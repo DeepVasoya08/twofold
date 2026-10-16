@@ -88,3 +88,58 @@ export interface UpdateKeyringRequest {
 export interface DeleteAccountRequest {
   loginKey: string;
 }
+
+/**
+ * Photo storage. A space's storage is addressed by its access token (the space id from its
+ * key slot), sent in this header. The server keeps only the token's SHA-256 and never links
+ * a space to an account, so it cannot tell whose space it is or how many an account has.
+ */
+export const SPACE_HEADER = 'x-twofold-space';
+
+export const STORAGE_SIZES = {
+  /** The space access token: the space id from the key slot. */
+  spaceToken: 16,
+  /** Photo and album ids are random, chosen by the browser. */
+  recordId: 16,
+  /** Largest sealed record (photo or album metadata), in bytes before base64url. */
+  maxRecord: 2048,
+  /** Largest encrypted thumbnail and full-size photo, in bytes. */
+  maxThumb: 1024 * 1024,
+  maxFull: 64 * 1024 * 1024,
+} as const;
+
+/** Which encrypted file of a photo: a small preview, or the original. */
+export type PhotoPart = 'thumb' | 'full';
+
+/** A photo as stored: an id, sealed metadata (which holds the photo's key) and file sizes. */
+export interface StoredPhoto {
+  id: string;
+  meta: string;
+  thumbSize: number;
+  fullSize: number;
+}
+
+export interface StoredAlbum {
+  id: string;
+  meta: string;
+}
+
+/** One page of a space's photos. `next` is the cursor for the following page, if any. */
+export interface PhotoPage {
+  photos: StoredPhoto[];
+  next: string | null;
+}
+
+export interface AlbumList {
+  albums: StoredAlbum[];
+}
+
+/** Starts a photo upload. The two files follow with PUT, then a commit makes it visible. */
+export type CreatePhotoRequest = StoredPhoto;
+
+export type CreateAlbumRequest = StoredAlbum;
+
+/** Replaces a photo's or album's sealed metadata (favorites, albums, titles). */
+export interface UpdateRecordRequest {
+  meta: string;
+}
