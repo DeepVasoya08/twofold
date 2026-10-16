@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { albumIdFromTitle } from './Albums';
 import { isInviteCode, normalizeInviteCode } from './Share';
 import { countWords } from './Recover';
 import { validateSignUp } from './SignUp';
@@ -36,14 +35,6 @@ describe('validateSignUp', () => {
     expect(
       validateSignUp({ ...valid, password: 'aaaaaaaaaaaaaaaa', confirm: 'aaaaaaaaaaaaaaaa' }),
     ).toHaveProperty('password');
-  });
-});
-
-describe('albumIdFromTitle', () => {
-  it('slugifies and avoids collisions', () => {
-    expect(albumIdFromTitle('Paris, 2027!', [])).toBe('paris-2027');
-    expect(albumIdFromTitle('Paris', ['paris', 'paris-2'])).toBe('paris-3');
-    expect(albumIdFromTitle('✨', [])).toBe('album');
   });
 });
 

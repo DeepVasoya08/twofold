@@ -63,10 +63,11 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   having no private space.
 - **Moving photos in** from the main library needs the private space's key. The first move
   after unlocking asks for the private password once and keeps that key in memory
-  (`Session.privateSpace`) until Twofold locks, so later moves don't ask. Setting up a
+  (`Session.otherSpace`) until Twofold locks, so later moves don't ask. Setting up a
   private space keeps its fresh key the same way. Nothing about this reaches the server.
   Skipping the prompt entirely would mean the main library holding something that opens or
   addresses the private space at rest, which is exactly what deniability rules out.
+  Moving photos back out of the private space asks for the main password the same way.
 - Setting up a private space from the main library writes a new slot 2, replacing any
   private space that was there (the main library cannot know). The dialog says so to
   everyone, always.
@@ -80,21 +81,71 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   the private password on a new device (the stored data still reveals nothing). A
   compromised server could equally serve altered JavaScript, which is the limit of any
   web-delivered end-to-end encryption, so this adds no new exposure.
+- **Storage doesn't link spaces to accounts at rest, but a live server could.** A
+  compromised server watching requests sees which session uses which space token, the
+  same exposure as the login key above. It can also count spaces: on a server with one
+  account, a second space's photos show that a private space exists. With many accounts,
+  nothing ties a space to its owner.
+- **Some ciphertext can be orphaned.** Setting up a private space from the main library
+  replaces any existing one without being able to delete its photos, and deleting an
+  account can only wipe spaces whose keys are on the device. What's left can never be
+  decrypted or reached again, but it isn't deleted. Because storage isn't tied to
+  accounts, there are no per-account storage quotas yet either.
+- **Infrastructure keeps its own history.** R2 records when each object was uploaded, and
+  D1 keeps point-in-time history for its Time Travel window, so a deleted photo's sealed
+  row (not its key or contents) can outlive the delete for that long.
 - **Sign-up reveals whether an email is registered** (and `POST /api/auth/prelogin`
   answers 404 for unknown emails). Hiding it needs email verification, which doesn't exist
   yet.
 - The two passwords must differ; the client refuses a new password that already opens
   another slot.
 
+## Photo storage
+
+Photos and albums belong to a **space**, never to an account.
+
+- **Addressing.** A space's storage is named by its access token, the 16-byte space id
+  from its key slot, sent in the `x-twofold-space` header. D1 stores only
+  `SHA-256(token)` in a `space` column. There is no account column, no index by account
+  and no table that maps one to the other, so the database can't say whose photos these
+  are, or whether an account has one space or two. Storage routes still need a signed-in
+  session, so only accounts can use storage, but the session is not recorded with what it
+  writes.
+- **Photo keys.** Every photo has its own random key. Its two files, a 640px JPEG preview
+  made on the device and the original byte for byte, are each encrypted with
+  `crypto_secretstream_xchacha20poly1305` in 64 KiB chunks, so any change, reordering or
+  truncation fails to decrypt (`packages/crypto/src/storage.ts`).
+- **Records.** A photo's metadata (its key, media type, size in pixels, date, favorite,
+  albums) and an album's title are JSON sealed with `crypto_aead_xchacha20poly1305_ietf`
+  under a `crypto_kdf` subkey of the space key (context `twfspace`). The associated data is
+  the record's kind and id, so the server can't swap one record for another, and the
+  plaintext is padded to 256-byte blocks. Records that don't open are left out.
+- **What the server keeps.** Per photo: a random id, the space tag, the sealed record and
+  the two ciphertext sizes; R2 objects are `photos/<id>/thumb` and `photos/<id>/full`.
+  Rows carry no timestamps; `pending_since` is set only while an upload hasn't been
+  committed, so abandoned uploads in a space are cleaned up after a day.
+- **Uploads** are created, then both files are sent with their declared sizes (checked
+  again after R2 stores them), then committed. Nothing is listed or served until commit,
+  and a committed photo's files can't be overwritten. Records are at most 2 KiB, previews
+  1 MiB and originals 64 MiB of ciphertext.
+- **Moving** a photo to the other space downloads and decrypts it, adds it to the other
+  space under a new id and key, then deletes the original. The two copies share nothing
+  the server can match.
+- **Deleting the account** first wipes every space the device holds keys for (the open
+  one, the other one if its password was typed this session, and the one the confirming
+  password opens), then the account.
+
 ## Sessions and the API
 
 - Passwords never reach the API. It sees the keyring (salt, KDF settings, sealed slots,
-  verifiers), the email and display name, and login keys.
+  verifiers), the email and display name, login keys, space tokens, and ciphertext.
 - A login (or sign-up) sets a 256-bit random session token in an `HttpOnly`,
   `SameSite=Strict` cookie (`__Host-` prefixed and `Secure` over HTTPS), valid 30 days.
   D1 stores only its SHA-256.
-- Every write must be `Content-Type: application/json`, which a cross-site form can't send
-  without a CORS preflight the API never answers. This backs up `SameSite=Strict`.
+- Every write must be `Content-Type: application/json` (or `application/octet-stream` for
+  encrypted files), which a cross-site form can't send without a CORS preflight the API
+  never answers. This backs up `SameSite=Strict`; storage requests also carry a custom
+  header, which needs a preflight too.
 - Changing the keyring or deleting the account needs a fresh login key as well as the
   cookie. Keyring updates carry a version number, so two devices can't silently overwrite
   each other, and may not change the salt or KDF settings.
@@ -106,13 +157,12 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
 ## In the browser
 
 - Keys live only in React state (`apps/web/src/app/account.tsx`). Locking, signing out or
-  reloading drops them and remounts the vault, which drops every decrypted photo.
+  reloading drops them and remounts the vault, which drops every decrypted photo and
+  revokes its object URLs.
 - Nothing is written to `localStorage`, IndexedDB or caches.
 
 ## Still to design
 
-- Photo storage: per-photo keys under each space key, and how R2 objects are grouped by
-  space without the database linking a private space to its account.
 - Sharing a space with another account.
 - Metadata minimisation in D1 (the display name is stored in plain text today, like the
   email).

@@ -1,45 +1,66 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 
+import { FormError, errorMessage } from '../app/account-ops';
+import type { NewPhoto } from '../app/space-store';
 import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
 import { pluralize } from '../lib/format';
-import type { Photo } from '../mock/data';
+import { makeThumbnail } from '../lib/thumbnail';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 
 import './upload-dialog.css';
 
+type Stage = 'waiting' | 'encrypting' | 'uploading' | 'done' | 'failed';
+
 interface UploadItem {
-  id: string;
+  id: number;
   name: string;
   /** In-memory object URL for the preview; never written to storage. */
   url: string;
-  width: number;
-  height: number;
-  /** 0–100. Encrypting is the first half, uploading the second. */
-  progress: number;
+  stage: Stage;
+  error?: string;
 }
 
-const TICK_MS = 90;
+const PROGRESS: Record<Stage, number> = {
+  waiting: 0,
+  encrypting: 25,
+  uploading: 60,
+  done: 100,
+  failed: 100,
+};
 
-function readSize(url: string): Promise<{ width: number; height: number }> {
-  return new Promise((resolve) => {
-    const image = new Image();
-    image.onload = () => {
-      resolve({ width: image.naturalWidth || 1200, height: image.naturalHeight || 800 });
-    };
-    image.onerror = () => {
-      resolve({ width: 1200, height: 800 });
-    };
-    image.src = url;
-  });
+function phase(item: UploadItem): string {
+  switch (item.stage) {
+    case 'waiting':
+      return 'Waiting';
+    case 'encrypting':
+      return 'Encrypting on this device';
+    case 'uploading':
+      return 'Uploading';
+    case 'done':
+      return 'Done';
+    case 'failed':
+      return item.error ?? 'Couldn’t upload this photo';
+  }
 }
 
-function phase(progress: number): string {
-  if (progress >= 100) return 'Done';
-  if (progress >= 50) return 'Uploading';
-  return 'Encrypting on this device';
+const isRunning = (item: UploadItem) =>
+  item.stage === 'waiting' || item.stage === 'encrypting' || item.stage === 'uploading';
+
+/** Reads a file into what the vault stores: the original bytes and a JPEG preview. */
+async function preparePhoto(file: File): Promise<NewPhoto> {
+  const thumbnail = await makeThumbnail(file);
+  if (!thumbnail) throw new FormError('Twofold can’t read this image.');
+  return {
+    thumb: thumbnail.bytes,
+    full: new Uint8Array(await file.arrayBuffer()),
+    type: file.type,
+    width: thumbnail.width,
+    height: thumbnail.height,
+    takenAt: new Date().toISOString(),
+  };
 }
 
 interface UploadDialogProps {
@@ -49,90 +70,80 @@ interface UploadDialogProps {
 }
 
 /**
- * Upload flow on mock data: progress is simulated. Real uploads will encrypt each file with
- * packages/crypto before anything leaves the browser.
+ * Encrypts each photo on this device, then uploads the ciphertext, one photo at a time.
+ * Cancelling stops the photos that haven't started yet.
  */
 export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
-  const { dispatch } = useVault();
+  const { upload } = useVault();
   const toast = useToast();
   const [items, setItems] = useState<UploadItem[]>([]);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const committed = useRef(false);
+  const queue = useRef<{ id: number; file: File }[]>([]);
+  const busy = useRef(false);
   const nextId = useRef(0);
 
-  const running = items.some((item) => item.progress < 100);
+  const running = items.some(isRunning);
   const finished = items.length > 0 && !running;
 
-  useEffect(() => {
-    if (!running) return;
-    const timer = window.setInterval(() => {
-      setItems((current) =>
-        current.map((item, index) =>
-          item.progress >= 100
-            ? item
-            : { ...item, progress: Math.min(100, item.progress + 4 + ((index * 3) % 5)) },
-        ),
-      );
-    }, TICK_MS);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [running]);
-
-  useEffect(() => {
-    if (!finished || committed.current) return;
-    committed.current = true;
-    const now = new Date().toISOString();
-    const photos: Photo[] = items.map((item) => ({
-      id: item.id,
-      src: item.url,
-      width: item.width,
-      height: item.height,
-      takenAt: now,
-      addedBy: 'me',
-      favorite: false,
-      albumIds: [],
-    }));
-    dispatch(albumId ? { type: 'add-photos', photos, albumId } : { type: 'add-photos', photos });
-    toast.show(`${pluralize(photos.length, 'photo')} added to your vault`);
-  }, [finished, items, albumId, dispatch, toast]);
-
-  const addFiles = async (files: FileList | null) => {
-    const images = [...(files ?? [])].filter((file) => file.type.startsWith('image/'));
-    if (images.length === 0) return;
-    committed.current = false;
-    const added = await Promise.all(
-      images.map(async (file) => {
-        const url = URL.createObjectURL(file);
-        const size = await readSize(url);
-        nextId.current += 1;
-        return {
-          id: `upload-${String(Date.now())}-${String(nextId.current)}`,
-          name: file.name,
-          url,
-          ...size,
-          progress: 0,
-        };
+  const setStage = (id: number, stage: Stage, error?: string) => {
+    setItems((current) =>
+      current.map((item) => {
+        if (item.id !== id) return item;
+        return error === undefined ? { ...item, stage } : { ...item, stage, error };
       }),
     );
-    setItems((current) => [...current.filter((item) => item.progress < 100), ...added]);
+  };
+
+  const pump = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    let added = 0;
+    for (let job = queue.current.shift(); job; job = queue.current.shift()) {
+      const { id, file } = job;
+      try {
+        setStage(id, 'encrypting');
+        await upload(await preparePhoto(file), albumId, (stage) => {
+          setStage(id, stage);
+        });
+        setStage(id, 'done');
+        added += 1;
+      } catch (error) {
+        setStage(id, 'failed', errorMessage(error));
+      }
+    }
+    busy.current = false;
+    if (added > 0) toast.show(`${pluralize(added, 'photo')} added to your vault`);
+  };
+
+  const addFiles = (files: FileList | null) => {
+    const images = [...(files ?? [])].filter((file) => file.type.startsWith('image/'));
+    if (images.length === 0) return;
+    const added = images.map((file) => {
+      nextId.current += 1;
+      queue.current.push({ id: nextId.current, file });
+      return {
+        id: nextId.current,
+        name: file.name,
+        url: URL.createObjectURL(file),
+        stage: 'waiting' as const,
+      };
+    });
+    setItems((current) => [...current, ...added]);
+    void pump();
   };
 
   const close = () => {
-    // Previews of photos that never made it into the vault are released straight away.
-    if (!committed.current) {
-      for (const item of items) URL.revokeObjectURL(item.url);
-    }
+    queue.current = [];
+    for (const item of items) URL.revokeObjectURL(item.url);
     setItems([]);
-    committed.current = false;
     onClose();
   };
 
   const onDrop = (event: DragEvent) => {
     event.preventDefault();
     setDragging(false);
-    void addFiles(event.dataTransfer.files);
+    addFiles(event.dataTransfer.files);
   };
 
   return (
@@ -175,7 +186,7 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
           tabIndex={-1}
           aria-label="Choose photos"
           onChange={(event) => {
-            void addFiles(event.currentTarget.files);
+            addFiles(event.currentTarget.files);
             event.currentTarget.value = '';
           }}
         />
@@ -191,20 +202,24 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
                 <div
                   className="progress"
                   role="progressbar"
-                  aria-label={`${item.name}: ${phase(item.progress)}`}
+                  aria-label={`${item.name}: ${phase(item)}`}
                   aria-valuemin={0}
                   aria-valuemax={100}
-                  aria-valuenow={item.progress}
+                  aria-valuenow={PROGRESS[item.stage]}
                 >
-                  <span className="progress__bar" style={{ width: `${String(item.progress)}%` }} />
+                  <span
+                    className="progress__bar"
+                    style={{ width: `${String(PROGRESS[item.stage])}%` }}
+                  />
                 </div>
-                <span className={`upload-item__phase${item.progress >= 100 ? ' is-done' : ''}`}>
-                  {item.progress >= 100 ? (
-                    <Icon name="check" size={14} />
-                  ) : (
-                    <Icon name="lock" size={14} />
-                  )}
-                  {phase(item.progress)}
+                <span
+                  className={`upload-item__phase${item.stage === 'done' ? ' is-done' : ''}${item.stage === 'failed' ? ' is-failed' : ''}`}
+                >
+                  <Icon
+                    name={item.stage === 'done' ? 'check' : item.stage === 'failed' ? 'x' : 'lock'}
+                    size={14}
+                  />
+                  {phase(item)}
                 </span>
               </div>
             </li>
