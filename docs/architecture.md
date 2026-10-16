@@ -24,6 +24,12 @@ everything from one origin, so there is no CORS and the CSP can stay at
   ciphertext; never receives plaintext photos, passwords, or keys. R2 object keys are
   random IDs. D1 holds metadata. Schema changes are SQL files in `apps/api/migrations`,
   applied on deploy.
+  - `/api/auth/*`: sign-up, prelogin (salt and KDF settings), login, logout.
+  - `/api/account`: the signed-in account and its keyring; `PUT /api/account/keyring`
+    replaces the keyring; `DELETE /api/account` deletes it. See
+    [security.md](security.md#sessions-and-the-api).
+  - Tables: `accounts`, `sessions` (token hashes only), `login_failures`.
+  - API tests run the real migrations on Node's built-in SQLite (`src/test/d1.ts`).
 
 ## Local development
 
@@ -31,8 +37,11 @@ everything from one origin, so there is no CORS and the CSP can stay at
   first and it serves the built web app too, exactly like production.
 - `pnpm --filter @twofold/web dev` runs Vite with hot reload on port 5173 and proxies
   `/api` to port 8787, so the app still sees one origin.
-- `pnpm test:e2e` builds the web app and runs Playwright against `wrangler dev`.
+- `pnpm test:e2e` builds the web app, applies migrations to a local D1 database and runs
+  Playwright against `wrangler dev`. Run `pnpm --filter @twofold/api db:migrate:local` once
+  before using `wrangler dev` by hand.
 - **packages/crypto** — the only place crypto code may live; libsodium constructions only.
+  `@twofold/crypto/webcrypto` is the Web Crypto-only part the API uses.
 - **packages/types** — types shared between web, API, and (later) mobile.
 
 ## Workspace conventions

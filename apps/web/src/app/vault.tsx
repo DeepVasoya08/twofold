@@ -1,8 +1,8 @@
 import { createContext, useContext, useMemo, useReducer } from 'react';
 import type { ReactNode } from 'react';
 
+import type { Space } from './account-ops';
 import {
-  MOCK_PRIVATE_PASSWORD,
   initialAlbums,
   initialPhotos,
   initialPrivateAlbums,
@@ -11,8 +11,8 @@ import {
 import type { Album, Photo } from '../mock/data';
 
 /**
- * In-memory vault state on mock data. Later this is backed by the API (ciphertext) and
- * decrypted in the browser; decrypted photos stay in memory, never in storage.
+ * In-memory vault state. Later this is backed by the API (ciphertext) and decrypted in the
+ * browser; decrypted photos stay in memory, never in storage.
  */
 
 export interface VaultState {
@@ -70,25 +70,19 @@ export function albumCover(state: VaultState, album: Album): Photo | undefined {
 }
 
 /** The main library, or the private space that only the private password opens. */
-export type Space = 'main' | 'private';
+export type { Space } from './account-ops';
 
+/**
+ * Photos and albums of both spaces. Which one is open comes from the account (the slot the
+ * password opened), not from here.
+ */
 export interface VaultsState {
-  /** The space the current password opened. */
-  space: Space;
   spaces: Record<Space, VaultState>;
-  /**
-   * Mock only: the private password, kept in memory so the demo opens the space with whatever
-   * was chosen in Settings. Real unlocking derives keys in packages/crypto and keeps no
-   * password anywhere. The main library never shows whether this is set.
-   */
-  privatePassword: string | null;
 }
 
 export type VaultsAction =
-  | { type: 'in-space'; action: VaultAction }
-  | { type: 'move-photo'; photoId: string; to: Space }
-  | { type: 'open-space'; space: Space }
-  | { type: 'set-up-private'; password: string };
+  | { type: 'in-space'; space: Space; action: VaultAction }
+  | { type: 'move-photo'; photoId: string; to: Space };
 
 function otherSpace(space: Space): Space {
   return space === 'main' ? 'private' : 'main';
@@ -106,11 +100,10 @@ export function vaultsReducer(state: VaultsState, action: VaultsAction): VaultsS
   switch (action.type) {
     case 'in-space':
       return {
-        ...state,
         spaces: withSpace(
           state.spaces,
-          state.space,
-          vaultReducer(state.spaces[state.space], action.action),
+          action.space,
+          vaultReducer(state.spaces[action.space], action.action),
         ),
       };
     case 'move-photo': {
@@ -125,7 +118,6 @@ export function vaultsReducer(state: VaultsState, action: VaultsAction): VaultsS
         vaultReducer(state.spaces[from], { type: 'delete-photo', photoId: photo.id }),
       );
       return {
-        ...state,
         spaces: withSpace(
           removed,
           action.to,
@@ -133,28 +125,20 @@ export function vaultsReducer(state: VaultsState, action: VaultsAction): VaultsS
         ),
       };
     }
-    case 'open-space':
-      return { ...state, space: action.space };
-    case 'set-up-private':
-      return { ...state, privatePassword: action.password };
   }
 }
 
-/**
- * Which space a password opens (mock). The same password box serves both, so nothing on
- * screen reveals whether a private space exists.
- */
-export function spaceForPassword(password: string, privatePassword: string | null): Space {
-  return privatePassword !== null && password === privatePassword ? 'private' : 'main';
-}
+/** A new session starts empty. Photo storage is not wired up yet, so uploads live in memory. */
+export const emptyVaults: VaultsState = {
+  spaces: { main: { photos: [], albums: [] }, private: { photos: [], albums: [] } },
+};
 
-export const initialVaults: VaultsState = {
-  space: 'main',
+/** The mock library from the design work, for tests and previews. */
+export const mockVaults: VaultsState = {
   spaces: {
     main: { photos: initialPhotos, albums: initialAlbums },
     private: { photos: initialPrivatePhotos, albums: initialPrivateAlbums },
   },
-  privatePassword: MOCK_PRIVATE_PASSWORD,
 };
 
 interface VaultValue {
@@ -163,43 +147,37 @@ interface VaultValue {
   /** Applies an action to the open space. */
   dispatch: (action: VaultAction) => void;
   space: Space;
-  /** The space this password opens. */
-  spaceFor: (password: string) => Space;
   movePhoto: (photoId: string, to: Space) => void;
-  openSpace: (space: Space) => void;
-  /** Sets or replaces the private password (mock). */
-  setPrivatePassword: (password: string) => void;
 }
 
 const VaultContext = createContext<VaultValue | null>(null);
 
+/**
+ * Decrypted photos for the open session, in memory only. Mount it with a key that changes
+ * whenever keys are dropped, so locking throws everything away.
+ */
 export function VaultProvider({
   children,
-  initialState = initialVaults,
+  space,
+  initialState = emptyVaults,
 }: {
   children: ReactNode;
+  space: Space;
   initialState?: VaultsState;
 }) {
   const [vaults, dispatchVaults] = useReducer(vaultsReducer, initialState);
   const value = useMemo<VaultValue>(
     () => ({
-      state: vaults.spaces[vaults.space],
+      state: vaults.spaces[space],
       dispatch: (action) => {
-        dispatchVaults({ type: 'in-space', action });
+        dispatchVaults({ type: 'in-space', space, action });
       },
-      space: vaults.space,
-      spaceFor: (password) => spaceForPassword(password, vaults.privatePassword),
+      space,
       movePhoto: (photoId, to) => {
         dispatchVaults({ type: 'move-photo', photoId, to });
       },
-      openSpace: (space) => {
-        dispatchVaults({ type: 'open-space', space });
-      },
-      setPrivatePassword: (password) => {
-        dispatchVaults({ type: 'set-up-private', password });
-      },
     }),
-    [vaults],
+    [vaults, space],
   );
   return <VaultContext value={value}>{children}</VaultContext>;
 }

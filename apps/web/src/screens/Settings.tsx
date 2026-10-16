@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { ReactNode, SubmitEvent } from 'react';
 
+import { useAccount, useMe } from '../app/account';
+import { errorMessage } from '../app/account-ops';
 import { useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useTheme } from '../app/theme';
@@ -13,9 +15,9 @@ import { Dialog } from '../components/Dialog';
 import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
-import { formatShortDay, formatTime } from '../lib/format';
+import { formatShortDay } from '../lib/format';
 import { MIN_PASSWORD_LENGTH } from '../lib/password';
-import { contact, devices, me, sharedSince } from '../mock/data';
+import { contact, sharedSince } from '../mock/data';
 
 import './settings.css';
 
@@ -67,8 +69,11 @@ type DialogName = 'main-password' | 'private-password' | 'stop-sharing' | 'delet
 export function Settings() {
   const { navigate } = useRouter();
   const { theme, setTheme } = useTheme();
-  const { space, openSpace, setPrivatePassword } = useVault();
+  const { space } = useVault();
+  const account = useAccount();
+  const me = useMe();
   const toast = useToast();
+  const [busy, setBusy] = useState(false);
   const isPrivate = space === 'private';
   const [dialog, setDialog] = useState<DialogName>(null);
   const [current, setCurrent] = useState('');
@@ -76,8 +81,8 @@ export function Settings() {
   const [confirm, setConfirm] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [autoLock, setAutoLock] = useState('15');
-  // Mock: the main library is shared with one person; the private space with no one.
-  const [shared, setShared] = useState(!isPrivate);
+  // Sharing is not built yet, so nothing is shared.
+  const [shared, setShared] = useState(false);
 
   const closeDialog = () => {
     setDialog(null);
@@ -87,8 +92,21 @@ export function Settings() {
     setPasswordError(null);
   };
 
+  /** Runs an account change from a dialog, showing any error in the dialog. */
+  const runInDialog = (operation: () => Promise<void>, done: () => void) => {
+    setBusy(true);
+    void operation()
+      .then(done, (error: unknown) => {
+        setPasswordError(errorMessage(error));
+      })
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
   const onChangeMain = (event: SubmitEvent) => {
     event.preventDefault();
+    if (busy) return;
     if (!current) {
       setPasswordError('Enter your current password.');
       return;
@@ -97,13 +115,19 @@ export function Settings() {
       setPasswordError(`Use at least ${String(MIN_PASSWORD_LENGTH)} characters.`);
       return;
     }
-    closeDialog();
-    toast.show('Password changed');
+    runInDialog(
+      () => account.changeMainPassword(current, next),
+      () => {
+        closeDialog();
+        toast.show('Password changed');
+      },
+    );
   };
 
   // In the main library this always reads "set up", whether or not a private space exists.
   const onSetPrivate = (event: SubmitEvent) => {
     event.preventDefault();
+    if (busy) return;
     if (isPrivate && !current) {
       setPasswordError('Enter your current private password.');
       return;
@@ -116,14 +140,36 @@ export function Settings() {
       setPasswordError("Passwords don't match.");
       return;
     }
-    setPrivatePassword(next);
-    closeDialog();
-    toast.show(isPrivate ? 'Private password changed' : 'Private space ready');
+    runInDialog(
+      () => account.setPrivatePassword(isPrivate ? current : null, next),
+      () => {
+        closeDialog();
+        toast.show(isPrivate ? 'Private password changed' : 'Private space ready');
+      },
+    );
+  };
+
+  const onDelete = (event: SubmitEvent) => {
+    event.preventDefault();
+    if (busy) return;
+    if (!current) {
+      setPasswordError('Enter your password to confirm.');
+      return;
+    }
+    runInDialog(
+      () => account.deleteAccount(current),
+      () => {
+        closeDialog();
+        toast.show('Account deleted');
+        navigate(paths.welcome);
+      },
+    );
   };
 
   const signOut = () => {
-    openSpace('main');
-    navigate(paths.welcome);
+    void account.logOut().then(() => {
+      navigate(paths.welcome);
+    });
   };
 
   return (
@@ -229,22 +275,30 @@ export function Settings() {
       </Section>
 
       <Section title="Security">
-        <Row
-          icon="shield"
-          title="Recovery key"
-          description="Saved when you signed up. Make a new one if you've lost it."
-          action={
-            <button
-              type="button"
-              className="btn btn--secondary btn--sm"
-              onClick={() => {
-                navigate(paths.recoveryKey);
-              }}
-            >
-              New key
-            </button>
-          }
-        />
+        {isPrivate ? (
+          <Row
+            icon="shield"
+            title="Recovery key"
+            description="Your recovery key only opens your main library. If you forget your private password, this space can't be recovered."
+          />
+        ) : (
+          <Row
+            icon="shield"
+            title="Recovery key"
+            description="Saved when you signed up. Make a new one if you've lost it."
+            action={
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => {
+                  navigate(paths.recoveryKey);
+                }}
+              >
+                New key
+              </button>
+            }
+          />
+        )}
         <Row
           icon="lock"
           title="Auto-lock"
@@ -268,33 +322,12 @@ export function Settings() {
       </Section>
 
       <Section title="Devices">
-        {devices.map((device) => (
-          <Row
-            key={device.id}
-            icon={device.kind}
-            title={device.name}
-            description={
-              device.current
-                ? 'This device'
-                : `Last active ${formatShortDay(device.lastActive)}, ${formatTime(device.lastActive)}`
-            }
-            action={
-              device.current ? (
-                <span className="pill">Current</span>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm"
-                  onClick={() => {
-                    toast.show(`Signed out of ${device.name}`);
-                  }}
-                >
-                  Sign out
-                </button>
-              )
-            }
-          />
-        ))}
+        <Row
+          icon="laptop"
+          title="This browser"
+          description="Signed in now"
+          action={<span className="pill">Current</span>}
+        />
       </Section>
 
       <Section title="Appearance">
@@ -361,8 +394,8 @@ export function Settings() {
             <button type="button" className="btn btn--ghost" onClick={closeDialog}>
               Cancel
             </button>
-            <button type="submit" className="btn btn--primary">
-              Change password
+            <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy}>
+              {busy ? 'Changing…' : 'Change password'}
             </button>
           </div>
         </form>
@@ -375,7 +408,7 @@ export function Settings() {
         description={
           isPrivate
             ? undefined
-            : 'Choose a second password. Open Twofold with it to see a separate space with its own photos and albums. Your main password will never show that it exists.'
+            : 'Choose a second password. Open Twofold with it to see a separate space with its own photos and albums. Your main password will never show that it exists. If you set one up before, this replaces it, and your recovery key cannot open it.'
         }
       >
         <form className="form" onSubmit={onSetPrivate} noValidate>
@@ -415,8 +448,8 @@ export function Settings() {
             <button type="button" className="btn btn--ghost" onClick={closeDialog}>
               Cancel
             </button>
-            <button type="submit" className="btn btn--primary">
-              {isPrivate ? 'Change password' : 'Create private space'}
+            <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy}>
+              {busy ? 'Saving…' : isPrivate ? 'Change password' : 'Create private space'}
             </button>
           </div>
         </form>
@@ -452,14 +485,26 @@ export function Settings() {
         title="Delete your account?"
         description="Your account and every photo in it will be permanently erased. This can't be undone."
       >
-        <div className="dialog__actions">
-          <button type="button" className="btn btn--ghost" onClick={closeDialog}>
-            Cancel
-          </button>
-          <button type="button" className="btn btn--danger" onClick={signOut}>
-            Delete account
-          </button>
-        </div>
+        <form className="form" onSubmit={onDelete} noValidate>
+          <PasswordField
+            label="Your password"
+            autoComplete="current-password"
+            value={current}
+            onChange={(event) => {
+              setCurrent(event.currentTarget.value);
+              setPasswordError(null);
+            }}
+            error={passwordError}
+          />
+          <div className="dialog__actions">
+            <button type="button" className="btn btn--ghost" onClick={closeDialog}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn--danger" disabled={busy} aria-busy={busy}>
+              {busy ? 'Deleting…' : 'Delete account'}
+            </button>
+          </div>
+        </form>
       </Dialog>
     </div>
   );

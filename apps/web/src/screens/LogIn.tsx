@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
+import { useAccount } from '../app/account';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
-import { useVault } from '../app/vault';
+import { useSubmit } from '../app/use-submit';
 import { AuthLayout } from '../components/AuthLayout';
 import { PasswordField, TextField } from '../components/Field';
+import { FormAlert } from '../components/FormAlert';
 import { isValidEmail } from '../lib/password';
 
 export function LogIn() {
   const { navigate } = useRouter();
-  const { openSpace, spaceFor } = useVault();
+  const { logIn } = useAccount();
+  const { busy, error, setError, run } = useSubmit();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -21,10 +24,11 @@ export function LogIn() {
   const onSubmit = (event: SubmitEvent) => {
     event.preventDefault();
     setSubmitted(true);
-    if (!isValidEmail(email) || !password) return;
-    // The same box opens either space; the password decides which.
-    openSpace(spaceFor(password));
-    navigate(paths.gallery);
+    if (busy || !isValidEmail(email) || !password) return;
+    // The same box opens either space; the slot the password fits decides which.
+    void run(() => logIn(email.trim(), password)).then((ok) => {
+      if (ok) navigate(paths.gallery);
+    });
   };
 
   return (
@@ -46,6 +50,7 @@ export function LogIn() {
           value={email}
           onChange={(event) => {
             setEmail(event.currentTarget.value);
+            setError(null);
           }}
           error={emailError}
         />
@@ -55,6 +60,7 @@ export function LogIn() {
           value={password}
           onChange={(event) => {
             setPassword(event.currentTarget.value);
+            setError(null);
           }}
           error={passwordError}
         />
@@ -63,8 +69,14 @@ export function LogIn() {
             Forgot password?
           </Link>
         </div>
-        <button type="submit" className="btn btn--primary btn--block btn--lg">
-          Log in
+        <FormAlert message={error} />
+        <button
+          type="submit"
+          className="btn btn--primary btn--block btn--lg"
+          disabled={busy}
+          aria-busy={busy}
+        >
+          {busy ? 'Opening…' : 'Log in'}
         </button>
       </form>
     </AuthLayout>

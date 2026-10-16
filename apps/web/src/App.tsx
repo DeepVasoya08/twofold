@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 
+import { redirectFor } from './app/access';
+import { useAccount } from './app/account';
 import { useRouter } from './app/router';
 import { matchRoute } from './app/routes';
 import type { Route } from './app/routes';
-import { useVault } from './app/vault';
 import { AppShell } from './components/AppShell';
 import { Album } from './screens/Album';
 import { Albums } from './screens/Albums';
@@ -94,20 +95,33 @@ function Screen({ route }: { route: Route }) {
   }
 }
 
+/** Sends the browser elsewhere after render, and shows nothing meanwhile. */
+function Redirect({ to }: { to: string }) {
+  const { navigate } = useRouter();
+  useEffect(() => {
+    navigate(to, { replace: true });
+  }, [navigate, to]);
+  return null;
+}
+
 /** Picks the screen for the current URL. Providers live in main.tsx (and in tests). */
 export function App() {
   const { pathname } = useRouter();
   const route = matchRoute(pathname);
-  const { space } = useVault();
+  const { state, space, pendingSignUp } = useAccount();
 
   // The private space re-tints the whole app (see styles/base.css).
   useEffect(() => {
-    document.documentElement.dataset.space = space;
+    document.documentElement.dataset.space = space ?? 'main';
   }, [space]);
 
   useEffect(() => {
     document.title = titles[route.name];
   }, [route.name]);
 
+  // Until the API says who is signed in, show nothing rather than the wrong screen.
+  if (state.status === 'loading') return null;
+  const redirect = redirectFor(route, state, { space, signingUp: pendingSignUp !== null });
+  if (redirect) return <Redirect to={redirect} />;
   return <Screen route={route} />;
 }

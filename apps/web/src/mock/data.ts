@@ -35,29 +35,6 @@ export const contact: Person = { id: 'contact', name: 'Mira', email: 'mira@examp
 
 export const sharedSince = '2025-11-02T12:00:00Z';
 
-/**
- * Which space a password opens. Mock only: any password opens the main library, except this
- * one, which opens the private space once it is set up. Real unlocking will try the password
- * against each key slot in packages/crypto, so the server never learns which space exists.
- */
-export const MOCK_PRIVATE_PASSWORD = 'private1234';
-
-/** Placeholder only. Real recovery keys will come from packages/crypto. */
-export const mockRecoveryKey = [
-  'MAPLE',
-  'RIVER',
-  'LANTERN',
-  'ORBIT',
-  'VELVET',
-  'HARBOR',
-  'TULIP',
-  'EMBER',
-  'CANYON',
-  'SPARROW',
-  'QUARTZ',
-  'MEADOW',
-];
-
 export const mockInviteCode = 'TWO-7KQ4-M9XD';
 
 export interface Device {

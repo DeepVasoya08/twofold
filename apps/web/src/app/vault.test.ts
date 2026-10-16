@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Photo } from '../mock/data';
-import { albumCover, albumPhotos, spaceForPassword, vaultReducer, vaultsReducer } from './vault';
+import { albumCover, albumPhotos, emptyVaults, vaultReducer, vaultsReducer } from './vault';
 import type { VaultState, VaultsState } from './vault';
 
 function photo(id: string, takenAt: string, albumIds: string[] = []): Photo {
@@ -69,26 +69,14 @@ describe('album helpers', () => {
 });
 
 describe('spaces', () => {
-  // Test-only phrases, not credentials.
-  const privatePhrase = 'test-phrase-b';
-  const mainPhrase = 'test-phrase-a';
   const vaults: VaultsState = {
-    space: 'main',
     spaces: { main: state, private: { photos: [], albums: [{ id: 'p', title: 'P' }] } },
-    privatePassword: privatePhrase,
   };
 
-  it('opens the private space only with the private password', () => {
-    expect(spaceForPassword(privatePhrase, privatePhrase)).toBe('private');
-    expect(spaceForPassword(mainPhrase, privatePhrase)).toBe('main');
-    expect(spaceForPassword(privatePhrase, null)).toBe('main');
-    expect(spaceForPassword('', null)).toBe('main');
-  });
-
-  it('applies actions to the open space only', () => {
-    const opened = vaultsReducer(vaults, { type: 'open-space', space: 'private' });
-    const next = vaultsReducer(opened, {
+  it('applies actions to the named space only', () => {
+    const next = vaultsReducer(vaults, {
       type: 'in-space',
+      space: 'private',
       action: { type: 'create-album', album: { id: 'q', title: 'Q' } },
     });
     expect(next.spaces.private.albums.map((a) => a.id)).toEqual(['q', 'p']);
@@ -110,11 +98,8 @@ describe('spaces', () => {
     expect(vaultsReducer(vaults, { type: 'move-photo', photoId: 'a', to: 'main' })).toBe(vaults);
   });
 
-  it('sets the private password', () => {
-    const next = vaultsReducer(
-      { ...vaults, privatePassword: null },
-      { type: 'set-up-private', password: mainPhrase },
-    );
-    expect(next.privatePassword).toBe(mainPhrase);
+  it('starts a new session empty', () => {
+    expect(emptyVaults.spaces.main.photos).toEqual([]);
+    expect(emptyVaults.spaces.private.photos).toEqual([]);
   });
 });

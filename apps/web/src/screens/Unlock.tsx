@@ -1,32 +1,42 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
+import { useAccount, useMe } from '../app/account';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
-import { useVault } from '../app/vault';
+import { useSubmit } from '../app/use-submit';
 import { AuthLayout } from '../components/AuthLayout';
 import { Avatar } from '../components/Brand';
 import { PasswordField } from '../components/Field';
-import { me } from '../mock/data';
 
 import './unlock.css';
 
-/** Shown to a returning user whose session is still valid but whose vault key is not in memory. */
+/** Shown to a returning user whose session is still valid but whose keys are not in memory. */
 export function Unlock() {
   const { navigate } = useRouter();
-  const { openSpace, spaceFor } = useVault();
+  const { unlock, logOut } = useAccount();
+  const me = useMe();
+  const { busy, error, setError, run } = useSubmit();
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
 
   const onSubmit = (event: SubmitEvent) => {
     event.preventDefault();
+    if (busy) return;
     if (!password) {
       setError('Enter your password to unlock.');
       return;
     }
-    // The same box opens either space; the password decides which.
-    openSpace(spaceFor(password));
-    navigate(paths.gallery);
+    // The same box opens either space; the slot the password fits decides which. This
+    // happens on this device: the password and keys are not sent anywhere.
+    void run(() => unlock(password)).then((ok) => {
+      if (ok) navigate(paths.gallery);
+    });
+  };
+
+  const switchAccount = () => {
+    void logOut().then(() => {
+      navigate(paths.login);
+    });
   };
 
   return (
@@ -35,7 +45,10 @@ export function Unlock() {
       subtitle="Twofold locked itself to keep your photos safe. Enter your password to open it."
       footer={
         <>
-          Not {me.name}? <Link to={paths.login}>Use another account</Link>
+          Not {me.name}?{' '}
+          <button type="button" className="text-link" onClick={switchAccount}>
+            Use another account
+          </button>
         </>
       }
     >
@@ -57,8 +70,13 @@ export function Unlock() {
           }}
           error={error}
         />
-        <button type="submit" className="btn btn--primary btn--block btn--lg">
-          Unlock
+        <button
+          type="submit"
+          className="btn btn--primary btn--block btn--lg"
+          disabled={busy}
+          aria-busy={busy}
+        >
+          {busy ? 'Unlocking…' : 'Unlock'}
         </button>
         <div className="form__row form__row--center">
           <Link to={paths.recover} className="text-link">
