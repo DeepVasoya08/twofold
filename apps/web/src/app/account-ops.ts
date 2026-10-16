@@ -11,12 +11,23 @@ import { ApiError, api } from '../lib/api';
 
 const loadCrypto = () => import('@twofold/crypto');
 
-/** A mistake the person can fix. The message is shown as is. */
+/** Which password in a change-password form a mistake is about. */
+export type PasswordInput = 'current' | 'new';
+
+/** A mistake the person can fix. The message is shown as is, next to `input` if given. */
 export class FormError extends Error {
-  constructor(message: string) {
+  readonly input: PasswordInput | undefined;
+
+  constructor(message: string, input?: PasswordInput) {
     super(message);
     this.name = 'FormError';
+    this.input = input;
   }
+}
+
+/** The password input an error belongs under, if it is about one. */
+export function errorInput(error: unknown): PasswordInput | undefined {
+  return error instanceof FormError ? error.input : undefined;
 }
 
 /** The message to show for any error an operation throws. */
@@ -29,6 +40,12 @@ export function errorMessage(error: unknown): string {
 export interface Session {
   account: AccountResponse;
   opened: OpenedSlot;
+  /**
+   * The private space's keys, held while the main library is open so photos can move into it
+   * without asking for the private password each time. Only set once the private password was
+   * typed (or the space was created) in this session; it lives in memory like the rest.
+   */
+  privateSpace?: OpenedSlot['space'];
 }
 
 export type Space = 'main' | 'private';
@@ -178,17 +195,19 @@ async function writeSlot(
   const { keyring } = session.account;
   const secret = await crypto.deriveFromPassword(password, keyring.salt, keyring.kdf);
   const clash = await crypto.openKeyring(keyring, secret);
-  if (clash && clash.slot !== index) throw new FormError(PASSWORD_IN_USE);
+  if (clash && clash.slot !== index) throw new FormError(PASSWORD_IN_USE, 'new');
   const account = await api.updateKeyring({
     loginKey: crypto.toBase64Url(session.opened.loginKey),
     version: session.account.version,
     keyring: await crypto.replaceSlot(keyring, index, space, secret),
   });
   const changedOwnSlot = index === session.opened.slot || session.opened.slot === SLOTS.recovery;
-  return {
-    account,
-    opened: changedOwnSlot ? { slot: index, space, loginKey: secret.loginKey } : session.opened,
-  };
+  const opened = changedOwnSlot
+    ? { slot: index, space, loginKey: secret.loginKey }
+    : session.opened;
+  // Creating a private space from the main library means its keys are already here.
+  const privateSpace = index === SLOTS.private && !changedOwnSlot ? space : session.privateSpace;
+  return privateSpace ? { account, opened, privateSpace } : { account, opened };
 }
 
 /** Opens a specific slot with a password, or throws the given message. */
@@ -200,7 +219,7 @@ async function openSlotWith(
 ): Promise<OpenedSlot> {
   const crypto = await loadCrypto();
   const opened = await crypto.unlockWithPassword(session.account.keyring, password);
-  if (opened?.slot !== index) throw new FormError(wrong);
+  if (opened?.slot !== index) throw new FormError(wrong, 'current');
   return opened;
 }
 
@@ -232,12 +251,20 @@ export async function setPrivatePassword(
   return writeSlot(session, SLOTS.private, space, next);
 }
 
-/** True if the password opens the private slot. Used to move a photo into it. */
-export async function opensPrivateSpace(session: Session, password: string): Promise<boolean> {
+/**
+ * Opens the private space's keys from the main library so photos can move into it. Throws
+ * the same message for a wrong password and for no private space at all.
+ */
+export async function openPrivateSpace(session: Session, password: string): Promise<Session> {
+  if (spaceOf(session.opened) === 'private') return session;
   await nextFrame();
-  const crypto = await loadCrypto();
-  const opened = await crypto.unlockWithPassword(session.account.keyring, password);
-  return opened?.slot === SLOTS.private;
+  const opened = await openSlotWith(
+    session,
+    SLOTS.private,
+    password,
+    'That password doesn’t open a private space.',
+  );
+  return { ...session, privateSpace: opened.space };
 }
 
 export async function newRecoveryWords(): Promise<{ key: Uint8Array; words: string[] }> {
@@ -257,7 +284,7 @@ export async function saveRecoveryKey(session: Session, recoveryKey: Uint8Array)
     version: session.account.version,
     keyring: await crypto.replaceSlot(keyring, SLOTS.recovery, session.opened.space, secret),
   });
-  return { account, opened: session.opened };
+  return { ...session, account };
 }
 
 export async function deleteAccount(session: Session, password: string): Promise<void> {
