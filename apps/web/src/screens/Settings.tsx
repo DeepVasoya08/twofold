@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ReactNode, SubmitEvent } from 'react';
 
 import { useAccount, useMe } from '../app/account';
-import { errorMessage } from '../app/account-ops';
+import { errorInput, errorMessage } from '../app/account-ops';
 import { useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useTheme } from '../app/theme';
@@ -66,6 +66,14 @@ const themes: { value: ThemePreference; label: string; icon: IconName }[] = [
 
 type DialogName = 'main-password' | 'private-password' | 'stop-sharing' | 'delete' | null;
 
+/** The password input in a dialog that an error is shown under. */
+type ErrorInput = 'current' | 'new' | 'confirm';
+
+interface PasswordError {
+  input: ErrorInput;
+  message: string;
+}
+
 export function Settings() {
   const { navigate } = useRouter();
   const { theme, setTheme } = useTheme();
@@ -79,7 +87,7 @@ export function Settings() {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<PasswordError | null>(null);
   const [autoLock, setAutoLock] = useState('15');
   // Sharing is not built yet, so nothing is shared.
   const [shared, setShared] = useState(false);
@@ -92,12 +100,21 @@ export function Settings() {
     setPasswordError(null);
   };
 
-  /** Runs an account change from a dialog, showing any error in the dialog. */
-  const runInDialog = (operation: () => Promise<void>, done: () => void) => {
+  const showError = (input: ErrorInput, message: string) => {
+    setPasswordError({ input, message });
+  };
+  const errorAt = (input: ErrorInput) =>
+    passwordError?.input === input ? passwordError.message : null;
+
+  /**
+   * Runs an account change from a dialog. An error shows under the input it is about, or
+   * under `otherwise` when it isn't about one.
+   */
+  const runInDialog = (operation: () => Promise<void>, done: () => void, otherwise: ErrorInput) => {
     setBusy(true);
     void operation()
       .then(done, (error: unknown) => {
-        setPasswordError(errorMessage(error));
+        showError(errorInput(error) ?? otherwise, errorMessage(error));
       })
       .finally(() => {
         setBusy(false);
@@ -108,11 +125,11 @@ export function Settings() {
     event.preventDefault();
     if (busy) return;
     if (!current) {
-      setPasswordError('Enter your current password.');
+      showError('current', 'Enter your current password.');
       return;
     }
     if (next.length < MIN_PASSWORD_LENGTH) {
-      setPasswordError(`Use at least ${String(MIN_PASSWORD_LENGTH)} characters.`);
+      showError('new', `Use at least ${String(MIN_PASSWORD_LENGTH)} characters.`);
       return;
     }
     runInDialog(
@@ -121,6 +138,7 @@ export function Settings() {
         closeDialog();
         toast.show('Password changed');
       },
+      'new',
     );
   };
 
@@ -129,15 +147,15 @@ export function Settings() {
     event.preventDefault();
     if (busy) return;
     if (isPrivate && !current) {
-      setPasswordError('Enter your current private password.');
+      showError('current', 'Enter your current private password.');
       return;
     }
     if (next.length < MIN_PASSWORD_LENGTH) {
-      setPasswordError(`Use at least ${String(MIN_PASSWORD_LENGTH)} characters.`);
+      showError('new', `Use at least ${String(MIN_PASSWORD_LENGTH)} characters.`);
       return;
     }
     if (next !== confirm) {
-      setPasswordError("Passwords don't match.");
+      showError('confirm', "Passwords don't match.");
       return;
     }
     runInDialog(
@@ -146,6 +164,7 @@ export function Settings() {
         closeDialog();
         toast.show(isPrivate ? 'Private password changed' : 'Private space ready');
       },
+      'confirm',
     );
   };
 
@@ -153,7 +172,7 @@ export function Settings() {
     event.preventDefault();
     if (busy) return;
     if (!current) {
-      setPasswordError('Enter your password to confirm.');
+      showError('current', 'Enter your password to confirm.');
       return;
     }
     runInDialog(
@@ -163,6 +182,7 @@ export function Settings() {
         toast.show('Account deleted');
         navigate(paths.welcome);
       },
+      'current',
     );
   };
 
@@ -378,6 +398,7 @@ export function Settings() {
               setCurrent(event.currentTarget.value);
               setPasswordError(null);
             }}
+            error={errorAt('current')}
           />
           <PasswordField
             label="New password"
@@ -387,7 +408,7 @@ export function Settings() {
               setNext(event.currentTarget.value);
               setPasswordError(null);
             }}
-            error={passwordError}
+            error={errorAt('new')}
             showStrength
           />
           <div className="dialog__actions">
@@ -421,6 +442,7 @@ export function Settings() {
                 setCurrent(event.currentTarget.value);
                 setPasswordError(null);
               }}
+              error={errorAt('current')}
             />
           )}
           <PasswordField
@@ -431,6 +453,7 @@ export function Settings() {
               setNext(event.currentTarget.value);
               setPasswordError(null);
             }}
+            error={errorAt('new')}
             showStrength
             hint="Make it different from your main password."
           />
@@ -442,7 +465,7 @@ export function Settings() {
               setConfirm(event.currentTarget.value);
               setPasswordError(null);
             }}
-            error={passwordError}
+            error={errorAt('confirm')}
           />
           <div className="dialog__actions">
             <button type="button" className="btn btn--ghost" onClick={closeDialog}>
@@ -494,7 +517,7 @@ export function Settings() {
               setCurrent(event.currentTarget.value);
               setPasswordError(null);
             }}
-            error={passwordError}
+            error={errorAt('current')}
           />
           <div className="dialog__actions">
             <button type="button" className="btn btn--ghost" onClick={closeDialog}>
