@@ -143,3 +143,92 @@ export type CreateAlbumRequest = StoredAlbum;
 export interface UpdateRecordRequest {
   meta: string;
 }
+
+/**
+ * Sharing. A space is shared by giving another account a share token of its own (sent in
+ * SPACE_HEADER instead of the space id) and the space's records key. Who a space is shared
+ * with, and which libraries it has joined, are sealed records only the space's owner opens.
+ */
+export const SHARE_SIZES = {
+  /** A crypto_box public key, and the BLAKE2b commitment to one. */
+  publicKey: 32,
+  commitment: 32,
+  /** The inviter's private handle on its invite. */
+  handle: 16,
+  /** Largest sealed message between the two sides of an invite, in bytes. */
+  maxMessage: 1024,
+} as const;
+
+/** An invite works once and only for this long. */
+export const INVITE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Most people one space can be shared with, and most libraries one space can join. */
+export const MAX_MEMBERS = 20;
+export const MAX_JOINED = 50;
+
+/**
+ * Starts an invite. The joiner will use `code`; the inviter keeps `handle` to itself and uses
+ * it for its own steps. `commitment` binds the inviter's public key before it is revealed.
+ */
+export interface CreateInviteRequest {
+  code: string;
+  handle: string;
+  commitment: string;
+}
+
+/** What the inviter sees of its invite as it progresses. */
+export interface InviterView {
+  joinerKey: string | null;
+  /** The joiner's name, sealed to the inviter's key. */
+  hello: string | null;
+}
+
+/** What the joiner sees of the invite as it progresses. */
+export interface JoinerView {
+  commitment: string;
+  inviterKey: string | null;
+  /** The access, sealed to the joiner's key, once the inviter confirms. */
+  grant: string | null;
+}
+
+export interface JoinInviteRequest {
+  joinerKey: string;
+}
+
+export interface HelloRequest {
+  hello: string;
+}
+
+export interface RevealRequest {
+  inviterKey: string;
+}
+
+export interface GrantRequest {
+  grant: string;
+}
+
+/** Someone a space is shared with: a random id and who they are, sealed for the owner. */
+export interface StoredMember {
+  id: string;
+  meta: string;
+}
+
+/** Shares a space: the member's own token (stored hashed) and their sealed details. */
+export interface CreateMemberRequest {
+  id: string;
+  token: string;
+  meta: string;
+}
+
+export interface MemberList {
+  members: StoredMember[];
+}
+
+/** A library this space has joined: its share token and records key, sealed for the owner. */
+export type StoredJoined = StoredAlbum;
+
+export type CreateJoinedRequest = StoredJoined;
+
+export interface JoinedList {
+  joined: StoredJoined[];
+}

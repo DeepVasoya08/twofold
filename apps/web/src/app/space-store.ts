@@ -1,4 +1,4 @@
-import type { SpaceKeys } from '@twofold/crypto';
+import type { SpaceAccess, SpaceKeys } from '@twofold/crypto';
 import { STORAGE_SIZES } from '@twofold/types';
 import type { PhotoPart } from '@twofold/types';
 
@@ -59,6 +59,12 @@ const TOO_LARGE = `That photo is too large. Twofold takes photos up to ${String(
   Math.floor(STORAGE_SIZES.maxFull / (1024 * 1024)) - 1,
 )} MB.`;
 
+/** Who added a photo to someone else's library: their member id and name. */
+interface AddedBy {
+  id: string;
+  name: string;
+}
+
 interface PhotoMeta {
   v: 1;
   /** The photo's own file key, base64url. */
@@ -69,6 +75,18 @@ interface PhotoMeta {
   takenAt: string;
   favorite: boolean;
   albumIds: string[];
+  /** Set when a member (not the library's owner) added it. */
+  by?: AddedBy;
+}
+
+/** How this device reaches a library someone shared with it. */
+export interface Membership {
+  /** This account's member id in that library. */
+  memberId: string;
+  /** This account's name, recorded on photos it adds there. */
+  myName: string;
+  /** The name of whoever shared the library. */
+  ownerName: string;
 }
 
 interface AlbumMeta {
@@ -80,10 +98,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function parseAddedBy(value: unknown): AddedBy | null | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string') {
+    return null;
+  }
+  return { id: value.id, name: value.name };
+}
+
 function parsePhotoMeta(value: unknown): PhotoMeta | null {
   if (!isRecord(value)) return null;
   const { v, key, type, width, height, takenAt, favorite, albumIds } = value;
+  const by = parseAddedBy(value.by);
   const ok =
+    by !== null &&
     v === 1 &&
     typeof key === 'string' &&
     typeof type === 'string' &&
@@ -95,7 +123,10 @@ function parsePhotoMeta(value: unknown): PhotoMeta | null {
     typeof favorite === 'boolean' &&
     Array.isArray(albumIds) &&
     albumIds.every((id) => typeof id === 'string');
-  return ok ? { v, key, type, width, height, takenAt, favorite, albumIds } : null;
+  if (!ok) return null;
+  const meta: PhotoMeta = { v, key, type, width, height, takenAt, favorite, albumIds };
+  if (by) meta.by = by;
+  return meta;
 }
 
 function parseAlbumMeta(value: unknown): AlbumMeta | null {
@@ -113,14 +144,24 @@ function decode(bytes: Uint8Array): unknown {
   }
 }
 
-function toPhoto(id: string, meta: PhotoMeta, src = ''): Photo {
+/** Who added a photo, as this device sees it. The owner's photos carry no `by`. */
+function addedBy(
+  meta: PhotoMeta,
+  membership: Membership | null,
+): Pick<Photo, 'addedBy' | 'addedByName'> {
+  const mine = meta.by ? meta.by.id === membership?.memberId : membership === null;
+  if (mine) return { addedBy: 'me' };
+  return { addedBy: 'contact', addedByName: meta.by?.name ?? membership?.ownerName ?? '' };
+}
+
+function toPhoto(id: string, meta: PhotoMeta, membership: Membership | null, src = ''): Photo {
   return {
     id,
     src,
     width: meta.width,
     height: meta.height,
     takenAt: meta.takenAt,
-    addedBy: 'me',
+    ...addedBy(meta, membership),
     favorite: meta.favorite,
     albumIds: meta.albumIds,
   };
@@ -132,13 +173,23 @@ interface Known {
   meta: PhotoMeta;
 }
 
+/**
+ * A store for one space: your own (from its keys) or one shared with you (from the access
+ * your invite delivered, with `membership` saying who you are there).
+ */
 export function remoteStore(
-  space: SpaceKeys,
+  space: SpaceKeys | SpaceAccess,
   makeApi: (token: string) => SpaceApi = spaceApi,
+  membership: Membership | null = null,
 ): SpaceStore {
+  let accessPromise: Promise<SpaceAccess> | null = null;
+  const access = () =>
+    (accessPromise ??=
+      'spaceKey' in space
+        ? loadCrypto().then((crypto) => crypto.ownerAccess(space))
+        : Promise.resolve(space));
   let apiPromise: Promise<SpaceApi> | null = null;
-  const remote = () =>
-    (apiPromise ??= loadCrypto().then((crypto) => makeApi(crypto.spaceToken(space))));
+  const remote = () => (apiPromise ??= access().then((opened) => makeApi(opened.token)));
   const known = new Map<string, Known>();
   const urls = new Map<string, string>();
 
@@ -173,7 +224,7 @@ export function remoteStore(
 
   const sealPhoto = async (id: string, meta: PhotoMeta) => {
     const crypto = await loadCrypto();
-    return crypto.sealRecord(space, 'photo', id, encode(meta));
+    return crypto.sealRecord(await access(), 'photo', id, encode(meta));
   };
 
   const decrypt = async (photoId: string, part: PhotoPart) => {
@@ -189,6 +240,7 @@ export function remoteStore(
     list: async () => {
       const api = await remote();
       const crypto = await loadCrypto();
+      const keys = await access();
       const photos: Photo[] = [];
       let after: string | undefined;
       do {
@@ -196,20 +248,20 @@ export function remoteStore(
         for (const stored of page.photos) {
           // A record that doesn't open was tampered with or isn't ours: leave it out.
           const opened = await crypto
-            .openRecord(space, 'photo', stored.id, stored.meta)
+            .openRecord(keys, 'photo', stored.id, stored.meta)
             .catch(() => null);
           const meta = opened && parsePhotoMeta(decode(opened));
           const key = meta && crypto.fromBase64Url(meta.key);
           if (!meta || key?.length !== 32) continue;
           known.set(stored.id, { key, meta });
-          photos.push(toPhoto(stored.id, meta));
+          photos.push(toPhoto(stored.id, meta, membership));
         }
         after = page.next ?? undefined;
       } while (after);
       const albums: Album[] = [];
       for (const stored of (await api.listAlbums()).albums) {
         const opened = await crypto
-          .openRecord(space, 'album', stored.id, stored.meta)
+          .openRecord(keys, 'album', stored.id, stored.meta)
           .catch(() => null);
         const meta = opened && parseAlbumMeta(decode(opened));
         if (meta) albums.push({ id: stored.id, title: meta.title });
@@ -254,6 +306,7 @@ export function remoteStore(
         favorite: false,
         albumIds,
       };
+      if (membership) meta.by = { id: membership.memberId, name: membership.myName };
       const api = await remote();
       onStage?.('uploading');
       await api.createPhoto({
@@ -266,7 +319,7 @@ export function remoteStore(
       await api.putFile(id, 'full', full);
       await api.commitPhoto(id);
       known.set(id, { key, meta });
-      return toPhoto(id, meta, track(id, 'thumb', photo.thumb, THUMB_TYPE));
+      return toPhoto(id, meta, membership, track(id, 'thumb', photo.thumb, THUMB_TYPE));
     },
 
     update: async (photo) => {
@@ -290,7 +343,7 @@ export function remoteStore(
       const api = await remote();
       await api.createAlbum({
         id,
-        meta: await crypto.sealRecord(space, 'album', id, encode(meta)),
+        meta: await crypto.sealRecord(await access(), 'album', id, encode(meta)),
       });
       return { id, title };
     },
@@ -305,6 +358,73 @@ export function remoteStore(
     dispose: () => {
       for (const url of urls.values()) URL.revokeObjectURL(url);
       urls.clear();
+    },
+  };
+}
+
+/** A library someone shared with this space, and the store that reaches it. */
+export interface SharedSource {
+  id: string;
+  /** Whose library it is. */
+  name: string;
+  store: SpaceStore;
+}
+
+/**
+ * Your own space plus every library it has joined, as one store. Photos and albums from a
+ * joined library carry its owner's name in `library`, and every change goes to the store
+ * the photo or album came from. New photos go to your own space, unless they're filed in
+ * a shared album. A library that fails to load is left out rather than hiding the rest.
+ */
+export function combinedStore(
+  own: SpaceStore,
+  loadShared: () => Promise<SharedSource[]>,
+): SpaceStore {
+  let shared: SharedSource[] = [];
+  const photoStores = new Map<string, SpaceStore>();
+  const albumStores = new Map<string, SpaceStore>();
+  const storeOf = (photoId: string) => photoStores.get(photoId) ?? own;
+
+  return {
+    list: async () => {
+      const mine = await own.list();
+      shared = await loadShared().catch(() => []);
+      const photos = [...mine.photos];
+      const albums = [...mine.albums];
+      for (const source of shared) {
+        const loaded = await source.store.list().catch(() => null);
+        if (!loaded) continue;
+        for (const photo of loaded.photos) {
+          photoStores.set(photo.id, source.store);
+          photos.push({ ...photo, library: source.name });
+        }
+        for (const album of loaded.albums) {
+          albumStores.set(album.id, source.store);
+          albums.push({ ...album, library: source.name });
+        }
+      }
+      return { photos, albums };
+    },
+    image: (photoId, part) => storeOf(photoId).image(photoId, part),
+    add: async (photo, albumIds, onStage) => {
+      const albumStore = albumIds[0] === undefined ? undefined : albumStores.get(albumIds[0]);
+      const target = albumStore ?? own;
+      const added = await target.add(photo, albumIds, onStage);
+      if (target === own) return added;
+      photoStores.set(added.id, target);
+      const source = shared.find((candidate) => candidate.store === target);
+      return source ? { ...added, library: source.name } : added;
+    },
+    update: (photo) => storeOf(photo.id).update(photo),
+    remove: async (photoId) => {
+      await storeOf(photoId).remove(photoId);
+      photoStores.delete(photoId);
+    },
+    createAlbum: (title) => own.createAlbum(title),
+    read: (photoId) => storeOf(photoId).read(photoId),
+    dispose: () => {
+      own.dispose();
+      for (const source of shared) source.store.dispose();
     },
   };
 }

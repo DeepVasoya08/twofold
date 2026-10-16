@@ -2,12 +2,14 @@ import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
 
 import { fromBase64Url, sha256, toBase64Url } from '@twofold/crypto/webcrypto';
-import { SPACE_HEADER } from '@twofold/types';
-import type { AlbumList, PhotoPage } from '@twofold/types';
+import { MAX_JOINED, MAX_MEMBERS, SPACE_HEADER } from '@twofold/types';
+import type { AlbumList, JoinedList, MemberList, PhotoPage } from '@twofold/types';
 
 import { messages, readBody } from '../respond';
 import {
   createAlbumSchema,
+  createJoinedSchema,
+  createMemberSchema,
   createPhotoSchema,
   emptySchema,
   photoPartSchema,
@@ -18,8 +20,21 @@ import {
 import { requireSession } from '../session';
 import type { AppEnv } from '../session';
 import {
+  countJoined,
+  countMembers,
+  deleteJoined,
+  deleteMember,
+  deleteSharing,
+  findMemberByToken,
+  insertJoined,
+  insertMember,
+  listJoined,
+  listMembers,
+} from '../share-db';
+import {
   commitPhoto,
   countAlbums,
+  countPhotos,
   deleteAlbums,
   deletePhotoRows,
   findPhoto,
@@ -45,21 +60,36 @@ const notFound = 'That photo isn’t here anymore.';
  * Photo storage for one space. A signed-in session is required (so only accounts can use
  * storage), but the account is never recorded: the space is named only by the SHA-256 of
  * its access token, so nothing at rest links a space to an account.
+ *
+ * The owner's token is the space id. A member's is a share token the owner registered; it
+ * reaches the same photos and albums, but not the owner-only routes (sharing, joined
+ * libraries, wiping the space), and the owner can revoke it.
  */
 export const space = new Hono<AppEnv>();
 
 space.use(requireSession);
 
-/** Resolves the space header to the tag rows are stored under. */
+/** Resolves the space header to the tag rows are stored under, via a member's token or not. */
 const requireSpace = createMiddleware<AppEnv>(async (c, next) => {
   const token = spaceTokenSchema.safeParse(c.req.header(SPACE_HEADER));
   const bytes = token.success ? fromBase64Url(token.data) : null;
   if (!bytes) return c.json({ error: messages.badRequest }, 400);
-  c.set('space', toBase64Url(await sha256(bytes)));
+  const hash = toBase64Url(await sha256(bytes));
+  const member = await findMemberByToken(c.env.DB, hash);
+  c.set('space', member?.space ?? hash);
+  c.set('member', member?.id ?? null);
   return next();
 });
 
 space.use(requireSpace);
+
+const notOwner = 'Only the person who shared this library can do that.';
+
+/** Owner-only routes refuse share tokens. */
+const requireOwner = createMiddleware<AppEnv>(async (c, next) => {
+  if (c.get('member') !== null) return c.json({ error: notOwner }, 403);
+  return next();
+});
 
 async function deletePhotos(c: { env: AppEnv['Bindings'] }, tag: string, ids: string[]) {
   if (ids.length === 0) return;
@@ -188,8 +218,8 @@ space.post('/albums', async (c) => {
   return c.body(null, 201);
 });
 
-/** Deletes everything in the space: every photo, its files, and every album. */
-space.delete('/', async (c) => {
+/** Deletes everything in the space: every photo, its files, every album, and its sharing. */
+space.delete('/', requireOwner, async (c) => {
   if (!(await readBody(c, emptySchema))) return c.json({ error: messages.badRequest }, 400);
   const tag = c.get('space');
   // R2 deletes up to 1000 keys per call; two keys per photo.
@@ -199,5 +229,77 @@ space.delete('/', async (c) => {
     await deletePhotos(c, tag, ids);
   }
   await deleteAlbums(c.env.DB, tag);
+  await deleteSharing(c.env.DB, tag);
+  return c.body(null, 204);
+});
+
+space.get('/members', requireOwner, async (c) =>
+  c.json<MemberList>({ members: await listMembers(c.env.DB, c.get('space')) }),
+);
+
+/** Shares the space: registers a member's own token. Only its SHA-256 is kept. */
+space.post('/members', requireOwner, async (c) => {
+  const body = await readBody(c, createMemberSchema);
+  const token = body && fromBase64Url(body.token);
+  if (!body || !token) return c.json({ error: messages.badRequest }, 400);
+  const tag = c.get('space');
+  if ((await countMembers(c.env.DB, tag)) >= MAX_MEMBERS) {
+    return c.json({ error: 'This library is shared with as many people as Twofold allows.' }, 409);
+  }
+  const tokenHash = toBase64Url(await sha256(token));
+  // A share token must never be another space's own token, or it would reach both.
+  if ((await countPhotos(c.env.DB, tokenHash)) > 0) {
+    return c.json({ error: messages.badRequest }, 409);
+  }
+  if (!(await insertMember(c.env.DB, tag, { id: body.id, tokenHash, meta: body.meta }))) {
+    return c.json({ error: messages.badRequest }, 409);
+  }
+  return c.body(null, 201);
+});
+
+/** Stops sharing with one member: their token stops working at once. */
+space.delete('/members/:id', requireOwner, async (c) => {
+  const id = recordIdSchema.safeParse(c.req.param('id'));
+  if (!id.success || !(await readBody(c, emptySchema))) {
+    return c.json({ error: messages.badRequest }, 400);
+  }
+  if (!(await deleteMember(c.env.DB, c.get('space'), id.data))) {
+    return c.json({ error: 'They already don’t have access.' }, 404);
+  }
+  return c.body(null, 204);
+});
+
+/** A member leaves: their own token stops working. */
+space.delete('/membership', async (c) => {
+  const member = c.get('member');
+  if (!(await readBody(c, emptySchema))) return c.json({ error: messages.badRequest }, 400);
+  if (member === null) return c.json({ error: messages.badRequest }, 400);
+  await deleteMember(c.env.DB, c.get('space'), member);
+  return c.body(null, 204);
+});
+
+space.get('/joined', requireOwner, async (c) =>
+  c.json<JoinedList>({ joined: await listJoined(c.env.DB, c.get('space')) }),
+);
+
+space.post('/joined', requireOwner, async (c) => {
+  const body = await readBody(c, createJoinedSchema);
+  if (!body) return c.json({ error: messages.badRequest }, 400);
+  const tag = c.get('space');
+  if ((await countJoined(c.env.DB, tag)) >= MAX_JOINED) {
+    return c.json({ error: 'You’ve joined as many libraries as Twofold allows.' }, 409);
+  }
+  if (!(await insertJoined(c.env.DB, tag, body))) {
+    return c.json({ error: messages.badRequest }, 409);
+  }
+  return c.body(null, 201);
+});
+
+space.delete('/joined/:id', requireOwner, async (c) => {
+  const id = recordIdSchema.safeParse(c.req.param('id'));
+  if (!id.success || !(await readBody(c, emptySchema))) {
+    return c.json({ error: messages.badRequest }, 400);
+  }
+  await deleteJoined(c.env.DB, c.get('space'), id.data);
   return c.body(null, 204);
 });

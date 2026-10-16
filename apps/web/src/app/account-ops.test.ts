@@ -258,8 +258,14 @@ describe('deleteAccount', { timeout: 30_000 }, () => {
     const tokens = [session.opened.space, withPrivate.otherSpace].map((space) =>
       space ? toBase64Url(space.spaceId) : '',
     );
-    await ops.deleteAccount(withPrivate, MAIN);
+    const left: string[] = [];
+    await ops.deleteAccount(withPrivate, MAIN, (space) => {
+      left.push(toBase64Url(space.spaceId));
+      return Promise.resolve();
+    });
     expect(server.wiped.sort()).toEqual(tokens.sort());
+    // Each space first leaves the libraries it joined.
+    expect(left.sort()).toEqual(tokens.sort());
   });
 });
 

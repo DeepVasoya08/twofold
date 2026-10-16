@@ -7,6 +7,7 @@ import type { AccountResponse } from '@twofold/types';
 import { ApiError, api } from '../lib/api';
 import type { Person } from '../mock/data';
 import * as ops from './account-ops';
+import { leaveAll } from './sharing';
 import type { PendingSignUp, Session, Space } from './account-ops';
 
 /**
@@ -27,6 +28,8 @@ interface AccountValue {
   me: Person | null;
   /** Bumped whenever keys are dropped or replaced, so decrypted state can be thrown away. */
   generation: number;
+  /** Loads the open space again, e.g. after joining or leaving a shared library. */
+  reloadVault: () => void;
   pendingSignUp: PendingSignUp | null;
   prepareSignUp: (values: { name: string; email: string; password: string }) => Promise<void>;
   completeSignUp: () => Promise<void>;
@@ -117,6 +120,9 @@ export function AccountProvider({
       space: session ? ops.spaceOf(session.opened) : null,
       me: account ? { id: 'me', name: account.name, email: account.email } : null,
       generation,
+      reloadVault: () => {
+        setGeneration((current) => current + 1);
+      },
       pendingSignUp,
       prepareSignUp: async (values) => {
         setPendingSignUp(await ops.prepareSignUp(values));
@@ -169,7 +175,7 @@ export function AccountProvider({
         }),
       deleteAccount: (password) =>
         guard(async () => {
-          await ops.deleteAccount(requireSession(), password);
+          await ops.deleteAccount(requireSession(), password, leaveAll);
           setGeneration((current) => current + 1);
           setState({ status: 'signed-out' });
         }),

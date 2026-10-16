@@ -6,6 +6,7 @@ import type { AccountState } from './account';
 import { ThemeProvider } from './theme';
 import { ToastProvider } from './toast';
 import type { Session, Space } from './account-ops';
+import { sessionStore } from './sharing';
 import { memoryStore, remoteStore } from './space-store';
 import { VaultProvider, emptyVaults } from './vault';
 import type { VaultsState } from './vault';
@@ -24,7 +25,7 @@ function OpenVault({
 }) {
   const [store] = useState(() =>
     session && !initialVault
-      ? remoteStore(session.opened.space)
+      ? sessionStore(session.opened.space, session.account.name)
       : memoryStore((initialVault ?? emptyVaults).spaces[space]),
   );
   return (

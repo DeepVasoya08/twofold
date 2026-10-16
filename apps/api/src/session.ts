@@ -13,8 +13,11 @@ const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
 
 export interface AppEnv {
   Bindings: Env;
-  /** `space` is set by requireSpace: the SHA-256 tag of the space being accessed. */
-  Variables: { account: AccountRecord; space: string };
+  /**
+   * Set by requireSpace: `space` is the tag of the space being accessed, and `member` the
+   * member id when the request came with a share token rather than the owner's token.
+   */
+  Variables: { account: AccountRecord; space: string; member: string | null };
 }
 
 /**

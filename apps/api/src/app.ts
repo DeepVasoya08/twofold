@@ -6,6 +6,7 @@ import type { HealthResponse } from '@twofold/types';
 import { messages } from './respond';
 import { account } from './routes/account';
 import { auth } from './routes/auth';
+import { invites } from './routes/invites';
 import { space } from './routes/space';
 import type { AppEnv } from './session';
 
@@ -45,6 +46,7 @@ app.get('/health', (c) => c.json<HealthResponse>({ status: 'ok' }));
 app.route('/auth', auth);
 app.route('/account', account);
 app.route('/space', space);
+app.route('/invites', invites);
 
 app.onError((error, c) => {
   console.error('Unhandled API error', error.name);

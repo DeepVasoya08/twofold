@@ -33,9 +33,16 @@ everything from one origin, so there is no CORS and the CSP can stay at
     sizes), `PUT /photos/:id/thumb` and `/full` (ciphertext, streamed to R2 at
     `photos/<id>/<part>`), then `POST /photos/:id/commit`. Also listing (paged by id),
     downloads, metadata updates, deletes, albums, and `DELETE /api/space` to wipe a space.
-    See [security.md](security.md#photo-storage).
-  - Tables: `accounts`, `sessions` (token hashes only), `login_failures`, `photos` and
-    `albums` (keyed by space, never by account).
+    Owner-only: `/members` (who the space is shared with, add, remove) and `/joined` (the
+    libraries this space joined). `DELETE /membership` lets a member leave. See
+    [security.md](security.md#photo-storage).
+  - `/api/invites/*`: the invite rendezvous. The inviter creates an invite and drives it by
+    a private handle (`GET /:handle`, `/reveal`, `/grant`, `DELETE`); the joiner drives it
+    by the code (`GET /join/:code`, `/key`, `/hello`, `DELETE`). See
+    [security.md](security.md#sharing).
+  - Tables: `accounts`, `sessions` (token hashes only), `login_failures`, `photos`,
+    `albums`, `members` and `joined` (keyed by space, never by account), and `invites`
+    (short-lived, keyed by hashes of the code and handle).
   - API tests run the real migrations on Node's built-in SQLite (`src/test/d1.ts`) and an
     in-memory R2 (`src/test/r2.ts`).
 

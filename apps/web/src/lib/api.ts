@@ -3,10 +3,17 @@ import type {
   AccountResponse,
   AlbumList,
   CreateAlbumRequest,
+  CreateInviteRequest,
+  CreateJoinedRequest,
+  CreateMemberRequest,
   CreatePhotoRequest,
   DeleteAccountRequest,
   ErrorResponse,
+  InviterView,
+  JoinedList,
+  JoinerView,
   LoginRequest,
+  MemberList,
   PhotoPage,
   PhotoPart,
   PreLoginRequest,
@@ -102,6 +109,32 @@ export const api = {
 };
 
 /**
+ * The invite rendezvous. Everything sent is a public key, a commitment or a sealed message.
+ * The joiner addresses an invite by its code, the inviter by its private handle.
+ */
+export const inviteApi = {
+  create: (body: CreateInviteRequest) => call<undefined>('POST', '/invites', body),
+  inviterView: (handle: string) =>
+    call<InviterView>('GET', `/invites/${encodeURIComponent(handle)}`),
+  reveal: (handle: string, inviterKey: string) =>
+    call<undefined>('POST', `/invites/${encodeURIComponent(handle)}/reveal`, { inviterKey }),
+  grant: (handle: string, grant: string) =>
+    call<undefined>('POST', `/invites/${encodeURIComponent(handle)}/grant`, { grant }),
+  cancel: (handle: string) =>
+    call<undefined>('DELETE', `/invites/${encodeURIComponent(handle)}`, {}),
+  joinerView: (code: string) =>
+    call<JoinerView>('GET', `/invites/join/${encodeURIComponent(code)}`),
+  join: (code: string, joinerKey: string) =>
+    call<undefined>('POST', `/invites/join/${encodeURIComponent(code)}/key`, { joinerKey }),
+  hello: (code: string, hello: string) =>
+    call<undefined>('POST', `/invites/join/${encodeURIComponent(code)}/hello`, { hello }),
+  finish: (code: string) =>
+    call<undefined>('DELETE', `/invites/join/${encodeURIComponent(code)}`, {}),
+};
+
+export type InviteApi = typeof inviteApi;
+
+/**
  * Typed calls to one space's storage. Everything sent is already encrypted; the token
  * addresses the space and is never stored by the server in readable form.
  */
@@ -130,6 +163,18 @@ export function spaceApi(token: string) {
       call<undefined>('POST', '/space/albums', body, headers),
     /** Deletes every photo and album in the space. */
     wipe: () => call<undefined>('DELETE', '/space', {}, headers),
+    listMembers: () => call<MemberList>('GET', '/space/members', undefined, headers),
+    addMember: (body: CreateMemberRequest) =>
+      call<undefined>('POST', '/space/members', body, headers),
+    removeMember: (id: string) =>
+      call<undefined>('DELETE', `/space/members/${encodeURIComponent(id)}`, {}, headers),
+    /** With a member's token: gives up that membership. */
+    leave: () => call<undefined>('DELETE', '/space/membership', {}, headers),
+    listJoined: () => call<JoinedList>('GET', '/space/joined', undefined, headers),
+    addJoined: (body: CreateJoinedRequest) =>
+      call<undefined>('POST', '/space/joined', body, headers),
+    removeJoined: (id: string) =>
+      call<undefined>('DELETE', `/space/joined/${encodeURIComponent(id)}`, {}, headers),
   };
 }
 

@@ -14,9 +14,10 @@ export async function signUp(
   page: Page,
   email = freshEmail(),
   password = MAIN_PASSWORD,
+  name = 'Sam',
 ): Promise<{ email: string; words: string }> {
   await page.goto('/signup');
-  await page.getByLabel('Your name').fill('Sam');
+  await page.getByLabel('Your name').fill(name);
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByLabel('Confirm password').fill(password);
