@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { AccountResponse, Keyring } from '@twofold/types';
 
 import type { Env } from './env';
-import { MAX_FAILURES } from './proof';
+import { MAX_EMAIL_FAILURES, MAX_FAILURES } from './proof';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 
@@ -171,6 +171,51 @@ describe('POST /api/auth/login', () => {
     expect((await login(keys[0])).status).toBe(429);
   });
 
+  it('only throttles the address the guesses came from', async () => {
+    const from = (address: string, loginKey: Uint8Array) =>
+      new Client(env).send(
+        'POST',
+        '/auth/login',
+        JSON.stringify({ email: EMAIL, loginKey: toBase64Url(loginKey) }),
+        { 'content-type': 'application/json', 'cf-connecting-ip': address },
+      );
+    for (let i = 0; i < MAX_FAILURES; i++) {
+      expect((await from('203.0.113.9', newLoginKey())).status).toBe(401);
+    }
+    expect((await from('203.0.113.9', keys[0])).status).toBe(429);
+    expect((await from('198.51.100.7', keys[0])).status).toBe(200);
+  });
+
+  it('stops guesses spread over many addresses at a ceiling per email', async () => {
+    const from = (address: string, loginKey: Uint8Array) =>
+      new Client(env).send(
+        'POST',
+        '/auth/login',
+        JSON.stringify({ email: EMAIL, loginKey: toBase64Url(loginKey) }),
+        { 'content-type': 'application/json', 'cf-connecting-ip': address },
+      );
+    for (let i = 0; i < MAX_EMAIL_FAILURES; i++) {
+      const address = `192.0.2.${String(Math.floor(i / MAX_FAILURES))}`;
+      expect((await from(address, newLoginKey())).status).toBe(401);
+    }
+    expect((await from('198.51.100.7', keys[0])).status).toBe(429);
+  });
+
+  it('keeps no address in readable form, and forgets finished windows', async () => {
+    await new Client(env).send(
+      'POST',
+      '/auth/login',
+      JSON.stringify({ email: EMAIL, loginKey: toBase64Url(newLoginKey()) }),
+      { 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.9' },
+    );
+    const rows = sqlite.prepare('SELECT email FROM login_failures').all() as { email: string }[];
+    expect(rows.map((row) => row.email).join()).not.toContain('203.0.113.9');
+    sqlite.prepare('UPDATE login_failures SET window_start = 0').run();
+    await login(newLoginKey(), 'other@example.com');
+    const left = sqlite.prepare('SELECT email FROM login_failures').all() as { email: string }[];
+    expect(left.every((row) => row.email.startsWith('other@example.com'))).toBe(true);
+  });
+
   it('opens a new window once the old one has passed', async () => {
     for (let i = 0; i < MAX_FAILURES; i++) await login(newLoginKey());
     sqlite.prepare('UPDATE login_failures SET window_start = 0').run();
@@ -192,6 +237,16 @@ describe('sessions', () => {
     expect(client.cookie).toBeNull();
     client.cookie = cookie;
     expect((await client.request('GET', '/account')).status).toBe(401);
+  });
+
+  it('forgets expired sessions when a new one starts', async () => {
+    await signUp();
+    sqlite.prepare('UPDATE sessions SET expires_at = 0').run();
+    await new Client(env).request('POST', '/auth/login', {
+      email: EMAIL,
+      loginKey: toBase64Url(keys[0]),
+    });
+    expect(sqlite.prepare('SELECT * FROM sessions').all()).toHaveLength(1);
   });
 
   it('rejects a missing, forged or expired session', async () => {

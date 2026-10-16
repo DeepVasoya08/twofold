@@ -12,6 +12,7 @@ test('serves the web app with its security headers', async ({ page }) => {
 
   expect(res?.headers()['content-security-policy']).toContain("default-src 'self'");
   expect(res?.headers()['x-frame-options']).toBe('DENY');
+  expect(res?.headers()['strict-transport-security']).toBe('max-age=31536000; includeSubDomains');
 });
 
 test('deep links fall back to the app shell, which asks you to log in', async ({ page }) => {

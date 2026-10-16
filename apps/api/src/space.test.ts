@@ -2,7 +2,7 @@ import { fromBase64Url, randomBytes, sha256, toBase64Url } from '@twofold/crypto
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { SPACE_HEADER } from '@twofold/types';
+import { SPACE_HEADER, STORAGE_SIZES } from '@twofold/types';
 import type { AlbumList, PhotoPage, StoredPhoto } from '@twofold/types';
 
 import type { Env } from './env';
@@ -275,5 +275,88 @@ describe('albums', () => {
 
   it('refuses a malformed album', async () => {
     expect((await client.request('POST', '/space/albums', { id: newId() })).status).toBe(400);
+  });
+});
+
+describe('storage quota', () => {
+  const QUOTA = STORAGE_SIZES.accountQuota;
+  const stored = () =>
+    (sqlite.prepare('SELECT stored_bytes FROM accounts').get() as { stored_bytes: number })
+      .stored_bytes;
+  const setStored = (bytes: number) => {
+    sqlite.prepare('UPDATE accounts SET stored_bytes = ?').run(bytes);
+  };
+  const start = (size = 1000) =>
+    client.request('POST', '/space/photos', {
+      id: newId(),
+      meta: newMeta(),
+      thumbSize: 100,
+      fullSize: size,
+    });
+
+  it('counts both files of every upload, in every space the account uses', async () => {
+    await upload();
+    useSpace(client, toBase64Url(randomBytes(16)));
+    await upload();
+    expect(stored()).toBe(2 * 1100);
+    expect(QUOTA).toBe(1024 * 1024 * 1024);
+  });
+
+  it('refuses an upload that would go over, and stores nothing for it', async () => {
+    setStored(QUOTA - 1099);
+    const res = await start();
+    expect(res.status).toBe(413);
+    expect((await res.json<{ error: string }>()).error).toMatch(/storage is full/);
+    expect(sqlite.prepare('SELECT * FROM photos').all()).toEqual([]);
+    expect(stored()).toBe(QUOTA - 1099);
+    setStored(QUOTA - 1100);
+    expect((await start()).status).toBe(201);
+    expect(stored()).toBe(QUOTA);
+  });
+
+  it('can’t be raced: parallel uploads together stay within the quota', async () => {
+    setStored(QUOTA - 2500);
+    const results = await Promise.all(Array.from({ length: 10 }, () => start()));
+    expect(results.filter((res) => res.status === 201)).toHaveLength(2);
+    expect(results.filter((res) => res.status === 413)).toHaveLength(8);
+    expect(stored()).toBe(QUOTA - 300);
+  });
+
+  it('gives the bytes back when a photo, an abandoned upload or a whole space is deleted', async () => {
+    const { photo } = await upload();
+    await upload();
+    expect((await client.request('DELETE', `/space/photos/${photo.id}`, {})).status).toBe(204);
+    expect(stored()).toBe(1100);
+    // Deleting it again gives nothing back twice.
+    expect((await client.request('DELETE', `/space/photos/${photo.id}`, {})).status).toBe(404);
+    expect(stored()).toBe(1100);
+    expect((await start()).status).toBe(201);
+    sqlite.prepare('UPDATE photos SET pending_since = 0 WHERE pending_since IS NOT NULL').run();
+    expect((await start()).status).toBe(201);
+    expect(stored()).toBe(2 * 1100);
+    expect((await client.request('DELETE', '/space', {})).status).toBe(204);
+    expect(stored()).toBe(0);
+  });
+
+  it('gives the bytes back when an upload’s id is taken', async () => {
+    const { photo } = await upload();
+    const res = await client.request('POST', '/space/photos', {
+      id: photo.id,
+      meta: newMeta(),
+      thumbSize: 100,
+      fullSize: 1000,
+    });
+    expect(res.status).toBe(409);
+    expect(stored()).toBe(1100);
+  });
+
+  it('is per account: another account’s uploads don’t count', async () => {
+    setStored(QUOTA);
+    const other = new Client(env);
+    const keyring = await makeKeyring([newLoginKey(), newLoginKey(), newLoginKey()]);
+    await other.request('POST', '/auth/signup', { email: 'kim@example.com', name: 'Kim', keyring });
+    useSpace(other, toBase64Url(randomBytes(16)));
+    await upload(other);
+    expect((await start()).status).toBe(413);
   });
 });

@@ -87,17 +87,25 @@ export async function commitPhoto(db: D1Database, space: string, id: string): Pr
     .run();
 }
 
-/** Ids of this space's uploads that started before `before` and never finished. */
+/** A photo row's id and the bytes it holds (both files), for deleting it. */
+export interface PhotoSize {
+  id: string;
+  size: number;
+}
+
+/** This space's uploads that started before `before` and never finished. */
 export async function stalePendingPhotos(
   db: D1Database,
   space: string,
   before: number,
-): Promise<string[]> {
+): Promise<PhotoSize[]> {
   const { results } = await db
-    .prepare('SELECT id FROM photos WHERE space = ? AND pending_since < ? LIMIT 100')
+    .prepare(
+      'SELECT id, thumb_size + full_size AS size FROM photos WHERE space = ? AND pending_since < ? LIMIT 100',
+    )
     .bind(space, before)
-    .all<{ id: string }>();
-  return results.map((row) => row.id);
+    .all<PhotoSize>();
+  return results;
 }
 
 /** Returns false if the photo isn't a committed photo in this space. */
@@ -114,28 +122,32 @@ export async function updatePhotoMeta(
   return result.meta.changes === 1;
 }
 
-export async function deletePhotoRows(
+/** Deletes photo rows. Returns the ones this call deleted (not already gone). */
+export async function deletePhotoRows<T extends { id: string }>(
   db: D1Database,
   space: string,
-  ids: readonly string[],
-): Promise<void> {
-  if (ids.length === 0) return;
-  await db.batch(
-    ids.map((id) => db.prepare('DELETE FROM photos WHERE space = ? AND id = ?').bind(space, id)),
+  photos: readonly T[],
+): Promise<T[]> {
+  if (photos.length === 0) return [];
+  const results = await db.batch(
+    photos.map((photo) =>
+      db.prepare('DELETE FROM photos WHERE space = ? AND id = ?').bind(space, photo.id),
+    ),
   );
+  return photos.filter((_, index) => results[index]?.meta.changes === 1);
 }
 
-/** Up to `limit` photo ids of a space, committed or not, for wiping it. */
-export async function somePhotoIds(
+/** Up to `limit` photos of a space, committed or not, for wiping it. */
+export async function somePhotos(
   db: D1Database,
   space: string,
   limit: number,
-): Promise<string[]> {
+): Promise<PhotoSize[]> {
   const { results } = await db
-    .prepare('SELECT id FROM photos WHERE space = ? LIMIT ?')
+    .prepare('SELECT id, thumb_size + full_size AS size FROM photos WHERE space = ? LIMIT ?')
     .bind(space, limit)
-    .all<{ id: string }>();
-  return results.map((row) => row.id);
+    .all<PhotoSize>();
+  return results;
 }
 
 export async function listAlbums(db: D1Database, space: string): Promise<StoredAlbum[]> {

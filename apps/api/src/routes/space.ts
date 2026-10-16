@@ -1,10 +1,12 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 
 import { fromBase64Url, sha256, toBase64Url } from '@twofold/crypto/webcrypto';
-import { MAX_JOINED, MAX_MEMBERS, SPACE_HEADER } from '@twofold/types';
+import { MAX_JOINED, MAX_MEMBERS, SPACE_HEADER, STORAGE_SIZES } from '@twofold/types';
 import type { AlbumList, JoinedList, MemberList, PhotoPage } from '@twofold/types';
 
+import { releaseStorage, reserveStorage } from '../db';
 import { messages, readBody } from '../respond';
 import {
   createAlbumSchema,
@@ -44,10 +46,11 @@ import {
   listPhotos,
   objectKey,
   objectKeys,
-  somePhotoIds,
+  somePhotos,
   stalePendingPhotos,
   updatePhotoMeta,
 } from '../space-db';
+import type { PhotoSize } from '../space-db';
 
 export const PAGE_SIZE = 500;
 export const MAX_ALBUMS = 1000;
@@ -91,11 +94,23 @@ const requireOwner = createMiddleware<AppEnv>(async (c, next) => {
   return next();
 });
 
-async function deletePhotos(c: { env: AppEnv['Bindings'] }, tag: string, ids: string[]) {
-  if (ids.length === 0) return;
-  await c.env.BLOBS.delete(ids.flatMap(objectKeys));
-  await deletePhotoRows(c.env.DB, tag, ids);
+/**
+ * Deletes photos and their files, and gives their bytes back to the account deleting them.
+ * Storage isn't linked to accounts, so that's the only account it can go to: usually the
+ * one that uploaded them. Only rows this call actually deleted count, so a photo deleted
+ * twice at once is given back once.
+ */
+async function deletePhotos(c: Context<AppEnv>, tag: string, photos: PhotoSize[]) {
+  if (photos.length === 0) return;
+  await c.env.BLOBS.delete(photos.flatMap((photo) => objectKeys(photo.id)));
+  const deleted = await deletePhotoRows(c.env.DB, tag, photos);
+  const bytes = deleted.reduce((total, photo) => total + photo.size, 0);
+  await releaseStorage(c.env.DB, c.get('account').id, bytes);
 }
+
+const storageFull = `Your storage is full. Twofold keeps up to ${String(
+  STORAGE_SIZES.accountQuota / (1024 * 1024 * 1024),
+)} GB per account; delete some photos to make room.`;
 
 space.get('/photos', async (c) => {
   const after = c.req.query('after') ?? '';
@@ -114,7 +129,14 @@ space.post('/photos', async (c) => {
   const tag = c.get('space');
   const now = Date.now();
   await deletePhotos(c, tag, await stalePendingPhotos(c.env.DB, tag, now - PENDING_TTL_MS));
+  // The declared sizes are what the files must be, so they're charged up front.
+  const size = body.thumbSize + body.fullSize;
+  const accountId = c.get('account').id;
+  if (!(await reserveStorage(c.env.DB, accountId, size, STORAGE_SIZES.accountQuota))) {
+    return c.json({ error: storageFull }, 413);
+  }
   if (!(await insertPendingPhoto(c.env.DB, tag, body, now))) {
+    await releaseStorage(c.env.DB, accountId, size);
     return c.json({ error: messages.badRequest }, 409);
   }
   return c.body(null, 201);
@@ -196,8 +218,9 @@ space.delete('/photos/:id', async (c) => {
     return c.json({ error: messages.badRequest }, 400);
   }
   const tag = c.get('space');
-  if (!(await findPhoto(c.env.DB, tag, id.data))) return c.json({ error: notFound }, 404);
-  await deletePhotos(c, tag, [id.data]);
+  const photo = await findPhoto(c.env.DB, tag, id.data);
+  if (!photo) return c.json({ error: notFound }, 404);
+  await deletePhotos(c, tag, [{ id: photo.id, size: photo.thumbSize + photo.fullSize }]);
   return c.body(null, 204);
 });
 
@@ -224,9 +247,9 @@ space.delete('/', requireOwner, async (c) => {
   const tag = c.get('space');
   // R2 deletes up to 1000 keys per call; two keys per photo.
   for (;;) {
-    const ids = await somePhotoIds(c.env.DB, tag, 500);
-    if (ids.length === 0) break;
-    await deletePhotos(c, tag, ids);
+    const photos = await somePhotos(c.env.DB, tag, 500);
+    if (photos.length === 0) break;
+    await deletePhotos(c, tag, photos);
   }
   await deleteAlbums(c.env.DB, tag);
   await deleteSharing(c.env.DB, tag);

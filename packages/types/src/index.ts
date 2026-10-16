@@ -106,6 +106,8 @@ export const STORAGE_SIZES = {
   /** Largest encrypted thumbnail and full-size photo, in bytes. */
   maxThumb: 1024 * 1024,
   maxFull: 64 * 1024 * 1024,
+  /** Most encrypted bytes one account can upload and keep, across every space. */
+  accountQuota: 1024 * 1024 * 1024,
 } as const;
 
 /** Which encrypted file of a photo: a small preview, or the original. */

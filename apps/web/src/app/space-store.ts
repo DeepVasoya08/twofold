@@ -3,6 +3,7 @@ import { STORAGE_SIZES } from '@twofold/types';
 import type { PhotoPart } from '@twofold/types';
 
 import { spaceApi } from '../lib/api';
+import { isPhotoType } from '../lib/photo-types';
 import type { SpaceApi } from '../lib/api';
 import type { Album, Photo } from '../mock/data';
 import { FormError } from './account-ops';
@@ -115,7 +116,7 @@ function parsePhotoMeta(value: unknown): PhotoMeta | null {
     v === 1 &&
     typeof key === 'string' &&
     typeof type === 'string' &&
-    type.startsWith('image/') &&
+    isPhotoType(type) &&
     typeof width === 'number' &&
     typeof height === 'number' &&
     typeof takenAt === 'string' &&
@@ -287,6 +288,7 @@ export function remoteStore(
 
     add: async (photo, albumIds, onStage) => {
       const crypto = await loadCrypto();
+      if (!isPhotoType(photo.type)) throw new FormError('Twofold can’t store this kind of file.');
       if (crypto.encryptedFileSize(photo.full.length) > STORAGE_SIZES.maxFull) {
         throw new FormError(TOO_LARGE);
       }
@@ -315,9 +317,15 @@ export function remoteStore(
         thumbSize: thumb.length,
         fullSize: full.length,
       });
-      await api.putFile(id, 'thumb', thumb);
-      await api.putFile(id, 'full', full);
-      await api.commitPhoto(id);
+      try {
+        await api.putFile(id, 'thumb', thumb);
+        await api.putFile(id, 'full', full);
+        await api.commitPhoto(id);
+      } catch (error) {
+        // Let the half-finished upload go now, so its space comes back to this account.
+        await api.deletePhoto(id).catch(() => undefined);
+        throw error;
+      }
       known.set(id, { key, meta });
       return toPhoto(id, meta, membership, track(id, 'thumb', photo.thumb, THUMB_TYPE));
     },
