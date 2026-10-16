@@ -1,0 +1,16 @@
+.unlock__couple {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.unlock__names {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 600;
+}

@@ -1,0 +1,125 @@
+.memory {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  height: 220px;
+  margin-bottom: 36px;
+  border-radius: var(--radius-xl);
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+
+.memory:hover {
+  text-decoration: none;
+}
+
+.memory__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s var(--ease);
+}
+
+.memory:hover .memory__image {
+  transform: scale(1.03);
+}
+
+.memory__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgb(20 10 24 / 62%) 0%, rgb(20 10 24 / 10%) 70%);
+}
+
+.memory__text {
+  position: absolute;
+  inset: auto auto 28px 32px;
+  display: grid;
+  gap: 4px;
+}
+
+.memory__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.memory__title {
+  font-family: var(--font-serif);
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.memory__meta {
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.month + .month {
+  margin-top: 32px;
+}
+
+.month__header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin: 0 -8px 12px;
+  padding: 12px 8px 8px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.month__title {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.month__places {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+@media (max-width: 860px) {
+  .memory {
+    height: 170px;
+    margin-bottom: 24px;
+    border-radius: var(--radius-lg);
+  }
+
+  .memory__text {
+    inset: auto auto 18px 20px;
+  }
+
+  .memory__title {
+    font-size: 26px;
+  }
+
+  .month__header {
+    top: 60px;
+    margin: 0 -16px 8px;
+    padding: 10px 16px 6px;
+  }
+
+  .month__title {
+    font-size: 19px;
+  }
+
+  .month__places {
+    font-size: 13px;
+  }
+}

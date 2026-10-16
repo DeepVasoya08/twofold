@@ -1,0 +1,254 @@
+.welcome {
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(
+      60% 50% at 85% 20%,
+      color-mix(in srgb, var(--logo-b) 18%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      50% 50% at 10% 0%,
+      color-mix(in srgb, var(--logo-a) 20%, transparent),
+      transparent 70%
+    ),
+    var(--bg);
+}
+
+.welcome__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 32px;
+}
+
+.welcome__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 48px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 32px 72px;
+}
+
+.welcome__copy {
+  display: grid;
+  justify-items: start;
+  gap: 22px;
+}
+
+.welcome__copy .lock-badge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.welcome__title {
+  font-family: var(--font-serif);
+  font-size: clamp(40px, 6vw, 72px);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+}
+
+.welcome__lede {
+  max-width: 480px;
+  color: var(--text-2);
+  font-size: 19px;
+  line-height: 1.55;
+}
+
+.welcome__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.welcome__stack {
+  position: relative;
+  aspect-ratio: 1 / 0.95;
+}
+
+.welcome__card {
+  position: absolute;
+  overflow: hidden;
+  border: 8px solid #fffdf9;
+  border-radius: 18px;
+  background: #fffdf9;
+  box-shadow: 0 30px 60px -24px rgb(43 32 48 / 50%);
+  animation: card-in 0.8s var(--ease) both;
+}
+
+.welcome__card img {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.welcome__card--0 {
+  top: 4%;
+  left: 6%;
+  width: 46%;
+  aspect-ratio: 3 / 4;
+  transform: rotate(-8deg);
+}
+
+.welcome__card--1 {
+  top: 0;
+  right: 4%;
+  width: 44%;
+  aspect-ratio: 4 / 3;
+  transform: rotate(5deg);
+  animation-delay: 0.08s;
+}
+
+.welcome__card--2 {
+  top: 34%;
+  left: 28%;
+  width: 46%;
+  aspect-ratio: 1;
+  transform: rotate(-2deg);
+  z-index: 2;
+  animation-delay: 0.16s;
+}
+
+.welcome__card--3 {
+  bottom: 2%;
+  left: 0;
+  width: 34%;
+  aspect-ratio: 4 / 3;
+  transform: rotate(4deg);
+  animation-delay: 0.24s;
+}
+
+.welcome__card--4 {
+  right: 0;
+  bottom: 6%;
+  width: 34%;
+  aspect-ratio: 3 / 4;
+  transform: rotate(-5deg);
+  animation-delay: 0.32s;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    translate: 0 24px;
+  }
+}
+
+.welcome__sticker {
+  position: absolute;
+  top: 30%;
+  right: 6%;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 14px 30px -12px var(--accent);
+  transform: rotate(6deg);
+}
+
+.welcome__features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px 72px;
+}
+
+.feature {
+  display: grid;
+  gap: 10px;
+  padding: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+}
+
+.feature__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.feature__title {
+  margin-top: 6px;
+  font-family: var(--font-serif);
+  font-size: 21px;
+  font-weight: 600;
+}
+
+.feature__text {
+  color: var(--text-2);
+  font-size: 15px;
+}
+
+.welcome__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 32px 40px;
+  border-top: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+@media (max-width: 860px) {
+  .welcome__nav {
+    padding: 16px 20px;
+  }
+
+  .welcome__hero {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    padding: 20px 20px 48px;
+  }
+
+  .welcome__stack {
+    order: -1;
+    width: min(100%, 420px);
+    margin: 0 auto;
+  }
+
+  .welcome__lede {
+    font-size: 17px;
+  }
+
+  .welcome__cta {
+    width: 100%;
+  }
+
+  .welcome__cta .btn {
+    flex: 1 1 100%;
+  }
+
+  .welcome__features {
+    grid-template-columns: 1fr;
+    padding: 0 20px 48px;
+  }
+
+  .welcome__footer {
+    flex-direction: column;
+    padding: 24px 20px 32px;
+  }
+}

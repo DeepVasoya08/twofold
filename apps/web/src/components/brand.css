@@ -1,0 +1,92 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+}
+
+.logo__word {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.logo-mark__a {
+  fill: var(--logo-a);
+}
+
+.logo-mark__b {
+  fill: var(--logo-b);
+  opacity: 0.9;
+}
+
+.logo-mark__fold {
+  fill: #fff;
+  opacity: 0.55;
+}
+
+.avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.avatar--me {
+  background: linear-gradient(135deg, #f0917b, #d9586a);
+}
+
+.avatar--partner {
+  background: linear-gradient(135deg, #9a72c4, #5b3a78);
+}
+
+.avatar--sm {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+}
+
+.avatar--md {
+  width: 40px;
+  height: 40px;
+  font-size: 15px;
+}
+
+.avatar--lg {
+  width: 64px;
+  height: 64px;
+  font-size: 22px;
+  box-shadow: 0 0 0 3px var(--surface);
+}
+
+.couple {
+  display: inline-flex;
+  flex: none;
+}
+
+.couple .avatar + .avatar {
+  margin-left: -10px;
+}
+
+.couple .avatar--sm + .avatar--sm {
+  margin-left: -7px;
+}
+
+.couple .avatar--lg + .avatar--lg {
+  margin-left: -16px;
+}
+
+.lock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}

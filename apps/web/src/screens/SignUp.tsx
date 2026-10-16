@@ -1,0 +1,110 @@
+import { useState } from 'react';
+import type { SubmitEvent } from 'react';
+
+import { Link, useRouter } from '../app/router';
+import { paths } from '../app/routes';
+import { AuthLayout } from '../components/AuthLayout';
+import { PasswordField, TextField } from '../components/Field';
+import { Icon } from '../components/Icon';
+import { MIN_PASSWORD_LENGTH, isValidEmail, passwordStrength } from '../lib/password';
+
+interface Errors {
+  name?: string;
+  email?: string;
+  password?: string;
+  confirm?: string;
+}
+
+export function validateSignUp(values: {
+  name: string;
+  email: string;
+  password: string;
+  confirm: string;
+}): Errors {
+  const errors: Errors = {};
+  if (!values.name.trim()) errors.name = 'Tell us what to call you.';
+  if (!isValidEmail(values.email)) errors.email = 'Enter a valid email address.';
+  if (values.password.length < MIN_PASSWORD_LENGTH) {
+    errors.password = `Use at least ${String(MIN_PASSWORD_LENGTH)} characters.`;
+  } else if (passwordStrength(values.password).score < 2) {
+    errors.password = 'Too easy to guess. Try a longer phrase.';
+  }
+  if (values.confirm !== values.password) errors.confirm = "Passwords don't match.";
+  return errors;
+}
+
+export function SignUp() {
+  const { navigate } = useRouter();
+  const [values, setValues] = useState({ name: '', email: '', password: '', confirm: '' });
+  const [submitted, setSubmitted] = useState(false);
+  const errors = submitted ? validateSignUp(values) : {};
+
+  const set = (key: keyof typeof values) => (event: { currentTarget: HTMLInputElement }) => {
+    const { value } = event.currentTarget;
+    setValues((current) => ({ ...current, [key]: value }));
+  };
+
+  const onSubmit = (event: SubmitEvent) => {
+    event.preventDefault();
+    setSubmitted(true);
+    if (Object.keys(validateSignUp(values)).length === 0) navigate(paths.recoveryKey);
+  };
+
+  return (
+    <AuthLayout
+      title="Create your vault"
+      subtitle="Start a private space, then invite your partner to share it."
+      step={{ current: 1, total: 3 }}
+      footer={
+        <>
+          Already have an account? <Link to={paths.login}>Log in</Link>
+        </>
+      }
+    >
+      <form className="form" onSubmit={onSubmit} noValidate>
+        <TextField
+          label="Your name"
+          autoComplete="given-name"
+          value={values.name}
+          onChange={set('name')}
+          error={errors.name}
+        />
+        <TextField
+          label="Email"
+          type="email"
+          autoComplete="email"
+          inputMode="email"
+          value={values.email}
+          onChange={set('email')}
+          error={errors.email}
+        />
+        <PasswordField
+          label="Password"
+          autoComplete="new-password"
+          value={values.password}
+          onChange={set('password')}
+          error={errors.password}
+          showStrength
+          hint={`At least ${String(MIN_PASSWORD_LENGTH)} characters. A short sentence works well.`}
+        />
+        <PasswordField
+          label="Confirm password"
+          autoComplete="new-password"
+          value={values.confirm}
+          onChange={set('confirm')}
+          error={errors.confirm}
+        />
+        <div className="callout">
+          <Icon name="key" size={18} />
+          <p>
+            Your password unlocks your photos, so we can&apos;t reset it for you. Next you&apos;ll
+            get a recovery key to keep somewhere safe.
+          </p>
+        </div>
+        <button type="submit" className="btn btn--primary btn--block btn--lg">
+          Continue
+        </button>
+      </form>
+    </AuthLayout>
+  );
+}
