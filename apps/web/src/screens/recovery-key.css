@@ -1,0 +1,68 @@
+.recovery {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.recovery__words {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  counter-reset: word;
+}
+
+.recovery__word {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  counter-increment: word;
+}
+
+.recovery__word::before {
+  content: counter(word);
+  min-width: 1.4em;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.recovery__actions {
+  display: flex;
+  justify-content: center;
+}
+
+.tips {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.tips li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.tips svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--success);
+}
+
+@media (max-width: 400px) {
+  .recovery__words {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

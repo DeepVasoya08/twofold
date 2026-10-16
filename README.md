@@ -1,11 +1,13 @@
 # Twofold
 
-An end-to-end encrypted private photo vault for couples. Photos are encrypted on your
-device before upload; the server only ever stores ciphertext.
+An end-to-end encrypted private photo library. Photos are encrypted on your device before
+upload; the server only ever stores ciphertext. A second password can open a separate,
+private space.
 
 Web first; a mobile app (Expo) will follow.
 
-> Status: foundation only — no product features yet.
+> Status: every screen is built on mock data (see [docs/ui.md](docs/ui.md)); the API and
+> encryption are not wired in yet.
 
 ## Repository layout
 
@@ -38,7 +40,7 @@ pnpm lint            # ESLint (typescript-eslint strict, type-aware)
 pnpm typecheck       # tsc in every package
 pnpm test            # Vitest unit tests in every package
 pnpm test:coverage   # same, with coverage
-pnpm test:e2e        # Playwright smoke test (builds the web app, runs it in wrangler dev)
+pnpm test:e2e        # Playwright tests (builds the web app, runs it in wrangler dev)
 pnpm build           # build every app and package
 pnpm format          # Prettier
 ```

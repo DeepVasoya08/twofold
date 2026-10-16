@@ -1,0 +1,67 @@
+.album-hero {
+  position: relative;
+  overflow: hidden;
+  height: 300px;
+  margin: 6px 0 24px;
+  border-radius: var(--radius-xl);
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+
+.album-hero__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-hero__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgb(20 10 24 / 70%) 0%, rgb(20 10 24 / 0%) 65%);
+}
+
+.album-hero__text {
+  position: absolute;
+  inset: auto 32px 28px;
+  display: grid;
+  gap: 6px;
+}
+
+.album-hero__title {
+  font-family: var(--font-serif);
+  font-size: 44px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+}
+
+.album-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 15px;
+  opacity: 0.9;
+}
+
+@media (max-width: 860px) {
+  .album-hero {
+    height: 220px;
+    margin: 4px -16px 16px;
+    border-radius: 0;
+  }
+
+  .album-hero__text {
+    inset: auto 20px 20px;
+  }
+
+  .album-hero__title {
+    font-size: 32px;
+  }
+
+  .album-hero__meta {
+    font-size: 13px;
+  }
+}

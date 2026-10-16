@@ -4,7 +4,7 @@ test('home page loads', async ({ page }) => {
   await page.goto('/');
 
   await expect(page).toHaveTitle('Twofold');
-  await expect(page.getByRole('heading', { level: 1, name: 'Twofold' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /Your photos/ })).toBeVisible();
 });
 
 test('serves the web app with its security headers', async ({ page }) => {
@@ -15,9 +15,9 @@ test('serves the web app with its security headers', async ({ page }) => {
 });
 
 test('deep links fall back to the app shell', async ({ page }) => {
-  await page.goto('/vault/some-album');
+  await page.goto('/albums/kyoto');
 
-  await expect(page.getByRole('heading', { level: 1, name: 'Twofold' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Kyoto in autumn' })).toBeVisible();
 });
 
 test('the API is on the same origin under /api', async ({ page }) => {

@@ -1,0 +1,197 @@
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 24px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.segmented__option {
+  min-height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+
+.segmented__option[aria-selected='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.share-card {
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.share {
+  display: grid;
+  gap: 20px;
+}
+
+.invite-card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 26px 20px 20px;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(100% 100% at 0% 0%, var(--accent-soft), transparent 70%),
+    radial-gradient(100% 100% at 100% 100%, var(--plum-soft), transparent 70%), var(--surface);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.invite-card__label {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.invite-card__code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: clamp(24px, 7vw, 32px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.invite-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.invite-card__expiry {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.waiting {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+
+.waiting__avatars {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.waiting__empty {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 2px dashed var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-3);
+}
+
+.waiting__dots {
+  display: flex;
+  gap: 5px;
+}
+
+.waiting__dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: dot 1.2s ease-in-out infinite;
+}
+
+.waiting__dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.waiting__dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.waiting__text {
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.share__note {
+  display: flex;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.share__note svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--success);
+}
+
+.joined {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.joined .avatar-pair {
+  margin-bottom: 6px;
+  animation: joined-in 0.6s var(--ease);
+}
+
+@keyframes joined-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+.joined__title {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.joined__text {
+  max-width: 360px;
+  color: var(--text-2);
+}
+
+@media (max-width: 560px) {
+  .share-card {
+    padding: 16px;
+  }
+}

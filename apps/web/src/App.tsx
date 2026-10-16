@@ -1,8 +1,113 @@
+import { useEffect } from 'react';
+
+import { useRouter } from './app/router';
+import { matchRoute } from './app/routes';
+import type { Route } from './app/routes';
+import { useVault } from './app/vault';
+import { AppShell } from './components/AppShell';
+import { Album } from './screens/Album';
+import { Albums } from './screens/Albums';
+import { Favorites } from './screens/Favorites';
+import { Gallery } from './screens/Gallery';
+import { LogIn } from './screens/LogIn';
+import { NotFound } from './screens/NotFound';
+import { PhotoViewer } from './screens/PhotoViewer';
+import { Recover } from './screens/Recover';
+import { RecoveryKey } from './screens/RecoveryKey';
+import { Settings } from './screens/Settings';
+import { Share } from './screens/Share';
+import { SignUp } from './screens/SignUp';
+import { Unlock } from './screens/Unlock';
+import { Welcome } from './screens/Welcome';
+
+const titles: Record<Route['name'], string> = {
+  welcome: 'Twofold',
+  signup: 'Create your vault · Twofold',
+  'recovery-key': 'Recovery key · Twofold',
+  login: 'Log in · Twofold',
+  unlock: 'Unlock · Twofold',
+  recover: 'Recover your vault · Twofold',
+  gallery: 'Photos · Twofold',
+  albums: 'Albums · Twofold',
+  album: 'Album · Twofold',
+  favorites: 'Favorites · Twofold',
+  photo: 'Photo · Twofold',
+  settings: 'Settings · Twofold',
+  share: 'Share · Twofold',
+  'not-found': 'Not found · Twofold',
+};
+
+function Screen({ route }: { route: Route }) {
+  switch (route.name) {
+    case 'welcome':
+      return <Welcome />;
+    case 'signup':
+      return <SignUp />;
+    case 'recovery-key':
+      return <RecoveryKey />;
+    case 'login':
+      return <LogIn />;
+    case 'unlock':
+      return <Unlock />;
+    case 'recover':
+      return <Recover />;
+    case 'photo':
+      return <PhotoViewer photoId={route.photoId} />;
+    case 'not-found':
+      return <NotFound />;
+    case 'gallery':
+      return (
+        <AppShell>
+          <Gallery />
+        </AppShell>
+      );
+    case 'albums':
+      return (
+        <AppShell>
+          <Albums />
+        </AppShell>
+      );
+    case 'album':
+      return (
+        <AppShell uploadAlbumId={route.albumId}>
+          <Album albumId={route.albumId} />
+        </AppShell>
+      );
+    case 'favorites':
+      return (
+        <AppShell>
+          <Favorites />
+        </AppShell>
+      );
+    case 'settings':
+      return (
+        <AppShell>
+          <Settings />
+        </AppShell>
+      );
+    case 'share':
+      return (
+        <AppShell>
+          <Share />
+        </AppShell>
+      );
+  }
+}
+
+/** Picks the screen for the current URL. Providers live in main.tsx (and in tests). */
 export function App() {
-  return (
-    <main>
-      <h1>Twofold</h1>
-      <p>A private, end-to-end encrypted photo vault for two.</p>
-    </main>
-  );
+  const { pathname } = useRouter();
+  const route = matchRoute(pathname);
+  const { space } = useVault();
+
+  // The private space re-tints the whole app (see styles/base.css).
+  useEffect(() => {
+    document.documentElement.dataset.space = space;
+  }, [space]);
+
+  useEffect(() => {
+    document.title = titles[route.name];
+  }, [route.name]);
+
+  return <Screen route={route} />;
 }
