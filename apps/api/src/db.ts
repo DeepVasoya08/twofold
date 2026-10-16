@@ -109,34 +109,37 @@ export async function deleteSession(db: D1Database, tokenHash: string): Promise<
   await db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(tokenHash).run();
 }
 
-/** Failures recorded for this email in the current window (0 once the window has passed). */
-export async function recentFailures(
-  db: D1Database,
-  email: string,
-  windowStart: number,
-): Promise<number> {
-  const row = await db
-    .prepare('SELECT failures FROM login_failures WHERE email = ? AND window_start > ?')
-    .bind(email, windowStart)
-    .first<{ failures: number }>();
-  return row?.failures ?? 0;
-}
-
-/** Counts a failure, starting a new window if the old one has passed. */
-export async function recordFailure(
+/**
+ * Counts an attempt as a failure before it is checked, starting a new window if the old one
+ * has passed, and returns the count including this attempt. Counting first, in one
+ * statement, means concurrent requests can't all read a count under the limit and then all
+ * be checked: each one gets its own number.
+ */
+export async function takeAttempt(
   db: D1Database,
   email: string,
   now: number,
   windowStart: number,
-): Promise<void> {
-  await db
+): Promise<number> {
+  const row = await db
     .prepare(
       `INSERT INTO login_failures (email, window_start, failures) VALUES (?1, ?2, 1)
        ON CONFLICT (email) DO UPDATE SET
          failures = CASE WHEN window_start > ?3 THEN failures + 1 ELSE 1 END,
-         window_start = CASE WHEN window_start > ?3 THEN window_start ELSE ?2 END`,
+         window_start = CASE WHEN window_start > ?3 THEN window_start ELSE ?2 END
+       RETURNING failures`,
     )
     .bind(email, now, windowStart)
+    .first<{ failures: number }>();
+  if (!row) throw new Error('The attempt was not counted');
+  return row.failures;
+}
+
+/** Gives back an attempt that turned out not to be a failure. */
+export async function returnAttempt(db: D1Database, email: string): Promise<void> {
+  await db
+    .prepare('UPDATE login_failures SET failures = failures - 1 WHERE email = ? AND failures > 0')
+    .bind(email)
     .run();
 }
 

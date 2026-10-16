@@ -6,7 +6,7 @@ import { fromBase64Url, sha256, toBase64Url } from '@twofold/crypto/webcrypto';
 import { INVITE_TTL_MS } from '@twofold/types';
 import type { InviterView, JoinerView } from '@twofold/types';
 
-import { recentFailures, recordFailure } from '../db';
+import { returnAttempt, takeAttempt } from '../db';
 import { FAILURE_WINDOW_MS, MAX_FAILURES } from '../proof';
 import { messages, readBody } from '../respond';
 import {
@@ -73,21 +73,24 @@ invites.post('/', async (c) => {
   return c.body(null, 201);
 });
 
-/** Resolves the joiner's code, counting unknown codes against the account. */
+/**
+ * Resolves the joiner's code, counting unknown codes against the account. The attempt is
+ * counted before the code is looked up (so parallel guesses can't get past the limit) and
+ * given back if the code is real.
+ */
 async function joinerSide(c: Context<AppEnv>): Promise<string | Response> {
   const code = inviteCodeSchema.safeParse(c.req.param('code'));
   if (!code.success) return c.json({ error: messages.badRequest }, 400);
   const now = Date.now();
-  const windowStart = now - FAILURE_WINDOW_MS;
   const key = throttleKey(c);
-  if ((await recentFailures(c.env.DB, key, windowStart)) >= MAX_FAILURES) {
+  if ((await takeAttempt(c.env.DB, key, now, now - FAILURE_WINDOW_MS)) > MAX_FAILURES) {
     return c.json({ error: messages.throttled }, 429);
   }
   const hash = await hashText(code.data);
   if (!(await findInvite(c.env.DB, 'code_hash', hash, now))) {
-    await recordFailure(c.env.DB, key, now, windowStart);
     return c.json({ error: gone }, 404);
   }
+  await returnAttempt(c.env.DB, key);
   return hash;
 }
 

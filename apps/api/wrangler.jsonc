@@ -3,7 +3,15 @@
   "name": "twofold",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
-  "observability": { "enabled": true },
+  // Keep the Worker's own console logs (which never include keys, tokens or ids), but no
+  // per-request logs or traces: those would store every request's path, headers and client
+  // details at Cloudflare, which could link a private space's requests to the main
+  // library's for as long as they're kept. See docs/security.md.
+  "observability": {
+    "enabled": true,
+    "logs": { "invocation_logs": false },
+    "traces": { "enabled": false },
+  },
   // One Worker serves the whole app on one origin: the built web app as static assets,
   // and the API under /api. Build apps/web first (pnpm build does this).
   "assets": {
