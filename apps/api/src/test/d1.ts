@@ -24,6 +24,12 @@ class Statement {
     return Promise.resolve((row ?? null) as T | null);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- D1's own signature
+  all<T>(): Promise<{ results: T[] }> {
+    const rows = this.db.prepare(this.sql).all(...this.params);
+    return Promise.resolve({ results: rows as T[] });
+  }
+
   run(): Promise<{ meta: { changes: number } }> {
     const result = this.db.prepare(this.sql).run(...this.params);
     return Promise.resolve({ meta: { changes: Number(result.changes) } });

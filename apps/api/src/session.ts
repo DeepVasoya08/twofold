@@ -13,7 +13,8 @@ const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
 
 export interface AppEnv {
   Bindings: Env;
-  Variables: { account: AccountRecord };
+  /** `space` is set by requireSpace: the SHA-256 tag of the space being accessed. */
+  Variables: { account: AccountRecord; space: string };
 }
 
 /**
