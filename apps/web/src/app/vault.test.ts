@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Photo } from '../mock/data';
-import { albumCover, albumPhotos, emptyVaults, vaultReducer, vaultsReducer } from './vault';
-import type { VaultState, VaultsState } from './vault';
+import { albumCover, albumPhotos, emptyVaults, vaultReducer } from './vault';
+import type { VaultState } from './vault';
 
 function photo(id: string, takenAt: string, albumIds: string[] = []): Photo {
   return {
@@ -41,11 +41,10 @@ describe('vaultReducer', () => {
     expect(next.albums[0]?.coverPhotoId).toBeUndefined();
   });
 
-  it('adds uploads to the front, optionally into an album', () => {
+  it('adds uploads to the front', () => {
     const next = vaultReducer(state, {
       type: 'add-photos',
-      photos: [photo('d', '2026-04-01T00:00:00Z')],
-      albumId: 'trip',
+      photos: [photo('d', '2026-04-01T00:00:00Z', ['trip'])],
     });
     expect(next.photos[0]).toMatchObject({ id: 'd', albumIds: ['trip'] });
   });
@@ -68,34 +67,43 @@ describe('album helpers', () => {
   });
 });
 
-describe('spaces', () => {
-  const vaults: VaultsState = {
-    spaces: { main: state, private: { photos: [], albums: [{ id: 'p', title: 'P' }] } },
-  };
-
-  it('applies actions to the named space only', () => {
-    const next = vaultsReducer(vaults, {
-      type: 'in-space',
-      space: 'private',
-      action: { type: 'create-album', album: { id: 'q', title: 'Q' } },
+describe('images', () => {
+  it('sets a preview or an original as it is decrypted', () => {
+    const withThumb = vaultReducer(state, {
+      type: 'set-image',
+      photoId: 'a',
+      part: 'thumb',
+      url: 'blob:thumb',
     });
-    expect(next.spaces.private.albums.map((a) => a.id)).toEqual(['q', 'p']);
-    expect(next.spaces.main).toBe(vaults.spaces.main);
+    const withFull = vaultReducer(withThumb, {
+      type: 'set-image',
+      photoId: 'a',
+      part: 'full',
+      url: 'blob:full',
+    });
+    expect(withFull.photos[0]).toMatchObject({ id: 'a', src: 'blob:thumb', fullSrc: 'blob:full' });
+    expect(withFull.photos[1]).toBe(state.photos[1]);
   });
 
-  it('moves a photo between spaces, leaving its albums behind', () => {
-    const moved = vaultsReducer(vaults, { type: 'move-photo', photoId: 'a', to: 'private' });
-    expect(moved.spaces.main.photos.map((p) => p.id)).toEqual(['b', 'c']);
-    expect(moved.spaces.main.albums[0]?.coverPhotoId).toBeUndefined();
-    expect(moved.spaces.private.photos).toMatchObject([{ id: 'a', albumIds: [] }]);
-
-    const back = vaultsReducer(moved, { type: 'move-photo', photoId: 'a', to: 'main' });
-    expect(back.spaces.private.photos).toEqual([]);
-    expect(back.spaces.main.photos[0]?.id).toBe('a');
+  it('keeps one decrypted original at a time', () => {
+    const first = vaultReducer(state, {
+      type: 'set-image',
+      photoId: 'a',
+      part: 'full',
+      url: 'blob:a',
+    });
+    const second = vaultReducer(first, {
+      type: 'set-image',
+      photoId: 'b',
+      part: 'full',
+      url: 'blob:b',
+    });
+    expect(second.photos.map((p) => p.fullSrc)).toEqual([undefined, 'blob:b', undefined]);
   });
 
-  it('ignores a move of a photo that is not in the other space', () => {
-    expect(vaultsReducer(vaults, { type: 'move-photo', photoId: 'a', to: 'main' })).toBe(vaults);
+  it('replaces everything once the space has loaded', () => {
+    const loaded = { photos: [photo('z', '2026-05-01T00:00:00Z')], albums: [] };
+    expect(vaultReducer(state, { type: 'loaded', state: loaded })).toBe(loaded);
   });
 
   it('starts a new session empty', () => {

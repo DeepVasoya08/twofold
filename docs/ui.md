@@ -1,9 +1,9 @@
 # Web UI
 
-Accounts are real: sign-up, log in, unlock, recovery and both passwords call the API and
-`packages/crypto` (design in [security.md](security.md)). Photo storage is not wired up yet,
-so a new account starts with an empty library, uploads stay in memory, and locking or
-reloading clears them. The mock library in `apps/web/src/mock/` (placeholder landscape
+Accounts and photo storage are real: sign-up, log in, unlock, recovery and both passwords
+call the API and `packages/crypto`, and photos, favorites and albums are stored end-to-end
+encrypted in each space (design in [security.md](security.md)). Unlocking downloads and
+decrypts the open space; locking or reloading drops everything decrypted. The mock library in `apps/web/src/mock/` (placeholder landscape
 "photos" drawn as SVG data URIs) now only decorates the welcome and sign-in screens and
 feeds unit tests; sharing, invite codes and
 auto-lock are still mock UI.
@@ -28,8 +28,9 @@ exists but is low-key (Settings → Sharing).
 - **Move to private space** (photo viewer, main library) asks for the private password the
   first time after unlocking, then moves straight in until Twofold locks. Right after
   setting up a private space it doesn't ask at all.
-  **Move to library** (private space) moves a photo back. Albums belong to one space, so a
-  moved photo arrives unfiled.
+  **Move to library** (private space) works the same way with the main password. Albums
+  belong to one space, so a moved photo arrives unfiled. A move re-encrypts the photo
+  under a new key and id in the other space, then deletes the original.
 - Each space is shared separately (Settings → Sharing → Invite). Sharing the library never
   shares the private space.
 - The lock button (sidebar, or top bar on phones) forgets which space was open.
@@ -78,7 +79,13 @@ Routes are the same in both spaces; the content depends on which space is open.
 | anything else          | Not found                                                       |
 
 Upload is a dialog opened from the sidebar (desktop) or the top bar (phones); inside an
-album it also adds the photos to that album. Its "encrypting" progress is simulated.
+album it also adds the photos to that album. Each photo is read on the device, given a
+640px JPEG preview (`lib/thumbnail.ts`), encrypted, then uploaded, one at a time; the
+progress bar follows those steps.
+
+The grid shows a quiet placeholder until a photo's preview has been downloaded and
+decrypted (a few at a time, newest first). The viewer then fetches and decrypts the
+original.
 
 The photo viewer zooms with the mouse wheel or a trackpad pinch (towards the pointer),
 a two-finger pinch on touch screens, a double-click (toggles 2.5×), and the `+`, `-` and
@@ -88,7 +95,9 @@ maths is in `lib/zoom.ts`, the gestures in `screens/use-zoom.ts`.
 ## Structure (`apps/web/src`)
 
 - `app/` — routing (`routes.ts` parses URLs, `router.tsx` is a small History API router
-  with no dependency), and in-memory state: vault (both spaces), theme, toasts.
+  with no dependency), and in-memory state: vault (the open space), theme, toasts.
+  `space-store.ts` reads and writes one space's encrypted photos and albums through the
+  API.
 - `components/` — layout (`AppShell`, `AuthLayout`) and shared pieces (fields, dialog,
   photo grid, upload dialog, icons, logo).
 - `screens/` — one file per screen, each with its own stylesheet.
@@ -109,8 +118,9 @@ maths is in `lib/zoom.ts`, the gestures in `screens/use-zoom.ts`.
 
 ## Security notes
 
-- Decrypted photos are shown through in-memory object URLs (as uploads already are) and
-  must never be written to `localStorage`, IndexedDB or caches.
+- Decrypted photos are shown through in-memory object URLs, revoked when the vault
+  unmounts (lock, sign-out), and must never be written to `localStorage`, IndexedDB or
+  caches.
 - No password is kept anywhere: it is turned into keys inside `app/account-ops.ts` and
   dropped. Keys live only in React state and are dropped on lock, sign-out and reload,
   along with every decrypted photo (the vault provider is remounted).

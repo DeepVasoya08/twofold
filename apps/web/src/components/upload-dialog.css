@@ -100,5 +100,10 @@
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--logo-b), var(--accent));
-  transition: width 0.1s linear;
+  transition: width 0.3s var(--ease);
+}
+
+.upload-item__phase.is-failed {
+  color: var(--danger);
+  font-weight: 600;
 }

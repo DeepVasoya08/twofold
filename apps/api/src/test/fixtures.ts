@@ -32,12 +32,26 @@ export class Client {
     private readonly origin = 'https://twofold.test',
   ) {}
 
+  /** Extra headers sent with every request (a space token, for example). */
+  headers: Record<string, string> = {};
+
   async request(method: string, path: string, body?: unknown): Promise<Response> {
-    const headers: Record<string, string> = {};
-    if (body !== undefined) headers['content-type'] = 'application/json';
+    return body === undefined
+      ? this.send(method, path)
+      : this.send(method, path, JSON.stringify(body), { 'content-type': 'application/json' });
+  }
+
+  /** Sends a raw body with the given headers. */
+  async send(
+    method: string,
+    path: string,
+    body?: BodyInit,
+    extraHeaders: Record<string, string> = {},
+  ): Promise<Response> {
+    const headers: Record<string, string> = { ...this.headers, ...extraHeaders };
     if (this.cookie) headers.cookie = this.cookie;
     const init: RequestInit = { method, headers };
-    if (body !== undefined) init.body = JSON.stringify(body);
+    if (body !== undefined) init.body = body;
     const res = await app.request(`${this.origin}/api${path}`, init, this.env);
     const setCookie = res.headers.get('set-cookie');
     if (setCookie) {

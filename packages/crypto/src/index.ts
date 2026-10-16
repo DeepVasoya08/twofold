@@ -8,6 +8,7 @@ import { getSodium } from './sodium';
 
 export * from './keyring';
 export * from './recovery-key';
+export * from './storage';
 export { fromBase64Url, toBase64Url } from './webcrypto';
 
 /** Resolves once libsodium's WebAssembly module has loaded and is safe to call. */

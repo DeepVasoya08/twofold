@@ -6,6 +6,7 @@ import { LockBadge } from '../components/Brand';
 import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
+import { PhotoImage } from '../components/PhotoImage';
 import { formatDateRange, groupByMonth, pluralize } from '../lib/format';
 
 import './gallery.css';
@@ -13,7 +14,7 @@ import './gallery.css';
 const HIGHLIGHT_MIN_PHOTOS = 3;
 
 export function Gallery() {
-  const { state, space } = useVault();
+  const { state, space, status } = useVault();
   const isPrivate = space === 'private';
   const months = groupByMonth(state.photos);
   const highlight = state.albums.find(
@@ -34,7 +35,15 @@ export function Gallery() {
         }
       />
 
-      {state.photos.length === 0 ? (
+      {status === 'failed' ? (
+        <EmptyState icon="lock" title="Couldn’t open your photos">
+          Check your connection, then lock Twofold and unlock it again to try again.
+        </EmptyState>
+      ) : status === 'loading' ? (
+        <p className="gallery__status" role="status">
+          Decrypting your photos…
+        </p>
+      ) : state.photos.length === 0 ? (
         isPrivate ? (
           <EmptyState icon="eye-off" title="Your private space is empty">
             Move photos here from your library, or upload straight in. They only appear when you
@@ -50,7 +59,7 @@ export function Gallery() {
         <>
           {highlight && highlightCover && (
             <Link to={paths.album(highlight.id)} className="memory">
-              <img className="memory__image" src={highlightCover.src} alt="" />
+              <PhotoImage className="memory__image" src={highlightCover.src} alt="" />
               <span className="memory__shade" />
               <span className="memory__text">
                 <span className="memory__eyebrow">

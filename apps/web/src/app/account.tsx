@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import type { SpaceKeys } from '@twofold/crypto';
 import type { AccountResponse } from '@twofold/types';
 
 import { ApiError, api } from '../lib/api';
@@ -36,10 +37,13 @@ interface AccountValue {
   logOut: () => Promise<void>;
   changeMainPassword: (current: string, next: string) => Promise<void>;
   setPrivatePassword: (current: string | null, next: string) => Promise<void>;
-  /** True while photos can move into the private space without asking for its password. */
-  privateSpaceOpen: boolean;
-  /** Keeps the private space's keys for this session; throws if the password doesn't fit. */
-  openPrivateSpace: (password: string) => Promise<void>;
+  /** True while photos can move to the other space without asking for its password. */
+  otherSpaceOpen: boolean;
+  /**
+   * Keeps the other space's keys for this session and returns them; throws if the password
+   * doesn't fit.
+   */
+  openOtherSpace: (password: string) => Promise<SpaceKeys>;
   saveRecoveryKey: (recoveryKey: Uint8Array) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
 }
@@ -152,9 +156,12 @@ export function AccountProvider({
         guard(async () => {
           update(await ops.setPrivatePassword(requireSession(), current, next));
         }),
-      privateSpaceOpen: session?.privateSpace !== undefined,
-      openPrivateSpace: async (password) => {
-        update(await ops.openPrivateSpace(requireSession(), password));
+      otherSpaceOpen: session?.otherSpace !== undefined,
+      openOtherSpace: async (password) => {
+        const next = await ops.openOtherSpace(requireSession(), password);
+        update(next);
+        if (!next.otherSpace) throw new ops.FormError('Unlock the other space first.');
+        return next.otherSpace;
       },
       saveRecoveryKey: (recoveryKey) =>
         guard(async () => {

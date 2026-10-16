@@ -17,7 +17,10 @@ import type { Session } from './account-ops';
  * These tests run the real crypto (Argon2id included) against an in-memory stand-in for the
  * API that checks login keys the way the server does.
  */
-const server = vi.hoisted(() => ({ account: null as AccountResponse | null }));
+const server = vi.hoisted(() => ({
+  account: null as AccountResponse | null,
+  wiped: [] as string[],
+}));
 
 async function matches(account: AccountResponse, loginKey: string): Promise<boolean> {
   const key = fromBase64Url(loginKey);
@@ -65,6 +68,12 @@ vi.mock('../lib/api', async (importOriginal) => {
       },
       logOut: () => Promise.resolve(undefined),
     },
+    spaceApi: (token: string) => ({
+      wipe: () => {
+        server.wiped.push(token);
+        return Promise.resolve(undefined);
+      },
+    }),
   };
 });
 
@@ -80,6 +89,7 @@ async function signUp(): Promise<{ session: Session; words: string }> {
 
 beforeEach(() => {
   server.account = null;
+  server.wiped = [];
 });
 
 describe('sign-up and unlock', { timeout: 30_000 }, () => {
@@ -92,7 +102,7 @@ describe('sign-up and unlock', { timeout: 30_000 }, () => {
     expect(ops.spaceOf((await ops.unlock(current(), MAIN)).opened)).toBe('main');
     await expect(ops.unlock(current(), PRIVATE)).rejects.toThrow('That password isn’t right.');
     // A new account has no private space, and nothing says so.
-    await expect(ops.openPrivateSpace(session, PRIVATE)).rejects.toThrow(
+    await expect(ops.openOtherSpace(session, PRIVATE)).rejects.toThrow(
       'That password doesn’t open a private space.',
     );
   });
@@ -124,16 +134,20 @@ describe('private space', { timeout: 30_000 }, () => {
     expect(current().keyring.slots[2]).not.toBe(before.slots[2]);
 
     // Creating it here keeps its keys, so photos can move in without asking.
-    expect(after.privateSpace).toBeDefined();
+    expect(after.otherSpace).toBeDefined();
     const fresh = await ops.unlock(current(), MAIN);
-    expect(fresh.privateSpace).toBeUndefined();
-    await expect(ops.openPrivateSpace(fresh, MAIN)).rejects.toThrow(/doesn’t open/);
-    const opened = await ops.openPrivateSpace(fresh, PRIVATE);
+    expect(fresh.otherSpace).toBeUndefined();
+    await expect(ops.openOtherSpace(fresh, MAIN)).rejects.toThrow(/doesn’t open/);
+    const opened = await ops.openOtherSpace(fresh, PRIVATE);
     expect(opened.opened).toBe(fresh.opened);
-    expect(opened.privateSpace?.spaceKey).toEqual(after.privateSpace?.spaceKey);
+    expect(opened.otherSpace?.spaceKey).toEqual(after.otherSpace?.spaceKey);
 
     const unlocked = await ops.unlock(current(), PRIVATE);
     expect(ops.spaceOf(unlocked.opened)).toBe('private');
+    // From the private space, the main password opens the library's keys for moving out.
+    await expect(ops.openOtherSpace(unlocked, PRIVATE)).rejects.toThrow(/main password/);
+    const back = await ops.openOtherSpace(unlocked, MAIN);
+    expect(back.otherSpace?.spaceKey).toEqual(session.opened.space.spaceKey);
     const loggedIn = await ops.logIn(EMAIL, PRIVATE);
     expect(ops.spaceOf(loggedIn.opened)).toBe('private');
   });
@@ -176,7 +190,7 @@ describe('main password and recovery', { timeout: 30_000 }, () => {
 
     const changed = await ops.changeMainPassword(withPrivate, MAIN, 'new main one');
     // Changing the main password keeps the private space's keys for this session.
-    expect(changed.privateSpace).toBeDefined();
+    expect(changed.otherSpace).toBeDefined();
     expect((await ops.unlock(current(), 'new main one')).opened.slot).toBe(0);
     await expect(ops.unlock(current(), MAIN)).rejects.toThrow();
   });
@@ -233,8 +247,19 @@ describe('deleteAccount', { timeout: 30_000 }, () => {
   it('needs a password that opens the keyring', async () => {
     const { session } = await signUp();
     await expect(ops.deleteAccount(session, 'wrong guess here')).rejects.toThrow();
+    expect(server.wiped).toEqual([]);
     await ops.deleteAccount(session, MAIN);
     expect(server.account).toBeNull();
+  });
+
+  it('first deletes the photos of every space this device can reach', async () => {
+    const { session } = await signUp();
+    const withPrivate = await ops.setPrivatePassword(session, null, PRIVATE);
+    const tokens = [session.opened.space, withPrivate.otherSpace].map((space) =>
+      space ? toBase64Url(space.spaceId) : '',
+    );
+    await ops.deleteAccount(withPrivate, MAIN);
+    expect(server.wiped.sort()).toEqual(tokens.sort());
   });
 });
 

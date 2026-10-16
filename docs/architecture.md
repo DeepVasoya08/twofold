@@ -28,8 +28,16 @@ everything from one origin, so there is no CORS and the CSP can stay at
   - `/api/account`: the signed-in account and its keyring; `PUT /api/account/keyring`
     replaces the keyring; `DELETE /api/account` deletes it. See
     [security.md](security.md#sessions-and-the-api).
-  - Tables: `accounts`, `sessions` (token hashes only), `login_failures`.
-  - API tests run the real migrations on Node's built-in SQLite (`src/test/d1.ts`).
+  - `/api/space/*`: one space's encrypted photos and albums, addressed by the
+    `x-twofold-space` header. Uploads are three steps: `POST /photos` (id, sealed metadata,
+    sizes), `PUT /photos/:id/thumb` and `/full` (ciphertext, streamed to R2 at
+    `photos/<id>/<part>`), then `POST /photos/:id/commit`. Also listing (paged by id),
+    downloads, metadata updates, deletes, albums, and `DELETE /api/space` to wipe a space.
+    See [security.md](security.md#photo-storage).
+  - Tables: `accounts`, `sessions` (token hashes only), `login_failures`, `photos` and
+    `albums` (keyed by space, never by account).
+  - API tests run the real migrations on Node's built-in SQLite (`src/test/d1.ts`) and an
+    in-memory R2 (`src/test/r2.ts`).
 
 ## Local development
 

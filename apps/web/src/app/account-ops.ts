@@ -1,7 +1,7 @@
 import type { OpenedSlot, SlotIndex } from '@twofold/crypto';
 import type { AccountResponse, Keyring } from '@twofold/types';
 
-import { ApiError, api } from '../lib/api';
+import { ApiError, api, spaceApi } from '../lib/api';
 
 /**
  * Account operations: everything that turns a password or recovery key into keys and talks
@@ -41,11 +41,12 @@ export interface Session {
   account: AccountResponse;
   opened: OpenedSlot;
   /**
-   * The private space's keys, held while the main library is open so photos can move into it
-   * without asking for the private password each time. Only set once the private password was
-   * typed (or the space was created) in this session; it lives in memory like the rest.
+   * The other space's keys (the private space's while the main library is open, and the
+   * other way round), so photos can move there without asking for its password each time.
+   * Only set once that password was typed (or the private space was created) in this
+   * session; it lives in memory like the rest.
    */
-  privateSpace?: OpenedSlot['space'];
+  otherSpace?: OpenedSlot['space'];
 }
 
 export type Space = 'main' | 'private';
@@ -206,8 +207,8 @@ async function writeSlot(
     ? { slot: index, space, loginKey: secret.loginKey }
     : session.opened;
   // Creating a private space from the main library means its keys are already here.
-  const privateSpace = index === SLOTS.private && !changedOwnSlot ? space : session.privateSpace;
-  return privateSpace ? { account, opened, privateSpace } : { account, opened };
+  const otherSpace = index === SLOTS.private && !changedOwnSlot ? space : session.otherSpace;
+  return otherSpace ? { account, opened, otherSpace } : { account, opened };
 }
 
 /** Opens a specific slot with a password, or throws the given message. */
@@ -252,19 +253,22 @@ export async function setPrivatePassword(
 }
 
 /**
- * Opens the private space's keys from the main library so photos can move into it. Throws
- * the same message for a wrong password and for no private space at all.
+ * Opens the other space's keys so photos can move there: the private space's from the main
+ * library, or the main library's from the private space. From the main library a wrong
+ * password gets the same message as no private space at all.
  */
-export async function openPrivateSpace(session: Session, password: string): Promise<Session> {
-  if (spaceOf(session.opened) === 'private') return session;
+export async function openOtherSpace(session: Session, password: string): Promise<Session> {
   await nextFrame();
-  const opened = await openSlotWith(
-    session,
-    SLOTS.private,
-    password,
-    'That password doesn’t open a private space.',
-  );
-  return { ...session, privateSpace: opened.space };
+  const fromPrivate = spaceOf(session.opened) === 'private';
+  const opened = fromPrivate
+    ? await openSlotWith(session, SLOTS.main, password, 'That isn’t your main password.')
+    : await openSlotWith(
+        session,
+        SLOTS.private,
+        password,
+        'That password doesn’t open a private space.',
+      );
+  return { ...session, otherSpace: opened.space };
 }
 
 export async function newRecoveryWords(): Promise<{ key: Uint8Array; words: string[] }> {
@@ -287,10 +291,21 @@ export async function saveRecoveryKey(session: Session, recoveryKey: Uint8Array)
   return { ...session, account };
 }
 
+/**
+ * Deletes the photos of every space this device holds keys for (the open one, the other one
+ * if it was opened, and the one the typed password opens), then the account. Storage isn't
+ * linked to the account, so a space no key here can reach is left as unreadable ciphertext.
+ */
 export async function deleteAccount(session: Session, password: string): Promise<void> {
   await nextFrame();
   const crypto = await loadCrypto();
   const opened = await crypto.unlockWithPassword(session.account.keyring, password);
   if (!opened) throw new FormError(WRONG_PASSWORD);
+  const tokens = new Set(
+    [session.opened.space, session.otherSpace, opened.space].flatMap((space) =>
+      space ? [crypto.spaceToken(space)] : [],
+    ),
+  );
+  for (const token of tokens) await spaceApi(token).wipe();
   await api.deleteAccount({ loginKey: crypto.toBase64Url(opened.loginKey) });
 }

@@ -4,6 +4,7 @@ import type { PhotoContext } from '../app/routes';
 import { formatShortDay } from '../lib/format';
 import type { Photo } from '../mock/data';
 import { Icon } from './Icon';
+import { PhotoImage } from './PhotoImage';
 
 import './photo-grid.css';
 
@@ -22,7 +23,7 @@ export function PhotoGrid({ photos, context }: PhotoGridProps) {
             className="photo-tile"
             aria-label={`Photo from ${formatShortDay(photo.takenAt)}${photo.location ? `, ${photo.location}` : ''}`}
           >
-            <img src={photo.src} alt="" loading="lazy" decoding="async" draggable={false} />
+            <PhotoImage src={photo.src} alt="" loading="lazy" decoding="async" draggable={false} />
             {photo.favorite && (
               <span className="photo-tile__fav" aria-hidden="true">
                 <Icon name="heart" size={14} filled />

@@ -39,7 +39,7 @@ const PNG = Buffer.from(
   'base64',
 );
 
-/** Uploads `count` photos through the upload dialog (kept in memory until storage lands). */
+/** Uploads `count` photos through the upload dialog and waits until they're all stored. */
 export async function uploadPhotos(page: Page, count: number): Promise<void> {
   await page
     .getByRole('button', { name: /^Upload/ })
@@ -86,4 +86,16 @@ export async function logIn(page: Page, email: string, password: string): Promis
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Log in' }).click();
+}
+
+/** Sets up a private space from the main library's settings, then goes back to Photos. */
+export async function setUpPrivateSpace(page: Page, password = PRIVATE_PASSWORD): Promise<void> {
+  await goTo(page, 'Settings');
+  await page.getByRole('button', { name: 'Set up' }).click();
+  const setup = page.getByRole('dialog', { name: 'Set up a private space' });
+  await setup.getByLabel('Private password', { exact: true }).fill(password);
+  await setup.getByLabel('Confirm private password').fill(password);
+  await setup.getByRole('button', { name: 'Create private space' }).click();
+  await expect(page.getByText('Private space ready')).toBeVisible();
+  await goTo(page, 'Photos');
 }

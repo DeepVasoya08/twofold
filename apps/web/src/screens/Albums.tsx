@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
+import { errorMessage } from '../app/account-ops';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useToast } from '../app/toast';
@@ -9,24 +10,14 @@ import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
 import { TextField } from '../components/Field';
 import { Icon } from '../components/Icon';
+import { PhotoImage } from '../components/PhotoImage';
 import { formatDateRange, pluralize } from '../lib/format';
 
 import './albums.css';
 
-/** URL-safe id for a new album. Mock only: real ids will be random and assigned by the API. */
-export function albumIdFromTitle(title: string, taken: readonly string[]): string {
-  const base =
-    title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'album';
-  let id = base;
-  for (let n = 2; taken.includes(id); n++) id = `${base}-${String(n)}`;
-  return id;
-}
-
 export function Albums() {
-  const { state, dispatch } = useVault();
+  const { state, createAlbum } = useVault();
+  const [busy, setBusy] = useState(false);
   const { navigate } = useRouter();
   const toast = useToast();
   const [creating, setCreating] = useState(false);
@@ -46,14 +37,22 @@ export function Albums() {
       setError('Give your album a name.');
       return;
     }
-    const id = albumIdFromTitle(
-      name,
-      state.albums.map((album) => album.id),
-    );
-    dispatch({ type: 'create-album', album: { id, title: name } });
-    toast.show(`“${name}” created`);
-    closeCreate();
-    navigate(paths.album(id));
+    if (busy) return;
+    setBusy(true);
+    createAlbum(name)
+      .then(
+        (album) => {
+          toast.show(`“${name}” created`);
+          closeCreate();
+          navigate(paths.album(album.id));
+        },
+        (caught: unknown) => {
+          setError(errorMessage(caught));
+        },
+      )
+      .finally(() => {
+        setBusy(false);
+      });
   };
 
   return (
@@ -86,8 +85,8 @@ export function Albums() {
                 <span className="album-card__cover">
                   {cover ? (
                     <>
-                      <img src={cover.src} alt="" loading="lazy" />
-                      {photos[1] && (
+                      <PhotoImage src={cover.src} alt="" loading="lazy" />
+                      {photos[1]?.src && (
                         <img
                           className="album-card__peek"
                           src={photos[1].src}
@@ -132,7 +131,7 @@ export function Albums() {
             <button type="button" className="btn btn--ghost" onClick={closeCreate}>
               Cancel
             </button>
-            <button type="submit" className="btn btn--primary">
+            <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy}>
               Create album
             </button>
           </div>

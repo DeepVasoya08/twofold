@@ -11,8 +11,13 @@ export interface Person {
 
 export interface Photo {
   id: string;
-  /** Image URL: placeholder art (data URI) or an in-memory object URL for local uploads. */
+  /**
+   * Preview image URL: placeholder art (data URI) or an in-memory object URL of the decrypted
+   * thumbnail. Empty until the thumbnail has been downloaded and decrypted.
+   */
   src: string;
+  /** In-memory object URL of the decrypted original, once the viewer has asked for it. */
+  fullSrc?: string;
   width: number;
   height: number;
   /** ISO 8601 timestamp. */

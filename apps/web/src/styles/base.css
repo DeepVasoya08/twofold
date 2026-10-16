@@ -543,3 +543,11 @@ button.text-link:hover {
     padding: 16px 16px 40px;
   }
 }
+
+/* Stands in for a photo until its encrypted preview has been downloaded and decrypted. */
+.photo-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--surface-3);
+}

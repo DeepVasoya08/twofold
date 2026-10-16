@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { KEY_SIZES } from '@twofold/types';
+import { KEY_SIZES, STORAGE_SIZES } from '@twofold/types';
 
 /** Length of an unpadded base64url string encoding `bytes` bytes. */
 function base64UrlLength(bytes: number): number {
@@ -51,3 +51,31 @@ export const updateKeyringSchema = z.strictObject({
 });
 
 export const deleteAccountSchema = z.strictObject({ loginKey });
+
+const recordId = base64Url(STORAGE_SIZES.recordId);
+
+/** A sealed record: nonce, ciphertext and tag, at most STORAGE_SIZES.maxRecord bytes. */
+const sealedRecord = z
+  .string()
+  .min(base64UrlLength(40))
+  .max(base64UrlLength(STORAGE_SIZES.maxRecord))
+  .regex(/^[A-Za-z0-9_-]+$/);
+
+export const spaceTokenSchema = base64Url(STORAGE_SIZES.spaceToken);
+
+export const recordIdSchema = recordId;
+
+export const photoPartSchema = z.enum(['thumb', 'full']);
+
+export const createPhotoSchema = z.strictObject({
+  id: recordId,
+  meta: sealedRecord,
+  thumbSize: z.number().int().min(1).max(STORAGE_SIZES.maxThumb),
+  fullSize: z.number().int().min(1).max(STORAGE_SIZES.maxFull),
+});
+
+export const createAlbumSchema = z.strictObject({ id: recordId, meta: sealedRecord });
+
+export const updateRecordSchema = z.strictObject({ meta: sealedRecord });
+
+export const emptySchema = z.strictObject({});

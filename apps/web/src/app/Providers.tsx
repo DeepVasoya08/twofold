@@ -1,11 +1,44 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { AccountProvider, useAccount } from './account';
 import type { AccountState } from './account';
 import { ThemeProvider } from './theme';
 import { ToastProvider } from './toast';
-import { VaultProvider } from './vault';
+import type { Session, Space } from './account-ops';
+import { memoryStore, remoteStore } from './space-store';
+import { VaultProvider, emptyVaults } from './vault';
 import type { VaultsState } from './vault';
+
+/** The open space's vault, with a store made once from the keys it was mounted with. */
+function OpenVault({
+  children,
+  space,
+  session,
+  initialVault,
+}: {
+  children: ReactNode;
+  space: Space;
+  session: Session | null;
+  initialVault: VaultsState | undefined;
+}) {
+  const [store] = useState(() =>
+    session && !initialVault
+      ? remoteStore(session.opened.space)
+      : memoryStore((initialVault ?? emptyVaults).spaces[space]),
+  );
+  return (
+    <VaultProvider
+      space={space}
+      store={store}
+      otherKeys={session?.otherSpace}
+      storeFor={remoteStore}
+      initialState={initialVault?.spaces[space]}
+    >
+      {children}
+    </VaultProvider>
+  );
+}
 
 /**
  * Decrypted photos for the unlocked session. Remounted whenever the account drops or
@@ -18,16 +51,16 @@ function SessionVault({
   children: ReactNode;
   initialVault?: VaultsState | undefined;
 }) {
-  const { generation, space } = useAccount();
-  const open = space ?? 'main';
-  return initialVault ? (
-    <VaultProvider key={generation} space={open} initialState={initialVault}>
+  const { generation, space, state } = useAccount();
+  return (
+    <OpenVault
+      key={generation}
+      space={space ?? 'main'}
+      session={state.status === 'unlocked' ? state.session : null}
+      initialVault={initialVault}
+    >
       {children}
-    </VaultProvider>
-  ) : (
-    <VaultProvider key={generation} space={open}>
-      {children}
-    </VaultProvider>
+    </OpenVault>
   );
 }
 

@@ -5,6 +5,7 @@ import { PageHeader } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
+import { PhotoImage } from '../components/PhotoImage';
 import { formatDateRange, pluralize } from '../lib/format';
 
 import './album.css';
@@ -46,7 +47,7 @@ export function Album({ albumId }: { albumId: string }) {
 
       {cover ? (
         <header className="album-hero">
-          <img className="album-hero__image" src={cover.src} alt="" />
+          <PhotoImage className="album-hero__image" src={cover.src} alt="" />
           <span className="album-hero__shade" />
           <div className="album-hero__text">
             <h1 className="album-hero__title">{album.title}</h1>

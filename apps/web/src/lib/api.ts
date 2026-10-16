@@ -1,8 +1,14 @@
+import { SPACE_HEADER } from '@twofold/types';
 import type {
   AccountResponse,
+  AlbumList,
+  CreateAlbumRequest,
+  CreatePhotoRequest,
   DeleteAccountRequest,
   ErrorResponse,
   LoginRequest,
+  PhotoPage,
+  PhotoPart,
   PreLoginRequest,
   PreLoginResponse,
   SignUpRequest,
@@ -28,27 +34,59 @@ function isErrorResponse(body: unknown): body is ErrorResponse {
   );
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+interface Body {
+  json?: unknown;
+  bytes?: Uint8Array<ArrayBuffer>;
+}
+
+async function send(
+  method: string,
+  path: string,
+  body: Body = {},
+  headers: Record<string, string> = {},
+): Promise<Response> {
+  const init: RequestInit = { method, credentials: 'same-origin', headers: { ...headers } };
+  if (body.json !== undefined) {
+    init.headers = { ...headers, 'content-type': 'application/json' };
+    init.body = JSON.stringify(body.json);
+  } else if (body.bytes) {
+    init.headers = { ...headers, 'content-type': 'application/octet-stream' };
+    init.body = body.bytes;
+  }
   let res: Response;
   try {
-    res = await fetch(`/api${path}`, {
-      method,
-      credentials: 'same-origin',
-      headers: body === undefined ? {} : { 'content-type': 'application/json' },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
+    res = await fetch(`/api${path}`, init);
   } catch {
     throw new ApiError(0, OFFLINE);
   }
-  if (res.status === 204) return undefined as T;
-  const parsed: unknown = await res.json().catch(() => null);
   if (!res.ok) {
+    const parsed: unknown = await res.json().catch(() => null);
     throw new ApiError(
       res.status,
       isErrorResponse(parsed) ? parsed.error : 'Something went wrong. Try again.',
     );
   }
-  return parsed as T;
+  return res;
+}
+
+async function call<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  headers?: Record<string, string>,
+): Promise<T> {
+  const res = await send(method, path, body === undefined ? {} : { json: body }, headers);
+  const text = await res.text().catch(() => '');
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
+async function download(path: string, headers: Record<string, string>): Promise<Uint8Array> {
+  const res = await send('GET', path, {}, headers);
+  try {
+    return new Uint8Array(await res.arrayBuffer());
+  } catch {
+    throw new ApiError(0, OFFLINE);
+  }
 }
 
 /** Typed calls to the Twofold API. Bodies carry derived keys, never passwords. */
@@ -62,3 +100,37 @@ export const api = {
     call<AccountResponse>('PUT', '/account/keyring', body),
   deleteAccount: (body: DeleteAccountRequest) => call<undefined>('DELETE', '/account', body),
 };
+
+/**
+ * Typed calls to one space's storage. Everything sent is already encrypted; the token
+ * addresses the space and is never stored by the server in readable form.
+ */
+export function spaceApi(token: string) {
+  const headers = { [SPACE_HEADER]: token };
+  const photo = (id: string) => `/space/photos/${encodeURIComponent(id)}`;
+  return {
+    listPhotos: (after?: string) =>
+      call<PhotoPage>(
+        'GET',
+        `/space/photos${after ? `?after=${encodeURIComponent(after)}` : ''}`,
+        undefined,
+        headers,
+      ),
+    listAlbums: () => call<AlbumList>('GET', '/space/albums', undefined, headers),
+    createPhoto: (body: CreatePhotoRequest) =>
+      call<undefined>('POST', '/space/photos', body, headers),
+    putFile: async (id: string, part: PhotoPart, bytes: Uint8Array<ArrayBuffer>) => {
+      await send('PUT', `${photo(id)}/${part}`, { bytes }, headers);
+    },
+    commitPhoto: (id: string) => call<undefined>('POST', `${photo(id)}/commit`, {}, headers),
+    getFile: (id: string, part: PhotoPart) => download(`${photo(id)}/${part}`, headers),
+    updatePhoto: (id: string, meta: string) => call<undefined>('PUT', photo(id), { meta }, headers),
+    deletePhoto: (id: string) => call<undefined>('DELETE', photo(id), {}, headers),
+    createAlbum: (body: CreateAlbumRequest) =>
+      call<undefined>('POST', '/space/albums', body, headers),
+    /** Deletes every photo and album in the space. */
+    wipe: () => call<undefined>('DELETE', '/space', {}, headers),
+  };
+}
+
+export type SpaceApi = ReturnType<typeof spaceApi>;
