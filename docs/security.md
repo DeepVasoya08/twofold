@@ -6,10 +6,14 @@ non-negotiable; this document will grow into the full threat model as features l
 ## Baseline (in place today)
 
 - All crypto is confined to `packages/crypto` and uses libsodium.
+- The web app and the API share one origin (a single Worker), so there is no CORS
+  surface and `connect-src 'self'` covers API calls.
 - The web app ships a strict Content-Security-Policy and related headers via
-  `apps/web/public/_headers` (Cloudflare Pages). `'wasm-unsafe-eval'` is allowed so
-  libsodium's WebAssembly can load. `connect-src` will need the API origin once the web
-  app starts calling it.
+  `apps/web/public/_headers` (Workers Static Assets). `'wasm-unsafe-eval'` is allowed so
+  libsodium's WebAssembly can load.
+- API responses get their own, stricter headers (`default-src 'none'`, `X-Frame-Options:
+DENY`, `no-referrer`, `nosniff`) from Hono's `secureHeaders` middleware in
+  `apps/api/src/app.ts`.
 - CI runs `pnpm audit --audit-level high` on every PR and push to `main`.
 - Credentials live only in GitHub secrets (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`).
 

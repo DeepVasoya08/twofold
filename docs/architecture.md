@@ -1,19 +1,37 @@
 # Architecture
 
 ```
- browser (apps/web)                         Cloudflare
- ┌───────────────────────┐   HTTPS   ┌──────────────────────────┐
- │ React UI              │ ────────▶ │ Worker (apps/api, Hono)  │
- │ packages/crypto       │           │   ├─ R2: encrypted blobs │
- │ (encrypt / decrypt)   │ ◀──────── │   └─ D1: metadata        │
- └───────────────────────┘ ciphertext└──────────────────────────┘
+ browser                                    Cloudflare: one Worker, one origin
+ ┌───────────────────────┐   HTTPS   ┌───────────────────────────────────┐
+ │ React UI (apps/web)   │ ────────▶ │ /*      static assets (apps/web)  │
+ │ packages/crypto       │           │ /api/*  Hono app (apps/api)       │
+ │ (encrypt / decrypt)   │ ◀──────── │           ├─ R2: encrypted blobs  │
+ └───────────────────────┘ ciphertext│           └─ D1: metadata         │
+                                     └───────────────────────────────────┘
 ```
 
-- **apps/web** — static SPA on Cloudflare Pages. All encryption and decryption happens
+A single Cloudflare Worker (`twofold`, configured in `apps/api/wrangler.jsonc`) serves
+everything from one origin, so there is no CORS and the CSP can stay at
+`connect-src 'self'`.
+
+- **apps/web** — static SPA, served by the Worker through Workers Static Assets from
+  `apps/web/dist`. Unknown paths fall back to `index.html` (SPA routing). Response headers
+  for assets come from `apps/web/public/_headers`. All encryption and decryption happens
   here, through `packages/crypto`.
-- **apps/api** — Cloudflare Worker. Stores and serves ciphertext; never receives
-  plaintext photos, passwords, or keys. R2 object keys are random IDs. D1 holds metadata.
-  Schema changes are SQL files in `apps/api/migrations`, applied on deploy.
+- **apps/api** — the Worker code, a Hono app mounted at `/api`. Only `/api/*` requests run
+  Worker code (`run_worker_first`); everything else is answered from assets, and unknown
+  `/api/*` routes return 404 rather than the app shell. Stores and serves
+  ciphertext; never receives plaintext photos, passwords, or keys. R2 object keys are
+  random IDs. D1 holds metadata. Schema changes are SQL files in `apps/api/migrations`,
+  applied on deploy.
+
+## Local development
+
+- `pnpm --filter @twofold/api dev` runs `wrangler dev` on port 8787. Run `pnpm build`
+  first and it serves the built web app too, exactly like production.
+- `pnpm --filter @twofold/web dev` runs Vite with hot reload on port 5173 and proxies
+  `/api` to port 8787, so the app still sees one origin.
+- `pnpm test:e2e` builds the web app and runs Playwright against `wrangler dev`.
 - **packages/crypto** — the only place crypto code may live; libsodium constructions only.
 - **packages/types** — types shared between web, API, and (later) mobile.
 
