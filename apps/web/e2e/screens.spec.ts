@@ -74,6 +74,37 @@ test('the photo viewer pages, favorites and closes', async ({ page }) => {
   await expect(page.locator('.photo-tile')).toHaveCount(1);
 });
 
+test('the photo viewer zooms with the wheel, double-click and keys', async ({ page }) => {
+  await signUp(page);
+  await uploadPhotos(page, 1);
+  await page.locator('.photo-tile').first().click();
+  const image = page.locator('.viewer__image');
+  await expect(image).toBeVisible();
+  const scale = () =>
+    image.evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).a);
+
+  const box = await image.boundingBox();
+  if (!box) throw new Error('The photo has no box');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -300);
+  await expect.poll(scale).toBeGreaterThan(1.5);
+  await page.mouse.wheel(0, 2000);
+  await expect.poll(scale).toBe(1);
+
+  await image.dblclick();
+  await expect.poll(scale).toBe(2.5);
+  // Dragging pans the zoomed photo.
+  const before = await image.boundingBox();
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2);
+  await page.mouse.up();
+  expect((await image.boundingBox())?.x).not.toBe(before?.x);
+  await page.keyboard.press('0');
+  await expect.poll(scale).toBe(1);
+  await page.keyboard.press('+');
+  await expect.poll(scale).toBe(1.5);
+});
+
 test('deleting a photo asks first', async ({ page }) => {
   await signUp(page);
   await uploadPhotos(page, 1);
