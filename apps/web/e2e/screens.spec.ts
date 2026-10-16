@@ -131,6 +131,25 @@ test('creates an album and uploads into it', async ({ page }) => {
   await expect(page.locator('.photo-tile')).toHaveCount(1);
 });
 
+test('refuses an SVG with a message and stores only the real photo', async ({ page }) => {
+  await signUp(page);
+  await uploadPhotos(page, 1);
+  await page
+    .getByRole('button', { name: /^Upload/ })
+    .filter({ visible: true })
+    .first()
+    .click();
+  const dialog = page.getByRole('dialog', { name: 'Add photos' });
+  await dialog.getByLabel('Choose photos').setInputFiles({
+    name: 'drawing.svg',
+    mimeType: 'image/svg+xml',
+    buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
+  });
+  await expect(dialog.getByText(/Twofold takes JPEG, PNG, GIF, WebP, HEIC and AVIF/)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(page.locator('.photo-tile')).toHaveCount(1);
+});
+
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 

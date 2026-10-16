@@ -13,6 +13,7 @@ non-negotiable; this document is the threat model and key design as they stand.
 - The web app ships a strict Content-Security-Policy and related headers via
   `apps/web/public/_headers` (Workers Static Assets). `'wasm-unsafe-eval'` is allowed so
   libsodium's WebAssembly can load. libsodium is loaded on first use, not on the welcome page.
+  `Strict-Transport-Security` makes browsers use HTTPS only, ahead of a custom domain.
 - API responses get their own, stricter headers (`default-src 'none'`, `X-Frame-Options:
 DENY`, `no-referrer`, `nosniff`, `Cache-Control: no-store`) in `apps/api/src/app.ts`.
 - CI runs `pnpm audit --audit-level high` on every PR and push to `main`.
@@ -89,8 +90,16 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
 - **Some ciphertext can be orphaned.** Setting up a private space from the main library
   replaces any existing one without being able to delete its photos, and deleting an
   account can only wipe spaces whose keys are on the device. What's left can never be
-  decrypted or reached again, but it isn't deleted. Because storage isn't tied to
-  accounts, there are no per-account storage quotas yet either.
+  decrypted or reached again, but it isn't deleted.
+- **The storage quota keeps a total per account.** Each account may keep 1 GB of
+  ciphertext across every space it uploads to (`stored_bytes` on `accounts`). Only the total
+  is stored, never which photos or spaces it is made of, but with few accounts the total can
+  be matched against the sizes of spaces (500 MB = 300 + 200) and so show which spaces,
+  including a private one, belong to an account. Deepu chose an exact per-account cap over a
+  per-space one knowing this. Uploads are charged to the uploading account when they start,
+  and deleted photos are given back to the account that deletes them (storage doesn't know
+  who uploaded them), so a member deleting an owner's photo frees the member's quota, not
+  the owner's.
 - **Infrastructure keeps its own history.** R2 records when each object was uploaded, and
   D1 keeps point-in-time history for its Time Travel window, so a deleted photo's sealed
   row (not its key or contents) can outlive the delete for that long.
@@ -214,7 +223,10 @@ hours, and the inviter's screen cancels its invite when it closes.
   verifiers), the email and display name, login keys, space tokens, and ciphertext.
 - A login (or sign-up) sets a 256-bit random session token in an `HttpOnly`,
   `SameSite=Strict` cookie (`__Host-` prefixed and `Secure` over HTTPS), valid 30 days.
-  D1 stores only its SHA-256.
+  D1 stores only its SHA-256, and expired sessions are deleted when a new one starts.
+- Any keyring change (a password, the recovery key, or setting up a private space) signs
+  out every other device. It has to be every change: the server can't tell which slot
+  changed, and treating them differently would tell it.
 - Every write must be `Content-Type: application/json` (or `application/octet-stream` for
   encrypted files), which a cross-site form can't send without a CORS preflight the API
   never answers. This backs up `SameSite=Strict`; storage requests also carry a custom
@@ -222,9 +234,12 @@ hours, and the inviter's screen cancels its invite when it closes.
 - Changing the keyring or deleting the account needs a fresh login key as well as the
   cookie. Keyring updates carry a version number, so two devices can't silently overwrite
   each other, and may not change the salt or KDF settings.
-- Failed logins (and failed proofs) are limited to 10 per email per 15 minutes, counted for
-  unknown emails too. Each attempt is counted, in one statement, before its key is checked
-  (a right key then clears the count), so parallel requests can't get more guesses than that.
+- Failed logins (and failed proofs) are limited to 10 per email from one internet address
+  per 15 minutes, and 200 per email from all addresses together, counted for unknown emails
+  too. Guessing from one address can't lock anyone else out, and a lockout needs 20
+  addresses. Each attempt is counted, in one statement, before its key is checked (a right
+  key then clears the counts), so parallel requests can't get more guesses than that. The
+  address is stored only as a SHA-256, and every count is deleted once its window passes.
 - The Worker keeps no per-request logs or traces (`observability` in
   `apps/api/wrangler.jsonc`), only its own error lines. Request logs would keep every
   request's path, headers and client details at Cloudflare, which could link the private
@@ -238,6 +253,9 @@ hours, and the inviter's screen cancels its invite when it closes.
   reloading drops them and remounts the vault, which drops every decrypted photo and
   revokes its object URLs.
 - Nothing is written to `localStorage`, IndexedDB or caches.
+- Only raster photo formats are stored or shown (JPEG, PNG, GIF, WebP, HEIC, AVIF;
+  `apps/web/src/lib/photo-types.ts`). An SVG is a document that can carry script, so it is
+  refused on upload and left out if a record names it.
 
 ## Still to design
 

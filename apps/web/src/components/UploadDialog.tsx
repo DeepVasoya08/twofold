@@ -6,6 +6,7 @@ import type { NewPhoto } from '../app/space-store';
 import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
 import { pluralize } from '../lib/format';
+import { PHOTO_TYPES, PHOTO_TYPES_TEXT, isPhotoType } from '../lib/photo-types';
 import { makeThumbnail } from '../lib/thumbnail';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
@@ -119,14 +120,24 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
   const addFiles = (files: FileList | null) => {
     const images = [...(files ?? [])].filter((file) => file.type.startsWith('image/'));
     if (images.length === 0) return;
-    const added = images.map((file) => {
+    const added = images.map((file): UploadItem => {
       nextId.current += 1;
+      // Other image formats (SVG, for one) are shown as refused and never read.
+      if (!isPhotoType(file.type)) {
+        return {
+          id: nextId.current,
+          name: file.name,
+          url: '',
+          stage: 'failed',
+          error: `Twofold takes ${PHOTO_TYPES_TEXT} photos.`,
+        };
+      }
       queue.current.push({ id: nextId.current, file });
       return {
         id: nextId.current,
         name: file.name,
         url: URL.createObjectURL(file),
-        stage: 'waiting' as const,
+        stage: 'waiting',
       };
     });
     setItems((current) => [...current, ...added]);
@@ -135,7 +146,7 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
 
   const close = () => {
     queue.current = [];
-    for (const item of items) URL.revokeObjectURL(item.url);
+    for (const item of items) if (item.url) URL.revokeObjectURL(item.url);
     setItems([]);
     onClose();
   };
@@ -181,7 +192,7 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
           ref={inputRef}
           className="visually-hidden"
           type="file"
-          accept="image/*"
+          accept={PHOTO_TYPES.join(',')}
           multiple
           tabIndex={-1}
           aria-label="Choose photos"
@@ -196,7 +207,11 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
         <ul className="upload-list" aria-label="Uploads">
           {items.map((item) => (
             <li key={item.id} className="upload-item">
-              <img className="upload-item__thumb" src={item.url} alt="" />
+              {item.url ? (
+                <img className="upload-item__thumb" src={item.url} alt="" />
+              ) : (
+                <span className="upload-item__thumb" aria-hidden="true" />
+              )}
               <div className="upload-item__body">
                 <span className="upload-item__name">{item.name}</span>
                 <div

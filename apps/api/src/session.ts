@@ -4,7 +4,7 @@ import { createMiddleware } from 'hono/factory';
 
 import { newSessionToken, sessionTokenHash } from '@twofold/crypto/webcrypto';
 
-import { deleteSession, findSessionAccount, insertSession } from './db';
+import { deleteExpiredSessions, deleteSession, findSessionAccount, insertSession } from './db';
 import type { AccountRecord } from './db';
 import type { Env } from './env';
 
@@ -17,7 +17,13 @@ export interface AppEnv {
    * Set by requireSpace: `space` is the tag of the space being accessed, and `member` the
    * member id when the request came with a share token rather than the owner's token.
    */
-  Variables: { account: AccountRecord; space: string; member: string | null };
+  Variables: {
+    account: AccountRecord;
+    /** SHA-256 of this request's session token. */
+    session: string;
+    space: string;
+    member: string | null;
+  };
 }
 
 /**
@@ -35,6 +41,7 @@ function isSecure(c: Context): boolean {
 export async function startSession(c: Context<AppEnv>, accountId: string): Promise<void> {
   const token = newSessionToken();
   const now = Date.now();
+  await deleteExpiredSessions(c.env.DB, now);
   await insertSession(c.env.DB, {
     tokenHash: await sessionTokenHash(token),
     accountId,
@@ -70,5 +77,6 @@ export const requireSession = createMiddleware<AppEnv>(async (c, next) => {
     return c.json({ error: 'Your session has ended. Log in again.' }, 401);
   }
   c.set('account', account);
+  c.set('session', sessionHash);
   return next();
 });

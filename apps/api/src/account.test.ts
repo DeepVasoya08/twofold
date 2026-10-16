@@ -101,6 +101,37 @@ describe('PUT /api/account/keyring', () => {
     }
   });
 
+  it('signs out every other device, but not this one', async () => {
+    const other = new Client(env);
+    await other.request('POST', '/auth/login', {
+      email: 'sam@example.com',
+      loginKey: toBase64Url(keys[0]),
+    });
+    expect((await other.request('GET', '/account')).status).toBe(200);
+    const res = await client.request('PUT', '/account/keyring', {
+      loginKey: toBase64Url(keys[0]),
+      version: 1,
+      keyring,
+    });
+    expect(res.status).toBe(200);
+    expect((await client.request('GET', '/account')).status).toBe(200);
+    expect((await other.request('GET', '/account')).status).toBe(401);
+  });
+
+  it('keeps other devices signed in when the change is refused', async () => {
+    const other = new Client(env);
+    await other.request('POST', '/auth/login', {
+      email: 'sam@example.com',
+      loginKey: toBase64Url(keys[0]),
+    });
+    await client.request('PUT', '/account/keyring', {
+      loginKey: toBase64Url(newLoginKey()),
+      version: 1,
+      keyring,
+    });
+    expect((await other.request('GET', '/account')).status).toBe(200);
+  });
+
   it('needs a session', async () => {
     const res = await new Client(env).request('PUT', '/account/keyring', {
       loginKey: toBase64Url(keys[0]),

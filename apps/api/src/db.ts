@@ -69,6 +69,38 @@ export async function updateKeyring(
   return result.meta.changes === 1;
 }
 
+/**
+ * Adds an upload's bytes to the account's total, only if that stays within `limit`. One
+ * statement, so parallel uploads can't together go over. Returns false if it would.
+ */
+export async function reserveStorage(
+  db: D1Database,
+  accountId: string,
+  bytes: number,
+  limit: number,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      'UPDATE accounts SET stored_bytes = stored_bytes + ?1 WHERE id = ?2 AND stored_bytes + ?1 <= ?3',
+    )
+    .bind(bytes, accountId, limit)
+    .run();
+  return result.meta.changes === 1;
+}
+
+/** Gives bytes back to the account that deleted them (never below zero). */
+export async function releaseStorage(
+  db: D1Database,
+  accountId: string,
+  bytes: number,
+): Promise<void> {
+  if (bytes <= 0) return;
+  await db
+    .prepare('UPDATE accounts SET stored_bytes = MAX(stored_bytes - ?, 0) WHERE id = ?')
+    .bind(bytes, accountId)
+    .run();
+}
+
 export async function deleteAccount(db: D1Database, accountId: string): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM sessions WHERE account_id = ?').bind(accountId),
@@ -103,6 +135,23 @@ export async function findSessionAccount(
     .bind(tokenHash, now)
     .first<AccountRow>();
   return row ? toRecord(row) : null;
+}
+
+/** Signs out every other device: used after the keyring changes. */
+export async function deleteOtherSessions(
+  db: D1Database,
+  accountId: string,
+  keepTokenHash: string,
+): Promise<void> {
+  await db
+    .prepare('DELETE FROM sessions WHERE account_id = ? AND token_hash != ?')
+    .bind(accountId, keepTokenHash)
+    .run();
+}
+
+/** Forgets sessions that have run out, so old login times aren't kept. */
+export async function deleteExpiredSessions(db: D1Database, now: number): Promise<void> {
+  await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now).run();
 }
 
 export async function deleteSession(db: D1Database, tokenHash: string): Promise<void> {
@@ -141,6 +190,11 @@ export async function returnAttempt(db: D1Database, email: string): Promise<void
     .prepare('UPDATE login_failures SET failures = failures - 1 WHERE email = ? AND failures > 0')
     .bind(email)
     .run();
+}
+
+/** Forgets failure counts whose window has passed, and the emails typed with them. */
+export async function deleteFinishedWindows(db: D1Database, windowStart: number): Promise<void> {
+  await db.prepare('DELETE FROM login_failures WHERE window_start <= ?').bind(windowStart).run();
 }
 
 export async function clearFailures(db: D1Database, email: string): Promise<void> {

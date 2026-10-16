@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 
-import { deleteAccount, updateKeyring } from '../db';
-import { checkProof } from '../proof';
+import { deleteAccount, deleteOtherSessions, updateKeyring } from '../db';
+import { checkProof, clientAddress } from '../proof';
 import { messages, readBody, toAccountResponse } from '../respond';
 import { deleteAccountSchema, updateKeyringSchema } from '../schemas';
 import { clearSessionCookie, requireSession } from '../session';
@@ -32,12 +32,21 @@ account.put('/keyring', async (c) => {
   ) {
     return c.json({ error: messages.badRequest }, 400);
   }
-  const proof = await checkProof(c.env.DB, current.email, current.keyring, body.loginKey);
+  const proof = await checkProof(
+    c.env.DB,
+    current.email,
+    await clientAddress(c),
+    current.keyring,
+    body.loginKey,
+  );
   if (proof === 'throttled') return c.json({ error: messages.throttled }, 429);
   if (proof === 'wrong') return c.json({ error: messages.wrongPassword }, 403);
   if (!(await updateKeyring(c.env.DB, current.id, body.version, body.keyring))) {
     return c.json({ error: messages.conflict }, 409);
   }
+  // A new password (or recovery key) signs out every other device. Every keyring change
+  // does this, whichever slot changed, so it says nothing about the private slot.
+  await deleteOtherSessions(c.env.DB, current.id, c.get('session'));
   return c.json(
     toAccountResponse({ ...current, keyring: body.keyring, version: body.version + 1 }),
   );
@@ -47,7 +56,13 @@ account.delete('/', async (c) => {
   const current = c.get('account');
   const body = await readBody(c, deleteAccountSchema);
   if (!body) return c.json({ error: messages.badRequest }, 400);
-  const proof = await checkProof(c.env.DB, current.email, current.keyring, body.loginKey);
+  const proof = await checkProof(
+    c.env.DB,
+    current.email,
+    await clientAddress(c),
+    current.keyring,
+    body.loginKey,
+  );
   if (proof === 'throttled') return c.json({ error: messages.throttled }, 429);
   if (proof === 'wrong') return c.json({ error: messages.wrongPassword }, 403);
   await deleteAccount(c.env.DB, current.id);

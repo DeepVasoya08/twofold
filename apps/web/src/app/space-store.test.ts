@@ -1,7 +1,7 @@
 import { resolveObjectURL } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
 
-import { newSpace } from '@twofold/crypto';
+import { newSpace, openRecord, ownerAccess, sealRecord } from '@twofold/crypto';
 import type { SpaceKeys } from '@twofold/crypto';
 import { fromBase64Url } from '@twofold/crypto/webcrypto';
 import { STORAGE_SIZES } from '@twofold/types';
@@ -72,6 +72,42 @@ describe('remoteStore', () => {
     const meta = fromBase64Url(entry?.photo.meta ?? '') ?? new Uint8Array();
     expect(contains(meta, bytes('2026-10-16'))).toBe(false);
     expect(contains(meta, bytes('image/png'))).toBe(false);
+  });
+
+  it('refuses to store an SVG, and leaves out any SVG it finds', async () => {
+    const { server, space } = await setUp();
+    const store = remoteStore(space, server.api);
+    await expect(store.add({ ...PHOTO, type: 'image/svg+xml' }, [])).rejects.toThrow(
+      'Twofold can’t store this kind of file.',
+    );
+    const added = await store.add(PHOTO, []);
+    const entry = server.photos.get(added.id);
+    const opened = await openRecord(
+      await ownerAccess(space),
+      'photo',
+      added.id,
+      entry?.photo.meta ?? '',
+    );
+    const meta = JSON.parse(new TextDecoder().decode(opened)) as Record<string, unknown>;
+    if (entry) {
+      entry.photo.meta = await sealRecord(
+        await ownerAccess(space),
+        'photo',
+        added.id,
+        bytes(JSON.stringify({ ...meta, type: 'image/svg+xml' })),
+      );
+    }
+    expect((await remoteStore(space, server.api).list()).photos).toEqual([]);
+  });
+
+  it('lets a half-finished upload go when sending it fails', async () => {
+    const { server, space } = await setUp();
+    const failing = (token: string) => ({
+      ...server.api(token),
+      putFile: () => Promise.reject(new Error('offline')),
+    });
+    await expect(remoteStore(space, failing).add(PHOTO, [])).rejects.toThrow('offline');
+    expect(server.photos.size).toBe(0);
   });
 
   it('saves favorites and albums', async () => {
