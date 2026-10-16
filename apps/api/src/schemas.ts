@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { KEY_SIZES, STORAGE_SIZES } from '@twofold/types';
+import { KEY_SIZES, SHARE_SIZES, STORAGE_SIZES } from '@twofold/types';
 
 /** Length of an unpadded base64url string encoding `bytes` bytes. */
 function base64UrlLength(bytes: number): number {
@@ -79,3 +79,39 @@ export const createAlbumSchema = z.strictObject({ id: recordId, meta: sealedReco
 export const updateRecordSchema = z.strictObject({ meta: sealedRecord });
 
 export const emptySchema = z.strictObject({});
+
+/** TWO-XXXX-XXXX, from the alphabet packages/crypto draws codes from. */
+export const inviteCodeSchema = z.string().regex(/^TWO-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/);
+
+export const inviteHandleSchema = base64Url(SHARE_SIZES.handle);
+
+const publicKey = base64Url(SHARE_SIZES.publicKey);
+
+/** nonce (24) + MAC (16) + at most SHARE_SIZES.maxMessage bytes of sealed message. */
+const peerMessage = z
+  .string()
+  .min(base64UrlLength(41))
+  .max(base64UrlLength(SHARE_SIZES.maxMessage))
+  .regex(/^[A-Za-z0-9_-]+$/);
+
+export const createInviteSchema = z.strictObject({
+  code: inviteCodeSchema,
+  handle: inviteHandleSchema,
+  commitment: base64Url(SHARE_SIZES.commitment),
+});
+
+export const joinInviteSchema = z.strictObject({ joinerKey: publicKey });
+
+export const helloSchema = z.strictObject({ hello: peerMessage });
+
+export const revealSchema = z.strictObject({ inviterKey: publicKey });
+
+export const grantSchema = z.strictObject({ grant: peerMessage });
+
+export const createMemberSchema = z.strictObject({
+  id: recordId,
+  token: spaceTokenSchema,
+  meta: sealedRecord,
+});
+
+export const createJoinedSchema = z.strictObject({ id: recordId, meta: sealedRecord });

@@ -170,3 +170,12 @@ export async function insertAlbum(
 export async function deleteAlbums(db: D1Database, space: string): Promise<void> {
   await db.prepare('DELETE FROM albums WHERE space = ?').bind(space).run();
 }
+
+/** How many photo rows a space has, committed or not. */
+export async function countPhotos(db: D1Database, space: string): Promise<number> {
+  const row = await db
+    .prepare('SELECT COUNT(*) AS count FROM photos WHERE space = ?')
+    .bind(space)
+    .first<{ count: number }>();
+  return row?.count ?? 0;
+}
