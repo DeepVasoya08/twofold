@@ -15,17 +15,17 @@ const features: { icon: IconName; title: string; text: string }[] = [
   {
     icon: 'lock',
     title: 'Locked before it leaves',
-    text: 'Every photo is encrypted on your device. Our servers only ever hold scrambled data.',
+    text: 'Every photo is encrypted on your device. Our servers only ever hold data they can’t read.',
+  },
+  {
+    icon: 'eye-off',
+    title: 'A space no one knows about',
+    text: 'Add a second password and a separate private space opens with it. Your everyday password never reveals it.',
   },
   {
     icon: 'users',
-    title: 'Just the two of you',
-    text: 'One shared vault, two keys. No followers, no feeds, no one else invited.',
-  },
-  {
-    icon: 'heart',
-    title: 'Made for keeping',
-    text: 'Albums for trips and slow Sundays, favorites for the ones you return to.',
+    title: 'Shared on your terms',
+    text: 'Invite someone you trust to a library. Nothing is shared unless you choose to share it.',
   },
 ];
 
@@ -44,17 +44,17 @@ export function Welcome() {
           <div className="welcome__copy">
             <LockBadge />
             <h1 className="welcome__title">
-              A private place
+              Your photos.
               <br />
-              for the two of you.
+              Truly private.
             </h1>
             <p className="welcome__lede">
-              Twofold is a photo vault for couples. Your memories are sealed on your own devices, so
-              they stay between you, and only you.
+              Twofold backs up your photo library with end-to-end encryption. No ads, no scanning,
+              no one looking through your memories but you.
             </p>
             <div className="welcome__cta">
               <Link to={paths.signup} className="btn btn--primary btn--lg">
-                Create your vault
+                Get started
                 <Icon name="arrow-right" size={18} />
               </Link>
               <Link to={paths.login} className="btn btn--secondary btn--lg">
@@ -70,7 +70,7 @@ export function Welcome() {
               </figure>
             ))}
             <span className="welcome__sticker">
-              <Icon name="heart" size={16} filled /> Only us
+              <Icon name="lock" size={16} /> Only you
             </span>
           </div>
         </section>
@@ -90,7 +90,7 @@ export function Welcome() {
 
       <footer className="welcome__footer">
         <span>Twofold</span>
-        <span>End-to-end encrypted. Open about how.</span>
+        <span>End-to-end encrypted. No ads, ever.</span>
       </footer>
     </div>
   );

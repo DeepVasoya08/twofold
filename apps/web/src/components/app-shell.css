@@ -54,24 +54,50 @@
   box-shadow: var(--shadow-sm);
 }
 
-.shell__couple {
+.shell__brand-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.private-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.shell__topbar-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.shell__account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-top: auto;
-  padding: 14px;
+  padding: 12px 8px 12px 14px;
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
 
-.shell__couple-text {
+.shell__account-text {
+  flex: 1;
   display: grid;
   gap: 2px;
   min-width: 0;
 }
 
-.shell__couple-names {
+.shell__account-name {
   overflow: hidden;
   font-size: 14px;
   font-weight: 700;
@@ -79,7 +105,7 @@
   white-space: nowrap;
 }
 
-.shell__couple .lock-badge {
+.shell__account .lock-badge {
   font-size: 12px;
 }
 

@@ -140,7 +140,7 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
       open={open}
       onClose={close}
       title="Add photos"
-      description="Photos are encrypted on this device before they're uploaded. Only you and your partner can see them."
+      description="Photos are encrypted on this device before they're uploaded. No one can see them unless you share them."
       size="md"
     >
       <div

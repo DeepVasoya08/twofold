@@ -6,13 +6,13 @@ export type Route =
   | { name: 'login' }
   | { name: 'unlock' }
   | { name: 'recover' }
-  | { name: 'pair' }
   | { name: 'gallery' }
   | { name: 'albums' }
   | { name: 'album'; albumId: string }
   | { name: 'favorites' }
   | { name: 'photo'; photoId: string }
   | { name: 'settings' }
+  | { name: 'share' }
   | { name: 'not-found' };
 
 export const paths = {
@@ -22,7 +22,6 @@ export const paths = {
   login: '/login',
   unlock: '/unlock',
   recover: '/recover',
-  pair: '/pair',
   gallery: '/photos',
   albums: '/albums',
   album: (albumId: string) => `/albums/${encodeURIComponent(albumId)}`,
@@ -32,6 +31,7 @@ export const paths = {
     return from && from.kind !== 'all' ? `${base}?from=${formatContext(from)}` : base;
   },
   settings: '/settings',
+  share: '/settings/share',
 } as const;
 
 const staticRoutes: Record<string, Route> = {
@@ -41,11 +41,11 @@ const staticRoutes: Record<string, Route> = {
   '/login': { name: 'login' },
   '/unlock': { name: 'unlock' },
   '/recover': { name: 'recover' },
-  '/pair': { name: 'pair' },
   '/photos': { name: 'gallery' },
   '/albums': { name: 'albums' },
   '/favorites': { name: 'favorites' },
   '/settings': { name: 'settings' },
+  '/settings/share': { name: 'share' },
 };
 
 function decodeSegment(segment: string): string | null {

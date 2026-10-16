@@ -19,7 +19,11 @@ DENY`, `no-referrer`, `nosniff`) from Hono's `secureHeaders` middleware in
 
 ## To be designed
 
-- Key hierarchy (password-derived key, per-vault key, per-photo keys) and how the two
-  partners share a vault.
+- Key hierarchy (password-derived key, per-vault key, per-photo keys) and how a library
+  is shared with another account.
+- The private space: a second password that opens a separate set of keys. One password box
+  serves both, so unlocking must try each key slot, and neither the main library nor the
+  server should be able to tell whether a private space exists (UI behaviour in
+  [ui.md](ui.md)).
 - Password hashing / KDF parameters.
 - Metadata minimisation in D1.

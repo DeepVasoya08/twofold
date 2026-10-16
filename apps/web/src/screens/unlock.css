@@ -1,4 +1,4 @@
-.unlock__couple {
+.unlock__account {
   display: flex;
   align-items: center;
   gap: 16px;
@@ -9,8 +9,20 @@
   box-shadow: var(--shadow-sm);
 }
 
-.unlock__names {
+.unlock__text {
+  display: grid;
+  min-width: 0;
+}
+
+.unlock__name {
   font-family: var(--font-serif);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
+}
+
+.unlock__email {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 14px;
+  text-overflow: ellipsis;
 }

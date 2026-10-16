@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { ThemeProvider } from './theme';
 import { ToastProvider } from './toast';
 import { VaultProvider } from './vault';
-import type { VaultState } from './vault';
+import type { VaultsState } from './vault';
 
 /** App-wide state. The router is supplied separately so tests can use MemoryRouter. */
 export function Providers({
@@ -11,7 +11,7 @@ export function Providers({
   initialVault,
 }: {
   children: ReactNode;
-  initialVault?: VaultState;
+  initialVault?: VaultsState;
 }) {
   return (
     <ThemeProvider>

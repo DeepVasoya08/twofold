@@ -8,14 +8,14 @@ import type { ThemePreference } from '../app/theme';
 import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
-import { Avatar, CoupleAvatars } from '../components/Brand';
+import { Avatar } from '../components/Brand';
 import { Dialog } from '../components/Dialog';
 import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
-import { formatShortDay, formatTime, pluralize } from '../lib/format';
+import { formatShortDay, formatTime } from '../lib/format';
 import { MIN_PASSWORD_LENGTH } from '../lib/password';
-import { devices, me, pairedSince, partner } from '../mock/data';
+import { contact, devices, me, sharedSince } from '../mock/data';
 
 import './settings.css';
 
@@ -62,27 +62,32 @@ const themes: { value: ThemePreference; label: string; icon: IconName }[] = [
   { value: 'dark', label: 'Dark', icon: 'moon' },
 ];
 
-type DialogName = 'password' | 'unpair' | 'delete' | null;
+type DialogName = 'main-password' | 'private-password' | 'stop-sharing' | 'delete' | null;
 
 export function Settings() {
   const { navigate } = useRouter();
   const { theme, setTheme } = useTheme();
-  const { state } = useVault();
+  const { space, openSpace, setPrivatePassword } = useVault();
   const toast = useToast();
+  const isPrivate = space === 'private';
   const [dialog, setDialog] = useState<DialogName>(null);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [autoLock, setAutoLock] = useState('15');
+  // Mock: the main library is shared with one person; the private space with no one.
+  const [shared, setShared] = useState(!isPrivate);
 
   const closeDialog = () => {
     setDialog(null);
     setCurrent('');
     setNext('');
+    setConfirm('');
     setPasswordError(null);
   };
 
-  const onChangePassword = (event: SubmitEvent) => {
+  const onChangeMain = (event: SubmitEvent) => {
     event.preventDefault();
     if (!current) {
       setPasswordError('Enter your current password.');
@@ -94,6 +99,31 @@ export function Settings() {
     }
     closeDialog();
     toast.show('Password changed');
+  };
+
+  // In the main library this always reads "set up", whether or not a private space exists.
+  const onSetPrivate = (event: SubmitEvent) => {
+    event.preventDefault();
+    if (isPrivate && !current) {
+      setPasswordError('Enter your current private password.');
+      return;
+    }
+    if (next.length < MIN_PASSWORD_LENGTH) {
+      setPasswordError(`Use at least ${String(MIN_PASSWORD_LENGTH)} characters.`);
+      return;
+    }
+    if (next !== confirm) {
+      setPasswordError("Passwords don't match.");
+      return;
+    }
+    setPrivatePassword(next);
+    closeDialog();
+    toast.show(isPrivate ? 'Private password changed' : 'Private space ready');
+  };
+
+  const signOut = () => {
+    openSpace('main');
+    navigate(paths.welcome);
   };
 
   return (
@@ -110,52 +140,95 @@ export function Settings() {
         </div>
       </Section>
 
-      <Section title="Your partner">
-        <div className="profile">
-          <CoupleAvatars a={me} b={partner} />
-          <div className="profile__text">
-            <span className="profile__name">Paired with {partner.name}</span>
-            <span className="profile__email">
-              Since {formatShortDay(pairedSince)} · {pluralize(state.photos.length, 'photo')}{' '}
-              together
-            </span>
-          </div>
-        </div>
-        <Row
-          icon="users"
-          title="Unpair"
-          description={`Stop sharing this vault with ${partner.name}.`}
-          action={
-            <button
-              type="button"
-              className="btn btn--danger-ghost btn--sm"
-              onClick={() => {
-                setDialog('unpair');
-              }}
-            >
-              Unpair
-            </button>
-          }
-        />
-      </Section>
-
-      <Section title="Security">
+      <Section title="Passwords">
         <Row
           icon="key"
-          title="Password"
-          description="Unlocks your photos on every device."
+          title="Main password"
+          description="Opens your photo library."
           action={
             <button
               type="button"
               className="btn btn--secondary btn--sm"
               onClick={() => {
-                setDialog('password');
+                setDialog('main-password');
               }}
             >
               Change
             </button>
           }
         />
+        <Row
+          icon="eye-off"
+          title={isPrivate ? 'Private password' : 'Private space'}
+          description={
+            isPrivate
+              ? 'Opens this private space. Type it in the same box as your main password.'
+              : 'A second password that opens a separate space. Your main password never shows it.'
+          }
+          action={
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              onClick={() => {
+                setDialog('private-password');
+              }}
+            >
+              {isPrivate ? 'Change' : 'Set up'}
+            </button>
+          }
+        />
+      </Section>
+
+      <Section title="Sharing">
+        {shared ? (
+          <Row
+            icon="users"
+            title={`Shared with ${contact.name}`}
+            description={`Since ${formatShortDay(sharedSince)}. They see this library, and nothing else.`}
+            action={
+              <button
+                type="button"
+                className="btn btn--danger-ghost btn--sm"
+                onClick={() => {
+                  setDialog('stop-sharing');
+                }}
+              >
+                Stop
+              </button>
+            }
+          />
+        ) : (
+          <Row
+            icon="users"
+            title="Not shared"
+            description={
+              isPrivate ? 'Only you can see this private space.' : 'Only you can see this library.'
+            }
+          />
+        )}
+        <Row
+          icon="link"
+          title="Invite someone"
+          description={
+            isPrivate
+              ? 'Share this private space with someone you trust.'
+              : 'Share your library with someone you trust.'
+          }
+          action={
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              onClick={() => {
+                navigate(paths.share);
+              }}
+            >
+              Invite
+            </button>
+          }
+        />
+      </Section>
+
+      <Section title="Security">
         <Row
           icon="shield"
           title="Recovery key"
@@ -175,7 +248,7 @@ export function Settings() {
         <Row
           icon="lock"
           title="Auto-lock"
-          description="Lock the vault after a while without use."
+          description="Lock Twofold after a while without use."
           action={
             <select
               className="select"
@@ -185,27 +258,11 @@ export function Settings() {
                 setAutoLock(event.currentTarget.value);
               }}
             >
+              <option value="1">1 minute</option>
               <option value="5">5 minutes</option>
               <option value="15">15 minutes</option>
-              <option value="60">1 hour</option>
               <option value="0">When I close the tab</option>
             </select>
-          }
-        />
-        <Row
-          icon="lock"
-          title="Lock now"
-          description="Clears your key from memory on this device."
-          action={
-            <button
-              type="button"
-              className="btn btn--secondary btn--sm"
-              onClick={() => {
-                navigate(paths.unlock);
-              }}
-            >
-              Lock
-            </button>
           }
         />
       </Section>
@@ -263,13 +320,7 @@ export function Settings() {
       </Section>
 
       <div className="settings-footer">
-        <button
-          type="button"
-          className="btn btn--secondary btn--block"
-          onClick={() => {
-            navigate(paths.welcome);
-          }}
-        >
+        <button type="button" className="btn btn--secondary btn--block" onClick={signOut}>
           <Icon name="logout" size={18} />
           Sign out
         </button>
@@ -284,8 +335,8 @@ export function Settings() {
         </button>
       </div>
 
-      <Dialog open={dialog === 'password'} onClose={closeDialog} title="Change password">
-        <form className="form" onSubmit={onChangePassword} noValidate>
+      <Dialog open={dialog === 'main-password'} onClose={closeDialog} title="Change main password">
+        <form className="form" onSubmit={onChangeMain} noValidate>
           <PasswordField
             label="Current password"
             autoComplete="current-password"
@@ -318,10 +369,64 @@ export function Settings() {
       </Dialog>
 
       <Dialog
-        open={dialog === 'unpair'}
+        open={dialog === 'private-password'}
         onClose={closeDialog}
-        title={`Unpair from ${partner.name}?`}
-        description={`You'll each keep a copy of the photos you added, but you won't see each other's anymore.`}
+        title={isPrivate ? 'Change private password' : 'Set up a private space'}
+        description={
+          isPrivate
+            ? undefined
+            : 'Choose a second password. Open Twofold with it to see a separate space with its own photos and albums. Your main password will never show that it exists.'
+        }
+      >
+        <form className="form" onSubmit={onSetPrivate} noValidate>
+          {isPrivate && (
+            <PasswordField
+              label="Current private password"
+              autoComplete="off"
+              value={current}
+              onChange={(event) => {
+                setCurrent(event.currentTarget.value);
+                setPasswordError(null);
+              }}
+            />
+          )}
+          <PasswordField
+            label={isPrivate ? 'New private password' : 'Private password'}
+            autoComplete="off"
+            value={next}
+            onChange={(event) => {
+              setNext(event.currentTarget.value);
+              setPasswordError(null);
+            }}
+            showStrength
+            hint="Make it different from your main password."
+          />
+          <PasswordField
+            label="Confirm private password"
+            autoComplete="off"
+            value={confirm}
+            onChange={(event) => {
+              setConfirm(event.currentTarget.value);
+              setPasswordError(null);
+            }}
+            error={passwordError}
+          />
+          <div className="dialog__actions">
+            <button type="button" className="btn btn--ghost" onClick={closeDialog}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn--primary">
+              {isPrivate ? 'Change password' : 'Create private space'}
+            </button>
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={dialog === 'stop-sharing'}
+        onClose={closeDialog}
+        title={`Stop sharing with ${contact.name}?`}
+        description={`${contact.name} will lose access to this library. Photos they added stay with them.`}
       >
         <div className="dialog__actions">
           <button type="button" className="btn btn--ghost" onClick={closeDialog}>
@@ -332,10 +437,11 @@ export function Settings() {
             className="btn btn--danger"
             onClick={() => {
               closeDialog();
-              navigate(paths.pair);
+              setShared(false);
+              toast.show(`Stopped sharing with ${contact.name}`);
             }}
           >
-            Unpair
+            Stop sharing
           </button>
         </div>
       </Dialog>
@@ -344,20 +450,13 @@ export function Settings() {
         open={dialog === 'delete'}
         onClose={closeDialog}
         title="Delete your account?"
-        description="Your account and every photo you added will be permanently erased. This can't be undone."
+        description="Your account and every photo in it will be permanently erased. This can't be undone."
       >
         <div className="dialog__actions">
           <button type="button" className="btn btn--ghost" onClick={closeDialog}>
             Cancel
           </button>
-          <button
-            type="button"
-            className="btn btn--danger"
-            onClick={() => {
-              closeDialog();
-              navigate(paths.welcome);
-            }}
-          >
+          <button type="button" className="btn btn--danger" onClick={signOut}>
             Delete account
           </button>
         </div>

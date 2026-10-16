@@ -53,8 +53,8 @@ export function SignUp() {
   return (
     <AuthLayout
       title="Create your vault"
-      subtitle="Start a private space, then invite your partner to share it."
-      step={{ current: 1, total: 3 }}
+      subtitle="Your photos, encrypted on your device before they go anywhere."
+      step={{ current: 1, total: 2 }}
       footer={
         <>
           Already have an account? <Link to={paths.login}>Log in</Link>

@@ -3,12 +3,14 @@ import type { SubmitEvent } from 'react';
 
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
+import { useVault } from '../app/vault';
 import { AuthLayout } from '../components/AuthLayout';
 import { PasswordField, TextField } from '../components/Field';
 import { isValidEmail } from '../lib/password';
 
 export function LogIn() {
   const { navigate } = useRouter();
+  const { openSpace, spaceFor } = useVault();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -19,13 +21,16 @@ export function LogIn() {
   const onSubmit = (event: SubmitEvent) => {
     event.preventDefault();
     setSubmitted(true);
-    if (isValidEmail(email) && password) navigate(paths.gallery);
+    if (!isValidEmail(email) || !password) return;
+    // The same box opens either space; the password decides which.
+    openSpace(spaceFor(password));
+    navigate(paths.gallery);
   };
 
   return (
     <AuthLayout
       title="Welcome back"
-      subtitle="Log in to open your shared vault."
+      subtitle="Log in to open your photos."
       footer={
         <>
           New to Twofold? <Link to={paths.signup}>Create a vault</Link>

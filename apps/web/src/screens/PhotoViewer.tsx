@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import type { PointerEvent } from 'react';
+import type { PointerEvent, SubmitEvent } from 'react';
 
 import { Link, useRouter } from '../app/router';
 import { parsePhotoContext, paths } from '../app/routes';
@@ -9,9 +9,10 @@ import { albumPhotos, useVault } from '../app/vault';
 import type { VaultState } from '../app/vault';
 import { Avatar } from '../components/Brand';
 import { Dialog } from '../components/Dialog';
+import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import { formatDay, formatTime, sortNewestFirst } from '../lib/format';
-import { me, partner } from '../mock/data';
+import { contact, me } from '../mock/data';
 import type { Photo } from '../mock/data';
 
 import './photo-viewer.css';
@@ -42,10 +43,13 @@ function closeTarget(context: PhotoContext): string {
 
 export function PhotoViewer({ photoId }: { photoId: string }) {
   const { search, navigate, back } = useRouter();
-  const { state, dispatch } = useVault();
+  const { state, dispatch, space, spaceFor, movePhoto } = useVault();
   const toast = useToast();
   const [showInfo, setShowInfo] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [dialog, setDialog] = useState<'delete' | 'move' | null>(null);
+  const [privatePassword, setPrivatePassword] = useState('');
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const isPrivate = space === 'private';
   const swipeStart = useRef<number | null>(null);
 
   const context = parsePhotoContext(search);
@@ -63,7 +67,7 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
 
   // Keyboard: arrows move through the list, Escape closes. Ignored while a dialog is open.
   const onKey = useEffectEvent((event: KeyboardEvent) => {
-    if (confirmDelete || event.defaultPrevented) return;
+    if (dialog || event.defaultPrevented) return;
     if (event.key === 'ArrowLeft') go(prev);
     else if (event.key === 'ArrowRight') go(next);
     else if (event.key === 'Escape') back(exit);
@@ -86,16 +90,46 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
     );
   }
 
-  const owner = photo.addedBy === 'me' ? me : partner;
+  const owner = photo.addedBy === 'me' ? me : contact;
   const albums = state.albums.filter((album) => photo.albumIds.includes(album.id));
 
-  const onDelete = () => {
-    dispatch({ type: 'delete-photo', photoId: photo.id });
-    setConfirmDelete(false);
-    toast.show('Photo deleted');
+  const closeDialog = () => {
+    setDialog(null);
+    setPrivatePassword('');
+    setMoveError(null);
+  };
+
+  /** After a photo leaves this list, show its neighbour, or go back to the grid. */
+  const leave = () => {
     const fallback = next ?? prev;
     if (fallback) navigate(paths.photo(fallback.id, context), { replace: true });
     else navigate(exit, { replace: true });
+  };
+
+  const onDelete = () => {
+    dispatch({ type: 'delete-photo', photoId: photo.id });
+    closeDialog();
+    toast.show('Photo deleted');
+    leave();
+  };
+
+  const onMoveOut = () => {
+    movePhoto(photo.id, 'main');
+    toast.show('Moved to your library');
+    leave();
+  };
+
+  // Moving in needs the private password, so the main library alone can't reach the space.
+  const onMoveIn = (event: SubmitEvent) => {
+    event.preventDefault();
+    if (spaceFor(privatePassword) !== 'private') {
+      setMoveError("That password doesn't open a private space. You can set one up in Settings.");
+      return;
+    }
+    movePhoto(photo.id, 'private');
+    closeDialog();
+    toast.show('Moved to your private space');
+    leave();
   };
 
   const onPointerDown = (event: PointerEvent) => {
@@ -162,7 +196,19 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
             type="button"
             className="viewer__btn"
             onClick={() => {
-              setConfirmDelete(true);
+              if (isPrivate) onMoveOut();
+              else setDialog('move');
+            }}
+            aria-label={isPrivate ? 'Move to library' : 'Move to private space'}
+            title={isPrivate ? 'Move to library' : 'Move to private space'}
+          >
+            <Icon name={isPrivate ? 'photos' : 'eye-off'} />
+          </button>
+          <button
+            type="button"
+            className="viewer__btn"
+            onClick={() => {
+              setDialog('delete');
             }}
             aria-label="Delete"
           >
@@ -262,7 +308,11 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
               </dt>
               <dd>
                 End-to-end encrypted
-                <span>Only you and {partner.name} can see this photo.</span>
+                <span>
+                  {isPrivate
+                    ? 'Only you can see it, and only after opening Twofold with your private password.'
+                    : 'Only you and people you share this library with can see it.'}
+                </span>
               </dd>
             </div>
           </dl>
@@ -270,21 +320,45 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
       )}
 
       <Dialog
-        open={confirmDelete}
-        onClose={() => {
-          setConfirmDelete(false);
-        }}
+        open={dialog === 'move'}
+        onClose={closeDialog}
+        title="Move to private space"
+        description="Enter your private password. The photo will leave your library and only appear when you open Twofold with that password."
+      >
+        <form className="form" onSubmit={onMoveIn} noValidate>
+          <PasswordField
+            label="Private password"
+            autoComplete="off"
+            value={privatePassword}
+            onChange={(event) => {
+              setPrivatePassword(event.currentTarget.value);
+              setMoveError(null);
+            }}
+            error={moveError}
+          />
+          <div className="dialog__actions">
+            <button type="button" className="btn btn--ghost" onClick={closeDialog}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn--primary">
+              Move
+            </button>
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={dialog === 'delete'}
+        onClose={closeDialog}
         title="Delete this photo?"
-        description={`It will be removed for both you and ${partner.name}. This can't be undone.`}
+        description={
+          isPrivate
+            ? "It will be removed from your private space. This can't be undone."
+            : "It will be removed for everyone you share this library with. This can't be undone."
+        }
       >
         <div className="dialog__actions">
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => {
-              setConfirmDelete(false);
-            }}
-          >
+          <button type="button" className="btn btn--ghost" onClick={closeDialog}>
             Cancel
           </button>
           <button type="button" className="btn btn--danger" onClick={onDelete}>

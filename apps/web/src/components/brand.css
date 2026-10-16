@@ -41,7 +41,7 @@
   background: linear-gradient(135deg, #f0917b, #d9586a);
 }
 
-.avatar--partner {
+.avatar--contact {
   background: linear-gradient(135deg, #9a72c4, #5b3a78);
 }
 
@@ -64,20 +64,20 @@
   box-shadow: 0 0 0 3px var(--surface);
 }
 
-.couple {
+.avatar-pair {
   display: inline-flex;
   flex: none;
 }
 
-.couple .avatar + .avatar {
+.avatar-pair .avatar + .avatar {
   margin-left: -10px;
 }
 
-.couple .avatar--sm + .avatar--sm {
+.avatar-pair .avatar--sm + .avatar--sm {
   margin-left: -7px;
 }
 
-.couple .avatar--lg + .avatar--lg {
+.avatar-pair .avatar--lg + .avatar--lg {
   margin-left: -16px;
 }
 

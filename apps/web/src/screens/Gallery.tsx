@@ -10,32 +10,42 @@ import { formatDateRange, groupByMonth, pluralize } from '../lib/format';
 
 import './gallery.css';
 
-const HIGHLIGHT_ALBUM_ID = 'first-year';
+const HIGHLIGHT_MIN_PHOTOS = 3;
 
 export function Gallery() {
-  const { state } = useVault();
+  const { state, space } = useVault();
+  const isPrivate = space === 'private';
   const months = groupByMonth(state.photos);
-  const highlight = state.albums.find((album) => album.id === HIGHLIGHT_ALBUM_ID);
+  const highlight = state.albums.find(
+    (album) => albumPhotos(state, album.id).length >= HIGHLIGHT_MIN_PHOTOS,
+  );
   const highlightPhotos = highlight ? albumPhotos(state, highlight.id) : [];
   const highlightCover = highlight ? albumCover(state, highlight) : undefined;
 
   return (
     <div className="page">
       <PageHeader
-        title="Our photos"
+        title={isPrivate ? 'Private space' : 'Photos'}
         subtitle={
           <>
             {pluralize(state.photos.length, 'photo')} <span aria-hidden="true">·</span>{' '}
-            <LockBadge />
+            <LockBadge label={isPrivate ? 'Opens only with your private password' : undefined} />
           </>
         }
       />
 
       {state.photos.length === 0 ? (
-        <EmptyState icon="image-plus" title="Your vault is ready">
-          Add your first photos with the Upload button. They&apos;re encrypted on this device before
-          they go anywhere.
-        </EmptyState>
+        isPrivate ? (
+          <EmptyState icon="eye-off" title="Your private space is empty">
+            Move photos here from your library, or upload straight in. They only appear when you
+            open Twofold with your private password.
+          </EmptyState>
+        ) : (
+          <EmptyState icon="image-plus" title="Your library is ready">
+            Add your first photos with the Upload button. They&apos;re encrypted on this device
+            before they go anywhere.
+          </EmptyState>
+        )
       ) : (
         <>
           {highlight && highlightCover && (

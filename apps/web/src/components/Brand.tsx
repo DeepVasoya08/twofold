@@ -4,7 +4,7 @@ import { Icon } from './Icon';
 
 import './brand.css';
 
-/** The mark: two overlapping circles, the two of you, folded into one place. */
+/** The mark: two overlapping circles, two spaces folded into one app. */
 export function LogoMark({ size = 32 }: { size?: number }) {
   return (
     <svg
@@ -39,7 +39,8 @@ export function Avatar({ person, size = 'md' }: { person: Person; size?: 'sm' | 
   );
 }
 
-export function CoupleAvatars({
+/** Two people side by side, e.g. you and someone you share a library with. */
+export function AvatarPair({
   a,
   b,
   size = 'md',
@@ -49,7 +50,7 @@ export function CoupleAvatars({
   size?: 'sm' | 'md' | 'lg';
 }) {
   return (
-    <span className="couple" role="img" aria-label={`${a.name} and ${b.name}`}>
+    <span className="avatar-pair" role="img" aria-label={`${a.name} and ${b.name}`}>
       <Avatar person={a} size={size} />
       <Avatar person={b} size={size} />
     </span>
@@ -57,7 +58,7 @@ export function CoupleAvatars({
 }
 
 /** A quiet reminder that everything here is end-to-end encrypted. */
-export function LockBadge({ label = 'End-to-end encrypted' }: { label?: string }) {
+export function LockBadge({ label = 'End-to-end encrypted' }: { label?: string | undefined }) {
   return (
     <span className="lock-badge">
       <Icon name="lock" size={14} />

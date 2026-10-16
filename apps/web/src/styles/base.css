@@ -112,6 +112,57 @@
   --focus: 0 0 0 3px rgb(239 125 136 / 40%);
 }
 
+/* The private space: same layout, cooler violet tones, so you always know where you are. */
+
+:root[data-space='private'] {
+  --bg: #f4f1f8;
+  --bg-tint: #ebe5f2;
+  --surface-2: #efeaf5;
+  --surface-3: #e5ddef;
+  --border: #e2dbec;
+  --border-strong: #d3c8e2;
+  --accent: #7a5bc4;
+  --accent-hover: #6a4bb4;
+  --accent-text: #6243ad;
+  --accent-soft: #ebe3f8;
+  --on-accent: #ffffff;
+  --focus: 0 0 0 3px rgb(122 91 196 / 35%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-space='private']:not([data-theme='light']) {
+    --bg: #120f1a;
+    --bg-tint: #17131f;
+    --surface: #1d1828;
+    --surface-2: #262033;
+    --surface-3: #30293f;
+    --border: #2e2840;
+    --border-strong: #3d3552;
+    --accent: #b39cf2;
+    --accent-hover: #c4b1f6;
+    --accent-text: #c1aef5;
+    --accent-soft: #2d2445;
+    --on-accent: #160f24;
+    --focus: 0 0 0 3px rgb(179 156 242 / 40%);
+  }
+}
+
+:root[data-space='private'][data-theme='dark'] {
+  --bg: #120f1a;
+  --bg-tint: #17131f;
+  --surface: #1d1828;
+  --surface-2: #262033;
+  --surface-3: #30293f;
+  --border: #2e2840;
+  --border-strong: #3d3552;
+  --accent: #b39cf2;
+  --accent-hover: #c4b1f6;
+  --accent-text: #c1aef5;
+  --accent-soft: #2d2445;
+  --on-accent: #160f24;
+  --focus: 0 0 0 3px rgb(179 156 242 / 40%);
+}
+
 /* Reset */
 
 *,

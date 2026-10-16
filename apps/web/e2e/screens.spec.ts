@@ -1,18 +1,18 @@
 import { expect, test } from '@playwright/test';
 
 const screens = [
-  ['/', /A private place/],
+  ['/', /Your photos/],
   ['/signup', 'Create your vault'],
   ['/signup/recovery-key', 'Save your recovery key'],
   ['/login', 'Welcome back'],
   ['/unlock', 'Welcome back, Deepu'],
   ['/recover', 'Recover your vault'],
-  ['/pair', 'Invite your partner'],
-  ['/photos', 'Our photos'],
+  ['/photos', 'Photos'],
   ['/albums', 'Albums'],
   ['/albums/kyoto', 'Kyoto in autumn'],
   ['/favorites', 'Favorites'],
   ['/settings', 'Settings'],
+  ['/settings/share', 'Share your library'],
   ['/nowhere', 'This page wandered off'],
 ] as const;
 
@@ -32,9 +32,9 @@ test('every screen renders under the production CSP without errors', async ({ pa
   expect(errors.filter((text) => !text.includes('404'))).toEqual([]);
 });
 
-test('sign up walks through recovery key and pairing into the gallery', async ({ page }) => {
+test('sign up walks through the recovery key into the library', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('link', { name: 'Create your vault' }).click();
+  await page.getByRole('link', { name: 'Get started' }).click();
 
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByText('Tell us what to call you.')).toBeVisible();
@@ -51,18 +51,58 @@ test('sign up walks through recovery key and pairing into the gallery', async ({
   await page.getByLabel("I've saved my recovery key somewhere safe").check();
   await next.click();
 
-  await expect(page).toHaveURL('/pair');
-  await page.getByRole('tab', { name: 'I have a code' }).click();
-  await page.getByLabel('Invite code').fill('nope');
-  await page.getByRole('button', { name: 'Join vault' }).click();
-  await expect(page.getByText(/doesn’t look right/)).toBeVisible();
-  await page.getByLabel('Invite code').fill('TWO-7KQ4-M9XD');
-  await page.getByRole('button', { name: 'Join vault' }).click();
-  await expect(page.getByRole('heading', { name: "You're connected" })).toBeVisible();
-  await page.getByRole('button', { name: 'Open our vault' }).click();
-
   await expect(page).toHaveURL('/photos');
-  await expect(page.getByRole('heading', { level: 1, name: 'Our photos' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
+});
+
+test('one password box opens the library or the private space', async ({ page }) => {
+  const unlockWith = async (password: string) => {
+    await page.goto('/unlock');
+    await page.getByLabel('Password', { exact: true }).fill(password);
+    await page.getByRole('button', { name: 'Unlock' }).click();
+  };
+
+  await unlockWith('my-main-password');
+  await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
+  await expect(page.getByText('Private', { exact: true })).toHaveCount(0);
+
+  // Set up a private space from the main library, then lock.
+  await page.getByRole('link', { name: 'Settings' }).first().click();
+  await page.getByRole('button', { name: 'Set up' }).click();
+  const setup = page.getByRole('dialog', { name: 'Set up a private space' });
+  await setup.getByLabel('Private password', { exact: true }).fill('another-secret-42');
+  await setup.getByLabel('Confirm private password').fill('another-secret-42');
+  await setup.getByRole('button', { name: 'Create private space' }).click();
+  await expect(page.getByText('Private space ready')).toBeVisible();
+
+  // Move a photo in from the library; the wrong password is refused. (State is in memory,
+  // so navigate inside the app rather than reloading.)
+  await page.getByRole('link', { name: 'Photos' }).first().click();
+  await page.locator('.photo-tile').first().click();
+  const photoPath = new URL(page.url()).pathname;
+  await page.getByRole('button', { name: 'Move to private space' }).click();
+  const move = page.getByRole('dialog', { name: 'Move to private space' });
+  await move.getByLabel('Private password').fill('my-main-password');
+  await move.getByRole('button', { name: 'Move' }).click();
+  await expect(move.getByText(/doesn't open a private space/)).toBeVisible();
+  await move.getByLabel('Private password').fill('another-secret-42');
+  await move.getByRole('button', { name: 'Move' }).click();
+  await expect(page.getByText('Moved to your private space')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Lock Twofold' }).first().click();
+  await expect(page).toHaveURL('/unlock');
+
+  await page.getByLabel('Password', { exact: true }).fill('another-secret-42');
+  await page.getByRole('button', { name: 'Unlock' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Private space' })).toBeVisible();
+  await expect(page.getByText('Private', { exact: true }).first()).toBeVisible();
+
+  // The moved photo is here (the newest), and can go back.
+  await page.locator('.photo-tile').first().click();
+  await expect(page).toHaveURL(photoPath);
+  await page.getByRole('button', { name: 'Move to library' }).click();
+  await expect(page.getByText('Moved to your library')).toBeVisible();
 });
 
 test('the photo viewer pages, favorites and closes', async ({ page }) => {

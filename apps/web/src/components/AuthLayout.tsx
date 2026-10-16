@@ -21,7 +21,7 @@ interface AuthLayoutProps {
   step?: { current: number; total: number };
 }
 
-/** Two-panel layout for sign up, log in and pairing; a single column on phones. */
+/** Two-panel layout for sign up, log in and sharing; a single column on phones. */
 export function AuthLayout({ title, subtitle, children, footer, step }: AuthLayoutProps) {
   return (
     <div className="auth">
@@ -34,9 +34,7 @@ export function AuthLayout({ title, subtitle, children, footer, step }: AuthLayo
           ))}
         </div>
         <blockquote className="auth__quote">
-          <p>
-            Every photo is locked on your device before it leaves. Only the two of you hold the key.
-          </p>
+          <p>Every photo is locked on your device before it leaves. Only you hold the key.</p>
           <span className="auth__quote-mark">
             <Icon name="lock" size={14} /> End-to-end encrypted
           </span>

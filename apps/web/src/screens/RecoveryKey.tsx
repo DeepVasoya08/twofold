@@ -29,7 +29,7 @@ export function RecoveryKey() {
     <AuthLayout
       title="Save your recovery key"
       subtitle="If you ever forget your password, these 12 words are the only way back into your photos. Not even we can help without them."
-      step={{ current: 2, total: 3 }}
+      step={{ current: 2, total: 2 }}
     >
       <div className="recovery">
         <ol className="recovery__words" aria-label="Recovery key">
@@ -52,7 +52,7 @@ export function RecoveryKey() {
           <Icon name="check" size={16} /> Write them on paper, or keep them in a password manager.
         </li>
         <li>
-          <Icon name="check" size={16} /> Don&apos;t share them, not even with your partner.
+          <Icon name="check" size={16} /> Don&apos;t share them with anyone.
         </li>
       </ul>
 
@@ -72,7 +72,7 @@ export function RecoveryKey() {
         className="btn btn--primary btn--block btn--lg"
         disabled={!saved}
         onClick={() => {
-          navigate(paths.pair);
+          navigate(paths.gallery);
         }}
       >
         Continue

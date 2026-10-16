@@ -10,12 +10,12 @@ describe('matchRoute', () => {
     ['/login', 'login'],
     ['/unlock', 'unlock'],
     ['/recover', 'recover'],
-    ['/pair', 'pair'],
     ['/photos', 'gallery'],
     ['/photos/', 'gallery'],
     ['/albums', 'albums'],
     ['/favorites', 'favorites'],
     ['/settings', 'settings'],
+    ['/settings/share', 'share'],
   ])('maps %s to %s', (path, name) => {
     expect(matchRoute(path).name).toBe(name);
   });
@@ -31,6 +31,7 @@ describe('matchRoute', () => {
 
   it('rejects unknown, nested and malformed paths', () => {
     expect(matchRoute('/nope').name).toBe('not-found');
+    expect(matchRoute('/pair').name).toBe('not-found');
     expect(matchRoute('/albums/a/b').name).toBe('not-found');
     expect(matchRoute('/albums/%E0%A4%A').name).toBe('not-found');
     expect(matchRoute('/albums/a%2Fb').name).toBe('not-found');

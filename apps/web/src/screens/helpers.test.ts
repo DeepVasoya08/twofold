@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { albumIdFromTitle } from './Albums';
-import { isInviteCode, normalizeInviteCode } from './Pair';
+import { isInviteCode, normalizeInviteCode } from './Share';
 import { countWords } from './Recover';
 import { validateSignUp } from './SignUp';
 

@@ -3,8 +3,9 @@ import type { ReactNode } from 'react';
 
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
-import { me, partner } from '../mock/data';
-import { CoupleAvatars, LockBadge, Logo } from './Brand';
+import { useVault } from '../app/vault';
+import { me } from '../mock/data';
+import { Avatar, LockBadge, Logo } from './Brand';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
 import { UploadDialog } from './UploadDialog';
@@ -34,7 +35,7 @@ const nav: { to: string; label: string; icon: IconName; match: (path: string) =>
     to: paths.settings,
     label: 'Settings',
     icon: 'settings',
-    match: (path) => path === paths.settings,
+    match: (path) => path.startsWith(paths.settings),
   },
 ];
 
@@ -46,8 +47,15 @@ interface AppShellProps {
 
 /** Signed-in chrome: a sidebar on wide screens, a top bar and bottom tabs on phones. */
 export function AppShell({ children, uploadAlbumId }: AppShellProps) {
-  const { pathname } = useRouter();
+  const { pathname, navigate } = useRouter();
+  const { space, openSpace } = useVault();
   const [uploading, setUploading] = useState(false);
+  const isPrivate = space === 'private';
+  // Locking forgets which space was open; the next password decides again.
+  const lock = () => {
+    openSpace('main');
+    navigate(paths.unlock);
+  };
   const openUpload = () => {
     setUploading(true);
   };
@@ -58,9 +66,12 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
         Skip to content
       </a>
       <aside className="shell__sidebar">
-        <Link to={paths.gallery} className="shell__brand" aria-label="Twofold photos">
-          <Logo size={30} />
-        </Link>
+        <div className="shell__brand-row">
+          <Link to={paths.gallery} className="shell__brand" aria-label="Twofold photos">
+            <Logo size={30} />
+          </Link>
+          {isPrivate && <PrivatePill />}
+        </div>
         <button type="button" className="btn btn--primary btn--block" onClick={openUpload}>
           <Icon name="upload" size={18} />
           Upload
@@ -81,29 +92,38 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
             );
           })}
         </nav>
-        <div className="shell__couple">
-          <CoupleAvatars a={me} b={partner} size="sm" />
-          <div className="shell__couple-text">
-            <span className="shell__couple-names">
-              {me.name} &amp; {partner.name}
-            </span>
-            <LockBadge label="Encrypted vault" />
+        <div className="shell__account">
+          <Avatar person={me} size="sm" />
+          <div className="shell__account-text">
+            <span className="shell__account-name">{me.name}</span>
+            <LockBadge label="Encrypted" />
           </div>
+          <button type="button" className="icon-btn" onClick={lock} aria-label="Lock Twofold">
+            <Icon name="lock" size={18} />
+          </button>
         </div>
       </aside>
 
       <header className="shell__topbar">
-        <Link to={paths.gallery} className="shell__brand" aria-label="Twofold photos">
-          <Logo size={26} />
-        </Link>
-        <button
-          type="button"
-          className="icon-btn icon-btn--accent"
-          onClick={openUpload}
-          aria-label="Upload photos"
-        >
-          <Icon name="upload" />
-        </button>
+        <div className="shell__brand-row">
+          <Link to={paths.gallery} className="shell__brand" aria-label="Twofold photos">
+            <Logo size={26} />
+          </Link>
+          {isPrivate && <PrivatePill />}
+        </div>
+        <div className="shell__topbar-actions">
+          <button type="button" className="icon-btn" onClick={lock} aria-label="Lock Twofold">
+            <Icon name="lock" />
+          </button>
+          <button
+            type="button"
+            className="icon-btn icon-btn--accent"
+            onClick={openUpload}
+            aria-label="Upload photos"
+          >
+            <Icon name="upload" />
+          </button>
+        </div>
       </header>
 
       <main className="shell__content" id="content">
@@ -135,6 +155,16 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
         }}
       />
     </div>
+  );
+}
+
+/** Shown only inside the private space, so you always know where you are. */
+function PrivatePill() {
+  return (
+    <span className="private-pill">
+      <Icon name="eye-off" size={13} />
+      Private
+    </span>
   );
 }
 

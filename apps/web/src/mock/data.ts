@@ -4,7 +4,7 @@ import type { Palette } from './art';
 /** Mock data for building the UI before the API and crypto are wired in. */
 
 export interface Person {
-  id: 'me' | 'partner';
+  id: 'me' | 'contact';
   name: string;
   email: string;
 }
@@ -30,9 +30,17 @@ export interface Album {
 }
 
 export const me: Person = { id: 'me', name: 'Deepu', email: 'deepu@example.com' };
-export const partner: Person = { id: 'partner', name: 'Mira', email: 'mira@example.com' };
+/** Someone the main library is shared with. */
+export const contact: Person = { id: 'contact', name: 'Mira', email: 'mira@example.com' };
 
-export const pairedSince = '2025-11-02T12:00:00Z';
+export const sharedSince = '2025-11-02T12:00:00Z';
+
+/**
+ * Which space a password opens. Mock only: any password opens the main library, except this
+ * one, which opens the private space once it is set up. Real unlocking will try the password
+ * against each key slot in packages/crypto, so the server never learns which space exists.
+ */
+export const MOCK_PRIVATE_PASSWORD = 'private1234';
 
 /** Placeholder only. Real recovery keys will come from packages/crypto. */
 export const mockRecoveryKey = [
@@ -132,7 +140,7 @@ const trips: Trip[] = [
     days: [14, 14, 13],
     location: 'Udaipur, India',
     palettes: ['sunset', 'dusk'],
-    albumId: 'first-year',
+    albumId: 'celebrations',
   },
   {
     month: '2025-12',
@@ -145,7 +153,7 @@ const trips: Trip[] = [
     days: [16, 9, 2, 2],
     location: 'Mumbai, India',
     palettes: ['ocean', 'dusk', 'sunset'],
-    albumId: 'first-year',
+    albumId: 'celebrations',
   },
 ];
 
@@ -158,10 +166,15 @@ const sizes: [number, number][] = [
   [900, 1200],
 ];
 
-function buildPhotos(): Photo[] {
+function buildPhotos(
+  source: readonly Trip[],
+  idPrefix: string,
+  seedOffset: number,
+  sharedBy: Person['id'] = 'me',
+): Photo[] {
   const photos: Photo[] = [];
   let n = 0;
-  for (const trip of trips) {
+  for (const trip of source) {
     trip.days.forEach((day, index) => {
       n += 1;
       const size = sizes[(n * 7) % sizes.length] ?? [1200, 800];
@@ -171,13 +184,18 @@ function buildPhotos(): Photo[] {
         'dawn';
       const hour = String(9 + ((n * 5) % 11)).padStart(2, '0');
       photos.push({
-        id: `p${String(n).padStart(3, '0')}`,
-        src: landscapeDataUri({ seed: n * 7919, palette, width: size[0], height: size[1] }),
+        id: `${idPrefix}${String(n).padStart(3, '0')}`,
+        src: landscapeDataUri({
+          seed: (n + seedOffset) * 7919,
+          palette,
+          width: size[0],
+          height: size[1],
+        }),
         width: size[0],
         height: size[1],
         takenAt: `${trip.month}-${String(day).padStart(2, '0')}T${hour}:${String((n * 13) % 60).padStart(2, '0')}:00Z`,
         location: trip.location,
-        addedBy: n % 3 === 0 ? 'partner' : 'me',
+        addedBy: n % 3 === 0 ? sharedBy : 'me',
         favorite: n % 5 === 1 || n % 7 === 0,
         albumIds: trip.albumId ? [trip.albumId] : [],
       });
@@ -186,13 +204,51 @@ function buildPhotos(): Photo[] {
   return photos;
 }
 
-export const initialPhotos: Photo[] = buildPhotos();
+export const initialPhotos: Photo[] = buildPhotos(trips, 'p', 0, 'contact');
 
 export const initialAlbums: Album[] = [
   { id: 'kyoto', title: 'Kyoto in autumn' },
   { id: 'lisbon', title: 'Lisbon weekend' },
   { id: 'monsoon', title: 'Monsoon in Goa' },
-  { id: 'first-year', title: 'Our first year' },
+  { id: 'celebrations', title: 'Celebrations' },
   { id: 'sundays', title: 'Slow Sundays' },
   { id: 'someday', title: 'Someday' },
+];
+
+const privateTrips: Trip[] = [
+  {
+    month: '2026-10',
+    days: [13, 8, 2],
+    location: 'Home',
+    palettes: ['night', 'dusk'],
+    albumId: 'keepsakes',
+  },
+  {
+    month: '2026-08',
+    days: [22, 21, 20, 19],
+    location: 'Pondicherry, India',
+    palettes: ['dusk', 'ocean', 'night'],
+    albumId: 'just-me',
+  },
+  {
+    month: '2026-04',
+    days: [17, 5],
+    location: 'Home',
+    palettes: ['dawn', 'night'],
+    albumId: 'keepsakes',
+  },
+  {
+    month: '2026-01',
+    days: [29, 12, 11],
+    location: 'Coorg, India',
+    palettes: ['forest', 'night', 'dusk'],
+  },
+];
+
+/** The private space: a separate library that only the private password opens. */
+export const initialPrivatePhotos: Photo[] = buildPhotos(privateTrips, 'x', 500);
+
+export const initialPrivateAlbums: Album[] = [
+  { id: 'keepsakes', title: 'Keepsakes' },
+  { id: 'just-me', title: 'Just for me' },
 ];

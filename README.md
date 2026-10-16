@@ -1,7 +1,8 @@
 # Twofold
 
-An end-to-end encrypted private photo vault for couples. Photos are encrypted on your
-device before upload; the server only ever stores ciphertext.
+An end-to-end encrypted private photo library. Photos are encrypted on your device before
+upload; the server only ever stores ciphertext. A second password can open a separate,
+private space.
 
 Web first; a mobile app (Expo) will follow.
 

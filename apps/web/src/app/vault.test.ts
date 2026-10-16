@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Photo } from '../mock/data';
-import { albumCover, albumPhotos, vaultReducer } from './vault';
-import type { VaultState } from './vault';
+import { albumCover, albumPhotos, spaceForPassword, vaultReducer, vaultsReducer } from './vault';
+import type { VaultState, VaultsState } from './vault';
 
 function photo(id: string, takenAt: string, albumIds: string[] = []): Photo {
   return {
@@ -65,5 +65,56 @@ describe('album helpers', () => {
     expect(albumCover(state, { id: 'trip', title: 'Trip', coverPhotoId: 'a' })?.id).toBe('a');
     expect(albumCover(state, { id: 'trip', title: 'Trip' })?.id).toBe('b');
     expect(albumCover(state, { id: 'none', title: 'None' })).toBeUndefined();
+  });
+});
+
+describe('spaces', () => {
+  // Test-only phrases, not credentials.
+  const privatePhrase = 'test-phrase-b';
+  const mainPhrase = 'test-phrase-a';
+  const vaults: VaultsState = {
+    space: 'main',
+    spaces: { main: state, private: { photos: [], albums: [{ id: 'p', title: 'P' }] } },
+    privatePassword: privatePhrase,
+  };
+
+  it('opens the private space only with the private password', () => {
+    expect(spaceForPassword(privatePhrase, privatePhrase)).toBe('private');
+    expect(spaceForPassword(mainPhrase, privatePhrase)).toBe('main');
+    expect(spaceForPassword(privatePhrase, null)).toBe('main');
+    expect(spaceForPassword('', null)).toBe('main');
+  });
+
+  it('applies actions to the open space only', () => {
+    const opened = vaultsReducer(vaults, { type: 'open-space', space: 'private' });
+    const next = vaultsReducer(opened, {
+      type: 'in-space',
+      action: { type: 'create-album', album: { id: 'q', title: 'Q' } },
+    });
+    expect(next.spaces.private.albums.map((a) => a.id)).toEqual(['q', 'p']);
+    expect(next.spaces.main).toBe(vaults.spaces.main);
+  });
+
+  it('moves a photo between spaces, leaving its albums behind', () => {
+    const moved = vaultsReducer(vaults, { type: 'move-photo', photoId: 'a', to: 'private' });
+    expect(moved.spaces.main.photos.map((p) => p.id)).toEqual(['b', 'c']);
+    expect(moved.spaces.main.albums[0]?.coverPhotoId).toBeUndefined();
+    expect(moved.spaces.private.photos).toMatchObject([{ id: 'a', albumIds: [] }]);
+
+    const back = vaultsReducer(moved, { type: 'move-photo', photoId: 'a', to: 'main' });
+    expect(back.spaces.private.photos).toEqual([]);
+    expect(back.spaces.main.photos[0]?.id).toBe('a');
+  });
+
+  it('ignores a move of a photo that is not in the other space', () => {
+    expect(vaultsReducer(vaults, { type: 'move-photo', photoId: 'a', to: 'main' })).toBe(vaults);
+  });
+
+  it('sets the private password', () => {
+    const next = vaultsReducer(
+      { ...vaults, privatePassword: null },
+      { type: 'set-up-private', password: mainPhrase },
+    );
+    expect(next.privatePassword).toBe(mainPhrase);
   });
 });
