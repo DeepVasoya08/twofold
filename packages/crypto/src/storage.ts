@@ -14,15 +14,25 @@ import { fromBase64Url, toBase64Url } from './webcrypto';
  *   crypto_aead_xchacha20poly1305_ietf under a subkey of the space key. The record's kind
  *   and id are the associated data, so the server can't swap one record for another.
  *   Plaintext is padded (ISO/IEC 7816-4, 256-byte blocks) to hide small length changes.
- * - A space's storage is addressed by its access token, the space id from its key slot.
+ * - A space's storage is addressed by an access token: the space id from its key slot for
+ *   the owner, or a share token for a member. Members get the records key, never the space
+ *   key, so records only the owner should read (sharing details) use a second subkey.
  */
 
 const KDF_CONTEXT = 'twfspace';
-const SUBKEY = { records: 1 } as const;
+const SUBKEY = { records: 1, owner: 2 } as const;
 const CHUNK_BYTES = 64 * 1024;
 const PAD_BLOCK = 256;
+const RECORD_KEY_BYTES = 32;
 
+/** Records everyone with access to a space can open: photos and albums. */
 export type RecordKind = 'photo' | 'album';
+
+/**
+ * Records only the space's owner can open: who it is shared with, and the libraries it has
+ * joined. They use a subkey that members never receive.
+ */
+export type OwnerRecordKind = 'member' | 'joined';
 
 export class DecryptionError extends Error {
   constructor(message = 'This data could not be decrypted') {
@@ -31,10 +41,44 @@ export class DecryptionError extends Error {
   }
 }
 
+/**
+ * What reading and writing a space's photos and albums needs: a token that addresses its
+ * storage and the key its records are sealed with. The owner's token is the space id; a
+ * member's is a share token of their own, which the owner can revoke. Neither includes the
+ * space key itself, so a member can't open the owner's records.
+ */
+export interface SpaceAccess {
+  token: string;
+  recordKey: Uint8Array;
+}
+
 /** The token that addresses a space's storage. The server stores only its SHA-256. */
 export function spaceToken(space: SpaceKeys): string {
   if (space.spaceId.length !== STORAGE_SIZES.spaceToken) throw new Error('Malformed space id');
   return toBase64Url(space.spaceId);
+}
+
+/** The owner's access to a space: its own token and records key. */
+export async function ownerAccess(space: SpaceKeys): Promise<SpaceAccess> {
+  const sodium = await getSodium();
+  return {
+    token: spaceToken(space),
+    recordKey: sodium.crypto_kdf_derive_from_key(
+      RECORD_KEY_BYTES,
+      SUBKEY.records,
+      KDF_CONTEXT,
+      space.spaceKey,
+    ),
+  };
+}
+
+/** A member's access to someone else's space, as their invite delivered it. */
+export function memberAccess(token: string, recordKey: Uint8Array): SpaceAccess {
+  if (fromBase64Url(token)?.length !== STORAGE_SIZES.spaceToken) {
+    throw new Error('Malformed share token');
+  }
+  if (recordKey.length !== RECORD_KEY_BYTES) throw new Error('Malformed records key');
+  return { token, recordKey: recordKey.slice() };
 }
 
 /** A new random photo or album id. */
@@ -43,24 +87,17 @@ export async function newRecordId(): Promise<string> {
   return toBase64Url(sodium.randombytes_buf(STORAGE_SIZES.recordId));
 }
 
-async function recordKey(space: SpaceKeys): Promise<Uint8Array> {
-  const sodium = await getSodium();
-  return sodium.crypto_kdf_derive_from_key(32, SUBKEY.records, KDF_CONTEXT, space.spaceKey);
-}
-
-function associatedData(kind: RecordKind, id: string): Uint8Array {
+function associatedData(kind: RecordKind | OwnerRecordKind, id: string): Uint8Array {
   return new TextEncoder().encode(`twofold:${kind}:${id}`);
 }
 
-/** Seals a record's bytes under the space key, bound to its kind and id. */
-export async function sealRecord(
-  space: SpaceKeys,
-  kind: RecordKind,
+async function sealWith(
+  key: Uint8Array,
+  kind: RecordKind | OwnerRecordKind,
   id: string,
   data: Uint8Array,
 ): Promise<string> {
   const sodium = await getSodium();
-  const key = await recordKey(space);
   const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
   const padded = sodium.pad(data, PAD_BLOCK);
   const box = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
@@ -70,7 +107,6 @@ export async function sealRecord(
     nonce,
     key,
   );
-  sodium.memzero(key);
   const sealed = new Uint8Array(nonce.length + box.length);
   sealed.set(nonce, 0);
   sealed.set(box, nonce.length);
@@ -78,10 +114,9 @@ export async function sealRecord(
   return toBase64Url(sealed);
 }
 
-/** Opens a sealed record. Throws DecryptionError if it was tampered with or belongs elsewhere. */
-export async function openRecord(
-  space: SpaceKeys,
-  kind: RecordKind,
+async function openWith(
+  key: Uint8Array,
+  kind: RecordKind | OwnerRecordKind,
   id: string,
   sealedText: string,
 ): Promise<Uint8Array> {
@@ -91,7 +126,6 @@ export async function openRecord(
   if (!sealed || sealed.length < nonceBytes + sodium.crypto_aead_xchacha20poly1305_ietf_ABYTES) {
     throw new DecryptionError();
   }
-  const key = await recordKey(space);
   try {
     const padded = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
       null,
@@ -103,6 +137,66 @@ export async function openRecord(
     return sodium.unpad(padded, PAD_BLOCK);
   } catch {
     throw new DecryptionError();
+  }
+}
+
+/** Seals a record's bytes under the space's records key, bound to its kind and id. */
+export function sealRecord(
+  access: SpaceAccess,
+  kind: RecordKind,
+  id: string,
+  data: Uint8Array,
+): Promise<string> {
+  return sealWith(access.recordKey, kind, id, data);
+}
+
+/** Opens a sealed record. Throws DecryptionError if it was tampered with or belongs elsewhere. */
+export function openRecord(
+  access: SpaceAccess,
+  kind: RecordKind,
+  id: string,
+  sealedText: string,
+): Promise<Uint8Array> {
+  return openWith(access.recordKey, kind, id, sealedText);
+}
+
+async function ownerKey(space: SpaceKeys): Promise<Uint8Array> {
+  const sodium = await getSodium();
+  return sodium.crypto_kdf_derive_from_key(
+    RECORD_KEY_BYTES,
+    SUBKEY.owner,
+    KDF_CONTEXT,
+    space.spaceKey,
+  );
+}
+
+/** Seals a record only the space's owner can open (members never get this subkey). */
+export async function sealOwnerRecord(
+  space: SpaceKeys,
+  kind: OwnerRecordKind,
+  id: string,
+  data: Uint8Array,
+): Promise<string> {
+  const sodium = await getSodium();
+  const key = await ownerKey(space);
+  try {
+    return await sealWith(key, kind, id, data);
+  } finally {
+    sodium.memzero(key);
+  }
+}
+
+/** Opens an owner-only record. Throws DecryptionError if it doesn't open. */
+export async function openOwnerRecord(
+  space: SpaceKeys,
+  kind: OwnerRecordKind,
+  id: string,
+  sealedText: string,
+): Promise<Uint8Array> {
+  const sodium = await getSodium();
+  const key = await ownerKey(space);
+  try {
+    return await openWith(key, kind, id, sealedText);
   } finally {
     sodium.memzero(key);
   }
