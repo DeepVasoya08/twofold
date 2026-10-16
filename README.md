@@ -9,13 +9,13 @@ Web first; a mobile app (Expo) will follow.
 
 ## Repository layout
 
-| Path              | What                                                              |
-| ----------------- | ----------------------------------------------------------------- |
-| `apps/web`        | Vite + React client, deployed to Cloudflare Pages                 |
-| `apps/api`        | Cloudflare Worker (Hono); R2 for encrypted blobs, D1 for metadata |
-| `packages/crypto` | All cryptography (libsodium-wrappers)                             |
-| `packages/types`  | Types shared between apps                                         |
-| `docs/`           | Architecture, security model, deployment                          |
+| Path              | What                                                             |
+| ----------------- | ---------------------------------------------------------------- |
+| `apps/web`        | Vite + React client, served as static assets by the Worker       |
+| `apps/api`        | The Worker: Hono API under `/api`, R2 for blobs, D1 for metadata |
+| `packages/crypto` | All cryptography (libsodium-wrappers)                            |
+| `packages/types`  | Types shared between apps                                        |
+| `docs/`           | Architecture, security model, deployment                         |
 
 ## Running locally
 
@@ -24,9 +24,12 @@ pinned version).
 
 ```sh
 pnpm install
-pnpm --filter @twofold/web dev   # web app on http://localhost:5173
-pnpm --filter @twofold/api dev   # API worker on http://localhost:8787 (local D1/R2 via wrangler)
+pnpm --filter @twofold/api dev   # Worker on http://localhost:8787 (local D1/R2 via wrangler)
+pnpm --filter @twofold/web dev   # web app with hot reload on http://localhost:5173, /api proxied to :8787
 ```
+
+In production one Cloudflare Worker serves the web app and the API from the same origin;
+see [docs/architecture.md](docs/architecture.md).
 
 ## Checks and tests
 
@@ -35,7 +38,7 @@ pnpm lint            # ESLint (typescript-eslint strict, type-aware)
 pnpm typecheck       # tsc in every package
 pnpm test            # Vitest unit tests in every package
 pnpm test:coverage   # same, with coverage
-pnpm test:e2e        # Playwright smoke test (builds and previews the web app)
+pnpm test:e2e        # Playwright smoke test (builds the web app, runs it in wrangler dev)
 pnpm build           # build every app and package
 pnpm format          # Prettier
 ```

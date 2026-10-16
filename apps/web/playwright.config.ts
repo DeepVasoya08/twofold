@@ -12,7 +12,7 @@ export default defineConfig({
   retries: isCI ? 1 : 0,
   reporter: isCI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: `http://localhost:${String(PORT)}`,
+    baseURL: `http://127.0.0.1:${String(PORT)}`,
     trace: 'retain-on-failure',
   },
   projects: [
@@ -24,8 +24,9 @@ export default defineConfig({
       },
     },
   ],
+  // Runs the production Worker locally: built web assets and the API on one origin.
   webServer: {
-    command: `pnpm run build && pnpm run preview --port ${String(PORT)} --strictPort`,
+    command: `pnpm run build && pnpm --filter @twofold/api exec wrangler dev --port ${String(PORT)} --ip 127.0.0.1`,
     port: PORT,
     reuseExistingServer: !isCI,
   },

@@ -1,18 +1,21 @@
 # Deployment
 
+One Cloudflare Worker, `twofold`, serves the whole app from one origin: the built web app
+as static assets and the API under `/api` (see [architecture.md](architecture.md)).
+
 `.github/workflows/deploy.yml` runs after the CI workflow succeeds on a push to `main`.
 It deploys the exact commit CI tested, in this order:
 
 1. Writes the `D1_DATABASE_ID` variable into `apps/api/wrangler.jsonc` (the committed
    file holds a placeholder).
 2. Applies D1 migrations (`wrangler d1 migrations apply DB --remote`).
-3. Deploys the API worker `twofold-api` (`wrangler deploy`).
-4. Builds the web app and uploads `apps/web/dist` to the Pages project `twofold-web`
-   (`wrangler pages deploy … --branch main`).
+3. Builds the web app into `apps/web/dist`.
+4. Deploys the `twofold` Worker (`wrangler deploy` in `apps/api`), which uploads the web
+   app's assets and the API code together. One deploy updates both, so the web app and
+   the API can never be out of step.
 
-The job stops at the first failing step, so a missing Pages project still leaves a
-freshly deployed API behind. Fix the cause and use **Re-run jobs** on the failed
-Deploy run.
+The job stops at the first failing step. Fix the cause and use **Re-run jobs** on the
+failed Deploy run.
 
 ## One-time setup
 
@@ -30,26 +33,18 @@ cd apps/api
 pnpm exec wrangler login
 pnpm exec wrangler d1 create twofold
 pnpm exec wrangler r2 bucket create twofold-blobs
-pnpm exec wrangler pages project create twofold-web --production-branch main
 ```
 
-| Resource      | Name            | Must match                                        |
-| ------------- | --------------- | ------------------------------------------------- |
-| D1 database   | `twofold`       | `database_name` in `apps/api/wrangler.jsonc`      |
-| R2 bucket     | `twofold-blobs` | `bucket_name` in `apps/api/wrangler.jsonc`        |
-| Pages project | `twofold-web`   | `PAGES_PROJECT` in `.github/workflows/deploy.yml` |
+| Resource    | Name            | Must match                                   |
+| ----------- | --------------- | -------------------------------------------- |
+| D1 database | `twofold`       | `database_name` in `apps/api/wrangler.jsonc` |
+| R2 bucket   | `twofold-blobs` | `bucket_name` in `apps/api/wrangler.jsonc`   |
 
 Keep the ID that `wrangler d1 create` prints (`database_id = "…"`); step 3 needs it.
 `wrangler d1 list` shows it again later.
 
-Create the Pages project with the command above, which makes a **Direct Upload**
-project. Do not create it in the dashboard by connecting the GitHub repository: that
-turns on Cloudflare's own Git builds, which try to build the monorepo on every push and
-fail, alongside the GitHub Actions deploy. If a Git-connected `twofold-web` already
-exists, delete it and recreate it with the command. The same applies to the API worker:
-leave Workers Builds (Git integration) off, because GitHub Actions deploys it.
-
-The API worker itself needs no setup; the first `wrangler deploy` creates it.
+The Worker itself needs no setup; the first `wrangler deploy` creates it. Leave Workers
+Builds (Git integration) off for it, because GitHub Actions deploys it.
 
 ### 2. Create the Cloudflare API token
 
@@ -58,13 +53,12 @@ Custom Token** and add these **Account** permissions, all set to **Edit**:
 
 | Permission         | Used by                                 |
 | ------------------ | --------------------------------------- |
-| Workers Scripts    | `wrangler deploy` (API worker)          |
+| Workers Scripts    | `wrangler deploy` (code and assets)     |
 | D1                 | `wrangler d1 migrations apply --remote` |
-| Cloudflare Pages   | `wrangler pages deploy`                 |
-| Workers R2 Storage | the worker's R2 bucket binding          |
+| Workers R2 Storage | the Worker's R2 bucket binding          |
 
 Under **Account Resources**, choose **Include → your account** only. No zone
-permissions are needed while the API is served on `workers.dev`. Copy the token; it is
+permissions are needed while the app is served on `workers.dev`. Copy the token; it is
 shown once.
 
 Your account ID is on the dashboard's **Workers & Pages** overview (right-hand side),
@@ -103,17 +97,37 @@ If you prefer, you can store the two secrets and the variable on the `production
 environment instead of the repository. Environment values override repository values
 of the same name, so keep them in one place only to avoid stale duplicates.
 
+### 5. Custom domain (optional)
+
+To serve the app on your own domain, open **Workers & Pages → twofold → Settings →
+Domains & Routes** and add a **Custom Domain**. The domain must be a zone on the same
+Cloudflare account. The token from step 2 does not need zone permissions for this,
+because you add the domain in the dashboard, not from CI.
+
 ## Checking a deploy
 
-The Deploy run's "Deploy API worker" step prints the worker URL
-(`https://twofold-api.<your-subdomain>.workers.dev`), and the Pages step prints the
-deployment URL. The production site is the Pages project's `*.pages.dev` address,
-shown on the project in the dashboard (normally `https://twofold-web.pages.dev`).
+The Deploy run's "Deploy Worker" step prints the Worker URL
+(`https://twofold.<your-subdomain>.workers.dev`). That one address serves the web app at
+`/` and the API at `/api` (for example `/api/health`).
 
-| Error in the Deploy run                          | Fix                                                                                             |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `Repository variable D1_DATABASE_ID is not set`  | Add it on the **Variables** tab (step 3), not as a secret.                                      |
-| `The Pages project "twofold-web" does not exist` | Run `wrangler pages project create` (step 1).                                                   |
-| `Authentication error [code: 10000]`             | The token lacks a permission from step 2, or the account ID does not match the token's account. |
+| Error in the Deploy run                                                    | Fix                                                                                             |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `Repository variable D1_DATABASE_ID is not set`                            | Add it on the **Variables** tab (step 3), not as a secret.                                      |
+| `The directory specified by the "assets.directory" field … does not exist` | The web build step did not run or failed; check the "Build web app" step.                       |
+| `Authentication error [code: 10000]`                                       | The token lacks a permission from step 2, or the account ID does not match the token's account. |
 
 After fixing any of these, re-run the failed Deploy run; no new commit is needed.
+
+## Moving off Cloudflare Pages
+
+Earlier versions deployed the web app to a Pages project (`twofold-web`) and the API to a
+separate Worker (`twofold-api`). The D1 database and R2 bucket stay the same; the new
+Worker binds to them. After the first deploy of the `twofold` Worker succeeds:
+
+1. Open the new `twofold.<your-subdomain>.workers.dev` URL and check the app and
+   `/api/health` load.
+2. If a custom domain is attached to the `twofold-web` Pages project, remove it there and
+   add it to the `twofold` Worker (step 5).
+3. Delete the old deployments: `pnpm exec wrangler pages project delete twofold-web` and
+   `pnpm exec wrangler delete --name twofold-api` (from `apps/api`, logged in as yourself).
+4. Edit the CI token and remove its **Cloudflare Pages** permission; nothing uses it now.
