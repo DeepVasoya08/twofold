@@ -58,9 +58,15 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   password against every slot locally, always all of them. Nothing is sent to the server.
 - **Logging in** on a new device sends the login key; the server compares it against all
   three verifiers in constant time and returns the same response whichever matched.
-- The main library never decrypts slot 2, so it has nothing to show. Settings always
-  offers "Set up", and moving a photo with a wrong password gives the same answer as having
-  no private space.
+- The main library never decrypts slot 2 on its own, so it has nothing to show. Settings
+  always offers "Set up", and moving a photo with a wrong password gives the same answer as
+  having no private space.
+- **Moving photos in** from the main library needs the private space's key. The first move
+  after unlocking asks for the private password once and keeps that key in memory
+  (`Session.privateSpace`) until Twofold locks, so later moves don't ask. Setting up a
+  private space keeps its fresh key the same way. Nothing about this reaches the server.
+  Skipping the prompt entirely would mean the main library holding something that opens or
+  addresses the private space at rest, which is exactly what deniability rules out.
 - Setting up a private space from the main library writes a new slot 2, replacing any
   private space that was there (the main library cannot know). The dialog says so to
   everyone, always.

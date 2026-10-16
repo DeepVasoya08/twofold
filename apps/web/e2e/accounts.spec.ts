@@ -43,9 +43,19 @@ test('one password box opens the library or the private space', async ({ page })
   // The main library still offers "Set up", as it always does.
   await expect(page.getByRole('button', { name: 'Set up' })).toBeVisible();
 
-  // Moving a photo in needs the private password; a wrong one gets the same answer as no space.
+  // Just created here, so its keys are in memory: photos move in without asking.
   await goTo(page, 'Photos');
   await uploadPhotos(page, 1);
+  await page.locator('.photo-tile').first().click();
+  await page.getByRole('button', { name: 'Move to private space' }).click();
+  await expect(page.getByText('Moved to your private space')).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // After locking, the main library can't reach it, so the first move asks once. A wrong
+  // password gets the same answer as no space.
+  await lock(page);
+  await unlockWith(page, MAIN_PASSWORD);
+  await uploadPhotos(page, 2);
   await page.locator('.photo-tile').first().click();
   await page.getByRole('button', { name: 'Move to private space' }).click();
   const move = page.getByRole('dialog', { name: 'Move to private space' });
@@ -55,6 +65,10 @@ test('one password box opens the library or the private space', async ({ page })
   await move.getByLabel('Private password').fill(PRIVATE_PASSWORD);
   await move.getByRole('button', { name: 'Move' }).click();
   await expect(page.getByText('Moved to your private space')).toBeVisible();
+  await expect(page.getByText('1 / 1')).toBeVisible();
+  await page.getByRole('button', { name: 'Move to private space' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page).toHaveURL('/photos');
 
   // Lock, then the private password opens the private space.
   await goTo(page, 'Photos');
@@ -130,8 +144,15 @@ test('changing the main password', async ({ page }) => {
   await goTo(page, 'Settings');
   await page.getByRole('button', { name: 'Change' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Change main password' });
-  await dialog.getByLabel('Current password').fill(MAIN_PASSWORD);
+  await dialog.getByLabel('Current password').fill('not my password at all');
   await dialog.getByLabel('New password').fill('my-changed-password-3');
+  await dialog.getByRole('button', { name: 'Change password' }).click();
+  // The error sits under the current password, the field to fix.
+  await expect(dialog.getByLabel('Current password')).toHaveAccessibleDescription(
+    'That password isn’t right.',
+  );
+  await expect(dialog.getByLabel('New password')).not.toHaveAttribute('aria-invalid');
+  await dialog.getByLabel('Current password').fill(MAIN_PASSWORD);
   await dialog.getByRole('button', { name: 'Change password' }).click();
   await expect(page.getByText('Password changed')).toBeVisible();
 

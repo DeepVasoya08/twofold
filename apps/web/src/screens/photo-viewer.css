@@ -101,8 +101,18 @@
   min-height: 0;
   overflow: hidden;
   padding: 8px 72px 40px;
-  touch-action: pan-y pinch-zoom;
+  /* Pinch and drag are handled by the viewer, not the browser. */
+  touch-action: none;
   user-select: none;
+  cursor: zoom-in;
+}
+
+.viewer__stage.is-zoomed {
+  cursor: grab;
+}
+
+.viewer__stage.is-dragging {
+  cursor: grabbing;
 }
 
 .viewer__image {
@@ -111,7 +121,9 @@
   min-height: 0;
   object-fit: contain;
   filter: drop-shadow(0 24px 48px rgb(0 0 0 / 55%));
+  transform-origin: center;
   animation: fade-in 0.25s var(--ease);
+  will-change: transform;
 }
 
 @keyframes fade-in {

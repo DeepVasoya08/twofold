@@ -36,7 +36,10 @@ interface AccountValue {
   logOut: () => Promise<void>;
   changeMainPassword: (current: string, next: string) => Promise<void>;
   setPrivatePassword: (current: string | null, next: string) => Promise<void>;
-  opensPrivateSpace: (password: string) => Promise<boolean>;
+  /** True while photos can move into the private space without asking for its password. */
+  privateSpaceOpen: boolean;
+  /** Keeps the private space's keys for this session; throws if the password doesn't fit. */
+  openPrivateSpace: (password: string) => Promise<void>;
   saveRecoveryKey: (recoveryKey: Uint8Array) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
 }
@@ -149,7 +152,10 @@ export function AccountProvider({
         guard(async () => {
           update(await ops.setPrivatePassword(requireSession(), current, next));
         }),
-      opensPrivateSpace: (password) => ops.opensPrivateSpace(requireSession(), password),
+      privateSpaceOpen: session?.privateSpace !== undefined,
+      openPrivateSpace: async (password) => {
+        update(await ops.openPrivateSpace(requireSession(), password));
+      },
       saveRecoveryKey: (recoveryKey) =>
         guard(async () => {
           update(await ops.saveRecoveryKey(requireSession(), recoveryKey));

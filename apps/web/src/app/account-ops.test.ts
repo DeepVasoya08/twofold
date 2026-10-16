@@ -92,7 +92,9 @@ describe('sign-up and unlock', { timeout: 30_000 }, () => {
     expect(ops.spaceOf((await ops.unlock(current(), MAIN)).opened)).toBe('main');
     await expect(ops.unlock(current(), PRIVATE)).rejects.toThrow('That password isn’t right.');
     // A new account has no private space, and nothing says so.
-    expect(await ops.opensPrivateSpace(session, PRIVATE)).toBe(false);
+    await expect(ops.openPrivateSpace(session, PRIVATE)).rejects.toThrow(
+      'That password doesn’t open a private space.',
+    );
   });
 
   it('refuses a taken email before making keys', async () => {
@@ -121,8 +123,14 @@ describe('private space', { timeout: 30_000 }, () => {
     expect(current().keyring.slots[1]).toBe(before.slots[1]);
     expect(current().keyring.slots[2]).not.toBe(before.slots[2]);
 
-    expect(await ops.opensPrivateSpace(after, PRIVATE)).toBe(true);
-    expect(await ops.opensPrivateSpace(after, MAIN)).toBe(false);
+    // Creating it here keeps its keys, so photos can move in without asking.
+    expect(after.privateSpace).toBeDefined();
+    const fresh = await ops.unlock(current(), MAIN);
+    expect(fresh.privateSpace).toBeUndefined();
+    await expect(ops.openPrivateSpace(fresh, MAIN)).rejects.toThrow(/doesn’t open/);
+    const opened = await ops.openPrivateSpace(fresh, PRIVATE);
+    expect(opened.opened).toBe(fresh.opened);
+    expect(opened.privateSpace?.spaceKey).toEqual(after.privateSpace?.spaceKey);
 
     const unlocked = await ops.unlock(current(), PRIVATE);
     expect(ops.spaceOf(unlocked.opened)).toBe('private');
@@ -152,10 +160,23 @@ describe('private space', { timeout: 30_000 }, () => {
 describe('main password and recovery', { timeout: 30_000 }, () => {
   it('changes the main password with the current one', async () => {
     const { session } = await signUp();
-    await expect(
-      ops.changeMainPassword(session, 'wrong guess here', 'new main one'),
-    ).rejects.toThrow('That password isn’t right.');
-    await ops.changeMainPassword(session, MAIN, 'new main one');
+    const wrong = await ops
+      .changeMainPassword(session, 'wrong guess here', 'new main one')
+      .catch((error: unknown) => error);
+    expect(wrong).toBeInstanceOf(ops.FormError);
+    expect(ops.errorMessage(wrong)).toBe('That password isn’t right.');
+    // Shown under the current password, since that's the one to fix.
+    expect(ops.errorInput(wrong)).toBe('current');
+
+    const withPrivate = await ops.setPrivatePassword(session, null, PRIVATE);
+    const clash = await ops
+      .changeMainPassword(withPrivate, MAIN, PRIVATE)
+      .catch((error: unknown) => error);
+    expect(ops.errorInput(clash)).toBe('new');
+
+    const changed = await ops.changeMainPassword(withPrivate, MAIN, 'new main one');
+    // Changing the main password keeps the private space's keys for this session.
+    expect(changed.privateSpace).toBeDefined();
     expect((await ops.unlock(current(), 'new main one')).opened.slot).toBe(0);
     await expect(ops.unlock(current(), MAIN)).rejects.toThrow();
   });

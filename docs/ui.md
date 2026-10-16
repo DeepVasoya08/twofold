@@ -25,7 +25,9 @@ exists but is low-key (Settings → Sharing).
   private space.
 - Inside the private space the app is re-tinted violet (`data-space="private"` on `<html>`,
   tokens in `styles/base.css`) and shows a small "Private" label, so you know where you are.
-- **Move to private space** (photo viewer, main library) asks for the private password.
+- **Move to private space** (photo viewer, main library) asks for the private password the
+  first time after unlocking, then moves straight in until Twofold locks. Right after
+  setting up a private space it doesn't ask at all.
   **Move to library** (private space) moves a photo back. Albums belong to one space, so a
   moved photo arrives unfiled.
 - Each space is shared separately (Settings → Sharing → Invite). Sharing the library never
@@ -77,6 +79,11 @@ Routes are the same in both spaces; the content depends on which space is open.
 
 Upload is a dialog opened from the sidebar (desktop) or the top bar (phones); inside an
 album it also adds the photos to that album. Its "encrypting" progress is simulated.
+
+The photo viewer zooms with the mouse wheel or a trackpad pinch (towards the pointer),
+a two-finger pinch on touch screens, a double-click (toggles 2.5×), and the `+`, `-` and
+`0` keys. A zoomed photo pans by dragging; a fitted one swipes to the next photo. The
+maths is in `lib/zoom.ts`, the gestures in `screens/use-zoom.ts`.
 
 ## Structure (`apps/web/src`)
 

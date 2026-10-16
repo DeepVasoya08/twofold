@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import type { PointerEvent, SubmitEvent } from 'react';
+import type { CSSProperties, SubmitEvent } from 'react';
 
 import { useAccount, useMe } from '../app/account';
 import { Link, useRouter } from '../app/router';
@@ -16,9 +16,9 @@ import { formatDay, formatTime, sortNewestFirst } from '../lib/format';
 import { contact } from '../mock/data';
 import type { Photo } from '../mock/data';
 
-import './photo-viewer.css';
+import { useZoom } from './use-zoom';
 
-const SWIPE_PX = 50;
+import './photo-viewer.css';
 
 export function photosInContext(state: VaultState, context: PhotoContext): Photo[] {
   switch (context.kind) {
@@ -45,7 +45,7 @@ function closeTarget(context: PhotoContext): string {
 export function PhotoViewer({ photoId }: { photoId: string }) {
   const { search, navigate, back } = useRouter();
   const { state, dispatch, space, movePhoto } = useVault();
-  const { opensPrivateSpace } = useAccount();
+  const { privateSpaceOpen, openPrivateSpace } = useAccount();
   const me = useMe();
   const [checking, setChecking] = useState(false);
   const toast = useToast();
@@ -54,7 +54,8 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
   const [privatePassword, setPrivatePassword] = useState('');
   const [moveError, setMoveError] = useState<string | null>(null);
   const isPrivate = space === 'private';
-  const swipeStart = useRef<number | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
 
   const context = parsePhotoContext(search);
   const list = photosInContext(state, context);
@@ -69,12 +70,24 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
     if (target) navigate(paths.photo(target.id, context), { replace: true });
   };
 
+  const zoom = useZoom({
+    stageRef,
+    imageRef,
+    resetKey: photoId,
+    onSwipe: (direction) => {
+      go(direction === 'prev' ? prev : next);
+    },
+  });
+
   // Keyboard: arrows move through the list, Escape closes. Ignored while a dialog is open.
   const onKey = useEffectEvent((event: KeyboardEvent) => {
     if (dialog || event.defaultPrevented) return;
     if (event.key === 'ArrowLeft') go(prev);
     else if (event.key === 'ArrowRight') go(next);
     else if (event.key === 'Escape') back(exit);
+    else if (event.key === '+' || event.key === '=') zoom.zoomBy(1.5);
+    else if (event.key === '-') zoom.zoomBy(1 / 1.5);
+    else if (event.key === '0') zoom.reset();
   });
   useEffect(() => {
     window.addEventListener('keydown', onKey);
@@ -123,14 +136,24 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
     leave();
   };
 
-  // Moving in needs the private password, so the main library alone can't reach the space.
-  // The same answer for a wrong password and for no private space at all.
+  const moveIn = () => {
+    movePhoto(photo.id, 'private');
+    toast.show('Moved to your private space');
+    leave();
+  };
+
+  // The main library can't reach the private space on its own, so the first move asks for
+  // the private password once. The key then stays in memory until Twofold locks, and later
+  // moves go straight in. A wrong password gets the same answer as no private space at all.
   const onMoveIn = (event: SubmitEvent) => {
     event.preventDefault();
     if (checking) return;
     setChecking(true);
-    void opensPrivateSpace(privatePassword)
-      .catch(() => false)
+    void openPrivateSpace(privatePassword)
+      .then(
+        () => true,
+        () => false,
+      )
       .then((opens) => {
         setChecking(false);
         if (!opens) {
@@ -139,24 +162,16 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
           );
           return;
         }
-        movePhoto(photo.id, 'private');
         closeDialog();
-        toast.show('Moved to your private space');
-        leave();
+        moveIn();
       });
   };
 
-  const onPointerDown = (event: PointerEvent) => {
-    if (event.pointerType !== 'mouse') swipeStart.current = event.clientX;
-  };
-  const onPointerUp = (event: PointerEvent) => {
-    const start = swipeStart.current;
-    swipeStart.current = null;
-    if (start === null) return;
-    const dx = event.clientX - start;
-    if (dx > SWIPE_PX) go(prev);
-    else if (dx < -SWIPE_PX) go(next);
-  };
+  const imageStyle: CSSProperties | undefined = zoom.zoomed
+    ? {
+        transform: `translate(${String(zoom.view.x)}px, ${String(zoom.view.y)}px) scale(${String(zoom.view.scale)})`,
+      }
+    : undefined;
 
   return (
     <div className={`viewer${showInfo ? ' viewer--info' : ''}`}>
@@ -211,6 +226,7 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
             className="viewer__btn"
             onClick={() => {
               if (isPrivate) onMoveOut();
+              else if (privateSpaceOpen) moveIn();
               else setDialog('move');
             }}
             aria-label={isPrivate ? 'Move to library' : 'Move to private space'}
@@ -231,10 +247,16 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
         </div>
       </header>
 
-      <div className="viewer__stage" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
+      <div
+        ref={stageRef}
+        className={`viewer__stage${zoom.zoomed ? ' is-zoomed' : ''}${zoom.dragging ? ' is-dragging' : ''}`}
+        {...zoom.stageHandlers}
+      >
         <img
           key={photo.id}
+          ref={imageRef}
           className="viewer__image"
+          style={imageStyle}
           src={photo.src}
           alt={`Photo from ${formatDay(photo.takenAt)}${photo.location ? ` in ${photo.location}` : ''}`}
           draggable={false}
@@ -337,7 +359,7 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
         open={dialog === 'move'}
         onClose={closeDialog}
         title="Move to private space"
-        description="Enter your private password. The photo will leave your library and only appear when you open Twofold with that password."
+        description="Enter your private password. The photo will leave your library and only appear when you open Twofold with that password. You won't be asked again until Twofold locks."
       >
         <form className="form" onSubmit={onMoveIn} noValidate>
           <PasswordField
