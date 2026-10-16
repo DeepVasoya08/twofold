@@ -311,6 +311,26 @@ describe('invites', () => {
     expect((await third.request('GET', `/invites/join/${code}`)).status).toBe(200);
   });
 
+  it('can’t be raced: parallel wrong codes get no more than the limit', async () => {
+    const { code } = await create();
+    const results = await Promise.all(
+      Array.from({ length: MAX_FAILURES * 3 }, () =>
+        guest.request('GET', `/invites/join/${newCode()}`),
+      ),
+    );
+    const statuses = results.map((res) => res.status);
+    expect(statuses.filter((status) => status === 404)).toHaveLength(MAX_FAILURES);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(MAX_FAILURES * 2);
+    expect((await guest.request('GET', `/invites/join/${code}`)).status).toBe(429);
+  });
+
+  it('doesn’t count a real code against the limit, however often it’s checked', async () => {
+    const { code } = await create();
+    for (let i = 0; i < MAX_FAILURES * 2; i++) {
+      expect((await guest.request('GET', `/invites/join/${code}`)).status).toBe(200);
+    }
+  });
+
   it('refuses malformed codes, keys and messages, and a taken code', async () => {
     const { code } = await create();
     expect(

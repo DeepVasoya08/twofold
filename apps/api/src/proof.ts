@@ -1,7 +1,7 @@
 import { constantTimeEqual, fromBase64Url, loginVerifier } from '@twofold/crypto/webcrypto';
 import type { Keyring } from '@twofold/types';
 
-import { clearFailures, recentFailures, recordFailure } from './db';
+import { clearFailures, takeAttempt } from './db';
 
 /** Ten wrong passwords per email per 15 minutes, then 429 until the window passes. */
 export const MAX_FAILURES = 10;
@@ -27,7 +27,9 @@ export type ProofResult = 'ok' | 'wrong' | 'throttled';
 
 /**
  * Checks a login key against an account (or against nothing, for an unknown email), with
- * per-email throttling. Unknown emails count failures too, so they behave the same.
+ * per-email throttling. Unknown emails count failures too, so they behave the same. Every
+ * attempt is counted before the key is checked, so parallel requests can't get past the
+ * limit; a right key then clears the count.
  */
 export async function checkProof(
   db: D1Database,
@@ -36,12 +38,12 @@ export async function checkProof(
   loginKey: string,
 ): Promise<ProofResult> {
   const now = Date.now();
-  const windowStart = now - FAILURE_WINDOW_MS;
-  if ((await recentFailures(db, email, windowStart)) >= MAX_FAILURES) return 'throttled';
+  if ((await takeAttempt(db, email, now, now - FAILURE_WINDOW_MS)) > MAX_FAILURES) {
+    return 'throttled';
+  }
   if (keyring && (await matchesAnyVerifier(keyring, loginKey))) {
     await clearFailures(db, email);
     return 'ok';
   }
-  await recordFailure(db, email, now, windowStart);
   return 'wrong';
 }

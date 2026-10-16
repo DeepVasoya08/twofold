@@ -189,7 +189,8 @@ in steps both sides poll for (`packages/crypto/src/sharing.ts`, `apps/api/src/ro
 Every sealed message starts with a purpose label (`hello` or `grant`), so one can't be
 replayed as the other. Each side's steps need its own secret: the code for the joiner, the
 handle for the inviter, and the server only accepts steps in order. Unknown codes count
-against the account like wrong passwords (10 per 15 minutes). Invites expire after 24
+against the account like wrong passwords (10 per 15 minutes, counted before the lookup and
+given back for a real code, so parallel guesses don't get more). Invites expire after 24
 hours, and the inviter's screen cancels its invite when it closes.
 
 ### Trade-offs we accepted
@@ -222,7 +223,12 @@ hours, and the inviter's screen cancels its invite when it closes.
   cookie. Keyring updates carry a version number, so two devices can't silently overwrite
   each other, and may not change the salt or KDF settings.
 - Failed logins (and failed proofs) are limited to 10 per email per 15 minutes, counted for
-  unknown emails too.
+  unknown emails too. Each attempt is counted, in one statement, before its key is checked
+  (a right key then clears the count), so parallel requests can't get more guesses than that.
+- The Worker keeps no per-request logs or traces (`observability` in
+  `apps/api/wrangler.jsonc`), only its own error lines. Request logs would keep every
+  request's path, headers and client details at Cloudflare, which could link the private
+  space's requests to the main library's for as long as they're stored.
 - Input is validated with zod at the API boundary (`apps/api/src/schemas.ts`), including
   exact key sizes and KDF bounds.
 

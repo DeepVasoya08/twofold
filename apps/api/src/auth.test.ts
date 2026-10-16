@@ -159,6 +159,18 @@ describe('POST /api/auth/login', () => {
     expect((await login(keys[0])).status).toBe(429);
   });
 
+  it('can’t be raced: parallel guesses get no more than the limit', async () => {
+    const results = await Promise.all(
+      Array.from({ length: MAX_FAILURES * 3 }, () => new Client(env)).map((c) =>
+        c.request('POST', '/auth/login', { email: EMAIL, loginKey: toBase64Url(newLoginKey()) }),
+      ),
+    );
+    const statuses = results.map((res) => res.status);
+    expect(statuses.filter((status) => status === 401)).toHaveLength(MAX_FAILURES);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(MAX_FAILURES * 2);
+    expect((await login(keys[0])).status).toBe(429);
+  });
+
   it('opens a new window once the old one has passed', async () => {
     for (let i = 0; i < MAX_FAILURES; i++) await login(newLoginKey());
     sqlite.prepare('UPDATE login_failures SET window_start = 0').run();
