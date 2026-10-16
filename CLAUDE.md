@@ -1,10 +1,27 @@
 # Twofold — rules for every task
-- End-to-end encrypted. The server must never see plaintext photos,
-  passwords, or keys.
-- All crypto goes through packages/crypto (libsodium). Never write
-  new crypto elsewhere.
-- Never log keys, passwords, or decrypted data.
-- Never store decrypted images in localStorage, IndexedDB, or disk cache.
-- Object names in R2 are random IDs, never filenames.
-- Every crypto change needs tests, including failure cases.
-- Keep PRs small: one feature per branch.
+
+Twofold is an end-to-end encrypted private photo vault for couples. pnpm monorepo:
+`apps/web` (Vite + React, Cloudflare Pages), `apps/api` (Hono on Cloudflare Workers, R2 + D1),
+`packages/crypto` (libsodium), `packages/types` (shared types), `docs/`.
+
+## Security rules (non-negotiable)
+
+- The server must never see plaintext photos, passwords, or keys.
+- All crypto lives in `packages/crypto` using standard libsodium constructions.
+  Never invent crypto or write crypto code elsewhere.
+- Never log keys, passwords, tokens, or decrypted data.
+- Never store decrypted images in localStorage, IndexedDB, or caches.
+- R2 object names are random IDs, never filenames.
+- No secrets in code or committed files; use env vars and GitHub secrets.
+
+## Engineering standards
+
+- Follow industry best practices: strict TypeScript, no `any`, small focused modules,
+  clear naming, input validation at API boundaries (zod).
+- Every change includes tests. Crypto changes need failure-case tests (wrong key,
+  tampered data). New web flows need a Playwright test.
+- Lint, typecheck, and all tests must pass before a task is considered done
+  (`pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e`).
+- One feature per branch, small PRs, conventional commit messages.
+- Update `docs/` when behavior or architecture changes.
+- Ask before adding a new dependency; prefer well-maintained, audited ones.
