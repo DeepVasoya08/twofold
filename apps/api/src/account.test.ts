@@ -1,0 +1,138 @@
+import { randomBytes, toBase64Url } from '@twofold/crypto/webcrypto';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import { KEY_SIZES } from '@twofold/types';
+import type { AccountResponse, Keyring } from '@twofold/types';
+
+import type { Env } from './env';
+import { createTestDb } from './test/d1';
+import { Client, makeKeyring, newLoginKey } from './test/fixtures';
+
+let env: Env;
+let client: Client;
+let keys: [Uint8Array, Uint8Array, Uint8Array];
+let keyring: Keyring;
+
+beforeEach(async () => {
+  env = { DB: createTestDb().db, BLOBS: {} as R2Bucket };
+  client = new Client(env);
+  keys = [newLoginKey(), newLoginKey(), newLoginKey()];
+  keyring = await makeKeyring(keys);
+  await client.request('POST', '/auth/signup', { email: 'sam@example.com', name: 'Sam', keyring });
+});
+
+function withNewPrivateSlot(base: Keyring, loginKeyVerifier: string): Keyring {
+  return {
+    ...base,
+    slots: [base.slots[0], base.slots[1], toBase64Url(randomBytes(KEY_SIZES.slot))],
+    verifiers: [base.verifiers[0], base.verifiers[1], loginKeyVerifier],
+  };
+}
+
+describe('GET /api/account', () => {
+  it('returns the account and keyring', async () => {
+    const res = await client.request('GET', '/account');
+    expect(await res.json()).toEqual({
+      email: 'sam@example.com',
+      name: 'Sam',
+      version: 1,
+      keyring,
+    });
+    expect(res.headers.get('cache-control')).toBe('no-store');
+  });
+});
+
+describe('PUT /api/account/keyring', () => {
+  it('replaces the keyring and bumps the version', async () => {
+    const next = withNewPrivateSlot(keyring, toBase64Url(randomBytes(32)));
+    const res = await client.request('PUT', '/account/keyring', {
+      loginKey: toBase64Url(keys[0]),
+      version: 1,
+      keyring: next,
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json<AccountResponse>();
+    expect(body.version).toBe(2);
+    expect(body.keyring).toEqual(next);
+    const reread = await client.request('GET', '/account');
+    expect((await reread.json<AccountResponse>()).keyring).toEqual(next);
+  });
+
+  it('accepts a proof from any slot', async () => {
+    const res = await client.request('PUT', '/account/keyring', {
+      loginKey: toBase64Url(keys[2]),
+      version: 1,
+      keyring,
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('needs a login key, not just the session', async () => {
+    const res = await client.request('PUT', '/account/keyring', {
+      loginKey: toBase64Url(newLoginKey()),
+      version: 1,
+      keyring,
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('refuses a stale version', async () => {
+    const put = (version: number) =>
+      client.request('PUT', '/account/keyring', {
+        loginKey: toBase64Url(keys[0]),
+        version,
+        keyring,
+      });
+    expect((await put(1)).status).toBe(200);
+    expect((await put(1)).status).toBe(409);
+  });
+
+  it('refuses a changed salt or KDF', async () => {
+    for (const next of [
+      { ...keyring, salt: toBase64Url(randomBytes(KEY_SIZES.salt)) },
+      { ...keyring, kdf: { opsLimit: 4, memLimit: keyring.kdf.memLimit } },
+    ]) {
+      const res = await client.request('PUT', '/account/keyring', {
+        loginKey: toBase64Url(keys[0]),
+        version: 1,
+        keyring: next,
+      });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it('needs a session', async () => {
+    const res = await new Client(env).request('PUT', '/account/keyring', {
+      loginKey: toBase64Url(keys[0]),
+      version: 1,
+      keyring,
+    });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('DELETE /api/account', () => {
+  it('needs a login key', async () => {
+    const res = await client.request('DELETE', '/account', {
+      loginKey: toBase64Url(newLoginKey()),
+    });
+    expect(res.status).toBe(403);
+    expect((await client.request('GET', '/account')).status).toBe(200);
+  });
+
+  it('deletes the account and every session', async () => {
+    const other = new Client(env);
+    await other.request('POST', '/auth/login', {
+      email: 'sam@example.com',
+      loginKey: toBase64Url(keys[0]),
+    });
+    const res = await client.request('DELETE', '/account', { loginKey: toBase64Url(keys[0]) });
+    expect(res.status).toBe(204);
+    expect((await other.request('GET', '/account')).status).toBe(401);
+    const login = await other.request('POST', '/auth/login', {
+      email: 'sam@example.com',
+      loginKey: toBase64Url(keys[0]),
+    });
+    expect(login.status).toBe(401);
+  });
+});
