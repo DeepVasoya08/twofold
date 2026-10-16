@@ -17,8 +17,7 @@ import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import { PhotoImage } from '../components/PhotoImage';
 import { formatDay, formatTime, sortNewestFirst } from '../lib/format';
-import { contact } from '../mock/data';
-import type { Photo } from '../mock/data';
+import type { Person, Photo } from '../mock/data';
 
 import { useZoom } from './use-zoom';
 
@@ -117,7 +116,12 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
     );
   }
 
-  const owner = photo.addedBy === 'me' ? me : contact;
+  const owner: Person =
+    photo.addedBy === 'me'
+      ? me
+      : { id: 'contact', name: photo.addedByName ?? 'Someone', email: '' };
+  // Photos in a library someone shared with you stay in it.
+  const canMove = photo.library === undefined;
   const albums = state.albums.filter((album) => photo.albumIds.includes(album.id));
 
   const closeDialog = () => {
@@ -246,19 +250,21 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
           >
             <Icon name="download" />
           </a>
-          <button
-            type="button"
-            className="viewer__btn"
-            disabled={busy}
-            onClick={() => {
-              if (otherSpaceOpen) move();
-              else setDialog('move');
-            }}
-            aria-label={isPrivate ? 'Move to library' : 'Move to private space'}
-            title={isPrivate ? 'Move to library' : 'Move to private space'}
-          >
-            <Icon name={isPrivate ? 'photos' : 'eye-off'} />
-          </button>
+          {canMove && (
+            <button
+              type="button"
+              className="viewer__btn"
+              disabled={busy}
+              onClick={() => {
+                if (otherSpaceOpen) move();
+                else setDialog('move');
+              }}
+              aria-label={isPrivate ? 'Move to library' : 'Move to private space'}
+              title={isPrivate ? 'Move to library' : 'Move to private space'}
+            >
+              <Icon name={isPrivate ? 'photos' : 'eye-off'} />
+            </button>
+          )}
           <button
             type="button"
             className="viewer__btn"
@@ -370,9 +376,11 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
               <dd>
                 End-to-end encrypted
                 <span>
-                  {isPrivate
-                    ? 'Only you can see it, and only after opening Twofold with your private password.'
-                    : 'Only you and people you share this library with can see it.'}
+                  {photo.library !== undefined
+                    ? `Only people in ${photo.library}’s library can see it.`
+                    : isPrivate
+                      ? 'Only you, and anyone you share this private space with, can see it.'
+                      : 'Only you and people you share this library with can see it.'}
                 </span>
               </dd>
             </div>
@@ -417,9 +425,11 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
         onClose={closeDialog}
         title="Delete this photo?"
         description={
-          isPrivate
-            ? "It will be removed from your private space. This can't be undone."
-            : "It will be removed for everyone you share this library with. This can't be undone."
+          photo.library !== undefined
+            ? `It will be removed from ${photo.library}’s library for everyone. This can’t be undone.`
+            : isPrivate
+              ? "It will be removed from your private space, and for anyone you share it with. This can't be undone."
+              : "It will be removed for everyone you share this library with. This can't be undone."
         }
       >
         <div className="dialog__actions">

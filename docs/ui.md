@@ -5,8 +5,7 @@ call the API and `packages/crypto`, and photos, favorites and albums are stored 
 encrypted in each space (design in [security.md](security.md)). Unlocking downloads and
 decrypts the open space; locking or reloading drops everything decrypted. The mock library in `apps/web/src/mock/` (placeholder landscape
 "photos" drawn as SVG data URIs) now only decorates the welcome and sign-in screens and
-feeds unit tests; sharing, invite codes and
-auto-lock are still mock UI.
+feeds unit tests. Sharing and invite codes are real too; auto-lock is still mock UI.
 
 Twofold presents itself as a private, end-to-end encrypted photo library for anyone. Sharing
 exists but is low-key (Settings → Sharing).
@@ -32,7 +31,15 @@ exists but is low-key (Settings → Sharing).
   belong to one space, so a moved photo arrives unfiled. A move re-encrypts the photo
   under a new key and id in the other space, then deletes the original.
 - Each space is shared separately (Settings → Sharing → Invite). Sharing the library never
-  shares the private space.
+  shares the private space. The inviter keeps the Share screen open with a code; the other
+  person enters it under "I have a code". Both then see the same four words (the safety
+  phrase), and nothing is shared until the inviter confirms they match. Leaving the screen
+  cancels the invite.
+- A library you join appears inside the space you joined it from, mixed in with your own
+  photos. Its albums appear too, and photos uploaded into one of them go to that library
+  under your name. Photos from a joined library can be favorited or deleted for everyone,
+  but not moved to the other space. Settings lists who the open space is shared with (with
+  **Stop**) and the libraries it joined (with **Leave**).
 - The lock button (sidebar, or top bar on phones) forgets which space was open.
 
 Unlocking tries the password against every key slot on the device (see
@@ -124,7 +131,6 @@ maths is in `lib/zoom.ts`, the gestures in `screens/use-zoom.ts`.
 - No password is kept anywhere: it is turned into keys inside `app/account-ops.ts` and
   dropped. Keys live only in React state and are dropped on lock, sign-out and reload,
   along with every decrypted photo (the vault provider is remounted).
-- The invite code and the sharing rows are still placeholders.
 
 ## Screenshots
 

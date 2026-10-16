@@ -229,8 +229,10 @@ export function VaultProvider({
       },
       movePhoto: async (photoId, keys = otherKeys) => {
         if (!keys) throw new FormError('Unlock the other space first.');
+        if (find(photoId).library !== undefined) {
+          throw new FormError('Photos in a library shared with you stay in it.');
+        }
         const otherStore = storeFor(keys);
-        find(photoId);
         // Albums belong to one space, so a moved photo arrives unfiled. It is re-encrypted
         // under a new key and id, so nothing ties the two copies together.
         await otherStore.add(await store.read(photoId), []);

@@ -1,4 +1,4 @@
-import type { OpenedSlot, SlotIndex } from '@twofold/crypto';
+import type { OpenedSlot, SlotIndex, SpaceKeys } from '@twofold/crypto';
 import type { AccountResponse, Keyring } from '@twofold/types';
 
 import { ApiError, api, spaceApi } from '../lib/api';
@@ -293,19 +293,28 @@ export async function saveRecoveryKey(session: Session, recoveryKey: Uint8Array)
 
 /**
  * Deletes the photos of every space this device holds keys for (the open one, the other one
- * if it was opened, and the one the typed password opens), then the account. Storage isn't
+ * if it was opened, and the one the typed password opens), leaving any libraries they
+ * joined and ending their sharing, then the account. Storage isn't
  * linked to the account, so a space no key here can reach is left as unreadable ciphertext.
  */
-export async function deleteAccount(session: Session, password: string): Promise<void> {
+export async function deleteAccount(
+  session: Session,
+  password: string,
+  /** Runs for each space before it is wiped: leaving the libraries it joined. */
+  beforeWipe: (space: SpaceKeys) => Promise<void> = () => Promise.resolve(),
+): Promise<void> {
   await nextFrame();
   const crypto = await loadCrypto();
   const opened = await crypto.unlockWithPassword(session.account.keyring, password);
   if (!opened) throw new FormError(WRONG_PASSWORD);
-  const tokens = new Set(
+  const spaces = new Map(
     [session.opened.space, session.otherSpace, opened.space].flatMap((space) =>
-      space ? [crypto.spaceToken(space)] : [],
+      space ? [[crypto.spaceToken(space), space] as const] : [],
     ),
   );
-  for (const token of tokens) await spaceApi(token).wipe();
+  for (const [token, space] of spaces) {
+    await beforeWipe(space).catch(() => undefined);
+    await spaceApi(token).wipe();
+  }
   await api.deleteAccount({ loginKey: crypto.toBase64Url(opened.loginKey) });
 }

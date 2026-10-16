@@ -102,7 +102,8 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
 
 ## Photo storage
 
-Photos and albums belong to a **space**, never to an account.
+Photos and albums belong to a **space**, never to an account. A space can be shared with
+other accounts; see [Sharing](#sharing).
 
 - **Addressing.** A space's storage is named by its access token, the 16-byte space id
   from its key slot, sent in the `x-twofold-space` header. D1 stores only
@@ -135,6 +136,77 @@ Photos and albums belong to a **space**, never to an account.
   one, the other one if its password was typed this session, and the one the confirming
   password opens), then the account.
 
+## Sharing
+
+A space is shared with another account by giving it **access**, not keys: a share token of
+its own and the space's records key (the `crypto_kdf` subkey photos and albums are sealed
+under). It never gets the space key or the space id.
+
+- **Access.** The owner registers the member's share token with `POST /api/space/members`;
+  D1 keeps only its SHA-256, in a `members` row next to the space's tag. A request whose
+  `x-twofold-space` header is a share token reaches the owner's photos and albums: the
+  member can view, add, favorite and delete photos, and add albums. The owner-only routes
+  (who it's shared with, joined libraries, wiping the space) refuse share tokens.
+- **Owner-only records.** Who a space is shared with (`members`) and which libraries it
+  joined (`joined`) are sealed under a second `crypto_kdf` subkey of the space key (id 2),
+  which members never receive. So even a server that showed a member those rows couldn't
+  make it read them, and joining a library doesn't open the libraries its owner joined.
+- **Where shares live.** Both lists are stored per space, like photos, so nothing links
+  them to an account. A library joined from the private space is kept in the private
+  space's rows and only appears there. Sharing the private space tells the person you share
+  it with that it exists, by your choice; it tells the server nothing new.
+- **Who added what.** Photos a member adds carry their member id and name inside the
+  sealed metadata, so the owner (and other members) see "Added by" without the server
+  learning it. Photos from a joined library appear in the joiner's open space, marked with
+  the owner's name, and can't be moved to the joiner's other space.
+- **Stopping.** The owner removes a member (`DELETE /api/space/members/:id`) and that share
+  token stops working at once; a member can also leave (`DELETE /api/space/membership`).
+  Deleting an account leaves the libraries its reachable spaces joined, and wiping a space
+  removes its `members` and `joined` rows.
+
+### Invites
+
+An invite moves the access from one browser to another through a server we don't trust,
+in steps both sides poll for (`packages/crypto/src/sharing.ts`, `apps/api/src/routes/invites.ts`):
+
+1. The inviter makes a code (`TWO-XXXX-XXXX`, 8 characters from 32, so 40 bits), a random
+   handle that stays on its device, and a `crypto_box` key pair. It sends the code, the
+   handle and a **commitment** to its public key (keyed BLAKE2b), not the key itself. D1
+   keeps the code and handle only as SHA-256, with no account or space.
+2. The joiner enters the code, reads the commitment and sends its own public key. Only the
+   first key is accepted, so a code works once.
+3. The inviter reveals its public key. The joiner checks it against the commitment, then
+   sends its name sealed to the inviter's key (`crypto_box`, `hello`).
+4. Both show a **safety phrase**: 4 BIP-39 words (44 bits) hashed from both public keys.
+   If anyone swapped a key, the phrases differ. Because the inviter committed before seeing
+   the joiner's key, and the joiner's key is sent before the inviter's is revealed, a
+   server in the middle has to pick its fake keys blind: one guess at 2^-44 per invite.
+5. Only when the inviter confirms the words match does it register the member and send
+   the access (`grant`: share token, records key, its own name, the member id) sealed to
+   the joiner's key. The joiner keeps it as an owner-only `joined` record in the open
+   space and deletes the invite.
+
+Every sealed message starts with a purpose label (`hello` or `grant`), so one can't be
+replayed as the other. Each side's steps need its own secret: the code for the joiner, the
+handle for the inviter, and the server only accepts steps in order. Unknown codes count
+against the account like wrong passwords (10 per 15 minutes). Invites expire after 24
+hours, and the inviter's screen cancels its invite when it closes.
+
+### Trade-offs we accepted
+
+- **Stopping sharing is enforced by the server, not by new keys.** A removed member still
+  knows the records key and the per-photo keys of photos it saw, and could decrypt any
+  ciphertext it got hold of later. The server refuses its token from the moment it's
+  removed, but a compromised server could still hand it new ciphertext. Rotating the space
+  key on removal would close that and is left for later.
+- **A member can delete photos for everyone**, like the owner. Sharing is for people you
+  trust.
+- **The safety phrase is only as good as the comparison.** If nobody checks the words, a
+  compromised server could put itself in the middle of that invite.
+- **A live server sees who joins what.** Like storage, a compromised server watching
+  requests can link the sessions on either side of an invite, and a member's session to
+  the share token it uses. Nothing at rest records it.
+
 ## Sessions and the API
 
 - Passwords never reach the API. It sees the keyring (salt, KDF settings, sealed slots,
@@ -163,6 +235,6 @@ Photos and albums belong to a **space**, never to an account.
 
 ## Still to design
 
-- Sharing a space with another account.
+- Rotating a space's key when someone stops sharing it (see the sharing trade-offs).
 - Metadata minimisation in D1 (the display name is stored in plain text today, like the
   email).

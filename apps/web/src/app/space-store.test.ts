@@ -5,76 +5,10 @@ import { newSpace } from '@twofold/crypto';
 import type { SpaceKeys } from '@twofold/crypto';
 import { fromBase64Url } from '@twofold/crypto/webcrypto';
 import { STORAGE_SIZES } from '@twofold/types';
-import type { PhotoPart, StoredAlbum, StoredPhoto } from '@twofold/types';
 
-import type { SpaceApi } from '../lib/api';
-import { ApiError } from '../lib/api';
+import { FakeServer } from '../test/fake-server';
 import { remoteStore } from './space-store';
 import type { NewPhoto } from './space-store';
-
-/** An in-memory stand-in for the storage API, holding exactly what the server would. */
-class FakeServer {
-  photos = new Map<string, { token: string; photo: StoredPhoto; committed: boolean }>();
-  files = new Map<string, Uint8Array<ArrayBuffer>>();
-  albums = new Map<string, { token: string; album: StoredAlbum }>();
-
-  api = (token: string): SpaceApi => {
-    const mine = (id: string) => {
-      const entry = this.photos.get(id);
-      if (entry?.token !== token) throw new ApiError(404, 'Not here');
-      return entry;
-    };
-    return {
-      listPhotos: () =>
-        Promise.resolve({
-          photos: [...this.photos.values()]
-            .filter((entry) => entry.token === token && entry.committed)
-            .map((entry) => entry.photo),
-          next: null,
-        }),
-      listAlbums: () =>
-        Promise.resolve({
-          albums: [...this.albums.values()]
-            .filter((entry) => entry.token === token)
-            .map((entry) => entry.album),
-        }),
-      createPhoto: (photo) => {
-        this.photos.set(photo.id, { token, photo, committed: false });
-        return Promise.resolve(undefined);
-      },
-      putFile: (id: string, part: PhotoPart, bytes: Uint8Array<ArrayBuffer>) => {
-        mine(id);
-        this.files.set(`${id}/${part}`, bytes);
-        return Promise.resolve();
-      },
-      commitPhoto: (id) => {
-        mine(id).committed = true;
-        return Promise.resolve(undefined);
-      },
-      getFile: (id, part) => {
-        mine(id);
-        const file = this.files.get(`${id}/${part}`);
-        return file ? Promise.resolve(file) : Promise.reject(new ApiError(404, 'Not here'));
-      },
-      updatePhoto: (id, meta) => {
-        mine(id).photo.meta = meta;
-        return Promise.resolve(undefined);
-      },
-      deletePhoto: (id) => {
-        mine(id);
-        this.photos.delete(id);
-        this.files.delete(`${id}/thumb`);
-        this.files.delete(`${id}/full`);
-        return Promise.resolve(undefined);
-      },
-      createAlbum: (album) => {
-        this.albums.set(album.id, { token, album });
-        return Promise.resolve(undefined);
-      },
-      wipe: () => Promise.resolve(undefined),
-    };
-  };
-}
 
 function bytes(text: string): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode(text);

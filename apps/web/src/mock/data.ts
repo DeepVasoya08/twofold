@@ -24,14 +24,20 @@ export interface Photo {
   takenAt: string;
   location?: string;
   addedBy: Person['id'];
+  /** The name of whoever added it, when that wasn't you. */
+  addedByName?: string;
   favorite: boolean;
   albumIds: string[];
+  /** Set when the photo is in a library someone shared with you: whose library it is. */
+  library?: string;
 }
 
 export interface Album {
   id: string;
   title: string;
   coverPhotoId?: string;
+  /** Set when the album is in a library someone shared with you: whose library it is. */
+  library?: string;
 }
 
 export const me: Person = { id: 'me', name: 'Deepu', email: 'deepu@example.com' };
@@ -177,7 +183,9 @@ function buildPhotos(
         height: size[1],
         takenAt: `${trip.month}-${String(day).padStart(2, '0')}T${hour}:${String((n * 13) % 60).padStart(2, '0')}:00Z`,
         location: trip.location,
-        addedBy: n % 3 === 0 ? sharedBy : 'me',
+        ...(n % 3 === 0 && sharedBy === 'contact'
+          ? { addedBy: 'contact' as const, addedByName: contact.name }
+          : { addedBy: 'me' as const }),
         favorite: n % 5 === 1 || n % 7 === 0,
         albumIds: trip.albumId ? [trip.albumId] : [],
       });

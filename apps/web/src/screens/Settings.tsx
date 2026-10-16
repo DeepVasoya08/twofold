@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode, SubmitEvent } from 'react';
+
+import type { SpaceKeys } from '@twofold/crypto';
 
 import { useAccount, useMe } from '../app/account';
 import { errorInput, errorMessage } from '../app/account-ops';
 import { useRouter } from '../app/router';
 import { paths } from '../app/routes';
+import { leaveLibrary, listJoined, listMembers, removeMember } from '../app/sharing';
+import type { JoinedLibrary, Member } from '../app/sharing';
 import { useTheme } from '../app/theme';
 import type { ThemePreference } from '../app/theme';
 import { useToast } from '../app/toast';
@@ -15,9 +19,7 @@ import { Dialog } from '../components/Dialog';
 import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
-import { formatShortDay } from '../lib/format';
 import { MIN_PASSWORD_LENGTH } from '../lib/password';
-import { contact, sharedSince } from '../mock/data';
 
 import './settings.css';
 
@@ -64,7 +66,38 @@ const themes: { value: ThemePreference; label: string; icon: IconName }[] = [
   { value: 'dark', label: 'Dark', icon: 'moon' },
 ];
 
-type DialogName = 'main-password' | 'private-password' | 'stop-sharing' | 'delete' | null;
+type DialogName = 'main-password' | 'private-password' | 'delete' | null;
+
+/** A sharing change waiting for confirmation: stop sharing with someone, or leave a library. */
+type SharingChange = { kind: 'stop'; member: Member } | { kind: 'leave'; library: JoinedLibrary };
+
+interface SharingLists {
+  members: Member[];
+  joined: JoinedLibrary[];
+}
+
+/** Who the open space is shared with, and what it joined. Null until loaded. */
+function useSharingLists(keys: SpaceKeys | null) {
+  const [lists, setLists] = useState<SharingLists | null>(null);
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    if (!keys) return;
+    let cancelled = false;
+    Promise.all([listMembers(keys), listJoined(keys)]).then(
+      ([members, joined]) => {
+        if (!cancelled) setLists({ members, joined });
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [keys, version]);
+  const reload = useCallback(() => {
+    setVersion((current) => current + 1);
+  }, []);
+  return { lists, reload };
+}
 
 /** The password input in a dialog that an error is shown under. */
 type ErrorInput = 'current' | 'new' | 'confirm';
@@ -89,8 +122,10 @@ export function Settings() {
   const [confirm, setConfirm] = useState('');
   const [passwordError, setPasswordError] = useState<PasswordError | null>(null);
   const [autoLock, setAutoLock] = useState('15');
-  // Sharing is not built yet, so nothing is shared.
-  const [shared, setShared] = useState(false);
+  const keys = account.state.status === 'unlocked' ? account.state.session.opened.space : null;
+  const sharing = useSharingLists(keys);
+  const [change, setChange] = useState<SharingChange | null>(null);
+  const where = isPrivate ? 'private space' : 'library';
 
   const closeDialog = () => {
     setDialog(null);
@@ -186,6 +221,35 @@ export function Settings() {
     );
   };
 
+  const onSharingChange = () => {
+    if (!change || !keys || busy) return;
+    setBusy(true);
+    const run =
+      change.kind === 'stop'
+        ? removeMember(keys, change.member.id)
+        : leaveLibrary(keys, change.library);
+    run
+      .then(
+        () => {
+          setChange(null);
+          if (change.kind === 'stop') {
+            toast.show(`Stopped sharing with ${change.member.name}`);
+            sharing.reload();
+          } else {
+            toast.show(`Left ${change.library.name}’s library`);
+            // Their photos leave the open space too.
+            account.reloadVault();
+          }
+        },
+        (error: unknown) => {
+          toast.show(errorMessage(error));
+        },
+      )
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
   const signOut = () => {
     void account.logOut().then(() => {
       navigate(paths.welcome);
@@ -246,24 +310,27 @@ export function Settings() {
       </Section>
 
       <Section title="Sharing">
-        {shared ? (
+        {sharing.lists?.members.map((member) => (
           <Row
+            key={member.id}
             icon="users"
-            title={`Shared with ${contact.name}`}
-            description={`Since ${formatShortDay(sharedSince)}. They see this library, and nothing else.`}
+            title={`Shared with ${member.name}`}
+            description={`They can see and add photos in this ${where}, and nothing else.`}
             action={
               <button
                 type="button"
                 className="btn btn--danger-ghost btn--sm"
+                aria-label={`Stop sharing with ${member.name}`}
                 onClick={() => {
-                  setDialog('stop-sharing');
+                  setChange({ kind: 'stop', member });
                 }}
               >
                 Stop
               </button>
             }
           />
-        ) : (
+        ))}
+        {sharing.lists?.members.length === 0 && (
           <Row
             icon="users"
             title="Not shared"
@@ -272,6 +339,26 @@ export function Settings() {
             }
           />
         )}
+        {sharing.lists?.joined.map((library) => (
+          <Row
+            key={library.id}
+            icon="albums"
+            title={`${library.name}’s library`}
+            description={`Shared with you. Its photos appear in your ${where}.`}
+            action={
+              <button
+                type="button"
+                className="btn btn--danger-ghost btn--sm"
+                aria-label={`Leave ${library.name}’s library`}
+                onClick={() => {
+                  setChange({ kind: 'leave', library });
+                }}
+              >
+                Leave
+              </button>
+            }
+          />
+        ))}
         <Row
           icon="link"
           title="Invite someone"
@@ -479,25 +566,39 @@ export function Settings() {
       </Dialog>
 
       <Dialog
-        open={dialog === 'stop-sharing'}
-        onClose={closeDialog}
-        title={`Stop sharing with ${contact.name}?`}
-        description={`${contact.name} will lose access to this library. Photos they added stay with them.`}
+        open={change !== null}
+        onClose={() => {
+          setChange(null);
+        }}
+        title={
+          change?.kind === 'leave'
+            ? `Leave ${change.library.name}’s library?`
+            : `Stop sharing with ${change?.member.name ?? ''}?`
+        }
+        description={
+          change?.kind === 'leave'
+            ? `Their photos will no longer appear in your ${where}. Photos you added stay in their library.`
+            : `They will lose access to this ${where} right away. Photos they added stay here.`
+        }
       >
         <div className="dialog__actions">
-          <button type="button" className="btn btn--ghost" onClick={closeDialog}>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => {
+              setChange(null);
+            }}
+          >
             Cancel
           </button>
           <button
             type="button"
             className="btn btn--danger"
-            onClick={() => {
-              closeDialog();
-              setShared(false);
-              toast.show(`Stopped sharing with ${contact.name}`);
-            }}
+            disabled={busy}
+            aria-busy={busy}
+            onClick={onSharingChange}
           >
-            Stop sharing
+            {change?.kind === 'leave' ? 'Leave' : 'Stop sharing'}
           </button>
         </div>
       </Dialog>
