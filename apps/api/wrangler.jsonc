@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "twofold-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "r2_buckets": [
+    {
+      // Encrypted blobs only. Object keys are random IDs, never filenames.
+      "binding": "BLOBS",
+      "bucket_name": "twofold-blobs",
+    },
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "twofold",
+      // Replaced at deploy time from the D1_DATABASE_ID repository variable (see deploy.yml).
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations",
+    },
+  ],
+}
