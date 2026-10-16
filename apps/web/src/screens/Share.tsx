@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
+import { useMe } from '../app/account';
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
 import { useToast } from '../app/toast';
@@ -9,7 +10,7 @@ import { PageHeader } from '../components/AppShell';
 import { Avatar, AvatarPair } from '../components/Brand';
 import { TextField } from '../components/Field';
 import { Icon } from '../components/Icon';
-import { contact, me, mockInviteCode } from '../mock/data';
+import { contact, mockInviteCode } from '../mock/data';
 
 import './share.css';
 
@@ -30,6 +31,7 @@ type Mode = 'invite' | 'join';
 export function Share() {
   const toast = useToast();
   const { space } = useVault();
+  const me = useMe();
   const [mode, setMode] = useState<Mode>('invite');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);

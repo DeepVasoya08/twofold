@@ -1,8 +1,12 @@
 # Web UI
 
-Every screen of the web app exists today on **mock data**: nothing calls the API or
-`packages/crypto` yet. Mock content lives in `apps/web/src/mock/` (placeholder landscape
-"photos" are drawn as SVG data URIs) and app state is in memory only.
+Accounts are real: sign-up, log in, unlock, recovery and both passwords call the API and
+`packages/crypto` (design in [security.md](security.md)). Photo storage is not wired up yet,
+so a new account starts with an empty library, uploads stay in memory, and locking or
+reloading clears them. The mock library in `apps/web/src/mock/` (placeholder landscape
+"photos" drawn as SVG data URIs) now only decorates the welcome and sign-in screens and
+feeds unit tests; sharing, invite codes and
+auto-lock are still mock UI.
 
 Twofold presents itself as a private, end-to-end encrypted photo library for anyone. Sharing
 exists but is low-key (Settings → Sharing).
@@ -28,11 +32,27 @@ exists but is low-key (Settings → Sharing).
   shares the private space.
 - The lock button (sidebar, or top bar on phones) forgets which space was open.
 
-Mock behaviour: any password opens the main library; `private1234` opens the private space
-until a new private password is chosen in Settings. For real, unlocking will try the
-password against each key slot in `packages/crypto`, and the server must not be able to
-tell how many spaces an account has. That design is still open (see
-[security.md](security.md)).
+Unlocking tries the password against every key slot on the device (see
+[security.md](security.md#key-slots)), so the server never learns which space opened.
+Setting up a private space from the main library always looks the same and replaces any
+private space that already exists, since the main library can't know whether there is one.
+
+## Accounts and locking
+
+- Signed out: only the welcome, sign-up, log-in and recovery screens are reachable; library
+  routes redirect to `/login`.
+- Signed in but locked (after a reload, or the lock button): library routes redirect to
+  `/unlock`, which greets the account by name. Keys are only ever in memory, so a reload
+  always locks.
+- Sign-up makes the keys and the recovery key at step 1 (Argon2id runs on the device, so
+  the button shows "Creating your keys…"), shows the 12 words at step 2, and only then
+  creates the account.
+- `/signup/recovery-key` doubles as "New key" from Settings in the main library. The private
+  space can't make a recovery key; its Settings say the private password can't be recovered.
+- Delete account asks for a password.
+- State lives in `app/account.tsx` (who is signed in, which slot is open) and
+  `app/account-ops.ts` (every operation that touches keys); `app/access.ts` decides
+  redirects.
 
 ## Screens and routes
 
@@ -80,14 +100,14 @@ album it also adds the photos to that album. Its "encrypting" progress is simula
   through the CSSOM, which the CSP allows.
 - Layout switches at 860px: sidebar on wide screens, top bar plus bottom tabs on phones.
 
-## Security notes for when real data arrives
+## Security notes
 
 - Decrypted photos are shown through in-memory object URLs (as uploads already are) and
   must never be written to `localStorage`, IndexedDB or caches.
-- The mock keeps the private password in React state so the demo works. Real code keeps
-  no password anywhere.
-- The recovery key, invite code and devices shown today are placeholders; real values
-  come from `packages/crypto` and the API.
+- No password is kept anywhere: it is turned into keys inside `app/account-ops.ts` and
+  dropped. Keys live only in React state and are dropped on lock, sign-out and reload,
+  along with every decrypted photo (the vault provider is remounted).
+- The invite code and the sharing rows are still placeholders.
 
 ## Screenshots
 

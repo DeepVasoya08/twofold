@@ -6,8 +6,9 @@ private space.
 
 Web first; a mobile app (Expo) will follow.
 
-> Status: every screen is built on mock data (see [docs/ui.md](docs/ui.md)); the API and
-> encryption are not wired in yet.
+> Status: accounts are real: sign-up, log in, unlock, the recovery key and both passwords
+> (see [docs/security.md](docs/security.md)). Photo storage is next; until then uploads
+> stay in memory for the session.
 
 ## Repository layout
 
@@ -15,7 +16,7 @@ Web first; a mobile app (Expo) will follow.
 | ----------------- | ---------------------------------------------------------------- |
 | `apps/web`        | Vite + React client, served as static assets by the Worker       |
 | `apps/api`        | The Worker: Hono API under `/api`, R2 for blobs, D1 for metadata |
-| `packages/crypto` | All cryptography (libsodium-wrappers)                            |
+| `packages/crypto` | All cryptography (libsodium-wrappers-sumo)                       |
 | `packages/types`  | Types shared between apps                                        |
 | `docs/`           | Architecture, security model, deployment                         |
 

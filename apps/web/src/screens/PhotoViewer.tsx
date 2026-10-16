@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { PointerEvent, SubmitEvent } from 'react';
 
+import { useAccount, useMe } from '../app/account';
 import { Link, useRouter } from '../app/router';
 import { parsePhotoContext, paths } from '../app/routes';
 import type { PhotoContext } from '../app/routes';
@@ -12,7 +13,7 @@ import { Dialog } from '../components/Dialog';
 import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import { formatDay, formatTime, sortNewestFirst } from '../lib/format';
-import { contact, me } from '../mock/data';
+import { contact } from '../mock/data';
 import type { Photo } from '../mock/data';
 
 import './photo-viewer.css';
@@ -43,7 +44,10 @@ function closeTarget(context: PhotoContext): string {
 
 export function PhotoViewer({ photoId }: { photoId: string }) {
   const { search, navigate, back } = useRouter();
-  const { state, dispatch, space, spaceFor, movePhoto } = useVault();
+  const { state, dispatch, space, movePhoto } = useVault();
+  const { opensPrivateSpace } = useAccount();
+  const me = useMe();
+  const [checking, setChecking] = useState(false);
   const toast = useToast();
   const [showInfo, setShowInfo] = useState(false);
   const [dialog, setDialog] = useState<'delete' | 'move' | null>(null);
@@ -120,16 +124,26 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
   };
 
   // Moving in needs the private password, so the main library alone can't reach the space.
+  // The same answer for a wrong password and for no private space at all.
   const onMoveIn = (event: SubmitEvent) => {
     event.preventDefault();
-    if (spaceFor(privatePassword) !== 'private') {
-      setMoveError("That password doesn't open a private space. You can set one up in Settings.");
-      return;
-    }
-    movePhoto(photo.id, 'private');
-    closeDialog();
-    toast.show('Moved to your private space');
-    leave();
+    if (checking) return;
+    setChecking(true);
+    void opensPrivateSpace(privatePassword)
+      .catch(() => false)
+      .then((opens) => {
+        setChecking(false);
+        if (!opens) {
+          setMoveError(
+            "That password doesn't open a private space. You can set one up in Settings.",
+          );
+          return;
+        }
+        movePhoto(photo.id, 'private');
+        closeDialog();
+        toast.show('Moved to your private space');
+        leave();
+      });
   };
 
   const onPointerDown = (event: PointerEvent) => {
@@ -340,8 +354,13 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
             <button type="button" className="btn btn--ghost" onClick={closeDialog}>
               Cancel
             </button>
-            <button type="submit" className="btn btn--primary">
-              Move
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={checking}
+              aria-busy={checking}
+            >
+              {checking ? 'Checking…' : 'Move'}
             </button>
           </div>
         </form>

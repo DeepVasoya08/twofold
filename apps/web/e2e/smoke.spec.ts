@@ -14,10 +14,11 @@ test('serves the web app with its security headers', async ({ page }) => {
   expect(res?.headers()['x-frame-options']).toBe('DENY');
 });
 
-test('deep links fall back to the app shell', async ({ page }) => {
+test('deep links fall back to the app shell, which asks you to log in', async ({ page }) => {
   await page.goto('/albums/kyoto');
 
-  await expect(page.getByRole('heading', { level: 1, name: 'Kyoto in autumn' })).toBeVisible();
+  await expect(page).toHaveURL('/login');
+  await expect(page.getByRole('heading', { level: 1, name: 'Welcome back' })).toBeVisible();
 });
 
 test('the API is on the same origin under /api', async ({ page }) => {
@@ -35,4 +36,11 @@ test('unknown API routes return 404, not the app shell', async ({ request }) => 
   const res = await request.get('/api/does-not-exist');
 
   expect(res.status()).toBe(404);
+});
+
+test('the account API needs a session', async ({ request }) => {
+  const res = await request.get('/api/account');
+
+  expect(res.status()).toBe(401);
+  expect(res.headers()['cache-control']).toBe('no-store');
 });

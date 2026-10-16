@@ -1,4 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Web Crypto, TextEncoder and base64 globals, available in browsers and Workers alike.
+    "lib": ["ES2022", "DOM"]
+  },
   "include": ["src", "vitest.config.ts"]
 }

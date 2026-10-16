@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { useAccount, useMe } from '../app/account';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useVault } from '../app/vault';
-import { me } from '../mock/data';
 import { Avatar, LockBadge, Logo } from './Brand';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
@@ -48,12 +48,14 @@ interface AppShellProps {
 /** Signed-in chrome: a sidebar on wide screens, a top bar and bottom tabs on phones. */
 export function AppShell({ children, uploadAlbumId }: AppShellProps) {
   const { pathname, navigate } = useRouter();
-  const { space, openSpace } = useVault();
+  const { space } = useVault();
+  const { lock: lockAccount } = useAccount();
+  const me = useMe();
   const [uploading, setUploading] = useState(false);
   const isPrivate = space === 'private';
-  // Locking forgets which space was open; the next password decides again.
+  // Locking drops the keys and every decrypted photo; the next password decides the space.
   const lock = () => {
-    openSpace('main');
+    lockAccount();
     navigate(paths.unlock);
   };
   const openUpload = () => {

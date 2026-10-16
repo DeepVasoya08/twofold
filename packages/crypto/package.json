@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./webcrypto": "./src/webcrypto.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -13,9 +14,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "libsodium-wrappers": "^0.8.4"
+    "@twofold/types": "workspace:*",
+    "libsodium-wrappers-sumo": "^0.8.4"
   },
   "devDependencies": {
-    "@types/libsodium-wrappers": "^0.8.2"
+    "@types/libsodium-wrappers-sumo": "^0.8.2"
   }
 }

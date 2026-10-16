@@ -24,9 +24,14 @@ export default defineConfig({
       },
     },
   ],
-  // Runs the production Worker locally: built web assets and the API on one origin.
+  // Runs the production Worker locally: built web assets and the API on one origin, with a
+  // local D1 database (kept in apps/api/.wrangler between runs; tests use fresh emails).
   webServer: {
-    command: `pnpm run build && pnpm --filter @twofold/api exec wrangler dev --port ${String(PORT)} --ip 127.0.0.1`,
+    command: [
+      'pnpm run build',
+      'pnpm --filter @twofold/api exec wrangler d1 migrations apply DB --local',
+      `pnpm --filter @twofold/api exec wrangler dev --port ${String(PORT)} --ip 127.0.0.1`,
+    ].join(' && '),
     port: PORT,
     reuseExistingServer: !isCI,
   },

@@ -422,6 +422,18 @@ a:hover {
   font-weight: 600;
 }
 
+/* A button that reads as a link, for actions that are not navigation. */
+button.text-link {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+button.text-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* Forms */
 
 .form {
@@ -458,6 +470,18 @@ a:hover {
   flex: none;
   margin-top: 2px;
   color: var(--plum);
+}
+
+/* A form-level error, e.g. a wrong password reported after submitting. */
+.form-alert {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .checkbox {

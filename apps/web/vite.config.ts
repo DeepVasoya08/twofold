@@ -9,6 +9,9 @@ export default defineConfig({
   },
   build: {
     sourcemap: false,
+    // libsodium (with Argon2id) is ~550 kB and loads on its own the first time keys are
+    // needed, never on the welcome page.
+    chunkSizeWarningLimit: 600,
   },
   test: {
     include: ['src/**/*.test.{ts,tsx}'],

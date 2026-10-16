@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
+import { useAccount } from '../app/account';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
+import { useSubmit } from '../app/use-submit';
 import { AuthLayout } from '../components/AuthLayout';
 import { PasswordField, TextField } from '../components/Field';
+import { FormAlert } from '../components/FormAlert';
 import { Icon } from '../components/Icon';
 import { MIN_PASSWORD_LENGTH, isValidEmail, passwordStrength } from '../lib/password';
 
@@ -35,6 +38,8 @@ export function validateSignUp(values: {
 
 export function SignUp() {
   const { navigate } = useRouter();
+  const { prepareSignUp } = useAccount();
+  const { busy, error, run } = useSubmit();
   const [values, setValues] = useState({ name: '', email: '', password: '', confirm: '' });
   const [submitted, setSubmitted] = useState(false);
   const errors = submitted ? validateSignUp(values) : {};
@@ -47,7 +52,11 @@ export function SignUp() {
   const onSubmit = (event: SubmitEvent) => {
     event.preventDefault();
     setSubmitted(true);
-    if (Object.keys(validateSignUp(values)).length === 0) navigate(paths.recoveryKey);
+    if (busy || Object.keys(validateSignUp(values)).length > 0) return;
+    // Keys and the recovery key are made here, on this device; the password goes no further.
+    void run(() => prepareSignUp(values)).then((ok) => {
+      if (ok) navigate(paths.recoveryKey);
+    });
   };
 
   return (
@@ -101,8 +110,14 @@ export function SignUp() {
             get a recovery key to keep somewhere safe.
           </p>
         </div>
-        <button type="submit" className="btn btn--primary btn--block btn--lg">
-          Continue
+        <FormAlert message={error} />
+        <button
+          type="submit"
+          className="btn btn--primary btn--block btn--lg"
+          disabled={busy}
+          aria-busy={busy}
+        >
+          {busy ? 'Creating your keys…' : 'Continue'}
         </button>
       </form>
     </AuthLayout>
