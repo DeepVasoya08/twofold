@@ -91,8 +91,9 @@ album it also adds the photos to that album. Each photo is read on the device, g
 progress bar follows those steps.
 
 The grid shows a quiet placeholder until a photo's preview has been downloaded and
-decrypted (a few at a time, newest first). The viewer then fetches and decrypts the
-original.
+decrypted (a few at a time, newest first). Decrypted previews reach the grid in batches,
+at most every 100 ms, so a large library redraws a few times a second rather than once
+per photo. The viewer then fetches and decrypts the original.
 
 The photo viewer zooms with the mouse wheel or a trackpad pinch (towards the pointer),
 a two-finger pinch on touch screens, a double-click (toggles 2.5×), and the `+`, `-` and

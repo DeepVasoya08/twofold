@@ -93,18 +93,17 @@ export interface PhotoSize {
   size: number;
 }
 
+/** Served by the photos_pending index, so it never reads the space's finished photos. */
+export const STALE_PENDING_SQL =
+  'SELECT id, thumb_size + full_size AS size FROM photos WHERE space = ? AND pending_since < ? LIMIT 100';
+
 /** This space's uploads that started before `before` and never finished. */
 export async function stalePendingPhotos(
   db: D1Database,
   space: string,
   before: number,
 ): Promise<PhotoSize[]> {
-  const { results } = await db
-    .prepare(
-      'SELECT id, thumb_size + full_size AS size FROM photos WHERE space = ? AND pending_since < ? LIMIT 100',
-    )
-    .bind(space, before)
-    .all<PhotoSize>();
+  const { results } = await db.prepare(STALE_PENDING_SQL).bind(space, before).all<PhotoSize>();
   return results;
 }
 

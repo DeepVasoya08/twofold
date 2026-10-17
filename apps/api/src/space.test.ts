@@ -7,6 +7,7 @@ import type { AlbumList, PhotoPage, StoredPhoto } from '@twofold/types';
 
 import type { Env } from './env';
 import { PAGE_SIZE, PENDING_TTL_MS } from './routes/space';
+import { STALE_PENDING_SQL } from './space-db';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
@@ -205,6 +206,16 @@ describe('uploading', () => {
     await upload();
     expect(sqlite.prepare('SELECT id FROM photos WHERE id = ?').get(stale.id)).toBeUndefined();
     expect(r2.objects.has(`photos/${stale.id}/thumb`)).toBe(false);
+  });
+
+  it('finds abandoned uploads without reading the space’s other photos', () => {
+    const plan = sqlite
+      .prepare(`EXPLAIN QUERY PLAN ${STALE_PENDING_SQL}`)
+      .all('space', 0)
+      .map((row) => String(row.detail));
+    expect(plan).toEqual([
+      'SEARCH photos USING INDEX photos_pending (space=? AND pending_since<?)',
+    ]);
   });
 });
 

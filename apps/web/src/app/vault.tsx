@@ -28,6 +28,7 @@ export interface VaultState {
 export type VaultAction =
   | { type: 'loaded'; state: VaultState }
   | { type: 'set-image'; photoId: string; part: PhotoPart; url: string }
+  | { type: 'set-thumbs'; urls: ReadonlyMap<string, string> }
   | { type: 'toggle-favorite'; photoId: string }
   | { type: 'delete-photo'; photoId: string }
   | { type: 'add-photos'; photos: Photo[] }
@@ -50,6 +51,14 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
           const rest = { ...photo };
           delete rest.fullSrc;
           return rest;
+        }),
+      };
+    case 'set-thumbs':
+      return {
+        ...state,
+        photos: state.photos.map((photo) => {
+          const url = action.urls.get(photo.id);
+          return url === undefined ? photo : { ...photo, src: url };
         }),
       };
     case 'toggle-favorite':
@@ -110,6 +119,11 @@ export const mockVaults: VaultsState = {
 
 /** Thumbnails download a few at a time, newest first, so the top of the timeline fills in first. */
 const THUMB_CONCURRENCY = 4;
+/**
+ * Decrypted thumbnails reach the screen together, at most this often. One update per
+ * thumbnail would redraw the whole grid once per photo, which a large library can't afford.
+ */
+const THUMB_FLUSH_MS = 100;
 
 export type VaultStatus = 'loading' | 'ready' | 'failed';
 
@@ -167,13 +181,22 @@ export function VaultProvider({
     let cancelled = false;
     // A function, so checks after an await see the cleanup's change.
     const stopped = () => cancelled;
+    let ready = new Map<string, string>();
+    let flushTimer: ReturnType<typeof setTimeout> | undefined;
+    const flush = () => {
+      flushTimer = undefined;
+      if (stopped() || ready.size === 0) return;
+      dispatch({ type: 'set-thumbs', urls: ready });
+      ready = new Map();
+    };
     const loadThumbs = async (queue: Photo[]) => {
       for (;;) {
         const photo = queue.shift();
         if (!photo || stopped()) return;
         const url = await store.image(photo.id, 'thumb').catch(() => null);
-        if (url && !stopped())
-          dispatch({ type: 'set-image', photoId: photo.id, part: 'thumb', url });
+        if (!url || stopped()) continue;
+        ready.set(photo.id, url);
+        flushTimer ??= setTimeout(flush, THUMB_FLUSH_MS);
       }
     };
     store.list().then(
@@ -190,6 +213,7 @@ export function VaultProvider({
     );
     return () => {
       cancelled = true;
+      clearTimeout(flushTimer);
       store.dispose();
     };
   }, [store, initialState]);
