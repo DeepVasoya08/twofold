@@ -51,7 +51,8 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
 
 - At sign-up slot 2 and verifier 2 are **random bytes** of exactly the same size as real
   ones. A secretbox ciphertext under an unknown key is indistinguishable from random, so
-  the stored keyring looks the same with or without a private space.
+  one copy of the stored keyring looks the same with or without a private space (but two
+  copies can differ; see the trade-offs below).
 - Every change uploads **all three slots and verifiers** together (`PUT
 /api/account/keyring`). Changing the main password, making a new recovery key and setting
   up a private space are the same request. D1 keeps no per-slot columns or timestamps.
@@ -78,6 +79,14 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
 - **The private space has no recovery.** If the recovery key could open it, anyone holding
   the recovery key would learn it exists. Forget the private password and that space is
   gone; the recovery key restores the main library and leaves slot 2 untouched.
+- **Keyring history shows when the private slot changes.** Every keyring write copies the
+  slots it doesn't change byte for byte, and the main library can't re-seal slot 2 without
+  its key. So anyone who can compare two copies of an account's row (a compromised server
+  watching the `PUT`, or D1 Time Travel, a backup or an export, which keep earlier copies
+  for days) sees when slot 2 alone changed, and so that a private space was set up or its
+  password changed. It reveals nothing else: no photos, keys or passwords. Closing it would
+  need a new construction (ruled out by "never invent crypto") or a private password that can
+  only be set at sign-up and never changed; we accepted the gap instead.
 - **A compromised, live server could notice a second login key** when someone logs in with
   the private password on a new device (the stored data still reveals nothing). A
   compromised server could equally serve altered JavaScript, which is the limit of any
