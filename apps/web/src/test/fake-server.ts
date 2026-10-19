@@ -4,6 +4,7 @@ import type {
   StoredAlbum,
   StoredJoined,
   StoredPhoto,
+  StoredProfilePhoto,
 } from '@twofold/types';
 
 import { ApiError } from '../lib/api';
@@ -20,6 +21,8 @@ export class FakeServer {
   /** By share token: whose space it opens, and the member record. */
   members = new Map<string, { space: string; id: string; meta: string }>();
   joined = new Map<string, { token: string; joined: StoredJoined }>();
+  /** By space token. */
+  profilePhotos = new Map<string, StoredProfilePhoto>();
 
   api = (token: string): SpaceApi => {
     const member = this.members.get(token);
@@ -148,6 +151,21 @@ export class FakeServer {
         ownerOnly();
         await Promise.resolve();
         if (this.joined.get(id)?.token === space) this.joined.delete(id);
+      },
+      getProfilePhoto: async () => {
+        ownerOnly();
+        await Promise.resolve();
+        return { photo: this.profilePhotos.get(space) ?? null };
+      },
+      putProfilePhoto: async (photo) => {
+        ownerOnly();
+        await Promise.resolve();
+        this.profilePhotos.set(space, photo);
+      },
+      deleteProfilePhoto: async () => {
+        ownerOnly();
+        await Promise.resolve();
+        this.profilePhotos.delete(space);
       },
     };
   };

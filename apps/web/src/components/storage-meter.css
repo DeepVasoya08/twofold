@@ -1,0 +1,42 @@
+.storage-meter {
+  display: grid;
+  gap: 8px;
+}
+
+.storage-meter__bar {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.storage-meter__fill {
+  display: block;
+  /* A sliver stays visible from the first photo on. */
+  min-width: 4px;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.storage-meter__bar.is-nearly-full .storage-meter__fill {
+  background: var(--danger);
+}
+
+.storage-meter__label {
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.storage-meter--compact {
+  gap: 6px;
+  padding: 0 14px;
+}
+
+.storage-meter--compact .storage-meter__bar {
+  height: 6px;
+}
+
+.storage-meter--compact .storage-meter__label {
+  font-size: 12px;
+}

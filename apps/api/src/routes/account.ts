@@ -8,10 +8,17 @@ import {
   deleteOtherSessions,
   listDevices,
   updateKeyring,
+  updateName,
 } from '../db';
 import { checkProof, clientAddress } from '../proof';
 import { messages, readBody, toAccountResponse } from '../respond';
-import { deleteAccountSchema, deviceIdSchema, emptySchema, updateKeyringSchema } from '../schemas';
+import {
+  deleteAccountSchema,
+  deviceIdSchema,
+  emptySchema,
+  updateKeyringSchema,
+  updateNameSchema,
+} from '../schemas';
 import { clearSessionCookie, requireSession } from '../session';
 import type { AppEnv } from '../session';
 
@@ -21,6 +28,15 @@ export const account = new Hono<AppEnv>();
 account.use(requireSession);
 
 account.get('/', (c) => c.json(toAccountResponse(c.get('account'))));
+
+/** Renames the account. The name isn't secret (sign-up sends it), so the session is enough. */
+account.put('/name', async (c) => {
+  const current = c.get('account');
+  const body = await readBody(c, updateNameSchema);
+  if (!body) return c.json({ error: messages.badRequest }, 400);
+  await updateName(c.env.DB, current.id, body.name);
+  return c.json(toAccountResponse({ ...current, name: body.name }));
+});
 
 /**
  * Replaces the whole keyring. The browser always sends all three slots, so a password

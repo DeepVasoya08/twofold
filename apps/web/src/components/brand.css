@@ -37,7 +37,18 @@
   box-shadow: 0 0 0 2px var(--surface);
 }
 
-.avatar--me {
+.avatar--photo {
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.avatar__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar--me:not(.avatar--photo) {
   background: linear-gradient(135deg, #f0917b, #d9586a);
 }
 

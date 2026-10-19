@@ -42,6 +42,32 @@ describe('GET /api/account', () => {
   });
 });
 
+describe('PUT /api/account/name', () => {
+  it('renames the account', async () => {
+    const res = await client.request('PUT', '/account/name', { name: '  Sam Rivera ' });
+    expect(res.status).toBe(200);
+    expect((await res.json<AccountResponse>()).name).toBe('Sam Rivera');
+    const reread = await client.request('GET', '/account');
+    expect((await reread.json<AccountResponse>()).name).toBe('Sam Rivera');
+  });
+
+  it('refuses an empty or overlong name, and changes nothing', async () => {
+    for (const name of ['', '   ', 'x'.repeat(61)]) {
+      expect((await client.request('PUT', '/account/name', { name })).status).toBe(400);
+    }
+    expect((await client.request('PUT', '/account/name', { name: 'A', extra: 1 })).status).toBe(
+      400,
+    );
+    const reread = await client.request('GET', '/account');
+    expect((await reread.json<AccountResponse>()).name).toBe('Sam');
+  });
+
+  it('needs a session', async () => {
+    const res = await new Client(env).request('PUT', '/account/name', { name: 'Kim' });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('PUT /api/account/keyring', () => {
   it('replaces the keyring and bumps the version', async () => {
     const next = withNewPrivateSlot(keyring, toBase64Url(randomBytes(32)));

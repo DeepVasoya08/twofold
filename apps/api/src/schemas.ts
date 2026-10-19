@@ -52,6 +52,8 @@ export const updateKeyringSchema = z.strictObject({
 
 export const deleteAccountSchema = z.strictObject({ loginKey });
 
+export const updateNameSchema = z.strictObject({ name });
+
 /** A session's public id: 16 random bytes in lowercase hex, made by SQLite. */
 export const deviceIdSchema = z.string().regex(/^[0-9a-f]{32}$/);
 
@@ -80,6 +82,17 @@ export const createPhotoSchema = z.strictObject({
 export const createAlbumSchema = z.strictObject({ id: recordId, meta: sealedRecord });
 
 export const updateRecordSchema = z.strictObject({ meta: sealedRecord });
+
+/** An encrypted profile photo: secretstream output, at most STORAGE_SIZES.maxProfilePhoto. */
+export const profilePhotoSchema = z.strictObject({
+  id: recordId,
+  meta: sealedRecord,
+  image: z
+    .string()
+    .min(base64UrlLength(41))
+    .max(base64UrlLength(STORAGE_SIZES.maxProfilePhoto))
+    .regex(/^[A-Za-z0-9_-]+$/),
+});
 
 export const emptySchema = z.strictObject({});
 

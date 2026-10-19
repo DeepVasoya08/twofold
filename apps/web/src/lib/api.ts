@@ -19,8 +19,11 @@ import type {
   PhotoPart,
   PreLoginRequest,
   PreLoginResponse,
+  ProfilePhotoResponse,
   SignUpRequest,
+  StoredProfilePhoto,
   UpdateKeyringRequest,
+  UpdateNameRequest,
 } from '@twofold/types';
 
 /** A failed API call. `message` is written for people and safe to show. */
@@ -122,6 +125,7 @@ export const api = {
   updateKeyring: (body: UpdateKeyringRequest) =>
     call<AccountResponse>('PUT', '/account/keyring', body),
   deleteAccount: (body: DeleteAccountRequest) => call<undefined>('DELETE', '/account', body),
+  updateName: (body: UpdateNameRequest) => call<AccountResponse>('PUT', '/account/name', body),
   devices: () => call<DeviceList>('GET', '/account/devices'),
   signOutDevice: (id: string) =>
     call<undefined>('DELETE', `/account/devices/${encodeURIComponent(id)}`, {}),
@@ -207,6 +211,11 @@ export function spaceApi(token: string) {
       call<undefined>('POST', '/space/joined', body, headers),
     removeJoined: (id: string) =>
       call<undefined>('DELETE', `/space/joined/${encodeURIComponent(id)}`, {}, headers),
+    getProfilePhoto: () =>
+      call<ProfilePhotoResponse>('GET', '/space/profile-photo', undefined, headers),
+    putProfilePhoto: (body: StoredProfilePhoto) =>
+      call<undefined>('PUT', '/space/profile-photo', body, headers),
+    deleteProfilePhoto: () => call<undefined>('DELETE', '/space/profile-photo', {}, headers),
   };
 }
 

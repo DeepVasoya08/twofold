@@ -6,6 +6,7 @@ import type { Device } from '@twofold/types';
 
 import { useAccount, useMe } from '../app/account';
 import { useAutoLock } from '../app/auto-lock';
+import { useProfile } from '../app/profile';
 import { errorInput, errorMessage } from '../app/account-ops';
 import { useRouter } from '../app/router';
 import { paths } from '../app/routes';
@@ -21,6 +22,8 @@ import { Dialog } from '../components/Dialog';
 import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
+import { ProfileDialog } from '../components/ProfileDialog';
+import { StorageMeter } from '../components/StorageMeter';
 import { api } from '../lib/api';
 import { AUTO_LOCK_CHOICES, parseAutoLock } from '../lib/auto-lock';
 import { formatLastActive, formatShortDay } from '../lib/format';
@@ -71,7 +74,7 @@ const themes: { value: ThemePreference; label: string; icon: IconName }[] = [
   { value: 'dark', label: 'Dark', icon: 'moon' },
 ];
 
-type DialogName = 'main-password' | 'private-password' | 'delete' | null;
+type DialogName = 'profile' | 'main-password' | 'private-password' | 'delete' | null;
 
 /** A sharing change waiting for confirmation: stop sharing with someone, or leave a library. */
 type SharingChange = { kind: 'stop'; member: Member } | { kind: 'leave'; library: JoinedLibrary };
@@ -211,6 +214,7 @@ export function Settings() {
   const { space } = useVault();
   const account = useAccount();
   const me = useMe();
+  const profile = useProfile();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const isPrivate = space === 'private';
@@ -360,11 +364,31 @@ export function Settings() {
 
       <Section title="You">
         <div className="profile">
-          <Avatar person={me} size="lg" />
+          <Avatar person={me} size="lg" src={profile.photo} />
           <div className="profile__text">
             <span className="profile__name">{me.name}</span>
             <span className="profile__email">{me.email}</span>
           </div>
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm profile__edit"
+            onClick={() => {
+              setDialog('profile');
+            }}
+          >
+            <Icon name="pencil" size={16} />
+            Edit
+          </button>
+        </div>
+      </Section>
+
+      <Section title="Storage">
+        <div className="settings-storage">
+          <StorageMeter />
+          <p className="settings-storage__note">
+            The 1 GB limit covers everything your account stores, including photos you add to
+            libraries shared with you.
+          </p>
         </div>
       </Section>
 
@@ -568,6 +592,8 @@ export function Settings() {
           Delete account
         </button>
       </div>
+
+      <ProfileDialog open={dialog === 'profile'} onClose={closeDialog} />
 
       <Dialog open={dialog === 'main-password'} onClose={closeDialog} title="Change main password">
         <form className="form" onSubmit={onChangeMain} noValidate>
