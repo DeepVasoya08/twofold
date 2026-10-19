@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 /** Test-only passwords. The local D1 database keeps accounts between runs, so emails are fresh. */
 export const MAIN_PASSWORD = 'Correct-Horse-Battery-9';
@@ -40,8 +40,8 @@ const PNG = Buffer.from(
   'base64',
 );
 
-/** Uploads `count` photos through the upload dialog and waits until they're all stored. */
-export async function uploadPhotos(page: Page, count: number): Promise<void> {
+/** Opens the upload dialog and picks `count` photos; they start uploading at once. */
+export async function choosePhotos(page: Page, count: number): Promise<Locator> {
   await page
     .getByRole('button', { name: /^Upload/ })
     .filter({ visible: true })
@@ -55,6 +55,12 @@ export async function uploadPhotos(page: Page, count: number): Promise<void> {
       buffer: PNG,
     })),
   );
+  return dialog;
+}
+
+/** Uploads `count` photos through the upload dialog and waits until they're all stored. */
+export async function uploadPhotos(page: Page, count: number): Promise<void> {
+  const dialog = await choosePhotos(page, count);
   await dialog.getByRole('button', { name: 'Done' }).click();
 }
 

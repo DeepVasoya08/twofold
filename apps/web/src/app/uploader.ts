@@ -1,0 +1,205 @@
+import { PHOTO_TYPES_TEXT, isPhotoType } from '../lib/photo-types';
+import { isUploadRunning } from '../lib/upload-progress';
+import type { UploadStatus } from '../lib/upload-progress';
+import { canStartUpload } from '../lib/upload-queue';
+import type { InFlight } from '../lib/upload-queue';
+import { errorMessage } from './account-ops';
+import type { NewPhoto, UploadStage } from './space-store';
+
+/**
+ * The upload queue for the open space, kept outside React so that closing the upload dialog,
+ * moving around the app or switching browser tabs doesn't stop photos on their way. Each
+ * photo is encrypted on this device, then the ciphertext is uploaded, up to three photos at
+ * a time (fewer when they're big; see lib/upload-queue.ts), in the order they were added.
+ */
+
+export interface UploadItem {
+  id: number;
+  name: string;
+  /**
+   * In-memory object URL of the small preview, once the photo has been read; never written
+   * to storage. Originals are never shown, so dropping hundreds of photos stays light.
+   */
+  url: string;
+  status: UploadStatus;
+  error?: string;
+}
+
+export interface UploaderState {
+  /** Every photo added since the list last started over. */
+  items: readonly UploadItem[];
+  /** Whether the upload dialog is showing. */
+  dialogOpen: boolean;
+}
+
+export interface UploaderDeps {
+  /** Reads a file into the original bytes and a small preview. */
+  prepare: (file: File) => Promise<NewPhoto>;
+  /** Encrypts and stores a photo in the open space. */
+  upload: (
+    photo: NewPhoto,
+    albumId: string | undefined,
+    onStage: (stage: UploadStage) => void,
+  ) => Promise<void>;
+  /** Called once each time the queue runs dry, with how many photos were stored. */
+  onStored: (count: number) => void;
+  /** Makes and drops in-memory preview URLs (object URLs in the browser). */
+  preview: { make: (bytes: Uint8Array<ArrayBuffer>) => string; revoke: (url: string) => void };
+}
+
+interface Job {
+  id: number;
+  file: File;
+  albumId: string | undefined;
+}
+
+export class Uploader {
+  private state: UploaderState = { items: [], dialogOpen: false };
+  private readonly listeners = new Set<() => void>();
+  private queue: Job[] = [];
+  private inFlight: InFlight = { count: 0, bytes: 0 };
+  /** Photos stored since the queue last ran dry, for one notice at the end. */
+  private stored = 0;
+  private nextId = 0;
+  /** Every preview URL made, so clearing revokes them all, even one made as it cleared. */
+  private readonly previews = new Set<string>();
+
+  constructor(private deps: UploaderDeps) {}
+
+  /** Swaps in the latest vault and toast; uploads already running keep their own. */
+  connect(deps: UploaderDeps): void {
+    this.deps = deps;
+  }
+
+  getState = (): UploaderState => this.state;
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  get running(): boolean {
+    return this.state.items.some((item) => isUploadRunning(item.status));
+  }
+
+  openDialog = (): void => {
+    this.set({ dialogOpen: true });
+  };
+
+  /** Hides the dialog. Photos already added keep uploading. */
+  closeDialog = (): void => {
+    this.set({ dialogOpen: false });
+    // The list has been seen; one still uploading stays, for the progress indicator.
+    if (!this.running) this.clear();
+  };
+
+  /** Queues photos; `albumId` adds them to that album as well as the timeline. */
+  add = (files: readonly File[], albumId: string | undefined): void => {
+    const images = files.filter((file) => file.type.startsWith('image/'));
+    if (images.length === 0) return;
+    const added = images.map((file): UploadItem => {
+      this.nextId += 1;
+      const id = this.nextId;
+      // Other image formats (SVG, for one) are shown as refused and never read.
+      if (!isPhotoType(file.type)) {
+        return {
+          id,
+          name: file.name,
+          url: '',
+          status: 'failed',
+          error: `Twofold takes ${PHOTO_TYPES_TEXT} photos.`,
+        };
+      }
+      this.queue.push({ id, file, albumId });
+      return { id, name: file.name, url: '', status: 'waiting' };
+    });
+    this.set({ items: [...this.state.items, ...added] });
+    this.pump();
+  };
+
+  /** Drops the photos that haven't started. Those already uploading finish. */
+  cancelWaiting = (): void => {
+    const dropped = new Set(this.queue.map((job) => job.id));
+    this.queue = [];
+    this.set({ items: this.state.items.filter((item) => !dropped.has(item.id)) });
+    this.settle();
+  };
+
+  /** Stops what hasn't started and forgets the list, as when the vault locks. */
+  dispose(): void {
+    this.queue = [];
+    this.stored = 0;
+    this.clear();
+  }
+
+  private clear(): void {
+    for (const url of this.previews) this.deps.preview.revoke(url);
+    this.previews.clear();
+    this.set({ items: [] });
+  }
+
+  private set(change: Partial<UploaderState>): void {
+    this.state = { ...this.state, ...change };
+    for (const listener of this.listeners) listener();
+  }
+
+  private listed(id: number): boolean {
+    return this.state.items.some((item) => item.id === id);
+  }
+
+  private update(id: number, change: Partial<UploadItem>): void {
+    // A photo dropped from the list (as the vault locked) stays dropped.
+    if (!this.listed(id)) return;
+    this.set({
+      items: this.state.items.map((item) => (item.id === id ? { ...item, ...change } : item)),
+    });
+  }
+
+  private async uploadOne({ id, file, albumId }: Job): Promise<void> {
+    const { prepare, upload, preview } = this.deps;
+    try {
+      this.update(id, { status: 'encrypting' });
+      const photo = await prepare(file);
+      if (!this.listed(id)) return;
+      const url = preview.make(photo.thumb);
+      this.previews.add(url);
+      this.update(id, { url });
+      await upload(photo, albumId, (stage) => {
+        this.update(id, { status: stage });
+      });
+      this.update(id, { status: 'done' });
+      this.stored += 1;
+    } catch (error) {
+      this.update(id, { status: 'failed', error: errorMessage(error) });
+    }
+  }
+
+  /** Starts queued photos while there's room, in order. */
+  private pump(): void {
+    for (let job = this.queue[0]; job; job = this.queue[0]) {
+      const size = job.file.size;
+      if (!canStartUpload(this.inFlight, size)) break;
+      this.queue.shift();
+      this.inFlight = { count: this.inFlight.count + 1, bytes: this.inFlight.bytes + size };
+      void this.uploadOne(job).finally(() => {
+        this.inFlight = { count: this.inFlight.count - 1, bytes: this.inFlight.bytes - size };
+        this.pump();
+      });
+    }
+    this.settle();
+  }
+
+  /** Once the queue runs dry: one notice, and a closed dialog's list starts over. */
+  private settle(): void {
+    if (this.inFlight.count > 0 || this.queue.length > 0) return;
+    if (this.stored > 0) {
+      this.deps.onStored(this.stored);
+      this.stored = 0;
+    }
+    // Failures stay, so the progress indicator can point at them until they've been seen.
+    const failed = this.state.items.some((item) => item.status === 'failed');
+    if (!this.state.dialogOpen && !failed) this.clear();
+  }
+}

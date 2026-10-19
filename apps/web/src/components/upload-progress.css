@@ -1,0 +1,44 @@
+.upload-progress {
+  position: fixed;
+  right: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(300px, calc(100vw - 24px));
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--accent-text);
+  text-align: left;
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+}
+
+.upload-progress.is-failed {
+  color: var(--danger);
+}
+
+.upload-progress__body {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+}
+
+.upload-progress__label {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* On phones it sits under the top bar, clear of the bottom tabs and toasts. */
+@media (max-width: 860px) {
+  .upload-progress {
+    top: 72px;
+    right: 12px;
+    bottom: auto;
+  }
+}

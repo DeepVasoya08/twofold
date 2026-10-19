@@ -1,14 +1,15 @@
-import { useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { useAccount, useMe } from '../app/account';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
+import { useUploads } from '../app/uploads';
 import { useVault } from '../app/vault';
 import { Avatar, LockBadge, Logo } from './Brand';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
 import { UploadDialog } from './UploadDialog';
+import { UploadProgress } from './UploadProgress';
 
 import './app-shell.css';
 
@@ -51,15 +52,12 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
   const { space } = useVault();
   const { lock: lockAccount } = useAccount();
   const me = useMe();
-  const [uploading, setUploading] = useState(false);
+  const { openDialog: openUpload } = useUploads();
   const isPrivate = space === 'private';
   // Locking drops the keys and every decrypted photo; the next password decides the space.
   const lock = () => {
     lockAccount();
     navigate(paths.unlock);
-  };
-  const openUpload = () => {
-    setUploading(true);
   };
 
   return (
@@ -149,13 +147,8 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
         })}
       </nav>
 
-      <UploadDialog
-        open={uploading}
-        albumId={uploadAlbumId}
-        onClose={() => {
-          setUploading(false);
-        }}
-      />
+      <UploadDialog albumId={uploadAlbumId} />
+      <UploadProgress />
     </div>
   );
 }
