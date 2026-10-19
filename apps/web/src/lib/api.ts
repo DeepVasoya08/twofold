@@ -1,4 +1,4 @@
-import { SPACE_HEADER } from '@twofold/types';
+import { SPACE_HEADER, readThumbBatch } from '@twofold/types';
 import type {
   AccountResponse,
   AlbumList,
@@ -87,7 +87,10 @@ async function call<T>(
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
-async function download(path: string, headers: Record<string, string>): Promise<Uint8Array> {
+async function download(
+  path: string,
+  headers: Record<string, string>,
+): Promise<Uint8Array<ArrayBuffer>> {
   const res = await send('GET', path, {}, headers);
   try {
     return new Uint8Array(await res.arrayBuffer());
@@ -157,6 +160,14 @@ export function spaceApi(token: string) {
     },
     commitPhoto: (id: string) => call<undefined>('POST', `${photo(id)}/commit`, {}, headers),
     getFile: (id: string, part: PhotoPart) => download(`${photo(id)}/${part}`, headers),
+    /** Encrypted thumbnails in the order asked, null for any the space doesn't have. */
+    getThumbs: async (ids: readonly string[]) => {
+      const query = ids.map(encodeURIComponent).join(',');
+      const bytes = await download(`/space/thumbs?ids=${query}`, headers);
+      const parts = readThumbBatch(bytes, ids.length);
+      if (!parts) throw new ApiError(0, OFFLINE);
+      return parts;
+    },
     updatePhoto: (id: string, meta: string) => call<undefined>('PUT', photo(id), { meta }, headers),
     deletePhoto: (id: string) => call<undefined>('DELETE', photo(id), {}, headers),
     createAlbum: (body: CreateAlbumRequest) =>

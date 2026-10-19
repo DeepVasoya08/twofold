@@ -85,6 +85,18 @@ describe('images', () => {
     expect(withFull.photos[1]).toBe(state.photos[1]);
   });
 
+  it('sets many previews in one update and leaves the other photos as they were', () => {
+    const next = vaultReducer(state, {
+      type: 'set-thumbs',
+      urls: new Map([
+        ['a', 'blob:a'],
+        ['c', 'blob:c'],
+      ]),
+    });
+    expect(next.photos.map((p) => p.src)).toEqual(['blob:a', '', 'blob:c']);
+    expect(next.photos[1]).toBe(state.photos[1]);
+  });
+
   it('keeps one decrypted original at a time', () => {
     const first = vaultReducer(state, {
       type: 'set-image',

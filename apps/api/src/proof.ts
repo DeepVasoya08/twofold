@@ -9,7 +9,7 @@ import {
 } from '@twofold/crypto/webcrypto';
 import type { Keyring } from '@twofold/types';
 
-import { clearFailures, deleteFinishedWindows, takeAttempt } from './db';
+import { attemptCount, attemptQuery, clearFailures, finishedWindowsQuery } from './db';
 
 /**
  * Ten wrong passwords per email from one internet address per 15 minutes, then 429 until
@@ -66,16 +66,21 @@ export async function checkProof(
 ): Promise<ProofResult> {
   const now = Date.now();
   const windowStart = now - FAILURE_WINDOW_MS;
-  await deleteFinishedWindows(db, windowStart);
   const fromHere = `${email} ${address}`;
-  const [here, overall] = [
-    await takeAttempt(db, fromHere, now, windowStart),
-    await takeAttempt(db, email, now, windowStart),
-  ];
-  if (here > MAX_FAILURES || overall > MAX_EMAIL_FAILURES) return 'throttled';
+  // One round trip: old windows go first, then both attempts are counted.
+  const [, here, overall] = await db.batch([
+    finishedWindowsQuery(db, windowStart),
+    attemptQuery(db, fromHere, now, windowStart),
+    attemptQuery(db, email, now, windowStart),
+  ]);
+  if (
+    attemptCount(here?.results ?? []) > MAX_FAILURES ||
+    attemptCount(overall?.results ?? []) > MAX_EMAIL_FAILURES
+  ) {
+    return 'throttled';
+  }
   if (keyring && (await matchesAnyVerifier(keyring, loginKey))) {
-    await clearFailures(db, fromHere);
-    await clearFailures(db, email);
+    await clearFailures(db, [fromHere, email]);
     return 'ok';
   }
   return 'wrong';

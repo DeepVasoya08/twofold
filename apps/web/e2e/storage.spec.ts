@@ -111,3 +111,66 @@ test('moved photos stay in their new space, and moving back asks for the main pa
   await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
   await expect(decryptedTiles(page)).toHaveCount(2);
 });
+
+test('previews download in batches, and only for photos near the screen', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 500 });
+  await signUp(page);
+  await uploadPhotos(page, 60);
+  await expect(page.getByText('60 photos added to your vault')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  await lock(page);
+  const single: string[] = [];
+  const batches: string[] = [];
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname;
+    if (/\/api\/space\/photos\/[^/]+\/thumb$/.test(path)) single.push(path);
+    if (path === '/api/space/thumbs') batches.push(request.url());
+  });
+  await unlockWith(page, MAIN_PASSWORD);
+  await expect(page.locator('.photo-tile')).toHaveCount(60);
+  await expect(decryptedTiles(page).first()).toBeVisible();
+  // Once the first screen has loaded, photos far down the timeline are still waiting for
+  // someone to scroll to them.
+  await page.waitForLoadState('networkidle');
+  const loaded = await decryptedTiles(page).count();
+  expect(loaded).toBeGreaterThan(0);
+  expect(loaded).toBeLessThan(60);
+
+  await page.locator('.photo-tile').last().scrollIntoViewIfNeeded();
+  await expect(decryptedTiles(page)).toHaveCount(60);
+  expect(single).toEqual([]);
+  expect(batches.length).toBeLessThanOrEqual(4);
+});
+
+test('the upload list shows each photo’s small preview, never the original', async ({ page }) => {
+  await signUp(page);
+  // An 800×600 original; its preview is at most 640 pixels wide.
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 600;
+    return canvas.toDataURL('image/png').split(',')[1] ?? '';
+  });
+  await page
+    .getByRole('button', { name: /^Upload/ })
+    .filter({ visible: true })
+    .first()
+    .click();
+  const dialog = page.getByRole('dialog', { name: 'Add photos' });
+  await dialog.getByLabel('Choose photos').setInputFiles(
+    Array.from({ length: 3 }, (_, index) => ({
+      name: `photo-${String(index)}.png`,
+      mimeType: 'image/png',
+      buffer: Buffer.from(png, 'base64'),
+    })),
+  );
+  await expect(dialog.getByRole('button', { name: 'Done' })).toBeVisible();
+  const previews = dialog.locator('img.upload-item__thumb');
+  await expect(previews).toHaveCount(3);
+  await expect
+    .poll(() =>
+      previews.evaluateAll((images: HTMLImageElement[]) => images.map((i) => i.naturalWidth)),
+    )
+    .toEqual([640, 640, 640]);
+});

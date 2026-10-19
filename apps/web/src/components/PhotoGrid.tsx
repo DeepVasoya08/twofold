@@ -23,7 +23,14 @@ export function PhotoGrid({ photos, context }: PhotoGridProps) {
             className="photo-tile"
             aria-label={`Photo from ${formatShortDay(photo.takenAt)}${photo.location ? `, ${photo.location}` : ''}`}
           >
-            <PhotoImage src={photo.src} alt="" loading="lazy" decoding="async" draggable={false} />
+            <PhotoImage
+              photoId={photo.id}
+              src={photo.src}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+            />
             {photo.favorite && (
               <span className="photo-tile__fav" aria-hidden="true">
                 <Icon name="heart" size={14} filled />

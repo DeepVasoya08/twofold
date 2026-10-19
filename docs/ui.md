@@ -88,11 +88,15 @@ Routes are the same in both spaces; the content depends on which space is open.
 Upload is a dialog opened from the sidebar (desktop) or the top bar (phones); inside an
 album it also adds the photos to that album. Each photo is read on the device, given a
 640px JPEG preview (`lib/thumbnail.ts`), encrypted, then uploaded, one at a time; the
-progress bar follows those steps.
+progress bar follows those steps. The upload list shows that small preview once a photo
+has been read, never the original, so dropping hundreds of photos stays light.
 
 The grid shows a quiet placeholder until a photo's preview has been downloaded and
-decrypted (a few at a time, newest first). The viewer then fetches and decrypts the
-original.
+decrypted. Previews are only asked for once their photo is near the screen (within about
+two phone screens, `lib/near-screen.ts`), and are downloaded up to 48 per request.
+Decrypted previews reach the grid in batches, at most every 100 ms, so a large library
+redraws a few times a second rather than once per photo. The viewer then fetches and
+decrypts the original.
 
 The photo viewer zooms with the mouse wheel or a trackpad pinch (towards the pointer),
 a two-finger pinch on touch screens, a double-click (toggles 2.5×), and the `+`, `-` and

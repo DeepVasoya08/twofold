@@ -3,10 +3,22 @@ import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 
 import { fromBase64Url, sha256, toBase64Url } from '@twofold/crypto/webcrypto';
-import { MAX_JOINED, MAX_MEMBERS, SPACE_HEADER, STORAGE_SIZES } from '@twofold/types';
+import {
+  MAX_JOINED,
+  MAX_MEMBERS,
+  SPACE_HEADER,
+  STORAGE_SIZES,
+  THUMB_BATCH_MAX,
+} from '@twofold/types';
 import type { AlbumList, JoinedList, MemberList, PhotoPage } from '@twofold/types';
 
-import { releaseStorage, reserveStorage } from '../db';
+import {
+  findSessionAccount,
+  releaseStorage,
+  reserveStorage,
+  sessionAccountFrom,
+  sessionAccountQuery,
+} from '../db';
 import { messages, readBody } from '../respond';
 import {
   createAlbumSchema,
@@ -19,7 +31,7 @@ import {
   spaceTokenSchema,
   updateRecordSchema,
 } from '../schemas';
-import { requireSession } from '../session';
+import { requestSessionHash, sessionEnded } from '../session';
 import type { AppEnv } from '../session';
 import {
   countJoined,
@@ -27,14 +39,15 @@ import {
   deleteJoined,
   deleteMember,
   deleteSharing,
-  findMemberByToken,
   insertJoined,
   insertMember,
+  memberByTokenQuery,
   listJoined,
   listMembers,
 } from '../share-db';
 import {
   commitPhoto,
+  committedPhotoIds,
   countAlbums,
   countPhotos,
   deleteAlbums,
@@ -70,15 +83,31 @@ const notFound = 'That photo isn’t here anymore.';
  */
 export const space = new Hono<AppEnv>();
 
-space.use(requireSession);
-
-/** Resolves the space header to the tag rows are stored under, via a member's token or not. */
+/**
+ * Checks the session and resolves the space header in one database round trip: the session's
+ * account, and whether the token is a member's share token. `space` is the tag rows are
+ * stored under. Without a live session the answer is 401, as for every signed-in route.
+ */
 const requireSpace = createMiddleware<AppEnv>(async (c, next) => {
+  const sessionHash = await requestSessionHash(c);
+  if (!sessionHash) return sessionEnded(c);
   const token = spaceTokenSchema.safeParse(c.req.header(SPACE_HEADER));
   const bytes = token.success ? fromBase64Url(token.data) : null;
-  if (!bytes) return c.json({ error: messages.badRequest }, 400);
+  const now = Date.now();
+  if (!bytes) {
+    const account = await findSessionAccount(c.env.DB, sessionHash, now);
+    return account ? c.json({ error: messages.badRequest }, 400) : sessionEnded(c);
+  }
   const hash = toBase64Url(await sha256(bytes));
-  const member = await findMemberByToken(c.env.DB, hash);
+  const [session, members] = await c.env.DB.batch([
+    sessionAccountQuery(c.env.DB, sessionHash, now),
+    memberByTokenQuery(c.env.DB, hash),
+  ]);
+  const account = sessionAccountFrom(session?.results ?? []);
+  if (!account) return sessionEnded(c);
+  const member = members?.results[0] as { id: string; space: string } | undefined;
+  c.set('account', account);
+  c.set('session', sessionHash);
   c.set('space', member?.space ?? hash);
   c.set('member', member?.id ?? null);
   return next();
@@ -122,17 +151,83 @@ space.get('/photos', async (c) => {
   return c.json<PhotoPage>({ photos, next });
 });
 
+/**
+ * Streams thumbnails one after another, each after its 4-byte length (0 for a missing one),
+ * so a batch never has to be held in the Worker's memory.
+ */
+function thumbStream(parts: readonly (R2ObjectBody | null)[]): ReadableStream<Uint8Array> {
+  let next = 0;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (reader) {
+        const chunk = await reader.read();
+        if (!chunk.done) {
+          controller.enqueue(chunk.value);
+          return;
+        }
+        reader = null;
+      }
+      const object = parts[next];
+      if (next === parts.length) {
+        controller.close();
+        return;
+      }
+      next += 1;
+      const header = new Uint8Array(4);
+      new DataView(header.buffer).setUint32(0, object?.size ?? 0);
+      controller.enqueue(header);
+      if (object) reader = (object.body as ReadableStream<Uint8Array>).getReader();
+    },
+    async cancel() {
+      await reader?.cancel();
+      for (const object of parts.slice(next)) await object?.body.cancel();
+    },
+  });
+}
+
+/**
+ * Many encrypted thumbnails in one response, in the order asked (see THUMB_BATCH_MAX for the
+ * format). Photos that aren't committed in this space come back empty, so a batch can't
+ * reach another space's files.
+ */
+space.get('/thumbs', async (c) => {
+  const ids = (c.req.query('ids') ?? '').split(',');
+  const valid =
+    ids.length <= THUMB_BATCH_MAX &&
+    new Set(ids).size === ids.length &&
+    ids.every((id) => recordIdSchema.safeParse(id).success);
+  if (!valid) return c.json({ error: messages.badRequest }, 400);
+  const [found, objects] = await Promise.all([
+    committedPhotoIds(c.env.DB, c.get('space'), ids),
+    Promise.all(ids.map((id) => c.env.BLOBS.get(objectKey(id, 'thumb')))),
+  ]);
+  const parts = ids.map((id, index) => (found.has(id) ? (objects[index] ?? null) : null));
+  for (const [index, object] of objects.entries()) {
+    if (object && !parts[index]) await object.body.cancel();
+  }
+  return c.body(thumbStream(parts), 200, { 'content-type': 'application/octet-stream' });
+});
+
 /** Starts an upload. The two files follow, then a commit makes the photo visible. */
 space.post('/photos', async (c) => {
   const body = await readBody(c, createPhotoSchema);
   if (!body) return c.json({ error: messages.badRequest }, 400);
   const tag = c.get('space');
   const now = Date.now();
-  await deletePhotos(c, tag, await stalePendingPhotos(c.env.DB, tag, now - PENDING_TTL_MS));
-  // The declared sizes are what the files must be, so they're charged up front.
+  // The declared sizes are what the files must be, so they're charged up front. Clearing out
+  // abandoned uploads runs alongside; if the reservation lost the race to space it freed,
+  // it is tried once more.
   const size = body.thumbSize + body.fullSize;
   const accountId = c.get('account').id;
-  if (!(await reserveStorage(c.env.DB, accountId, size, STORAGE_SIZES.accountQuota))) {
+  const reserve = () => reserveStorage(c.env.DB, accountId, size, STORAGE_SIZES.accountQuota);
+  const [, reserved] = await Promise.all([
+    stalePendingPhotos(c.env.DB, tag, now - PENDING_TTL_MS).then((stale) =>
+      deletePhotos(c, tag, stale).then(() => stale.length),
+    ),
+    reserve(),
+  ]);
+  if (!reserved && !(await reserve())) {
     return c.json({ error: storageFull }, 413);
   }
   if (!(await insertPendingPhoto(c.env.DB, tag, body, now))) {
@@ -174,27 +269,38 @@ space.post('/photos/:id/commit', async (c) => {
     return c.json({ error: messages.badRequest }, 400);
   }
   const tag = c.get('space');
-  const photo = await findPhoto(c.env.DB, tag, id.data);
-  if (!photo) return c.json({ error: notFound }, 404);
-  if (!photo.pending) return c.body(null, 204);
+  // The files' sizes go into the commit itself, so it only succeeds if they match what was
+  // declared; the photo is looked up only to say why a commit didn't happen.
   const [thumb, full] = await Promise.all([
     c.env.BLOBS.head(objectKey(id.data, 'thumb')),
     c.env.BLOBS.head(objectKey(id.data, 'full')),
   ]);
-  if (thumb?.size !== photo.thumbSize || full?.size !== photo.fullSize) {
-    return c.json({ error: 'The upload didn’t finish. Try again.' }, 409);
+  if (
+    thumb &&
+    full &&
+    (await commitPhoto(c.env.DB, tag, id.data, { thumbSize: thumb.size, fullSize: full.size }))
+  ) {
+    return c.body(null, 204);
   }
-  await commitPhoto(c.env.DB, tag, id.data);
-  return c.body(null, 204);
+  const photo = await findPhoto(c.env.DB, tag, id.data);
+  if (!photo) return c.json({ error: notFound }, 404);
+  if (!photo.pending) return c.body(null, 204);
+  return c.json({ error: 'The upload didn’t finish. Try again.' }, 409);
 });
 
 space.get('/photos/:id/:part', async (c) => {
   const params = parsePhotoParams(c.req.param());
   if (!params) return c.json({ error: messages.badRequest }, 400);
-  const photo = await findPhoto(c.env.DB, c.get('space'), params.id);
-  if (!photo || photo.pending) return c.json({ error: notFound }, 404);
-  const object = await c.env.BLOBS.get(objectKey(params.id, params.part));
-  if (!object) return c.json({ error: notFound }, 404);
+  // The row and the file are fetched together; the file is only sent if the row says this
+  // space has the photo.
+  const [photo, object] = await Promise.all([
+    findPhoto(c.env.DB, c.get('space'), params.id),
+    c.env.BLOBS.get(objectKey(params.id, params.part)),
+  ]);
+  if (!photo || photo.pending || !object) {
+    await object?.body.cancel();
+    return c.json({ error: notFound }, 404);
+  }
   return c.body(object.body, 200, {
     'content-type': 'application/octet-stream',
     'content-length': String(object.size),

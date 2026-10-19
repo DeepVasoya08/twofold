@@ -1,7 +1,17 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 
 import type { SpaceKeys } from '@twofold/crypto';
+import { THUMB_BATCH_MAX } from '@twofold/types';
 import type { PhotoPart } from '@twofold/types';
 
 import { FormError } from './account-ops';
@@ -28,6 +38,7 @@ export interface VaultState {
 export type VaultAction =
   | { type: 'loaded'; state: VaultState }
   | { type: 'set-image'; photoId: string; part: PhotoPart; url: string }
+  | { type: 'set-thumbs'; urls: ReadonlyMap<string, string> }
   | { type: 'toggle-favorite'; photoId: string }
   | { type: 'delete-photo'; photoId: string }
   | { type: 'add-photos'; photos: Photo[] }
@@ -50,6 +61,14 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
           const rest = { ...photo };
           delete rest.fullSrc;
           return rest;
+        }),
+      };
+    case 'set-thumbs':
+      return {
+        ...state,
+        photos: state.photos.map((photo) => {
+          const url = action.urls.get(photo.id);
+          return url === undefined ? photo : { ...photo, src: url };
         }),
       };
     case 'toggle-favorite':
@@ -108,8 +127,18 @@ export const mockVaults: VaultsState = {
   },
 };
 
-/** Thumbnails download a few at a time, newest first, so the top of the timeline fills in first. */
-const THUMB_CONCURRENCY = 4;
+/**
+ * Thumbnails download only once their photo is near the screen, many per request. Requests
+ * made within this long of each other share a batch, and at most THUMB_REQUESTS batches are
+ * downloading at once.
+ */
+const THUMB_GATHER_MS = 30;
+const THUMB_REQUESTS = 2;
+/**
+ * Decrypted thumbnails reach the screen together, at most this often. One update per
+ * thumbnail would redraw the whole grid once per photo, which a large library can't afford.
+ */
+const THUMB_FLUSH_MS = 100;
 
 export type VaultStatus = 'loading' | 'ready' | 'failed';
 
@@ -133,6 +162,8 @@ interface VaultValue {
   movePhoto: (photoId: string, otherKeys?: SpaceKeys) => Promise<void>;
   /** Starts decrypting a photo's original; `fullSrc` is set when it's ready. */
   loadFull: (photoId: string) => void;
+  /** Asks for photos' previews, for when they come near the screen. Asking twice is free. */
+  requestThumbs: (photoIds: readonly string[]) => void;
 }
 
 const VaultContext = createContext<VaultValue | null>(null);
@@ -162,27 +193,67 @@ export function VaultProvider({
   const [state, dispatch] = useReducer(vaultReducer, initialState ?? { photos: [], albums: [] });
   const [status, setStatus] = useState<VaultStatus>(initialState ? 'ready' : 'loading');
 
+  const thumbLoader = useRef<((photoIds: readonly string[]) => void) | null>(null);
+  const requestThumbs = useCallback((photoIds: readonly string[]) => {
+    thumbLoader.current?.(photoIds);
+  }, []);
+
   useEffect(() => {
     if (initialState) return;
     let cancelled = false;
     // A function, so checks after an await see the cleanup's change.
     const stopped = () => cancelled;
-    const loadThumbs = async (queue: Photo[]) => {
-      for (;;) {
-        const photo = queue.shift();
-        if (!photo || stopped()) return;
-        const url = await store.image(photo.id, 'thumb').catch(() => null);
-        if (url && !stopped())
-          dispatch({ type: 'set-image', photoId: photo.id, part: 'thumb', url });
+    let ready = new Map<string, string>();
+    let flushTimer: ReturnType<typeof setTimeout> | undefined;
+    const flush = () => {
+      flushTimer = undefined;
+      if (stopped() || ready.size === 0) return;
+      dispatch({ type: 'set-thumbs', urls: ready });
+      ready = new Map();
+    };
+    // Each photo's preview is asked for once; `wanted` holds those not yet downloading.
+    const asked = new Set<string>();
+    const wanted = new Set<string>();
+    let downloading = 0;
+    let gatherTimer: ReturnType<typeof setTimeout> | undefined;
+    const pump = () => {
+      gatherTimer = undefined;
+      while (!stopped() && downloading < THUMB_REQUESTS && wanted.size > 0) {
+        const batch = [...wanted].slice(0, THUMB_BATCH_MAX);
+        for (const photoId of batch) wanted.delete(photoId);
+        downloading += 1;
+        store
+          .thumbs(batch)
+          .then(
+            (urls) => {
+              if (stopped()) return;
+              for (const [photoId, url] of urls) ready.set(photoId, url);
+              flushTimer ??= setTimeout(flush, THUMB_FLUSH_MS);
+            },
+            () => {
+              // Let them be asked for again, the next time they come near the screen.
+              for (const photoId of batch) asked.delete(photoId);
+            },
+          )
+          .finally(() => {
+            downloading -= 1;
+            pump();
+          });
       }
+    };
+    thumbLoader.current = (photoIds) => {
+      for (const photoId of photoIds) {
+        if (asked.has(photoId)) continue;
+        asked.add(photoId);
+        wanted.add(photoId);
+      }
+      if (wanted.size > 0) gatherTimer ??= setTimeout(pump, THUMB_GATHER_MS);
     };
     store.list().then(
       (loaded) => {
         if (stopped()) return;
         dispatch({ type: 'loaded', state: loaded });
         setStatus('ready');
-        const queue = [...loaded.photos].sort((a, b) => b.takenAt.localeCompare(a.takenAt));
-        for (let i = 0; i < THUMB_CONCURRENCY; i++) void loadThumbs(queue);
       },
       () => {
         if (!stopped()) setStatus('failed');
@@ -190,6 +261,9 @@ export function VaultProvider({
     );
     return () => {
       cancelled = true;
+      thumbLoader.current = null;
+      clearTimeout(flushTimer);
+      clearTimeout(gatherTimer);
       store.dispose();
     };
   }, [store, initialState]);
@@ -248,10 +322,18 @@ export function VaultProvider({
           () => undefined,
         );
       },
+      requestThumbs,
     };
-  }, [state, status, space, store, otherKeys, storeFor]);
+  }, [state, status, space, store, otherKeys, storeFor, requestThumbs]);
 
   return <VaultContext value={value}>{children}</VaultContext>;
+}
+
+const noRequests = () => undefined;
+
+/** Asks for previews when inside a vault; does nothing outside one (as in static previews). */
+export function useRequestThumbs(): VaultValue['requestThumbs'] {
+  return useContext(VaultContext)?.requestThumbs ?? noRequests;
 }
 
 export function useVault(): VaultValue {

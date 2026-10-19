@@ -110,6 +110,35 @@ export const STORAGE_SIZES = {
   accountQuota: 1024 * 1024 * 1024,
 } as const;
 
+/**
+ * Most thumbnails one `GET /space/thumbs?ids=a,b,c` returns. The response is the encrypted
+ * thumbnails in the order asked, each as a 4-byte big-endian length and then its bytes; a
+ * length of 0 means that photo isn't there (deleted, still uploading, or another space's).
+ */
+export const THUMB_BATCH_MAX = 48;
+
+/**
+ * Splits a thumbnail batch response into one entry per id asked for, in order: the encrypted
+ * thumbnail, or null where the server had none. Returns null if the response is malformed.
+ */
+export function readThumbBatch(
+  bytes: Uint8Array<ArrayBuffer>,
+  count: number,
+): (Uint8Array<ArrayBuffer> | null)[] | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const parts: (Uint8Array<ArrayBuffer> | null)[] = [];
+  let offset = 0;
+  while (parts.length < count) {
+    if (offset + 4 > bytes.length) return null;
+    const length = view.getUint32(offset);
+    offset += 4;
+    if (offset + length > bytes.length) return null;
+    parts.push(length === 0 ? null : bytes.slice(offset, offset + length));
+    offset += length;
+  }
+  return offset === bytes.length ? parts : null;
+}
+
 /** Which encrypted file of a photo: a small preview, or the original. */
 export type PhotoPart = 'thumb' | 'full';
 

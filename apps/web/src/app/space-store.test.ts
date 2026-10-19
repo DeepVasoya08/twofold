@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { newSpace, openRecord, ownerAccess, sealRecord } from '@twofold/crypto';
 import type { SpaceKeys } from '@twofold/crypto';
 import { fromBase64Url } from '@twofold/crypto/webcrypto';
-import { STORAGE_SIZES } from '@twofold/types';
+import { STORAGE_SIZES, THUMB_BATCH_MAX } from '@twofold/types';
 
 import { FakeServer } from '../test/fake-server';
-import { remoteStore } from './space-store';
+import { combinedStore, memoryStore, remoteStore } from './space-store';
 import type { NewPhoto } from './space-store';
 
 function bytes(text: string): Uint8Array<ArrayBuffer> {
@@ -200,11 +200,66 @@ describe('remoteStore', () => {
     expect(resolveObjectURL(a.src)).toBeDefined();
   });
 
+  it('downloads many previews per request, and leaves out tampered or unknown ones', async () => {
+    const { server, space } = await setUp();
+    const uploader = remoteStore(space, server.api);
+    const ids: string[] = [];
+    for (let i = 0; i < THUMB_BATCH_MAX + 2; i++) ids.push((await uploader.add(PHOTO, [])).id);
+    const tampered = server.files.get(`${ids[0] ?? ''}/thumb`);
+    if (!tampered) throw new Error('missing');
+    tampered[30] = (tampered[30] ?? 0) ^ 1;
+
+    let requests = 0;
+    const counting = (token: string) => {
+      const api = server.api(token);
+      return {
+        ...api,
+        getThumbs: (batch: readonly string[]) => {
+          requests += 1;
+          return api.getThumbs(batch);
+        },
+      };
+    };
+    const later = remoteStore(space, counting);
+    await later.list();
+    const urls = await later.thumbs([...ids, 'not-a-photo']);
+    expect(requests).toBe(2);
+    expect([...urls.keys()]).toEqual(ids.slice(1));
+    expect(await objectUrlBytes(urls.get(ids[1] ?? '') ?? '')).toEqual(PHOTO.thumb);
+
+    // Previews already decrypted are reused, not downloaded again.
+    expect((await later.thumbs(ids.slice(1, 3))).size).toBe(2);
+    expect(requests).toBe(2);
+  });
+
   it('revokes its object URLs when disposed', async () => {
     const { server, space } = await setUp();
     const store = remoteStore(space, server.api);
     const added = await store.add(PHOTO, []);
     store.dispose();
     expect(resolveObjectURL(added.src)).toBeUndefined();
+  });
+});
+
+describe('combinedStore', () => {
+  it('asks each library only for its own previews', async () => {
+    const photo = (id: string) => ({
+      id,
+      src: `blob:${id}`,
+      width: 1,
+      height: 1,
+      takenAt: '2026-10-16T09:30:00.000Z',
+      addedBy: 'me' as const,
+      favorite: false,
+      albumIds: [],
+    });
+    const own = memoryStore({ photos: [photo('mine')], albums: [] });
+    const theirs = memoryStore({ photos: [photo('theirs')], albums: [] });
+    const store = combinedStore(own, () =>
+      Promise.resolve([{ id: 's', name: 'Ana', store: theirs }]),
+    );
+    await store.list();
+    const urls = await store.thumbs(['mine', 'theirs']);
+    expect(Object.fromEntries(urls)).toEqual({ mine: 'blob:mine', theirs: 'blob:theirs' });
   });
 });

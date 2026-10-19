@@ -59,7 +59,12 @@ export function Gallery() {
         <>
           {highlight && highlightCover && (
             <Link to={paths.album(highlight.id)} className="memory">
-              <PhotoImage className="memory__image" src={highlightCover.src} alt="" />
+              <PhotoImage
+                className="memory__image"
+                photoId={highlightCover.id}
+                src={highlightCover.src}
+                alt=""
+              />
               <span className="memory__shade" />
               <span className="memory__text">
                 <span className="memory__eyebrow">
