@@ -121,25 +121,38 @@ test('moving a selection to the private space asks for its password once', async
   await expect(page.locator('.photo-tile img')).toHaveCount(2);
 });
 
-test('share sends decrypted copies, downloading them where there is no share sheet', async ({
-  page,
-}) => {
+test('download saves decrypted copies of a selection or a whole album', async ({ page }) => {
   await signUp(page);
   await uploadPhotos(page, 1);
   await expect(page.getByText('1 photo added to your vault')).toBeVisible();
-  // Desktop Chromium on Linux has no share sheet for files.
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, 'canShare', { value: undefined, configurable: true });
-  });
 
   await page
     .getByRole('button', { name: /^Select photo from / })
     .first()
     .click();
-  await bar(page).getByRole('button', { name: 'Share' }).click();
-  const share = page.getByRole('dialog', { name: 'Share this photo' });
-  await expect(share.getByText('leave Twofold without its encryption')).toBeVisible();
-  const download = page.waitForEvent('download');
-  await share.getByRole('button', { name: 'Download copies' }).click();
+  await bar(page).getByRole('button', { name: 'Download' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Download this photo' });
+  await expect(dialog.getByText('Downloaded copies aren’t encrypted')).toBeVisible();
+  let download = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download' }).click();
+  expect((await download).suggestedFilename()).toBe('twofold-1.png');
+
+  // Albums have a Download button, and the same action in their menu. The photo is still
+  // selected after downloading it.
+  await bar(page).getByRole('button', { name: 'Add to album' }).click();
+  const picker = page.getByRole('dialog', { name: 'Add 1 photo to an album' });
+  await picker.getByLabel('New album').fill('Lisbon');
+  await picker.getByRole('button', { name: 'Create and add' }).click();
+  await goTo(page, 'Albums');
+  await page.getByRole('button', { name: 'Actions for Lisbon' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Download' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('link', { name: /Lisbon/ }).click();
+  await page.getByRole('button', { name: 'Download album' }).click();
+  download = page.waitForEvent('download');
+  await page
+    .getByRole('dialog', { name: 'Download this photo' })
+    .getByRole('button', { name: 'Download' })
+    .click();
   expect((await download).suggestedFilename()).toBe('twofold-1.png');
 });

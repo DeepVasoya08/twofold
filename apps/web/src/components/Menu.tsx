@@ -17,11 +17,14 @@ export function Menu({
   label,
   items,
   className,
+  icon = 'more',
 }: {
   /** The button's accessible name, such as "Album actions". */
   label: string;
   items: readonly MenuItem[];
   className?: string | undefined;
+  /** The button's icon: three dots across, or down. */
+  icon?: 'more' | 'more-vertical';
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -59,7 +62,7 @@ export function Menu({
           setOpen((value) => !value);
         }}
       >
-        <Icon name="more" />
+        <Icon name={icon} />
       </button>
       {open && (
         <ul className="menu__list" id={menuId} role="menu" aria-label={label}>

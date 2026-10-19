@@ -112,6 +112,7 @@ export const createMemberSchema = z.strictObject({
   id: recordId,
   token: spaceTokenSchema,
   meta: sealedRecord,
+  album: recordId.optional(),
 });
 
 export const createJoinedSchema = z.strictObject({ id: recordId, meta: sealedRecord });

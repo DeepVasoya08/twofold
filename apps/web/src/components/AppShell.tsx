@@ -49,7 +49,11 @@ interface AppShellProps {
 /** Signed-in chrome: a sidebar on wide screens, a top bar and bottom tabs on phones. */
 export function AppShell({ children, uploadAlbumId }: AppShellProps) {
   const { pathname, navigate } = useRouter();
-  const { space } = useVault();
+  const { space, state } = useVault();
+  // An album someone shared with you can't take photos, so uploads there go to your timeline.
+  const uploadTarget = state.albums.find((album) => album.id === uploadAlbumId)?.sharedAlbum
+    ? undefined
+    : uploadAlbumId;
   const { lock: lockAccount } = useAccount();
   const me = useMe();
   const { openDialog: openUpload } = useUploads();
@@ -147,7 +151,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
         })}
       </nav>
 
-      <UploadDialog albumId={uploadAlbumId} />
+      <UploadDialog albumId={uploadTarget} />
       <UploadProgress />
     </div>
   );

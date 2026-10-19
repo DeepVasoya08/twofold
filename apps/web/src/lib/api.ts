@@ -1,6 +1,7 @@
 import { SPACE_HEADER, readThumbBatch } from '@twofold/types';
 import type {
   AccountResponse,
+  AlbumItemList,
   AlbumList,
   CreateAlbumRequest,
   CreateInviteRequest,
@@ -144,6 +145,7 @@ export type InviteApi = typeof inviteApi;
 export function spaceApi(token: string) {
   const headers = { [SPACE_HEADER]: token };
   const photo = (id: string) => `/space/photos/${encodeURIComponent(id)}`;
+  const album = (id: string) => `/space/albums/${encodeURIComponent(id)}`;
   return {
     listPhotos: (after?: string) =>
       call<PhotoPage>(
@@ -177,6 +179,22 @@ export function spaceApi(token: string) {
     /** Deletes the album only; its photos stay. */
     deleteAlbum: (id: string) =>
       call<undefined>('DELETE', `/space/albums/${encodeURIComponent(id)}`, {}, headers),
+    /** Starts sharing an album, or replaces its title sealed under the album key. */
+    shareAlbum: (id: string, meta: string) =>
+      call<undefined>('PUT', `${album(id)}/shared`, { meta }, headers),
+    /** Stops sharing an album with everyone. */
+    unshareAlbum: (id: string) => call<undefined>('DELETE', `${album(id)}/shared`, {}, headers),
+    listAlbumItems: (id: string) =>
+      call<AlbumItemList>('GET', `${album(id)}/items`, undefined, headers),
+    putAlbumItem: (id: string, photoId: string, meta: string) =>
+      call<undefined>(
+        'PUT',
+        `${album(id)}/items/${encodeURIComponent(photoId)}`,
+        { meta },
+        headers,
+      ),
+    deleteAlbumItem: (id: string, photoId: string) =>
+      call<undefined>('DELETE', `${album(id)}/items/${encodeURIComponent(photoId)}`, {}, headers),
     /** Deletes every photo and album in the space. */
     wipe: () => call<undefined>('DELETE', '/space', {}, headers),
     listMembers: () => call<MemberList>('GET', '/space/members', undefined, headers),

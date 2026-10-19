@@ -152,18 +152,25 @@ export async function updatePhotoMeta(
   return result.meta.changes === 1;
 }
 
-/** Deletes photo rows. Returns the ones this call deleted (not already gone). */
+/**
+ * Deletes photo rows, and takes them out of shared albums. Returns the ones this call
+ * deleted (not already gone).
+ */
 export async function deletePhotoRows<T extends { id: string }>(
   db: D1Database,
   space: string,
   photos: readonly T[],
 ): Promise<T[]> {
   if (photos.length === 0) return [];
-  const results = await db.batch(
-    photos.map((photo) =>
+  // A deleted photo also leaves every shared album that listed it.
+  const results = await db.batch([
+    ...photos.map((photo) =>
       db.prepare('DELETE FROM photos WHERE space = ? AND id = ?').bind(space, photo.id),
     ),
-  );
+    ...photos.map((photo) =>
+      db.prepare('DELETE FROM album_items WHERE photo = ? AND space = ?').bind(photo.id, space),
+    ),
+  ]);
   return photos.filter((_, index) => results[index]?.meta.changes === 1);
 }
 

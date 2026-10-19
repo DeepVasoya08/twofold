@@ -78,7 +78,7 @@ interface SharingLists {
   joined: JoinedLibrary[];
 }
 
-/** Who the open space is shared with, and what it joined. Null until loaded. */
+/** Who the whole open space is shared with, and the libraries it joined. Null until loaded. */
 function useSharingLists(keys: SpaceKeys | null) {
   const [lists, setLists] = useState<SharingLists | null>(null);
   const [version, setVersion] = useState(0);
@@ -87,7 +87,13 @@ function useSharingLists(keys: SpaceKeys | null) {
     let cancelled = false;
     Promise.all([listMembers(keys), listJoined(keys)]).then(
       ([members, joined]) => {
-        if (!cancelled) setLists({ members, joined });
+        // Albums shared one at a time are managed from the album, not here.
+        if (!cancelled) {
+          setLists({
+            members: members.filter((member) => member.album === null),
+            joined: joined.filter((library) => library.album === undefined),
+          });
+        }
       },
       () => undefined,
     );

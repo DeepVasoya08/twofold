@@ -1,9 +1,12 @@
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
+import { useState } from 'react';
+
 import { useSelection } from '../app/selection';
 import { albumCover, albumPhotos, useVault } from '../app/vault';
 import { AlbumActions } from '../components/AlbumActions';
 import { PageHeader } from '../components/AppShell';
+import { DownloadDialog } from '../components/DownloadDialog';
 import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
@@ -19,6 +22,8 @@ export function Album({ albumId }: { albumId: string }) {
   const { navigate } = useRouter();
   const selection = useSelection();
   const album = state.albums.find((candidate) => candidate.id === albumId);
+  // What the download dialog decrypts, fixed when it opens.
+  const [downloading, setDownloading] = useState<readonly string[] | null>(null);
 
   if (!album) {
     return (
@@ -47,11 +52,16 @@ export function Album({ albumId }: { albumId: string }) {
   const actions = (
     <AlbumActions
       album={album}
-      onDeleted={() => {
+      onGone={() => {
         navigate(paths.albums, { replace: true });
       }}
     />
   );
+  const sharing = album.sharedAlbum
+    ? `Shared with you by ${album.library ?? 'someone'}`
+    : album.sharedWith
+      ? `Shared with ${album.sharedWith.join(', ')}`
+      : null;
 
   return (
     <div className="page">
@@ -61,6 +71,19 @@ export function Album({ albumId }: { albumId: string }) {
           Albums
         </Link>
         <div className="album-toolbar__actions">
+          {photos.length > 0 && (
+            <button
+              type="button"
+              className="btn btn--secondary"
+              aria-label="Download album"
+              onClick={() => {
+                setDownloading(photos.map((photo) => photo.id));
+              }}
+            >
+              <Icon name="download" size={18} />
+              <span className="album-toolbar__label">Download</span>
+            </button>
+          )}
           {photos.length > 0 && <SelectButton selection={selection} />}
           {actions}
         </div>
@@ -77,6 +100,11 @@ export function Album({ albumId }: { albumId: string }) {
           <span className="album-hero__shade" />
           <div className="album-hero__text">
             <h1 className="album-hero__title">{album.title}</h1>
+            {sharing && (
+              <p className="album-hero__shared">
+                <Icon name="users" size={14} /> {sharing}
+              </p>
+            )}
             <p className="album-hero__meta">
               {pluralize(photos.length, 'photo')}
               {range && <> · {range}</>}
@@ -90,12 +118,14 @@ export function Album({ albumId }: { albumId: string }) {
           </div>
         </header>
       ) : (
-        <PageHeader title={album.title} subtitle="No photos yet" />
+        <PageHeader title={album.title} subtitle={sharing ?? 'No photos yet'} />
       )}
 
       {photos.length === 0 ? (
         <EmptyState icon="image-plus" title="Nothing in here yet">
-          Use Upload to add photos straight into this album.
+          {album.sharedAlbum
+            ? 'Photos added to this album will show up here.'
+            : 'Use Upload to add photos straight into this album.'}
         </EmptyState>
       ) : (
         <PhotoGrid
@@ -104,6 +134,14 @@ export function Album({ albumId }: { albumId: string }) {
           selection={selection}
         />
       )}
+
+      <DownloadDialog
+        open={downloading !== null}
+        photoIds={downloading ?? []}
+        onClose={() => {
+          setDownloading(null);
+        }}
+      />
     </div>
   );
 }

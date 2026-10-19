@@ -13,11 +13,46 @@ import { TextField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import { PhotoImage } from '../components/PhotoImage';
 import { formatDateRange, pluralize } from '../lib/format';
+import type { Album } from '../mock/data';
 
 import './albums.css';
 
+/** Which albums the Albums page shows. */
+export type AlbumTab = 'all' | 'with-me' | 'by-me';
+
+const TABS: readonly { id: AlbumTab; label: string }[] = [
+  { id: 'all', label: 'All albums' },
+  { id: 'with-me', label: 'Shared with me' },
+  { id: 'by-me', label: 'Shared by me' },
+];
+
+/**
+ * The albums one tab shows. Shared with me: albums of someone else's, shared whole or as part
+ * of their library. Shared by me: your own albums you've shared with at least one person.
+ */
+export function albumsInTab(albums: readonly Album[], tab: AlbumTab): Album[] {
+  switch (tab) {
+    case 'all':
+      return [...albums];
+    case 'with-me':
+      return albums.filter((album) => album.library !== undefined);
+    case 'by-me':
+      return albums.filter((album) => (album.sharedWith?.length ?? 0) > 0);
+  }
+}
+
+const EMPTY: Record<AlbumTab, string> = {
+  all: 'No albums yet. Make one with New album.',
+  'with-me':
+    'Nothing’s shared with you yet. When someone shares an album with you, it shows up here.',
+  'by-me':
+    'You haven’t shared any albums. Open an album’s menu and choose Share to invite someone.',
+};
+
 export function Albums() {
   const { state, createAlbum } = useVault();
+  const [tab, setTab] = useState<AlbumTab>('all');
+  const shown = albumsInTab(state.albums, tab);
   const [busy, setBusy] = useState(false);
   const { navigate } = useRouter();
   const toast = useToast();
@@ -60,7 +95,7 @@ export function Albums() {
     <div className="page">
       <PageHeader
         title="Albums"
-        subtitle={pluralize(state.albums.length, 'album')}
+        subtitle={pluralize(shown.length, 'album')}
         actions={
           <button
             type="button"
@@ -75,51 +110,79 @@ export function Albums() {
         }
       />
 
-      <ul className="album-grid">
-        {state.albums.map((album) => {
-          const photos = albumPhotos(state, album.id);
-          const cover = albumCover(state, album);
-          const range = formatDateRange(photos.map((photo) => photo.takenAt));
-          return (
-            <li key={album.id} className="album-grid__item">
-              <Link to={paths.album(album.id)} className="album-card">
-                <span className="album-card__cover">
-                  {cover ? (
-                    <>
-                      <PhotoImage
-                        photoId={cover.id}
-                        preload={photos[1] && !photos[1].src ? [photos[1].id] : undefined}
-                        src={cover.src}
-                        alt=""
-                        loading="lazy"
-                      />
-                      {photos[1]?.src && (
-                        <img
-                          className="album-card__peek"
-                          src={photos[1].src}
+      <div className="album-tabs" role="tablist" aria-label="Albums">
+        {TABS.map((each) => (
+          <button
+            key={each.id}
+            type="button"
+            role="tab"
+            id={`album-tab-${each.id}`}
+            aria-selected={tab === each.id}
+            aria-controls="album-tab-panel"
+            className="album-tabs__tab"
+            onClick={() => {
+              setTab(each.id);
+            }}
+          >
+            {each.label}
+          </button>
+        ))}
+      </div>
+
+      <div role="tabpanel" id="album-tab-panel" aria-labelledby={`album-tab-${tab}`}>
+        {shown.length === 0 && <p className="album-tabs__empty">{EMPTY[tab]}</p>}
+        <ul className="album-grid">
+          {shown.map((album) => {
+            const photos = albumPhotos(state, album.id);
+            const cover = albumCover(state, album);
+            const range = formatDateRange(photos.map((photo) => photo.takenAt));
+            return (
+              <li key={album.id} className="album-grid__item">
+                <Link to={paths.album(album.id)} className="album-card">
+                  <span className="album-card__cover">
+                    {cover ? (
+                      <>
+                        <PhotoImage
+                          photoId={cover.id}
+                          preload={photos[1] && !photos[1].src ? [photos[1].id] : undefined}
+                          src={cover.src}
                           alt=""
                           loading="lazy"
                         />
-                      )}
-                    </>
-                  ) : (
-                    <span className="album-card__empty">
-                      <Icon name="image-plus" size={28} />
+                        {photos[1]?.src && (
+                          <img
+                            className="album-card__peek"
+                            src={photos[1].src}
+                            alt=""
+                            loading="lazy"
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <span className="album-card__empty">
+                        <Icon name="image-plus" size={28} />
+                      </span>
+                    )}
+                  </span>
+                  <span className="album-card__title">{album.title}</span>
+                  <span className="album-card__meta">
+                    {photos.length === 0
+                      ? 'Empty'
+                      : `${pluralize(photos.length, 'photo')}${range ? ` · ${range}` : ''}`}
+                  </span>
+                  {sharedLine(album) && (
+                    <span className="album-card__shared">
+                      <Icon name="users" size={14} />
+                      {sharedLine(album)}
                     </span>
                   )}
-                </span>
-                <span className="album-card__title">{album.title}</span>
-                <span className="album-card__meta">
-                  {photos.length === 0
-                    ? 'Empty'
-                    : `${pluralize(photos.length, 'photo')}${range ? ` · ${range}` : ''}`}
-                </span>
-              </Link>
-              <AlbumActions album={album} className="album-card__menu" />
-            </li>
-          );
-        })}
-      </ul>
+                </Link>
+                <AlbumActions album={album} className="album-card__menu" />
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
       <Dialog open={creating} onClose={closeCreate} title="New album">
         <form className="form" onSubmit={onCreate} noValidate>
@@ -147,4 +210,13 @@ export function Albums() {
       </Dialog>
     </div>
   );
+}
+
+/** Who an album is shared with or by, for its card. */
+function sharedLine(album: Album): string | null {
+  if (album.library !== undefined) return `From ${album.library}`;
+  if (album.sharedWith && album.sharedWith.length > 0) {
+    return `Shared with ${album.sharedWith.join(', ')}`;
+  }
+  return null;
 }

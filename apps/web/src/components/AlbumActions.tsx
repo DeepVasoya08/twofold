@@ -1,44 +1,50 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
+import { useAccount } from '../app/account';
 import { errorMessage } from '../app/account-ops';
-import { Link } from '../app/router';
-import { paths } from '../app/routes';
+import { leaveJoined } from '../app/sharing';
 import { useToast } from '../app/toast';
 import { albumPhotos, useVault } from '../app/vault';
 import { pluralize } from '../lib/format';
 import type { Album } from '../mock/data';
+import { AlbumShareDialog } from './AlbumShareDialog';
 import { Dialog } from './Dialog';
+import { DownloadDialog } from './DownloadDialog';
 import { TextField } from './Field';
 import { Menu } from './Menu';
-import { ShareDialog } from './ShareDialog';
+import type { MenuItem } from './Menu';
 
-type Open = 'rename' | 'share' | 'delete' | null;
+type Open = 'rename' | 'share' | 'download' | 'delete' | 'leave' | null;
 
 /**
- * Rename, share or delete an album, from a "more" menu. Deleting an album keeps its photos.
- * Sharing sends copies of its photos; inviting someone shares the whole library, since
- * invites are per library, not per album.
+ * An album's actions, from a "more" menu. Your own albums can be shared with people,
+ * downloaded, renamed or deleted (deleting keeps the photos). Albums in a library shared with
+ * you can be downloaded, renamed or deleted, and an album someone shared with you can be
+ * downloaded or left.
  */
 export function AlbumActions({
   album,
   className,
-  onDeleted,
+  onGone,
 }: {
   album: Album;
   className?: string | undefined;
-  onDeleted?: (() => void) | undefined;
+  /** After the album is deleted or left, so a page showing it can move on. */
+  onGone?: (() => void) | undefined;
 }) {
   const { state, space, renameAlbum, deleteAlbum } = useVault();
+  const account = useAccount();
   const toast = useToast();
   const [open, setOpen] = useState<Open>(null);
   const [title, setTitle] = useState(album.title);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // What the share dialog decrypts, fixed when it opens.
-  const [sharing, setSharing] = useState<readonly string[]>([]);
+  // What the download dialog decrypts, fixed when it opens.
+  const [downloading, setDownloading] = useState<readonly string[]>([]);
   const count = albumPhotos(state, album.id).length;
   const inShared = album.library !== undefined;
+  const keys = account.state.status === 'unlocked' ? account.state.session.opened.space : null;
 
   const close = () => {
     setOpen(null);
@@ -73,15 +79,16 @@ export function AlbumActions({
       });
   };
 
-  const onDelete = () => {
+  /** Runs a change that ends with the album gone from here, then tells the page. */
+  const finish = (change: () => Promise<void>, done: string) => {
     if (busy) return;
     setBusy(true);
-    deleteAlbum(album.id).then(
+    change().then(
       () => {
         setBusy(false);
         close();
-        toast.show(`“${album.title}” deleted`);
-        onDeleted?.();
+        toast.show(done);
+        onGone?.();
       },
       (caught: unknown) => {
         setBusy(false);
@@ -91,43 +98,85 @@ export function AlbumActions({
     );
   };
 
+  const onDelete = () => {
+    finish(() => deleteAlbum(album.id), `“${album.title}” deleted`);
+  };
+
+  const onLeave = () => {
+    const joinedId = album.joinedId;
+    if (!keys || !joinedId) return;
+    finish(async () => {
+      await leaveJoined(keys, joinedId);
+      // Its photos leave the open space too.
+      account.reloadVault();
+    }, `You left “${album.title}”`);
+  };
+
   const where = inShared
     ? `${album.library ?? ''}’s library`
     : space === 'private'
       ? 'your private space'
       : 'your library';
 
+  const download: MenuItem = {
+    label: 'Download',
+    icon: 'download',
+    onSelect: () => {
+      setDownloading(albumPhotos(state, album.id).map((photo) => photo.id));
+      setOpen('download');
+    },
+  };
+  const items: MenuItem[] = album.sharedAlbum
+    ? [
+        download,
+        {
+          label: 'Leave album',
+          icon: 'logout',
+          danger: true,
+          onSelect: () => {
+            setOpen('leave');
+          },
+        },
+      ]
+    : [
+        // Only a space's owner says who it's shared with, so only your own albums are shared.
+        ...(inShared
+          ? []
+          : [
+              {
+                label: 'Share',
+                icon: 'share',
+                onSelect: () => {
+                  setOpen('share');
+                },
+              } satisfies MenuItem,
+            ]),
+        download,
+        {
+          label: 'Rename',
+          icon: 'pencil',
+          onSelect: () => {
+            setTitle(album.title);
+            setOpen('rename');
+          },
+        },
+        {
+          label: 'Delete album',
+          icon: 'trash',
+          danger: true,
+          onSelect: () => {
+            setOpen('delete');
+          },
+        },
+      ];
+
   return (
     <>
       <Menu
         label={`Actions for ${album.title}`}
         className={className}
-        items={[
-          {
-            label: 'Rename',
-            icon: 'pencil',
-            onSelect: () => {
-              setTitle(album.title);
-              setOpen('rename');
-            },
-          },
-          {
-            label: 'Share',
-            icon: 'share',
-            onSelect: () => {
-              setSharing(albumPhotos(state, album.id).map((photo) => photo.id));
-              setOpen('share');
-            },
-          },
-          {
-            label: 'Delete album',
-            icon: 'trash',
-            danger: true,
-            onSelect: () => {
-              setOpen('delete');
-            },
-          },
-        ]}
+        icon="more-vertical"
+        items={items}
       />
 
       <Dialog open={open === 'rename'} onClose={close} title="Rename album">
@@ -154,20 +203,9 @@ export function AlbumActions({
         </form>
       </Dialog>
 
-      <ShareDialog open={open === 'share'} photoIds={sharing} onClose={close}>
-        {!inShared && (
-          <section className="share-invite">
-            <h3 className="share-invite__title">Share the album itself</h3>
-            <p className="share-copies__note">
-              Invites share all of {where}, not one album. Everyone you invite sees every photo and
-              album in it, and what they add shows up for you.
-            </p>
-            <Link to={paths.share} className="btn btn--secondary">
-              Invite someone
-            </Link>
-          </section>
-        )}
-      </ShareDialog>
+      {!inShared && <AlbumShareDialog open={open === 'share'} album={album} onClose={close} />}
+
+      <DownloadDialog open={open === 'download'} photoIds={downloading} onClose={close} />
 
       <Dialog
         open={open === 'delete'}
@@ -191,6 +229,28 @@ export function AlbumActions({
             aria-busy={busy}
           >
             Delete album
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={open === 'leave'}
+        onClose={close}
+        title={`Leave “${album.title}”?`}
+        description={`You won’t see it anymore. ${album.library ?? 'Its owner'} can invite you again.`}
+      >
+        <div className="dialog__actions">
+          <button type="button" className="btn btn--ghost" onClick={close}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn--danger"
+            onClick={onLeave}
+            disabled={busy}
+            aria-busy={busy}
+          >
+            Leave album
           </button>
         </div>
       </Dialog>

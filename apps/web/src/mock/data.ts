@@ -28,16 +28,30 @@ export interface Photo {
   addedByName?: string;
   favorite: boolean;
   albumIds: string[];
-  /** Set when the photo is in a library someone shared with you: whose library it is. */
+  /**
+   * Set when the photo is someone else's: whose library it is (shared whole, or through one
+   * album).
+   */
   library?: string;
+  /**
+   * Set when the photo is here only because someone shared an album with you. You can view
+   * and download it, but not change it, and it stays out of your timeline.
+   */
+  sharedAlbum?: boolean;
 }
 
 export interface Album {
   id: string;
   title: string;
   coverPhotoId?: string;
-  /** Set when the album is in a library someone shared with you: whose library it is. */
+  /** Set when the album is someone else's: whose library it is. */
   library?: string;
+  /** Set when someone shared just this album with you. It can be viewed, not changed. */
+  sharedAlbum?: boolean;
+  /** The people you've shared this album with, by name. */
+  sharedWith?: string[];
+  /** For an album shared with you: the record of it in your space, for leaving it. */
+  joinedId?: string;
 }
 
 export const me: Person = { id: 'me', name: 'Deepu', email: 'deepu@example.com' };

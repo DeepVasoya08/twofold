@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { newSpace } from './keyring';
 import {
   DecryptionError,
+  albumAccess,
   decryptFile,
   encryptFile,
   encryptedFileSize,
   memberAccess,
+  newAlbumKey,
   newFileKey,
   newRecordId,
   openOwnerRecord,
@@ -116,6 +118,51 @@ describe('ownerAccess / memberAccess', () => {
   it('refuses malformed tokens and keys', () => {
     expect(() => memberAccess('short', bytes(32))).toThrow(/token/);
     expect(() => memberAccess(toBase64Url(bytes(16)), bytes(31))).toThrow(/key/);
+  });
+});
+
+describe('newAlbumKey / albumAccess', () => {
+  const token = () => toBase64Url(bytes(16));
+
+  it('makes a fresh 32-byte key each time', async () => {
+    const first = await newAlbumKey();
+    const second = await newAlbumKey();
+    expect(first).toHaveLength(32);
+    expect(toBase64Url(first)).not.toBe(toBase64Url(second));
+  });
+
+  it('round-trips a shared album’s records under its own key', async () => {
+    const album = albumAccess(token(), await newAlbumKey());
+    const sealed = await sealRecord(album, 'photo', 'p1', text('details'));
+    expect(await openRecord(album, 'photo', 'p1', sealed)).toEqual(text('details'));
+  });
+
+  it('can’t open the space’s records, and the space can’t open the album’s', async () => {
+    const space = await newAccess();
+    const album = albumAccess(token(), await newAlbumKey());
+    const spaceRecord = await sealRecord(space, 'photo', 'p1', text('private'));
+    await expect(openRecord(album, 'photo', 'p1', spaceRecord)).rejects.toThrow(DecryptionError);
+    const albumRecord = await sealRecord(album, 'photo', 'p1', text('shared'));
+    await expect(openRecord(space, 'photo', 'p1', albumRecord)).rejects.toThrow(DecryptionError);
+  });
+
+  it('refuses another album’s key, a moved record, and tampering', async () => {
+    const album = albumAccess(token(), await newAlbumKey());
+    const other = albumAccess(token(), await newAlbumKey());
+    const sealed = await sealRecord(album, 'album', 'a1', text('title'));
+    await expect(openRecord(other, 'album', 'a1', sealed)).rejects.toThrow(DecryptionError);
+    await expect(openRecord(album, 'album', 'a2', sealed)).rejects.toThrow(DecryptionError);
+    await expect(openRecord(album, 'photo', 'a1', sealed)).rejects.toThrow(DecryptionError);
+    const raw = fromBase64Url(sealed) ?? new Uint8Array();
+    const tampered = toBase64Url(flip(raw, raw.length - 1));
+    await expect(openRecord(album, 'album', 'a1', tampered)).rejects.toThrow(DecryptionError);
+  });
+
+  it('refuses malformed tokens and keys', async () => {
+    expect(() => albumAccess('short', bytes(32))).toThrow();
+    expect(() => albumAccess(token(), bytes(16))).toThrow();
+    const key = await newAlbumKey();
+    expect(albumAccess(token(), key).recordKey).not.toBe(key);
   });
 });
 

@@ -40,6 +40,13 @@ exists but is low-key (Settings → Sharing).
   under your name. Photos from a joined library can be favorited or deleted for everyone,
   but not moved to the other space. Settings lists who the open space is shared with (with
   **Stop**) and the libraries it joined (with **Leave**).
+- One album can be shared instead of a whole library: **Share** in an album's menu lists
+  who has access (with **Remove**, and **Stop sharing with everyone**) and offers **Invite
+  someone**, which opens the same invite screen for just that album
+  (`/settings/share?album=<id>`). The other person joins with the code as usual. They can
+  view and download the album's photos, including ones added later, and leave it from its
+  menu; they can't change anything, and its photos stay out of their timeline and
+  favorites.
 - The lock button (sidebar, or top bar on phones) forgets which space was open.
 
 ## Selecting photos and album actions
@@ -50,24 +57,30 @@ exists but is low-key (Settings → Sharing).
   **Select all** for that month, and the selection bar has **Select all** for the page.
   Escape or the × stops picking.
 - The selection bar sits over the top of the page: **Add to album** (pick an album, or make
-  one and add to it), **Remove from album** (inside an album), **Share**, **Add to
-  favorites** / **Remove from favorites**, **Move to private space** / **Move to library**,
-  and **Delete**. Changes run a few photos at a time; afterwards only the photos that
+  one and add to it), **Remove from album** (inside an album), **Share**, **Download**,
+  **Add to favorites** / **Remove from favorites**, **Move to private space** / **Move to
+  library**, and **Delete**. Photos from an album shared with you only offer **Download**. Changes run a few photos at a time; afterwards only the photos that
   didn't go through stay selected, and a toast says how many did.
 - Moving a selection asks for the other space's password exactly as moving one photo does
   (once per unlock, same answer for a wrong password as for no private space). Photos from
   a library shared with you are left out of a move, and can only go in that library's
   albums: the album picker only offers albums at least one selected photo can go in.
-- **Share** sends copies: it decrypts the originals (up to 50 at a time) and opens the
-  device's share sheet, or downloads them where there is none (most desktop browsers). The
-  dialog says the copies leave Twofold unencrypted. Invites stay per space, so an album's
-  Share also offers **Invite someone**, which says it shares the whole library or private
-  space, not one album.
-- Every album has a "more" menu (on its card in Albums, and next to **Select** inside it):
-  **Rename**, **Share** and **Delete album**. Deleting an album keeps its photos.
+- **Share** means sharing with people inside Twofold: the selected photos (your own only)
+  go in a new album you name, then the invite screen opens for that album.
+- **Download** saves copies to the device: it decrypts the originals (up to 50 at a time)
+  and downloads them. The dialog says downloaded copies aren't encrypted.
+- Every album has a vertical "more" menu, always visible on its card in Albums and next to
+  **Select** inside it. Your albums: **Share**, **Download**, **Rename** and **Delete
+  album** (deleting keeps the photos). Albums of a library shared with you: **Download**,
+  **Rename** and **Delete album**. An album shared with you: **Download** and **Leave
+  album**. Inside an album there is also a **Download** button.
+- Albums has three tabs: **All albums**, **Shared with me** (other people's albums, shared
+  alone or with their library) and **Shared by me** (your albums shared with at least one
+  person). Cards say who an album is from or shared with.
 - Code: `app/selection.ts` (selection state), `components/SelectionBar.tsx`,
-  `AlbumPicker.tsx`, `ShareDialog.tsx`, `AlbumActions.tsx`, `MoveSpaceDialog.tsx` (shared
-  with the viewer), and the vault's batch changes in `app/vault.tsx`.
+  `AlbumPicker.tsx`, `DownloadDialog.tsx`, `AlbumActions.tsx`, `AlbumShareDialog.tsx`,
+  `MoveSpaceDialog.tsx` (shared with the viewer), and the vault's batch changes in
+  `app/vault.tsx`.
 
 Unlocking tries the password against every key slot on the device (see
 [security.md](security.md#key-slots)), so the server never learns which space opened.
@@ -105,22 +118,22 @@ private space that already exists, since the main library can't know whether the
 
 Routes are the same in both spaces; the content depends on which space is open.
 
-| Route                  | Screen                                                          |
-| ---------------------- | --------------------------------------------------------------- |
-| `/`                    | Welcome                                                         |
-| `/signup`              | Create your account (step 1 of 2)                               |
-| `/signup/recovery-key` | Save your 12-word recovery key (step 2)                         |
-| `/login`               | Log in                                                          |
-| `/unlock`              | Unlock (returning user, key not in memory)                      |
-| `/recover`             | Reset the password with the recovery key                        |
-| `/photos`              | Library or private space: timeline grouped by month             |
-| `/photos/:id`          | Photo viewer; `?from=favorites` or `?from=album:<id>` scopes it |
-| `/albums`              | Albums, with "New album"                                        |
-| `/albums/:id`          | One album, with Rename, Share and Delete album                  |
-| `/favorites`           | Favorites                                                       |
-| `/settings`            | Profile, passwords, sharing, security, devices, appearance      |
-| `/settings/share`      | Invite someone to the open space, or join with a code           |
-| anything else          | Not found                                                       |
+| Route                  | Screen                                                             |
+| ---------------------- | ------------------------------------------------------------------ |
+| `/`                    | Welcome                                                            |
+| `/signup`              | Create your account (step 1 of 2)                                  |
+| `/signup/recovery-key` | Save your 12-word recovery key (step 2)                            |
+| `/login`               | Log in                                                             |
+| `/unlock`              | Unlock (returning user, key not in memory)                         |
+| `/recover`             | Reset the password with the recovery key                           |
+| `/photos`              | Library or private space: timeline grouped by month                |
+| `/photos/:id`          | Photo viewer; `?from=favorites` or `?from=album:<id>` scopes it    |
+| `/albums`              | Albums, with tabs and "New album"                                  |
+| `/albums/:id`          | One album, with Download and its menu                              |
+| `/favorites`           | Favorites                                                          |
+| `/settings`            | Profile, passwords, sharing, security, devices, appearance         |
+| `/settings/share`      | Invite someone to the open space (or `?album=` one album), or join |
+| anything else          | Not found                                                          |
 
 Upload is a dialog opened from the sidebar (desktop) or the top bar (phones); inside an
 album it also adds the photos to that album. Each photo is read on the device, given a

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { albumsInTab } from './Albums';
 import { isInviteCode, normalizeInviteCode } from './Share';
 import { countWords } from './Recover';
 import { validateSignUp } from './SignUp';
@@ -42,5 +43,26 @@ describe('countWords', () => {
   it('counts whitespace-separated words', () => {
     expect(countWords('  maple   river\nlantern ')).toBe(3);
     expect(countWords('')).toBe(0);
+  });
+});
+
+describe('albumsInTab', () => {
+  const mine = { id: 'm', title: 'Mine' };
+  const sharedByMe = { id: 'b', title: 'Trip', sharedWith: ['Mira'] };
+  const fromLibrary = { id: 'l', title: 'Theirs', library: 'Mira' };
+  const sharedWithMe = { id: 's', title: 'Gift', library: 'Sam', sharedAlbum: true };
+  const all = [mine, sharedByMe, fromLibrary, sharedWithMe];
+
+  it('shows everything under All albums', () => {
+    expect(albumsInTab(all, 'all')).toEqual(all);
+  });
+
+  it('shows other people’s albums under Shared with me', () => {
+    expect(albumsInTab(all, 'with-me')).toEqual([fromLibrary, sharedWithMe]);
+  });
+
+  it('shows your albums shared with someone under Shared by me', () => {
+    expect(albumsInTab(all, 'by-me')).toEqual([sharedByMe]);
+    expect(albumsInTab([{ ...sharedByMe, sharedWith: [] }], 'by-me')).toEqual([]);
   });
 });

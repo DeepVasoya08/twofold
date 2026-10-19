@@ -1,7 +1,7 @@
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
 import { allSelected, useSelection } from '../app/selection';
-import { albumCover, albumPhotos, useVault } from '../app/vault';
+import { albumCover, albumPhotos, timelinePhotos, useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { LockBadge } from '../components/Brand';
 import { EmptyState } from '../components/EmptyState';
@@ -19,14 +19,15 @@ const HIGHLIGHT_MIN_PHOTOS = 3;
 export function Gallery() {
   const { state, space, status } = useVault();
   const isPrivate = space === 'private';
-  const months = groupByMonth(state.photos);
+  const photos = timelinePhotos(state);
+  const months = groupByMonth(photos);
   const highlight = state.albums.find(
     (album) => albumPhotos(state, album.id).length >= HIGHLIGHT_MIN_PHOTOS,
   );
   const highlightPhotos = highlight ? albumPhotos(state, highlight.id) : [];
   const highlightCover = highlight ? albumCover(state, highlight) : undefined;
   const selection = useSelection();
-  const hasPhotos = status === 'ready' && state.photos.length > 0;
+  const hasPhotos = status === 'ready' && photos.length > 0;
 
   return (
     <div className="page">
@@ -34,13 +35,13 @@ export function Gallery() {
         title={isPrivate ? 'Private space' : 'Photos'}
         subtitle={
           <>
-            {pluralize(state.photos.length, 'photo')} <span aria-hidden="true">·</span>{' '}
+            {pluralize(photos.length, 'photo')} <span aria-hidden="true">·</span>{' '}
             <LockBadge label={isPrivate ? 'Opens only with your private password' : undefined} />
           </>
         }
         actions={hasPhotos && <SelectButton selection={selection} />}
       />
-      <SelectionBar selection={selection} allIds={state.photos.map((photo) => photo.id)} />
+      <SelectionBar selection={selection} allIds={photos.map((photo) => photo.id)} />
 
       {status === 'failed' ? (
         <EmptyState icon="lock" title="Couldn’t open your photos">
@@ -50,7 +51,7 @@ export function Gallery() {
         <p className="gallery__status" role="status">
           Decrypting your photos…
         </p>
-      ) : state.photos.length === 0 ? (
+      ) : photos.length === 0 ? (
         isPrivate ? (
           <EmptyState icon="eye-off" title="Your private space is empty">
             Move photos here from your library, or upload straight in. They only appear when you

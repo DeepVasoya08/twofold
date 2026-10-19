@@ -193,8 +193,12 @@ export const SHARE_SIZES = {
 /** An invite works once and only for this long. */
 export const INVITE_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** Most people one space can be shared with, and most libraries one space can join. */
+/**
+ * Most people one space can be shared with, most people one album can be shared with, and
+ * most libraries and albums one space can join.
+ */
 export const MAX_MEMBERS = 20;
+export const MAX_ALBUM_MEMBERS = 20;
 export const MAX_JOINED = 50;
 
 /**
@@ -238,21 +242,40 @@ export interface GrantRequest {
   grant: string;
 }
 
-/** Someone a space is shared with: a random id and who they are, sealed for the owner. */
+/**
+ * Someone a space is shared with: a random id and who they are, sealed for the owner.
+ * `album` is set when they were given one album rather than the whole library.
+ */
 export interface StoredMember {
   id: string;
   meta: string;
+  album: string | null;
 }
 
-/** Shares a space: the member's own token (stored hashed) and their sealed details. */
+/**
+ * Shares a space, or one album of it: the member's own token (stored hashed) and their
+ * sealed details. An album-scoped token reaches only that album's shared photos, read-only.
+ */
 export interface CreateMemberRequest {
   id: string;
   token: string;
   meta: string;
+  album?: string;
 }
 
 export interface MemberList {
   members: StoredMember[];
+}
+
+/** Starts or updates sharing an album: its title, sealed under the album's own key. */
+export type ShareAlbumRequest = UpdateRecordRequest;
+
+/** A photo's details sealed under a shared album's key, for the people it's shared with. */
+export type PutAlbumItemRequest = UpdateRecordRequest;
+
+/** The photos a shared album currently lists for the people it's shared with. */
+export interface AlbumItemList {
+  photoIds: string[];
 }
 
 /** A library this space has joined: its share token and records key, sealed for the owner. */

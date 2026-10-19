@@ -6,7 +6,7 @@ import type { SpaceKeys } from '@twofold/crypto';
 import { useAccount, useMe } from '../app/account';
 import { FormError, errorMessage } from '../app/account-ops';
 import { useRouter } from '../app/router';
-import { paths } from '../app/routes';
+import { parseShareAlbum, paths } from '../app/routes';
 import {
   POLL_MS,
   abandonJoin,
@@ -106,10 +106,29 @@ type InviteState =
   | { status: 'done'; name: string }
   | { status: 'failed'; message: string };
 
-/** Makes a code, waits for someone to use it, and shares once the safety phrases match. */
-function InvitePanel({ keys, where }: { keys: SpaceKeys | null; where: string }) {
+/** One album being shared instead of the whole library. */
+interface SharedAlbum {
+  id: string;
+  title: string;
+  sharedWith: string[];
+}
+
+/**
+ * Makes a code, waits for someone to use it, and shares once the safety phrases match: the
+ * whole library, or only `album`.
+ */
+function InvitePanel({
+  keys,
+  where,
+  album,
+}: {
+  keys: SpaceKeys | null;
+  where: string;
+  album: SharedAlbum | null;
+}) {
   const toast = useToast();
   const me = useMe();
+  const { shareAlbum, setSharedWith } = useVault();
   const [state, setState] = useState<InviteState>({ status: 'starting' });
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -171,7 +190,19 @@ function InvitePanel({ keys, where }: { keys: SpaceKeys | null; where: string })
   const onShare = () => {
     if (state.status !== 'confirm' || !keys || busy) return;
     setBusy(true);
-    confirmInvite(state.invite, { name: state.name, joinerKey: state.joinerKey }, keys, me.name)
+    const joiner = { name: state.name, joinerKey: state.joinerKey };
+    const share = async () => {
+      if (!album) return confirmInvite(state.invite, joiner, keys, me.name);
+      // The album gets its own key now, and only that key goes to them.
+      const albumKey = await shareAlbum(album.id);
+      const member = await confirmInvite(state.invite, joiner, keys, me.name, undefined, {
+        albumId: album.id,
+        albumKey,
+      });
+      setSharedWith(album.id, [...album.sharedWith, member.name]);
+      return member;
+    };
+    share()
       .then(
         () => {
           shared.current = true;
@@ -192,7 +223,9 @@ function InvitePanel({ keys, where }: { keys: SpaceKeys | null; where: string })
       <div className="share-done" role="status">
         <Icon name="check" size={20} />
         <p>
-          Your {where} is shared with {state.name}. You can stop sharing any time in Settings.
+          {album
+            ? `“${album.title}” is shared with ${state.name}. You can remove them any time from the album’s Share menu.`
+            : `Your ${where} is shared with ${state.name}. You can stop sharing any time in Settings.`}
         </p>
       </div>
     );
@@ -323,10 +356,15 @@ function JoinPanel({ keys, where }: { keys: SpaceKeys | null; where: string }) {
       }
       await finishJoin(state.join, progress.grant, keys);
       pending.current = null;
-      toast.show(`You joined ${progress.grant.name}’s library`);
       // Load the open space again, now with their photos.
       reloadVault();
-      navigate(paths.gallery);
+      if (progress.grant.album) {
+        toast.show(`${progress.grant.name} shared an album with you`);
+        navigate(paths.albums);
+      } else {
+        toast.show(`You joined ${progress.grant.name}’s library`);
+        navigate(paths.gallery);
+      }
       return true;
     },
     (caught) => {
@@ -378,7 +416,7 @@ function JoinPanel({ keys, where }: { keys: SpaceKeys | null; where: string }) {
         )}
         <p className="share__note">
           <Icon name="shield" size={16} />
-          Their photos will appear in your {where}, and only there.
+          What they share will appear in your {where}, and only there.
         </p>
       </div>
     );
@@ -420,14 +458,51 @@ function JoinPanel({ keys, where }: { keys: SpaceKeys | null; where: string }) {
   );
 }
 
-/** Invite someone to the open space, or join a library someone shared with you. */
+/**
+ * Invite someone to the open space or to one of its albums, or join a library or album
+ * someone shared with you.
+ */
 export function Share() {
-  const { space } = useVault();
+  const { space, state: vault, status } = useVault();
   const { state } = useAccount();
+  const { search } = useRouter();
   const [mode, setMode] = useState<Mode>('invite');
   const keys = state.status === 'unlocked' ? state.session.opened.space : null;
 
   const where = space === 'private' ? 'private space' : 'library';
+  const albumId = parseShareAlbum(search);
+  if (albumId !== null) {
+    const found = vault.albums.find((each) => each.id === albumId && each.library === undefined);
+    const album: SharedAlbum | null = found
+      ? { id: found.id, title: found.title, sharedWith: found.sharedWith ?? [] }
+      : null;
+    return (
+      <div className="page page--narrow">
+        <PageHeader
+          title={
+            album
+              ? `Share “${album.title}”`
+              : status === 'loading'
+                ? 'Share album'
+                : 'Album not found'
+          }
+          subtitle={
+            album
+              ? 'Invite someone you trust. They can view and download this album’s photos, including ones you add later, and nothing else.'
+              : status === 'loading'
+                ? 'Decrypting your albums…'
+                : 'It may have been deleted, or it isn’t yours to share.'
+          }
+          back={{ to: paths.album(albumId), label: 'Album' }}
+        />
+        {album && (
+          <div className="share-card">
+            <InvitePanel keys={keys} where={where} album={album} />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="page page--narrow">
@@ -469,7 +544,7 @@ export function Share() {
 
         {mode === 'invite' ? (
           <div role="tabpanel" id="panel-invite" aria-labelledby="tab-invite">
-            <InvitePanel keys={keys} where={where} />
+            <InvitePanel keys={keys} where={where} album={null} />
           </div>
         ) : (
           <JoinPanel keys={keys} where={where} />

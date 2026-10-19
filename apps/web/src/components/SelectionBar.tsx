@@ -1,8 +1,12 @@
 import { useState } from 'react';
+import type { SubmitEvent } from 'react';
 
 import type { SpaceKeys } from '@twofold/crypto';
 
 import { useAccount } from '../app/account';
+import { errorMessage } from '../app/account-ops';
+import { useRouter } from '../app/router';
+import { paths } from '../app/routes';
 import { allSelected, batchMessage } from '../app/selection';
 import type { Selection } from '../app/selection';
 import { useToast } from '../app/toast';
@@ -12,19 +16,28 @@ import type { Settled } from '../lib/settle-each';
 import type { Album } from '../mock/data';
 import { AlbumPicker } from './AlbumPicker';
 import { Dialog } from './Dialog';
+import { DownloadDialog } from './DownloadDialog';
+import { TextField } from './Field';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
 import { MoveSpaceDialog, moveLabel } from './MoveSpaceDialog';
-import { ShareDialog } from './ShareDialog';
 
 import './selection-bar.css';
 
-type Open = 'album' | 'delete' | 'move' | 'share' | null;
+type Open = 'album' | 'delete' | 'move' | 'share' | 'download' | null;
+
+interface Action {
+  label: string;
+  icon: IconName;
+  onClick: () => void;
+  danger?: boolean;
+}
 
 /**
  * Actions for the selected photos, in a bar over the top of the page: add to an album (or
- * take out of the one being viewed), share copies, favorite, move to the other space, and
- * delete. After a change, only the photos it couldn't change stay selected.
+ * take out of the one being viewed), share with someone, download, favorite, move to the
+ * other space, and delete. Photos from an album someone shared with you can only be
+ * downloaded. After a change, only the photos it couldn't change stay selected.
  */
 export function SelectionBar({
   selection,
@@ -39,11 +52,14 @@ export function SelectionBar({
 }) {
   const vault = useVault();
   const { otherSpaceOpen } = useAccount();
+  const { navigate } = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState<Open>(null);
   const [busy, setBusy] = useState(false);
-  // What the share dialog decrypts, fixed when it opens.
-  const [sharing, setSharing] = useState<readonly string[]>([]);
+  // What the download or share dialog works on, fixed when it opens.
+  const [chosen, setChosen] = useState<readonly string[]>([]);
+  const [albumName, setAlbumName] = useState('');
+  const [nameError, setNameError] = useState<string | null>(null);
   const { space, state } = vault;
 
   if (!selection.selecting) return null;
@@ -55,6 +71,9 @@ export function SelectionBar({
   // Photos in a library shared with you stay in it.
   const movable = photos.filter((photo) => photo.library === undefined).map((photo) => photo.id);
   const album = albumId ? state.albums.find((each) => each.id === albumId) : undefined;
+  // Only your own photos can be shared, through an album of your own.
+  const shareable = count > 0 && photos.every((photo) => photo.library === undefined);
+  const viewOnly = photos.some((photo) => photo.sharedAlbum);
 
   const run = (change: () => Promise<Settled<string>>, done: (photos: string) => string) => {
     if (busy) return;
@@ -89,7 +108,43 @@ export function SelectionBar({
     );
   };
 
-  const actions: { label: string; icon: IconName; onClick: () => void; danger?: boolean }[] = [
+  /** Puts the photos in a new album of their own, then invites someone to it. */
+  const onShare = (event: SubmitEvent) => {
+    event.preventDefault();
+    const name = albumName.trim();
+    if (!name) {
+      setNameError('Give the album a name.');
+      return;
+    }
+    if (busy) return;
+    setBusy(true);
+    vault
+      .createAlbum(name)
+      .then(async (created) => {
+        const result = await vault.setDetails(chosen, { album: created, included: true });
+        if (result.failed.length > 0) toast.show(batchMessage(result, (added) => `${added} added`));
+        selection.clear();
+        setOpen(null);
+        navigate(paths.shareAlbum(created.id));
+      })
+      .catch((error: unknown) => {
+        setNameError(errorMessage(error));
+      })
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
+  const download: Action = {
+    label: 'Download',
+    icon: 'download',
+    onClick: () => {
+      setChosen(ids);
+      setOpen('download');
+    },
+  };
+
+  const actions: Action[] = [
     {
       label: 'Add to album',
       icon: 'album-add',
@@ -110,27 +165,29 @@ export function SelectionBar({
       },
     });
   }
-  actions.push(
-    {
+  if (shareable) {
+    actions.push({
       label: 'Share',
       icon: 'share',
       onClick: () => {
-        setSharing(ids);
+        setChosen(ids);
+        setAlbumName('');
+        setNameError(null);
         setOpen('share');
       },
+    });
+  }
+  actions.push(download, {
+    label: allFavorite ? 'Remove from favorites' : 'Add to favorites',
+    icon: 'heart',
+    onClick: () => {
+      run(
+        () => vault.setDetails(ids, { favorite: !allFavorite }),
+        (changed) =>
+          allFavorite ? `${changed} removed from favorites` : `${changed} added to favorites`,
+      );
     },
-    {
-      label: allFavorite ? 'Remove from favorites' : 'Add to favorites',
-      icon: 'heart',
-      onClick: () => {
-        run(
-          () => vault.setDetails(ids, { favorite: !allFavorite }),
-          (changed) =>
-            allFavorite ? `${changed} removed from favorites` : `${changed} added to favorites`,
-        );
-      },
-    },
-  );
+  });
   if (movable.length > 0) {
     actions.push({
       label: moveLabel(space),
@@ -150,6 +207,7 @@ export function SelectionBar({
     },
   });
 
+  const shown = viewOnly ? [download] : actions;
   const shared = photos.some((photo) => photo.library !== undefined);
   const everything = allSelected(selection.selected, allIds);
   return (
@@ -177,7 +235,7 @@ export function SelectionBar({
           {everything ? 'Deselect all' : 'Select all'}
         </button>
         <div className="selection-bar__actions">
-          {actions.map((action) => (
+          {shown.map((action) => (
             <button
               key={action.label}
               type="button"
@@ -216,13 +274,53 @@ export function SelectionBar({
         onUnlocked={move}
       />
 
-      <ShareDialog
-        open={open === 'share'}
-        photoIds={sharing}
+      <DownloadDialog
+        open={open === 'download'}
+        photoIds={chosen}
         onClose={() => {
           setOpen(null);
         }}
       />
+
+      <Dialog
+        open={open === 'share'}
+        onClose={() => {
+          setOpen(null);
+        }}
+        title={
+          chosen.length === 1 ? 'Share this photo' : `Share ${pluralize(chosen.length, 'photo')}`
+        }
+        description="Photos are shared through an album. Name a new album for them, then invite someone. They'll see only that album."
+      >
+        <form className="form" onSubmit={onShare} noValidate>
+          <TextField
+            label="Album name"
+            placeholder="Photos for Sam"
+            autoFocus
+            value={albumName}
+            maxLength={80}
+            onChange={(event) => {
+              setAlbumName(event.currentTarget.value);
+              setNameError(null);
+            }}
+            error={nameError}
+          />
+          <div className="dialog__actions">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => {
+                setOpen(null);
+              }}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy}>
+              Next: invite someone
+            </button>
+          </div>
+        </form>
+      </Dialog>
 
       <Dialog
         open={open === 'delete'}

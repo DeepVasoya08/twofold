@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { newInviteKeys, newSpace, ownerAccess } from '@twofold/crypto';
+import { albumAccess, newInviteKeys, newSpace, openRecord, ownerAccess } from '@twofold/crypto';
 import type { SpaceKeys } from '@twofold/crypto';
 
 import { FakeInvites, FakeServer } from '../test/fake-server';
@@ -12,6 +12,7 @@ import {
   confirmInvite,
   finishJoin,
   leaveAll,
+  leaveJoined,
   leaveLibrary,
   listJoined,
   listMembers,
@@ -22,7 +23,7 @@ import {
 } from './sharing';
 import type { Invite, Join } from './sharing';
 import { remoteStore } from './space-store';
-import type { NewPhoto } from './space-store';
+import type { NewPhoto, SpaceStore } from './space-store';
 
 const PHOTO: NewPhoto = {
   thumb: new TextEncoder().encode('preview'),
@@ -72,6 +73,18 @@ async function shareAliceWithBob(w: World): Promise<{ invite: Invite; join: Join
   return { invite, join };
 }
 
+/** Alice shares one album with Bob, all the way through, from her store. */
+async function shareAlbumWithBob(w: World, alices: SpaceStore, albumId: string) {
+  const { invite, join, asked } = await handshake(w);
+  if (asked.stage !== 'confirm') throw new Error('expected a confirmation');
+  const albumKey = await alices.shareAlbum(albumId);
+  await confirmInvite(invite, asked, w.alice, 'Alice', apis(w), { albumId, albumKey });
+  const granted = await advanceJoin(join, 'Bob', w.invites.api);
+  if (granted.stage !== 'granted') throw new Error('expected a grant');
+  await finishJoin(join, granted.grant, w.bob, apis(w));
+  return granted.grant;
+}
+
 describe('invites', () => {
   it('show both sides the same safety phrase, and the joiner’s name', async () => {
     const w = await world();
@@ -87,7 +100,7 @@ describe('invites', () => {
     const w = await world();
     await shareAliceWithBob(w);
     expect(await listMembers(w.alice, w.server.api)).toEqual([
-      { id: expect.any(String) as string, name: 'Bob' },
+      { id: expect.any(String) as string, name: 'Bob', album: null },
     ]);
     const [library] = await listJoined(w.bob, w.server.api);
     expect(library).toMatchObject({ name: 'Alice' });
@@ -248,5 +261,131 @@ describe('a shared library', () => {
     await expect(asMember.listJoined()).rejects.toThrow();
     await expect(asMember.listMembers()).rejects.toThrow();
     await expect(asMember.wipe()).rejects.toThrow();
+  });
+});
+
+describe('a shared album', () => {
+  /** Alice's store with an album of two photos and one photo outside it, shared with Bob. */
+  async function sharedAlbum() {
+    const w = await world();
+    const alices = remoteStore(w.alice, w.server.api);
+    const album = await alices.createAlbum('Trip');
+    await alices.createAlbum('Private');
+    const first = await alices.add(PHOTO, [album.id]);
+    const second = await alices.add(PHOTO, [album.id]);
+    const outside = await alices.add(PHOTO, []);
+    await alices.list();
+    const grant = await shareAlbumWithBob(w, alices, album.id);
+    const bobs = () => sessionStore(w.bob, 'Bob', w.server.api);
+    return { w, alices, album, first, second, outside, grant, bobs };
+  }
+
+  it('shows Bob only that album and its photos, marked as shared with him', async () => {
+    const { album, first, second, bobs } = await sharedAlbum();
+    const { photos, albums } = await bobs().list();
+    expect(albums).toEqual([
+      {
+        id: album.id,
+        title: 'Trip',
+        library: 'Alice',
+        sharedAlbum: true,
+        joinedId: expect.any(String) as string,
+      },
+    ]);
+    expect(photos.map((photo) => photo.id).sort()).toEqual([first.id, second.id].sort());
+    for (const photo of photos) {
+      expect(photo).toMatchObject({ library: 'Alice', sharedAlbum: true, albumIds: [album.id] });
+      expect(photo.favorite).toBe(false);
+    }
+  });
+
+  it('hands over the album’s own key, which can’t open the rest of the library', async () => {
+    const { w, outside, grant } = await sharedAlbum();
+    const owner = await ownerAccess(w.alice);
+    expect(grant.album).toBeDefined();
+    expect(grant.recordKey).not.toBe(Buffer.from(owner.recordKey).toString('base64url'));
+    expect(grant.token).not.toBe(owner.token);
+    const stored = w.server.photos.get(outside.id)?.photo;
+    if (!stored) throw new Error('missing photo');
+    const access = albumAccess(grant.token, Buffer.from(grant.recordKey, 'base64url'));
+    await expect(openRecord(access, 'photo', outside.id, stored.meta)).rejects.toThrow();
+  });
+
+  it('can’t be changed by Bob', async () => {
+    const { first, album, bobs } = await sharedAlbum();
+    const store = bobs();
+    const [photo] = (await store.list()).photos;
+    if (!photo) throw new Error('missing photo');
+    await expect(store.update({ ...photo, favorite: true })).rejects.toThrow();
+    await expect(store.remove(first.id)).rejects.toThrow();
+    await expect(store.renameAlbum(album.id, 'Mine')).rejects.toThrow();
+    await expect(store.add(PHOTO, [album.id])).rejects.toThrow();
+  });
+
+  it('follows photos Alice adds, takes out, and the album’s new name', async () => {
+    const { alices, album, first, outside, bobs } = await sharedAlbum();
+    const outsidePhoto = (await alices.list()).photos.find((photo) => photo.id === outside.id);
+    const firstPhoto = (await alices.list()).photos.find((photo) => photo.id === first.id);
+    if (!outsidePhoto || !firstPhoto) throw new Error('missing photo');
+    await alices.update({ ...outsidePhoto, albumIds: [album.id] });
+    await alices.update({ ...firstPhoto, albumIds: [] });
+    await alices.renameAlbum(album.id, 'Our trip');
+    const added = await alices.add(PHOTO, [album.id]);
+    const { photos, albums } = await bobs().list();
+    expect(photos.map((photo) => photo.id)).toContain(outside.id);
+    expect(photos.map((photo) => photo.id)).toContain(added.id);
+    expect(photos.map((photo) => photo.id)).not.toContain(first.id);
+    expect(albums[0]?.title).toBe('Our trip');
+  });
+
+  it('keeps Alice’s favorites and other albums to herself', async () => {
+    const { w, alices, album, first, bobs } = await sharedAlbum();
+    const other = (await alices.list()).albums.find((each) => each.title === 'Private');
+    const photo = (await alices.list()).photos.find((each) => each.id === first.id);
+    if (!other || !photo) throw new Error('missing');
+    await alices.update({ ...photo, favorite: true, albumIds: [album.id, other.id] });
+    const seen = (await bobs().list()).photos.find((each) => each.id === first.id);
+    expect(seen).toMatchObject({ favorite: false, albumIds: [album.id] });
+    expect(w.server.items.size).toBe(2);
+  });
+
+  it('lists the people it’s shared with for Alice', async () => {
+    const { w, album } = await sharedAlbum();
+    const { albums } = await sessionStore(w.alice, 'Alice', w.server.api).list();
+    expect(albums.find((each) => each.id === album.id)?.sharedWith).toEqual(['Bob']);
+    expect(await listMembers(w.alice, w.server.api)).toEqual([
+      { id: expect.any(String) as string, name: 'Bob', album: album.id },
+    ]);
+  });
+
+  it('stops for Bob when Alice stops sharing, and a new share gets a new key', async () => {
+    const { w, alices, album, grant, bobs } = await sharedAlbum();
+    await alices.stopSharingAlbum(album.id);
+    expect(await bobs().list()).toEqual({ photos: [], albums: [] });
+    const again = await shareAlbumWithBob(w, alices, album.id);
+    expect(again.recordKey).not.toBe(grant.recordKey);
+    expect((await bobs().list()).photos).toHaveLength(2);
+  });
+
+  it('stops for Bob when the album is deleted, and can be left', async () => {
+    const first = await sharedAlbum();
+    await first.alices.removeAlbum(first.album.id);
+    expect((await first.bobs().list()).albums).toEqual([]);
+
+    const second = await sharedAlbum();
+    const [joined] = await listJoined(second.w.bob, second.w.server.api);
+    if (!joined) throw new Error('missing album');
+    await leaveJoined(second.w.bob, joined.id, second.w.server.api);
+    expect(await listJoined(second.w.bob, second.w.server.api)).toEqual([]);
+    expect(await listMembers(second.w.alice, second.w.server.api)).toEqual([]);
+  });
+
+  it('can only be shared by its owner', async () => {
+    const w = await world();
+    const album = await remoteStore(w.alice, w.server.api).createAlbum('Trip');
+    await shareAliceWithBob(w);
+    const bobs = sessionStore(w.bob, 'Bob', w.server.api);
+    await bobs.list();
+    await expect(bobs.shareAlbum(album.id)).rejects.toThrow(FormError);
   });
 });

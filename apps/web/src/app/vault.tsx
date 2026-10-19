@@ -48,7 +48,8 @@ export type VaultAction =
   | { type: 'set-details'; photoIds: readonly string[]; change: PhotoDetails }
   | { type: 'create-album'; album: Album }
   | { type: 'rename-album'; albumId: string; title: string }
-  | { type: 'delete-album'; albumId: string };
+  | { type: 'delete-album'; albumId: string }
+  | { type: 'set-shared-with'; albumId: string; names: string[] };
 
 /** What a change to many photos sets on each: a favorite, or being in an album or not. */
 export type PhotoDetails = { favorite: boolean } | { albumId: string; included: boolean };
@@ -135,6 +136,17 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
           album.id === action.albumId ? { ...album, title: action.title } : album,
         ),
       };
+    case 'set-shared-with':
+      return {
+        ...state,
+        albums: state.albums.map((album) => {
+          if (album.id !== action.albumId) return album;
+          if (action.names.length > 0) return { ...album, sharedWith: action.names };
+          const rest = { ...album };
+          delete rest.sharedWith;
+          return rest;
+        }),
+      };
     case 'delete-album':
       return {
         photos: state.photos.map((photo) =>
@@ -145,6 +157,14 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
   }
 }
 
+/**
+ * The photos of your timeline: everything except photos that are here only because someone
+ * shared an album with you, which stay in that album.
+ */
+export function timelinePhotos(state: VaultState): Photo[] {
+  return state.photos.filter((photo) => !photo.sharedAlbum);
+}
+
 /** Photos in an album, newest first. */
 export function albumPhotos(state: VaultState, albumId: string): Photo[] {
   return state.photos
@@ -152,9 +172,12 @@ export function albumPhotos(state: VaultState, albumId: string): Photo[] {
     .sort((a, b) => b.takenAt.localeCompare(a.takenAt));
 }
 
-/** Whether a photo can go in an album: both must be in the same library. */
+/**
+ * Whether a photo can go in an album: both must be in the same library, and neither can be
+ * from an album someone shared with you, which can't be changed.
+ */
 export function fitsAlbum(photo: Photo, album: Album): boolean {
-  return photo.library === album.library;
+  return !photo.sharedAlbum && !album.sharedAlbum && photo.library === album.library;
 }
 
 /** The album's chosen cover, or else its newest photo. */
@@ -184,6 +207,8 @@ export const mockVaults: VaultsState = {
     private: { photos: initialPrivatePhotos, albums: initialPrivateAlbums },
   },
 };
+
+const VIEW_ONLY = 'Photos in an album shared with you can be viewed, not changed.';
 
 /** How many photos a change to many saves at once. */
 const SAVES_AT_ONCE = 4;
@@ -215,6 +240,15 @@ interface VaultValue {
   renameAlbum: (albumId: string, title: string) => Promise<void>;
   /** Deletes an album and takes it out of its photos, which stay in the library. */
   deleteAlbum: (albumId: string) => Promise<void>;
+  /**
+   * Gets one of your albums ready to share with people and returns its key, for the invite
+   * to hand over.
+   */
+  shareAlbum: (albumId: string) => Promise<Uint8Array>;
+  /** Stops sharing an album with everyone. */
+  stopSharingAlbum: (albumId: string) => Promise<void>;
+  /** Records who an album is shared with now, by name, after someone is added or removed. */
+  setSharedWith: (albumId: string, names: string[]) => void;
   /** Decrypts photos' originals into files, for sending copies elsewhere. */
   originals: (photoIds: readonly string[]) => Promise<File[]>;
   /**
@@ -297,12 +331,18 @@ export function VaultProvider({
       if (!photo) throw new FormError('That photo isn’t in your vault anymore.');
       return photo;
     };
+    /** A photo that may be changed: not one from an album someone shared with you. */
+    const findChangeable = (photoId: string): Photo => {
+      const photo = find(photoId);
+      if (photo.sharedAlbum) throw new FormError(VIEW_ONLY);
+      return photo;
+    };
     const otherStoreFor = (keys: SpaceKeys | undefined) => {
       if (!keys) throw new FormError('Unlock the other space first.');
       return storeFor(keys);
     };
     const moveOne = async (otherStore: SpaceStore, photoId: string) => {
-      if (find(photoId).library !== undefined) {
+      if (findChangeable(photoId).library !== undefined) {
         throw new FormError('Photos in a library shared with you stay in it.');
       }
       // Albums belong to one space, so a moved photo arrives unfiled. It is re-encrypted
@@ -319,7 +359,7 @@ export function VaultProvider({
         dispatch({ type: 'add-photos', photos: [added] });
       },
       toggleFavorite: async (photoId) => {
-        const photo = find(photoId);
+        const photo = findChangeable(photoId);
         dispatch({ type: 'toggle-favorite', photoId });
         try {
           await store.update({ ...photo, favorite: !photo.favorite });
@@ -329,13 +369,15 @@ export function VaultProvider({
         }
       },
       deletePhoto: async (photoId) => {
+        findChangeable(photoId);
         await store.remove(photoId);
         dispatch({ type: 'delete-photos', photoIds: [photoId] });
       },
       deletePhotos: async (photoIds) => {
-        const result = await settleEach(photoIds, SAVES_AT_ONCE, (photoId) =>
-          store.remove(photoId),
-        );
+        const result = await settleEach(photoIds, SAVES_AT_ONCE, async (photoId) => {
+          findChangeable(photoId);
+          await store.remove(photoId);
+        });
         dispatch({ type: 'delete-photos', photoIds: result.done });
         return result;
       },
@@ -347,7 +389,7 @@ export function VaultProvider({
             ? { albumId: requested.album.id, included: requested.included }
             : requested;
         const result = await settleEach(photoIds, SAVES_AT_ONCE, async (photoId) => {
-          const photo = find(photoId);
+          const photo = findChangeable(photoId);
           if (album && !fitsAlbum(photo, album)) {
             throw new FormError('Photos can only go in albums of their own library.');
           }
@@ -375,6 +417,14 @@ export function VaultProvider({
           store.update(withDetails(photo, { albumId, included: false })),
         );
         dispatch({ type: 'delete-album', albumId });
+      },
+      shareAlbum: (albumId) => store.shareAlbum(albumId),
+      stopSharingAlbum: async (albumId) => {
+        await store.stopSharingAlbum(albumId);
+        dispatch({ type: 'set-shared-with', albumId, names: [] });
+      },
+      setSharedWith: (albumId, names) => {
+        dispatch({ type: 'set-shared-with', albumId, names });
       },
       originals: async (photoIds) => {
         const files: File[] = [];
