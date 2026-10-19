@@ -263,3 +263,29 @@ test('the progress card reopens the upload list, and leaving mid-upload asks fir
   await page.close({ runBeforeUnload: true });
   expect(await asked).toBe('beforeunload');
 });
+
+test('previews still appear on a phone when a preview download fails', async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  await signUp(page);
+  await uploadPhotos(page, 19);
+  await expect(page.getByText('19 photos added to your vault')).toBeVisible();
+
+  // After unlocking, the first batch of previews fails, as it did when Cloudflare cut the
+  // response short. The grid tries again instead of leaving empty tiles.
+  await lock(page);
+  let failed = 0;
+  await page.route('**/api/space/thumbs?*', async (route) => {
+    if (failed === 0) {
+      failed += 1;
+      await route.abort('connectionreset');
+    } else {
+      await route.continue();
+    }
+  });
+  await unlockWith(page, MAIN_PASSWORD);
+  await expect(page.locator('.photo-tile')).toHaveCount(19);
+  await expect(decryptedTiles(page).first()).toBeVisible({ timeout: 10_000 });
+  expect(failed).toBe(1);
+  // Every tile near the screen fills in, not just a few.
+  await expect(page.locator('.photo-tile .photo-placeholder')).toHaveCount(0, { timeout: 10_000 });
+});

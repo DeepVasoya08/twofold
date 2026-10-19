@@ -11,12 +11,12 @@ import {
 import type { ReactNode } from 'react';
 
 import type { SpaceKeys } from '@twofold/crypto';
-import { THUMB_BATCH_MAX } from '@twofold/types';
 import type { PhotoPart } from '@twofold/types';
 
 import { FormError } from './account-ops';
 import type { Space } from './account-ops';
 import type { NewPhoto, SpaceStore, UploadStage } from './space-store';
+import { createThumbLoader } from './thumb-loader';
 import {
   initialAlbums,
   initialPhotos,
@@ -127,19 +127,6 @@ export const mockVaults: VaultsState = {
   },
 };
 
-/**
- * Thumbnails download only once their photo is near the screen, many per request. Requests
- * made within this long of each other share a batch, and at most THUMB_REQUESTS batches are
- * downloading at once.
- */
-const THUMB_GATHER_MS = 30;
-const THUMB_REQUESTS = 2;
-/**
- * Decrypted thumbnails reach the screen together, at most this often. One update per
- * thumbnail would redraw the whole grid once per photo, which a large library can't afford.
- */
-const THUMB_FLUSH_MS = 100;
-
 export type VaultStatus = 'loading' | 'ready' | 'failed';
 
 interface VaultValue {
@@ -203,52 +190,13 @@ export function VaultProvider({
     let cancelled = false;
     // A function, so checks after an await see the cleanup's change.
     const stopped = () => cancelled;
-    let ready = new Map<string, string>();
-    let flushTimer: ReturnType<typeof setTimeout> | undefined;
-    const flush = () => {
-      flushTimer = undefined;
-      if (stopped() || ready.size === 0) return;
-      dispatch({ type: 'set-thumbs', urls: ready });
-      ready = new Map();
-    };
-    // Each photo's preview is asked for once; `wanted` holds those not yet downloading.
-    const asked = new Set<string>();
-    const wanted = new Set<string>();
-    let downloading = 0;
-    let gatherTimer: ReturnType<typeof setTimeout> | undefined;
-    const pump = () => {
-      gatherTimer = undefined;
-      while (!stopped() && downloading < THUMB_REQUESTS && wanted.size > 0) {
-        const batch = [...wanted].slice(0, THUMB_BATCH_MAX);
-        for (const photoId of batch) wanted.delete(photoId);
-        downloading += 1;
-        store
-          .thumbs(batch)
-          .then(
-            (urls) => {
-              if (stopped()) return;
-              for (const [photoId, url] of urls) ready.set(photoId, url);
-              flushTimer ??= setTimeout(flush, THUMB_FLUSH_MS);
-            },
-            () => {
-              // Let them be asked for again, the next time they come near the screen.
-              for (const photoId of batch) asked.delete(photoId);
-            },
-          )
-          .finally(() => {
-            downloading -= 1;
-            pump();
-          });
-      }
-    };
-    thumbLoader.current = (photoIds) => {
-      for (const photoId of photoIds) {
-        if (asked.has(photoId)) continue;
-        asked.add(photoId);
-        wanted.add(photoId);
-      }
-      if (wanted.size > 0) gatherTimer ??= setTimeout(pump, THUMB_GATHER_MS);
-    };
+    const loader = createThumbLoader({
+      fetch: (photoIds) => store.thumbs(photoIds),
+      onReady: (urls) => {
+        dispatch({ type: 'set-thumbs', urls });
+      },
+    });
+    thumbLoader.current = loader.request;
     store.list().then(
       (loaded) => {
         if (stopped()) return;
@@ -262,8 +210,7 @@ export function VaultProvider({
     return () => {
       cancelled = true;
       thumbLoader.current = null;
-      clearTimeout(flushTimer);
-      clearTimeout(gatherTimer);
+      loader.stop();
       store.dispose();
     };
   }, [store, initialState]);

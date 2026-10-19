@@ -119,7 +119,9 @@ The grid shows a quiet placeholder until a photo's preview has been downloaded a
 decrypted. Previews are only asked for once their photo is near the screen (within about
 two phone screens, `lib/near-screen.ts`), and are downloaded up to 48 per request.
 Decrypted previews reach the grid in batches, at most every 100 ms, so a large library
-redraws a few times a second rather than once per photo. The viewer then fetches and
+redraws a few times a second rather than once per photo. A request that fails is tried
+again after 1, 2 and 4 seconds (`app/thumb-loader.ts`), so a dropped connection doesn't
+leave tiles empty. The viewer then fetches and
 decrypts the original.
 
 The photo viewer zooms with the mouse wheel or a trackpad pinch (towards the pointer),
