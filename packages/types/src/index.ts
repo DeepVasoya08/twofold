@@ -89,6 +89,26 @@ export interface DeleteAccountRequest {
   loginKey: string;
 }
 
+export type DeviceKind = 'computer' | 'phone' | 'tablet';
+
+/** One signed-in device: a session, labeled from its browser when it was last used. */
+export interface Device {
+  id: string;
+  /** "Chrome on Android"; empty when the browser couldn't be told. */
+  name: string;
+  kind: DeviceKind;
+  /** Milliseconds since the epoch. */
+  signedInAt: number;
+  /** Milliseconds since the epoch, to the hour. */
+  lastActive: number;
+  /** True for the device asking. */
+  current: boolean;
+}
+
+export interface DeviceList {
+  devices: Device[];
+}
+
 /**
  * Photo storage. A space's storage is addressed by its access token (the space id from its
  * key slot), sent in this header. The server keeps only the token's SHA-256 and never links

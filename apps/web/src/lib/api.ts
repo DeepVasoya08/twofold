@@ -8,6 +8,7 @@ import type {
   CreateMemberRequest,
   CreatePhotoRequest,
   DeleteAccountRequest,
+  DeviceList,
   ErrorResponse,
   InviterView,
   JoinedList,
@@ -34,6 +35,16 @@ export class ApiError extends Error {
 }
 
 const OFFLINE = "Couldn't reach Twofold. Check your connection and try again.";
+
+let sessionEndedListener: (() => void) | null = null;
+
+/**
+ * Called whenever a signed-in request is refused because the session is gone: signed out
+ * from another device, a password changed elsewhere, or it ran out.
+ */
+export function onSessionEnded(listener: (() => void) | null): void {
+  sessionEndedListener = listener;
+}
 
 function isErrorResponse(body: unknown): body is ErrorResponse {
   return (
@@ -67,6 +78,8 @@ async function send(
     throw new ApiError(0, OFFLINE);
   }
   if (!res.ok) {
+    // A 401 from /auth is a wrong password, not an ended session.
+    if (res.status === 401 && !path.startsWith('/auth/')) sessionEndedListener?.();
     const parsed: unknown = await res.json().catch(() => null);
     throw new ApiError(
       res.status,
@@ -109,6 +122,9 @@ export const api = {
   updateKeyring: (body: UpdateKeyringRequest) =>
     call<AccountResponse>('PUT', '/account/keyring', body),
   deleteAccount: (body: DeleteAccountRequest) => call<undefined>('DELETE', '/account', body),
+  devices: () => call<DeviceList>('GET', '/account/devices'),
+  signOutDevice: (id: string) =>
+    call<undefined>('DELETE', `/account/devices/${encodeURIComponent(id)}`, {}),
 };
 
 /**

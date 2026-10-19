@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Photo } from '../mock/data';
-import { formatDateRange, groupByMonth, initials, pluralize } from './format';
+import { formatDateRange, formatLastActive, groupByMonth, initials, pluralize } from './format';
 
 function photo(id: string, takenAt: string, location?: string): Photo {
   return {
@@ -60,5 +60,19 @@ describe('small helpers', () => {
   it('makes initials', () => {
     expect(initials('Deepu')).toBe('D');
     expect(initials('mira  rao kapoor')).toBe('MR');
+  });
+});
+
+describe('formatLastActive', () => {
+  const hour = 60 * 60 * 1000;
+  const now = Date.UTC(2026, 9, 19, 12, 30);
+
+  it('reads naturally at each scale', () => {
+    expect(formatLastActive(now - 20 * 60 * 1000, now)).toBe('Active recently');
+    expect(formatLastActive(now - hour, now)).toBe('Active 1 hour ago');
+    expect(formatLastActive(now - 5 * hour, now)).toBe('Active 5 hours ago');
+    expect(formatLastActive(now - 30 * hour, now)).toBe('Active yesterday');
+    expect(formatLastActive(now - 4 * 24 * hour, now)).toBe('Active 4 days ago');
+    expect(formatLastActive(Date.UTC(2026, 6, 2), now)).toBe('Active Jul 2, 2026');
   });
 });

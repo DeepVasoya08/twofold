@@ -84,7 +84,7 @@ export async function unlockWith(page: Page, password: string): Promise<void> {
 
 export async function signOut(page: Page): Promise<void> {
   await goTo(page, 'Settings');
-  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).toHaveURL('/');
 }
 

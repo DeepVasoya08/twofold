@@ -251,6 +251,14 @@ hours, and the inviter's screen cancels its invite when it closes.
 - A login (or sign-up) sets a 256-bit random session token in an `HttpOnly`,
   `SameSite=Strict` cookie (`__Host-` prefixed and `Secure` over HTTPS), valid 30 days.
   D1 stores only its SHA-256, and expired sessions are deleted when a new one starts.
+- Each session also keeps a random public id, a coarse device label made from the
+  User-Agent at login ("Chrome on Android", no versions or models; the User-Agent itself
+  isn't stored), and when it was last used, to the hour. Settings lists them and can sign
+  any other device out, which deletes its session. Only account routes mark a session
+  used, never storage routes, so the time says nothing about when a space was opened, and
+  a login with the private password starts the same kind of session as any other. A
+  signed-out device drops its keys on its next request, or as soon as it's looked at
+  again; until then a decrypted photo already on its screen stays there.
 - Any keyring change (a password, the recovery key, or setting up a private space) signs
   out every other device. It has to be every change: the server can't tell which slot
   changed, and treating them differently would tell it.
