@@ -9,6 +9,7 @@ import {
   panBy,
   wheelFactor,
   zoomAt,
+  zoomPercent,
 } from './zoom';
 
 describe('wheelFactor', () => {
@@ -78,5 +79,14 @@ describe('isZoomed', () => {
   it('is true only above the fitted scale', () => {
     expect(isZoomed(FITTED)).toBe(false);
     expect(isZoomed({ scale: 1.1, x: 0, y: 0 })).toBe(true);
+  });
+});
+
+describe('zoomPercent', () => {
+  it('shows the scale as a whole percentage of the fitted size', () => {
+    expect(zoomPercent(1)).toBe(100);
+    expect(zoomPercent(2.5)).toBe(250);
+    expect(zoomPercent(1.4999)).toBe(150);
+    expect(zoomPercent(MAX_SCALE)).toBe(500);
   });
 });
