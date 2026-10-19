@@ -178,3 +178,74 @@ test('deleting the account needs the password', async ({ page }) => {
   await logIn(page, email, MAIN_PASSWORD);
   await expect(page.getByText('That email and password don’t match.')).toBeVisible();
 });
+
+test('the password is hashed in a Web Worker, so the page keeps responding', async ({ page }) => {
+  await signUp(page);
+  await lock(page);
+
+  // A slower CPU, like a mid-range phone, where hashing takes about a second.
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+
+  // Record the longest gap between animation frames while the password is hashed.
+  await page.evaluate(() => {
+    const record = window as unknown as { longestFrameGap: number };
+    record.longestFrameGap = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      record.longestFrameGap = Math.max(record.longestFrameGap, now - last);
+      last = now;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+
+  const worker = page.waitForEvent('worker');
+  await unlockWith(page, MAIN_PASSWORD);
+  const hashWorker = await worker;
+  expect(hashWorker.url()).toContain('password-worker');
+  // The worker is shut down as soon as it answers.
+  await new Promise<void>((resolve) => {
+    hashWorker.once('close', () => {
+      resolve();
+    });
+  });
+  const longestGap = await page.evaluate(
+    () => (window as unknown as { longestFrameGap: number }).longestFrameGap,
+  );
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
+  // On the main thread this would freeze the page for about a second.
+  expect(longestGap).toBeLessThan(400);
+});
+
+test('signing out while unlocking does not open the library', async ({ page }) => {
+  await signUp(page);
+  await lock(page);
+
+  // Hold the worker's script back so the unlock is still working when the person signs out.
+  let release: (() => void) | undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/assets/password-worker-*.js', async (route) => {
+    await held;
+    await route.continue();
+  });
+
+  const worker = page.waitForEvent('worker');
+  await unlockWith(page, MAIN_PASSWORD);
+  await page.getByRole('button', { name: 'Use another account' }).click();
+  await expect(page).toHaveURL('/login');
+
+  release?.();
+  const hashWorker = await worker;
+  await new Promise<void>((resolve) => {
+    hashWorker.once('close', () => {
+      resolve();
+    });
+  });
+  await expect(page).toHaveURL('/login');
+  await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toHaveCount(0);
+});

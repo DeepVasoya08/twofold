@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./webcrypto": "./src/webcrypto.ts"
+    "./webcrypto": "./src/webcrypto.ts",
+    "./password-worker": "./src/password-worker.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

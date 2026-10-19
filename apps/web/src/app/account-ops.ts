@@ -9,7 +9,18 @@ import { ApiError, api, spaceApi } from '../lib/api';
  * key slots leave the browser. Crypto loads on first use so the welcome page stays light.
  */
 
-const loadCrypto = () => import('@twofold/crypto');
+let hasherChosen = false;
+
+const loadCrypto = async () => {
+  const crypto = await import('@twofold/crypto');
+  // Argon2id runs in a Web Worker so the page keeps responding while it works.
+  if (!hasherChosen && typeof Worker !== 'undefined') {
+    hasherChosen = true;
+    const { spawnHashWorker } = await import('../lib/hash-worker');
+    crypto.setPasswordHasher(crypto.workerHasher(spawnHashWorker));
+  }
+  return crypto;
+};
 
 /** Which password in a change-password form a mistake is about. */
 export type PasswordInput = 'current' | 'new';
@@ -62,7 +73,10 @@ const WRONG_LOGIN = 'That email and password don’t match.';
 const WRONG_PASSWORD = 'That password isn’t right.';
 const PASSWORD_IN_USE = 'Choose a password you don’t already use for Twofold.';
 
-/** Lets the browser paint a busy state before Argon2id blocks the main thread. */
+/**
+ * Lets the browser paint a busy state first, for when Argon2id has to run on the main thread
+ * (no Web Worker).
+ */
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, 0);

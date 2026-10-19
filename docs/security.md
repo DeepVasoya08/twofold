@@ -43,6 +43,18 @@ A space key is 32 random bytes plus a 16-byte random space id, made on the devic
 4. The slot's **verifier** is `SHA-256(loginKey)`. The server keeps it to check logins.
    Guessing a password from a verifier still costs one Argon2id run per guess.
 
+**Where Argon2id runs.** Always on the device, never on the server: the server would need
+the password, and seeing a second password work would reveal the private space. In the web
+app it runs in a Web Worker (`packages/crypto/src/password-worker.ts`, set up by
+`setPasswordHasher` and `workerHasher`), a thread of the same page loaded from the same
+origin, so the page keeps responding during the second or so it takes on a phone. Each hash
+gets a fresh worker that is shut down once it answers; it receives only the normalized
+password, salt and parameters (checked again in the worker) and returns `master`, and the
+copy it hashed into is wiped. If a worker can't start or fails, the hash runs on the main
+thread instead, with the same result. Because the page stays usable meanwhile, a login,
+unlock or password change that finishes after the person locked or signed out doesn't put
+keys back in memory (`app/account.tsx`).
+
 The recovery key is 128 random bits written as 12 BIP-39 words (with BIP-39's 4-bit
 checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
 (`crypto_generichash` keyed by the salt) instead of Argon2id.
