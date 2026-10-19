@@ -38,6 +38,8 @@ export interface Photo {
    * and download it, but not change it, and it stays out of your timeline.
    */
   sharedAlbum?: boolean;
+  /** Encrypted bytes it takes up on the server (both files), once it is stored. */
+  size?: number;
 }
 
 export interface Album {
@@ -61,31 +63,6 @@ export const contact: Person = { id: 'contact', name: 'Mira', email: 'mira@examp
 export const sharedSince = '2025-11-02T12:00:00Z';
 
 export const mockInviteCode = 'TWO-7KQ4-M9XD';
-
-export interface Device {
-  id: string;
-  name: string;
-  kind: 'laptop' | 'phone';
-  lastActive: string;
-  current: boolean;
-}
-
-export const devices: Device[] = [
-  {
-    id: 'd1',
-    name: 'Chrome on MacBook Air',
-    kind: 'laptop',
-    lastActive: '2026-10-16T06:00:00Z',
-    current: true,
-  },
-  {
-    id: 'd2',
-    name: 'Safari on iPhone 16',
-    kind: 'phone',
-    lastActive: '2026-10-15T21:40:00Z',
-    current: false,
-  },
-];
 
 interface Trip {
   month: string;

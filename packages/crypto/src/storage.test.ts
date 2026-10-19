@@ -200,6 +200,26 @@ describe('sealOwnerRecord / openOwnerRecord', () => {
   });
 });
 
+describe('profile photo records', () => {
+  it('open only as a profile, in their own space', async () => {
+    const space = await newSpace();
+    const key = await newFileKey();
+    const sealed = await sealOwnerRecord(space, 'profile', 'p1', key);
+    expect(await openOwnerRecord(space, 'profile', 'p1', sealed)).toEqual(key);
+    // A profile record can't stand in for a sharing record, or the other way round.
+    await expect(openOwnerRecord(space, 'member', 'p1', sealed)).rejects.toThrow(DecryptionError);
+    const member = await sealOwnerRecord(space, 'member', 'p1', text('Sam'));
+    await expect(openOwnerRecord(space, 'profile', 'p1', member)).rejects.toThrow(DecryptionError);
+    // Another space (such as the other password's) can't open it.
+    await expect(openOwnerRecord(await newSpace(), 'profile', 'p1', sealed)).rejects.toThrow(
+      DecryptionError,
+    );
+    await expect(openRecord(await ownerAccess(space), 'photo', 'p1', sealed)).rejects.toThrow(
+      DecryptionError,
+    );
+  });
+});
+
 describe('encryptFile / decryptFile', () => {
   it.each([0, 1, 64 * 1024, 64 * 1024 + 1, 200_000])(
     'round-trips %i bytes at the predicted size',

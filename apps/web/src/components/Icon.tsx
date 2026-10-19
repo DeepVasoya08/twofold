@@ -186,6 +186,7 @@ const icons = {
       <path d="m4.5 17.5 4.5-4.5 3 3 2-2 5 5" />
     </>
   ),
+  cloud: <path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.5 9.5 4.5 4.5 0 0 0 7 18.5z" />,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof icons;

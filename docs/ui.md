@@ -113,6 +113,13 @@ private space that already exists, since the main library can't know whether the
   (`twofold.autoLockMinutes`); nothing secret is stored with it. Logic in
   `lib/idle-timer.ts` and `app/auto-lock.tsx`.
 - Delete account asks for a password.
+- Settings → You → Edit changes the name (shared by both spaces) and the profile photo
+  (one per space, so the private space starts with initials). The photo is cropped to a
+  square on the device and encrypted before upload (`app/profile.tsx`,
+  `app/profile-photo.ts`, `components/ProfileDialog.tsx`).
+- Storage used shows as "12.4 MB of 1 GB used" in Settings → Storage and at the bottom of
+  the sidebar. It counts only the open space's own photos, never the account's total, so
+  the main library can't hint at a private space (`lib/storage-usage.ts`).
 - State lives in `app/account.tsx` (who is signed in, which slot is open) and
   `app/account-ops.ts` (every operation that touches keys); `app/access.ts` decides
   redirects.

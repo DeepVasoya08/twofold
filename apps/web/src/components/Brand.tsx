@@ -31,10 +31,22 @@ export function Logo({ size = 32 }: { size?: number }) {
   );
 }
 
-export function Avatar({ person, size = 'md' }: { person: Person; size?: 'sm' | 'md' | 'lg' }) {
+/** A profile photo when there is one (a decrypted, in-memory URL), or else initials. */
+export function Avatar({
+  person,
+  size = 'md',
+  src = null,
+}: {
+  person: Person;
+  size?: 'sm' | 'md' | 'lg';
+  src?: string | null;
+}) {
   return (
-    <span className={`avatar avatar--${size} avatar--${person.id}`} aria-hidden="true">
-      {initials(person.name)}
+    <span
+      className={`avatar avatar--${size} avatar--${person.id}${src ? ' avatar--photo' : ''}`}
+      aria-hidden="true"
+    >
+      {src ? <img className="avatar__image" src={src} alt="" /> : initials(person.name)}
     </span>
   );
 }

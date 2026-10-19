@@ -29,10 +29,10 @@ const RECORD_KEY_BYTES = 32;
 export type RecordKind = 'photo' | 'album';
 
 /**
- * Records only the space's owner can open: who it is shared with, and the libraries it has
- * joined. They use a subkey that members never receive.
+ * Records only the space's owner can open: who it is shared with, the libraries it has
+ * joined, and the key of its profile photo. They use a subkey that members never receive.
  */
-export type OwnerRecordKind = 'member' | 'joined';
+export type OwnerRecordKind = 'member' | 'joined' | 'profile';
 
 export class DecryptionError extends Error {
   constructor(message = 'This data could not be decrypted') {

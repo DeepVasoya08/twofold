@@ -162,6 +162,22 @@ other accounts; see [Sharing](#sharing).
 - **Moving** a photo to the other space downloads and decrypts it, adds it to the other
   space under a new id and key, then deletes the original. The two copies share nothing
   the server can match.
+- **Profile photos** belong to a space too, one per space at most (`profile_photos`, keyed
+  by the space tag). The browser crops and shrinks the photo to a 256px JPEG, encrypts it
+  with `encryptFile` under a key of its own, and seals that key in an owner-only `profile`
+  record, so members of a shared space can't read or replace it (the routes refuse share
+  tokens too). The main library and the private space each have their own photo, so one
+  never shows the other exists. It counts against the storage quota like any upload (at
+  most 128 KiB of ciphertext), and wiping the space removes it. The account's **name** is
+  not secret: sign-up sends it in plaintext, and `PUT /api/account/name` changes it with the
+  session alone.
+- **Storage used** shown in the app is the encrypted size of the open space's own photos,
+  added up in the browser from the sizes the photo list already carries. The account's
+  total (`stored_bytes`) is never sent to the browser: in the main library it would include
+  a private space's photos and so show that one exists. The settings say the 1 GB limit
+  covers everything the account stores, which is also true without a private space (photos
+  added to libraries shared with you count too), so a "storage full" message before the main
+  library reaches 1 GB has an innocent explanation.
 - **Deleting the account** first wipes every space the device holds keys for (the open
   one, the other one if its password was typed this session, and the one the confirming
   password opens), then the account.
@@ -285,6 +301,14 @@ hours, and the inviter's screen cancels its invite when it closes.
 - A login (or sign-up) sets a 256-bit random session token in an `HttpOnly`,
   `SameSite=Strict` cookie (`__Host-` prefixed and `Secure` over HTTPS), valid 30 days.
   D1 stores only its SHA-256, and expired sessions are deleted when a new one starts.
+- Each session also keeps a random public id, a coarse device label made from the
+  User-Agent at login ("Chrome on Android", no versions or models; the User-Agent itself
+  isn't stored), and when it was last used, to the hour. Settings lists them and can sign
+  any other device out, which deletes its session. Only account routes mark a session
+  used, never storage routes, so the time says nothing about when a space was opened, and
+  a login with the private password starts the same kind of session as any other. A
+  signed-out device drops its keys on its next request, or as soon as it's looked at
+  again; until then a decrypted photo already on its screen stays there.
 - Any keyring change (a password, the recovery key, or setting up a private space) signs
   out every other device. It has to be every change: the server can't tell which slot
   changed, and treating them differently would tell it.

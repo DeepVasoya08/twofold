@@ -89,6 +89,31 @@ export interface DeleteAccountRequest {
   loginKey: string;
 }
 
+/** Changes the name shown on the account. Names are not secret: sign-up sends one too. */
+export interface UpdateNameRequest {
+  name: string;
+}
+
+export type DeviceKind = 'computer' | 'phone' | 'tablet';
+
+/** One signed-in device: a session, labeled from its browser when it was last used. */
+export interface Device {
+  id: string;
+  /** "Chrome on Android"; empty when the browser couldn't be told. */
+  name: string;
+  kind: DeviceKind;
+  /** Milliseconds since the epoch. */
+  signedInAt: number;
+  /** Milliseconds since the epoch, to the hour. */
+  lastActive: number;
+  /** True for the device asking. */
+  current: boolean;
+}
+
+export interface DeviceList {
+  devices: Device[];
+}
+
 /**
  * Photo storage. A space's storage is addressed by its access token (the space id from its
  * key slot), sent in this header. The server keeps only the token's SHA-256 and never links
@@ -108,6 +133,8 @@ export const STORAGE_SIZES = {
   maxFull: 64 * 1024 * 1024,
   /** Most encrypted bytes one account can upload and keep, across every space. */
   accountQuota: 1024 * 1024 * 1024,
+  /** Largest encrypted profile photo, in bytes. The browser shrinks photos well below this. */
+  maxProfilePhoto: 128 * 1024,
 } as const;
 
 /**
@@ -163,6 +190,21 @@ export interface PhotoPage {
 
 export interface AlbumList {
   albums: StoredAlbum[];
+}
+
+/**
+ * A space's profile photo: the image encrypted under its own file key, and that key in an
+ * owner-only sealed record. Each space has its own, so one never hints at the other.
+ */
+export interface StoredProfilePhoto {
+  id: string;
+  meta: string;
+  /** The encrypted image, base64url. */
+  image: string;
+}
+
+export interface ProfilePhotoResponse {
+  photo: StoredProfilePhoto | null;
 }
 
 /** Starts a photo upload. The two files follow with PUT, then a commit makes it visible. */

@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode, SubmitEvent } from 'react';
 
 import type { SpaceKeys } from '@twofold/crypto';
+import type { Device } from '@twofold/types';
 
 import { useAccount, useMe } from '../app/account';
 import { useAutoLock } from '../app/auto-lock';
+import { useProfile } from '../app/profile';
 import { errorInput, errorMessage } from '../app/account-ops';
 import { useRouter } from '../app/router';
 import { paths } from '../app/routes';
@@ -20,7 +22,11 @@ import { Dialog } from '../components/Dialog';
 import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
+import { ProfileDialog } from '../components/ProfileDialog';
+import { StorageMeter } from '../components/StorageMeter';
+import { api } from '../lib/api';
 import { AUTO_LOCK_CHOICES, parseAutoLock } from '../lib/auto-lock';
+import { formatLastActive, formatShortDay } from '../lib/format';
 import { MIN_PASSWORD_LENGTH } from '../lib/password';
 
 import './settings.css';
@@ -68,7 +74,7 @@ const themes: { value: ThemePreference; label: string; icon: IconName }[] = [
   { value: 'dark', label: 'Dark', icon: 'moon' },
 ];
 
-type DialogName = 'main-password' | 'private-password' | 'delete' | null;
+type DialogName = 'profile' | 'main-password' | 'private-password' | 'delete' | null;
 
 /** A sharing change waiting for confirmation: stop sharing with someone, or leave a library. */
 type SharingChange = { kind: 'stop'; member: Member } | { kind: 'leave'; library: JoinedLibrary };
@@ -107,6 +113,99 @@ function useSharingLists(keys: SpaceKeys | null) {
   return { lists, reload };
 }
 
+interface DeviceListState {
+  devices: Device[];
+  /** When the list arrived, for "Active 3 hours ago". */
+  loadedAt: number;
+}
+
+/** Every device signed in to the account, this one first. Null until loaded. */
+function useDevices() {
+  const [list, setList] = useState<DeviceListState | null>(null);
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    api.devices().then(
+      ({ devices }) => {
+        if (!cancelled) setList({ devices, loadedAt: Date.now() });
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
+  const reload = useCallback(() => {
+    setVersion((current) => current + 1);
+  }, []);
+  return { list, reload };
+}
+
+const UNKNOWN_DEVICE = 'Unknown device';
+
+function DeviceRows() {
+  const toast = useToast();
+  const { list, reload } = useDevices();
+  const [signingOut, setSigningOut] = useState<string | null>(null);
+
+  if (!list) {
+    return <Row icon="laptop" title="This device" description="Signed in now" />;
+  }
+
+  const signOut = (device: Device) => {
+    if (signingOut) return;
+    setSigningOut(device.id);
+    api
+      .signOutDevice(device.id)
+      .then(
+        () => {
+          toast.show(`Signed out ${device.name || 'that device'}`);
+        },
+        (error: unknown) => {
+          toast.show(errorMessage(error));
+        },
+      )
+      .finally(() => {
+        setSigningOut(null);
+        reload();
+      });
+  };
+
+  return list.devices.map((device) => {
+    const name = device.name || UNKNOWN_DEVICE;
+    const active = device.current
+      ? 'Active now'
+      : formatLastActive(device.lastActive, list.loadedAt);
+    const since = `Signed in ${formatShortDay(new Date(device.signedInAt).toISOString())}`;
+    return (
+      <Row
+        key={device.id}
+        icon={device.kind === 'computer' ? 'laptop' : 'phone'}
+        title={name}
+        description={`${active} · ${since}`}
+        action={
+          device.current ? (
+            <span className="pill">This device</span>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              aria-label={`Sign out ${name}`}
+              disabled={signingOut !== null}
+              aria-busy={signingOut === device.id}
+              onClick={() => {
+                signOut(device);
+              }}
+            >
+              {signingOut === device.id ? 'Signing out…' : 'Sign out'}
+            </button>
+          )
+        }
+      />
+    );
+  });
+}
+
 /** The password input in a dialog that an error is shown under. */
 type ErrorInput = 'current' | 'new' | 'confirm';
 
@@ -121,6 +220,7 @@ export function Settings() {
   const { space } = useVault();
   const account = useAccount();
   const me = useMe();
+  const profile = useProfile();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const isPrivate = space === 'private';
@@ -270,11 +370,31 @@ export function Settings() {
 
       <Section title="You">
         <div className="profile">
-          <Avatar person={me} size="lg" />
+          <Avatar person={me} size="lg" src={profile.photo} />
           <div className="profile__text">
             <span className="profile__name">{me.name}</span>
             <span className="profile__email">{me.email}</span>
           </div>
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm profile__edit"
+            onClick={() => {
+              setDialog('profile');
+            }}
+          >
+            <Icon name="pencil" size={16} />
+            Edit
+          </button>
+        </div>
+      </Section>
+
+      <Section title="Storage">
+        <div className="settings-storage">
+          <StorageMeter />
+          <p className="settings-storage__note">
+            The 1 GB limit covers everything your account stores, including photos you add to
+            libraries shared with you.
+          </p>
         </div>
       </Section>
 
@@ -438,12 +558,7 @@ export function Settings() {
       </Section>
 
       <Section title="Devices">
-        <Row
-          icon="laptop"
-          title="This browser"
-          description="Signed in now"
-          action={<span className="pill">Current</span>}
-        />
+        <DeviceRows />
       </Section>
 
       <Section title="Appearance">
@@ -483,6 +598,8 @@ export function Settings() {
           Delete account
         </button>
       </div>
+
+      <ProfileDialog open={dialog === 'profile'} onClose={closeDialog} />
 
       <Dialog open={dialog === 'main-password'} onClose={closeDialog} title="Change main password">
         <form className="form" onSubmit={onChangeMain} noValidate>
