@@ -90,8 +90,11 @@ Routes are the same in both spaces; the content depends on which space is open.
 
 Upload is a dialog opened from the sidebar (desktop) or the top bar (phones); inside an
 album it also adds the photos to that album. Each photo is read on the device, given a
-640px JPEG preview (`lib/thumbnail.ts`), encrypted, then uploaded, one at a time; the
-progress bar follows those steps. The upload list shows that small preview once a photo
+640px JPEG preview (`lib/thumbnail.ts`), encrypted, then uploaded; the progress bar
+follows those steps. Up to three photos go at once, in the order they were added, so each
+one's server round trips overlap the others'. Big photos go fewer at a time: at most 48 MB
+of originals are in flight, and a photo bigger than that goes alone (`lib/upload-queue.ts`),
+which keeps memory in check on phones. The upload list shows that small preview once a photo
 has been read, never the original, so dropping hundreds of photos stays light.
 
 The grid shows a quiet placeholder until a photo's preview has been downloaded and

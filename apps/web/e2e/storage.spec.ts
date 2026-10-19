@@ -174,3 +174,23 @@ test('the upload list shows each photo’s small preview, never the original', a
     )
     .toEqual([640, 640, 640]);
 });
+
+test('up to three photos upload at once, and all of them arrive', async ({ page }) => {
+  await signUp(page);
+  // Slow each photo's upload down so the ones in flight overlap, and count them.
+  let inFlight = 0;
+  let most = 0;
+  await page.route('**/api/space/photos/*/full', async (route) => {
+    inFlight += 1;
+    most = Math.max(most, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await route.continue();
+    inFlight -= 1;
+  });
+
+  await uploadPhotos(page, 7);
+
+  expect(most).toBe(3);
+  await expect(page.getByText('7 photos added to your vault')).toBeVisible();
+  await expect(page.locator('.photo-tile')).toHaveCount(7);
+});
