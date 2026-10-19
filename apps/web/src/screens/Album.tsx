@@ -47,7 +47,7 @@ export function Album({ albumId }: { albumId: string }) {
 
       {cover ? (
         <header className="album-hero">
-          <PhotoImage className="album-hero__image" src={cover.src} alt="" />
+          <PhotoImage className="album-hero__image" photoId={cover.id} src={cover.src} alt="" />
           <span className="album-hero__shade" />
           <div className="album-hero__text">
             <h1 className="album-hero__title">{album.title}</h1>

@@ -85,7 +85,13 @@ export function Albums() {
                 <span className="album-card__cover">
                   {cover ? (
                     <>
-                      <PhotoImage src={cover.src} alt="" loading="lazy" />
+                      <PhotoImage
+                        photoId={cover.id}
+                        preload={photos[1] && !photos[1].src ? [photos[1].id] : undefined}
+                        src={cover.src}
+                        alt=""
+                        loading="lazy"
+                      />
                       {photos[1]?.src && (
                         <img
                           className="album-card__peek"

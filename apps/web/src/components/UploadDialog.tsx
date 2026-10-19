@@ -18,7 +18,10 @@ type Stage = 'waiting' | 'encrypting' | 'uploading' | 'done' | 'failed';
 interface UploadItem {
   id: number;
   name: string;
-  /** In-memory object URL for the preview; never written to storage. */
+  /**
+   * In-memory object URL of the small preview, once the photo has been read; never written
+   * to storage. Originals are never shown here, so dropping hundreds of photos stays light.
+   */
   url: string;
   stage: Stage;
   error?: string;
@@ -83,6 +86,8 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
   const queue = useRef<{ id: number; file: File }[]>([]);
   const busy = useRef(false);
   const nextId = useRef(0);
+  /** Every preview URL made, so closing revokes them all, even one made as it closed. */
+  const previews = useRef(new Set<string>());
 
   const running = items.some(isRunning);
   const finished = items.length > 0 && !running;
@@ -104,7 +109,11 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
       const { id, file } = job;
       try {
         setStage(id, 'encrypting');
-        await upload(await preparePhoto(file), albumId, (stage) => {
+        const photo = await preparePhoto(file);
+        const url = URL.createObjectURL(new Blob([photo.thumb], { type: 'image/jpeg' }));
+        previews.current.add(url);
+        setItems((current) => current.map((item) => (item.id === id ? { ...item, url } : item)));
+        await upload(photo, albumId, (stage) => {
           setStage(id, stage);
         });
         setStage(id, 'done');
@@ -133,12 +142,7 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
         };
       }
       queue.current.push({ id: nextId.current, file });
-      return {
-        id: nextId.current,
-        name: file.name,
-        url: URL.createObjectURL(file),
-        stage: 'waiting',
-      };
+      return { id: nextId.current, name: file.name, url: '', stage: 'waiting' };
     });
     setItems((current) => [...current, ...added]);
     void pump();
@@ -146,7 +150,8 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
 
   const close = () => {
     queue.current = [];
-    for (const item of items) if (item.url) URL.revokeObjectURL(item.url);
+    for (const url of previews.current) URL.revokeObjectURL(url);
+    previews.current.clear();
     setItems([]);
     onClose();
   };
@@ -208,7 +213,7 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
           {items.map((item) => (
             <li key={item.id} className="upload-item">
               {item.url ? (
-                <img className="upload-item__thumb" src={item.url} alt="" />
+                <img className="upload-item__thumb" src={item.url} alt="" loading="lazy" />
               ) : (
                 <span className="upload-item__thumb" aria-hidden="true" />
               )}

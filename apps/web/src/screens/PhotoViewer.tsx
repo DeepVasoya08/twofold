@@ -288,6 +288,7 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
           ref={imageRef}
           className="viewer__image"
           style={imageStyle}
+          photoId={photo.id}
           src={photo.fullSrc ?? photo.src}
           alt={`Photo from ${formatDay(photo.takenAt)}${photo.location ? ` in ${photo.location}` : ''}`}
           draggable={false}

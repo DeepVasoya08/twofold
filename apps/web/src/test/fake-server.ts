@@ -64,6 +64,14 @@ export class FakeServer {
         const file = this.files.get(`${id}/${part}`);
         return file ? Promise.resolve(file) : Promise.reject(new ApiError(404, 'Not here'));
       },
+      getThumbs: (ids) =>
+        Promise.resolve(
+          ids.map((id) => {
+            const entry = this.photos.get(id);
+            const visible = entry?.token === space && entry.committed;
+            return visible ? (this.files.get(`${id}/thumb`) ?? null) : null;
+          }),
+        ),
       updatePhoto: (id, meta) => {
         mine(id).photo.meta = meta;
         return Promise.resolve(undefined);

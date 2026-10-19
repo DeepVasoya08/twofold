@@ -1,5 +1,5 @@
 import type { SpaceAccess, SpaceKeys } from '@twofold/crypto';
-import { STORAGE_SIZES } from '@twofold/types';
+import { STORAGE_SIZES, THUMB_BATCH_MAX } from '@twofold/types';
 import type { PhotoPart } from '@twofold/types';
 
 import { spaceApi } from '../lib/api';
@@ -40,6 +40,12 @@ export interface SpaceStore {
    * latest original is kept: asking for another revokes the previous one.
    */
   image: (photoId: string, part: PhotoPart) => Promise<string>;
+  /**
+   * Downloads and decrypts many previews, in as few requests as it can. Returns an object
+   * URL for each one it got; photos it doesn't know, or whose preview didn't decrypt, are
+   * left out.
+   */
+  thumbs: (photoIds: readonly string[]) => Promise<Map<string, string>>;
   add: (
     photo: NewPhoto,
     albumIds: string[],
@@ -286,6 +292,32 @@ export function remoteStore(
       return track(photoId, part, plain, part === 'thumb' ? THUMB_TYPE : entry.meta.type);
     },
 
+    thumbs: async (photoIds) => {
+      const found = new Map<string, string>();
+      const missing: string[] = [];
+      for (const photoId of photoIds) {
+        const cached = urls.get(`${photoId}/thumb`);
+        if (cached) found.set(photoId, cached);
+        else if (known.has(photoId)) missing.push(photoId);
+      }
+      if (missing.length === 0) return found;
+      const api = await remote();
+      const crypto = await loadCrypto();
+      for (let start = 0; start < missing.length; start += THUMB_BATCH_MAX) {
+        const ids = missing.slice(start, start + THUMB_BATCH_MAX);
+        const files = await api.getThumbs(ids);
+        for (const [index, photoId] of ids.entries()) {
+          const sealed = files[index];
+          const entry = known.get(photoId);
+          if (!sealed || !entry) continue;
+          // A preview that doesn't decrypt was tampered with: it stays a placeholder.
+          const plain = await crypto.decryptFile(entry.key, sealed).catch(() => null);
+          if (plain) found.set(photoId, track(photoId, 'thumb', new Uint8Array(plain), THUMB_TYPE));
+        }
+      }
+      return found;
+    },
+
     add: async (photo, albumIds, onStage) => {
       const crypto = await loadCrypto();
       if (!isPhotoType(photo.type)) throw new FormError('Twofold can’t store this kind of file.');
@@ -414,6 +446,21 @@ export function combinedStore(
       return { photos, albums };
     },
     image: (photoId, part) => storeOf(photoId).image(photoId, part),
+    thumbs: async (photoIds) => {
+      const byStore = new Map<SpaceStore, string[]>();
+      for (const photoId of photoIds) {
+        const store = storeOf(photoId);
+        byStore.set(store, [...(byStore.get(store) ?? []), photoId]);
+      }
+      const found = new Map<string, string>();
+      const results = await Promise.all(
+        [...byStore].map(([store, ids]) =>
+          store.thumbs(ids).catch(() => new Map<string, string>()),
+        ),
+      );
+      for (const result of results) for (const [id, url] of result) found.set(id, url);
+      return found;
+    },
     add: async (photo, albumIds, onStage) => {
       const albumStore = albumIds[0] === undefined ? undefined : albumStores.get(albumIds[0]);
       const target = albumStore ?? own;
@@ -451,6 +498,14 @@ export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): Spac
     list: () => Promise.resolve(initial),
     image: (photoId) =>
       Promise.resolve(initial.photos.find((photo) => photo.id === photoId)?.src ?? ''),
+    thumbs: (photoIds) =>
+      Promise.resolve(
+        new Map(
+          initial.photos
+            .filter((photo) => photo.src && photoIds.includes(photo.id))
+            .map((photo) => [photo.id, photo.src]),
+        ),
+      ),
     add: (photo, albumIds) => {
       const url = URL.createObjectURL(new Blob([photo.full], { type: photo.type }));
       return Promise.resolve({
