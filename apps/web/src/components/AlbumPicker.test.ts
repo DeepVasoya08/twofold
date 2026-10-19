@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Photo } from '../mock/data';
-import { albumChoices } from './AlbumPicker';
+import { albumChoices, shareChoices } from './AlbumPicker';
 
 const photo = (library?: string): Photo => ({
   id: library ?? 'mine',
@@ -34,5 +34,13 @@ describe('albumChoices', () => {
 
   it('leaves out the album being viewed', () => {
     expect(albumChoices(albums, [photo()], 'trip').map((a) => a.id)).toEqual(['home']);
+  });
+});
+
+describe('shareChoices', () => {
+  it('offers only your own albums, the ones already shared first', () => {
+    const withShared = [...albums, { id: 'gift', title: 'Gift', sharedWith: ['Sam'] }];
+    expect(shareChoices(withShared, [photo()]).map((a) => a.id)).toEqual(['gift', 'trip', 'home']);
+    expect(shareChoices(withShared, [photo('Mira')])).toEqual([]);
   });
 });

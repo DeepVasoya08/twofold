@@ -24,14 +24,27 @@ export function albumChoices(
 }
 
 /**
+ * The albums photos can be shared through: your own, the ones already shared with someone
+ * first, so sharing more photos with the same people doesn't make another album.
+ */
+export function shareChoices(albums: readonly Album[], photos: readonly Photo[]): Album[] {
+  const own = albumChoices(albums, photos).filter((album) => album.library === undefined);
+  const shared = (album: Album) => ((album.sharedWith?.length ?? 0) > 0 ? 0 : 1);
+  return [...own].sort((a, b) => shared(a) - shared(b));
+}
+
+/**
  * Picks an album to add photos to, or makes a new one. Albums belong to one library, so a
  * library shared with you only offers its own albums, and new albums are made in yours.
+ * With `sharing`, it picks the album to share the photos through: only your own albums,
+ * the ones already shared listed first.
  */
 export function AlbumPicker({
   open,
   photos,
   except,
   busy,
+  sharing = false,
   onClose,
   onPick,
 }: {
@@ -39,6 +52,7 @@ export function AlbumPicker({
   photos: readonly Photo[];
   except?: string | undefined;
   busy: boolean;
+  sharing?: boolean;
   onClose: () => void;
   onPick: (album: Album) => void;
 }) {
@@ -46,7 +60,9 @@ export function AlbumPicker({
   const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const choices = albumChoices(state.albums, photos, except);
+  const choices = sharing
+    ? shareChoices(state.albums, photos)
+    : albumChoices(state.albums, photos, except);
   const canCreate = photos.some((photo) => photo.library === undefined);
 
   const close = () => {
@@ -83,7 +99,16 @@ export function AlbumPicker({
     <Dialog
       open={open}
       onClose={close}
-      title={`Add ${pluralize(photos.length, 'photo')} to an album`}
+      title={
+        sharing
+          ? `Share ${pluralize(photos.length, 'photo')}`
+          : `Add ${pluralize(photos.length, 'photo')} to an album`
+      }
+      description={
+        sharing
+          ? 'Photos are shared through an album. Add them to one you already share, or to any album of yours, then invite people to it. Everyone invited sees the same album.'
+          : undefined
+      }
       size="md"
     >
       {choices.length > 0 ? (
@@ -113,6 +138,9 @@ export function AlbumPicker({
                     <span className="album-picker__meta">
                       {count === 0 ? 'Empty' : pluralize(count, 'photo')}
                       {album.library !== undefined && ` · ${album.library}’s library`}
+                      {album.sharedWith &&
+                        album.sharedWith.length > 0 &&
+                        ` · Shared with ${album.sharedWith.join(', ')}`}
                     </span>
                   </span>
                 </button>
@@ -148,7 +176,7 @@ export function AlbumPicker({
             aria-busy={creating}
           >
             <Icon name="plus" size={18} />
-            Create and add
+            {sharing ? 'Create and share' : 'Create and add'}
           </button>
         </form>
       )}

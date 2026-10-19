@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import type { SubmitEvent } from 'react';
 
 import type { SpaceKeys } from '@twofold/crypto';
 
@@ -17,7 +16,6 @@ import type { Album } from '../mock/data';
 import { AlbumPicker } from './AlbumPicker';
 import { Dialog } from './Dialog';
 import { DownloadDialog } from './DownloadDialog';
-import { TextField } from './Field';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
 import { MoveSpaceDialog, moveLabel } from './MoveSpaceDialog';
@@ -58,8 +56,6 @@ export function SelectionBar({
   const [busy, setBusy] = useState(false);
   // What the download or share dialog works on, fixed when it opens.
   const [chosen, setChosen] = useState<readonly string[]>([]);
-  const [albumName, setAlbumName] = useState('');
-  const [nameError, setNameError] = useState<string | null>(null);
   const { space, state } = vault;
 
   if (!selection.selecting) return null;
@@ -108,27 +104,26 @@ export function SelectionBar({
     );
   };
 
-  /** Puts the photos in a new album of their own, then invites someone to it. */
-  const onShare = (event: SubmitEvent) => {
-    event.preventDefault();
-    const name = albumName.trim();
-    if (!name) {
-      setNameError('Give the album a name.');
-      return;
-    }
+  /**
+   * Shares the photos through `target`: puts them in it (if they aren't already), then opens
+   * the invite for that album. Everyone invited to an album sees the same album.
+   */
+  const shareThrough = (target: Album) => {
     if (busy) return;
     setBusy(true);
     vault
-      .createAlbum(name)
-      .then(async (created) => {
-        const result = await vault.setDetails(chosen, { album: created, included: true });
-        if (result.failed.length > 0) toast.show(batchMessage(result, (added) => `${added} added`));
+      .setDetails(chosen, { album: target, included: true })
+      .then((result) => {
+        if (result.failed.length > 0) {
+          toast.show(batchMessage(result, (added) => `${added} added to “${target.title}”`));
+          return;
+        }
         selection.clear();
         setOpen(null);
-        navigate(paths.shareAlbum(created.id));
+        navigate(paths.shareAlbum(target.id));
       })
       .catch((error: unknown) => {
-        setNameError(errorMessage(error));
+        toast.show(errorMessage(error));
       })
       .finally(() => {
         setBusy(false);
@@ -170,9 +165,13 @@ export function SelectionBar({
       label: 'Share',
       icon: 'share',
       onClick: () => {
+        // Inside one of your albums, the photos are already in it: share that album.
+        if (album && album.library === undefined) {
+          selection.clear();
+          navigate(paths.shareAlbum(album.id));
+          return;
+        }
         setChosen(ids);
-        setAlbumName('');
-        setNameError(null);
         setOpen('share');
       },
     });
@@ -282,45 +281,16 @@ export function SelectionBar({
         }}
       />
 
-      <Dialog
+      <AlbumPicker
         open={open === 'share'}
+        photos={photos.filter((photo) => chosen.includes(photo.id))}
+        busy={busy}
+        sharing
         onClose={() => {
           setOpen(null);
         }}
-        title={
-          chosen.length === 1 ? 'Share this photo' : `Share ${pluralize(chosen.length, 'photo')}`
-        }
-        description="Photos are shared through an album. Name a new album for them, then invite someone. They'll see only that album."
-      >
-        <form className="form" onSubmit={onShare} noValidate>
-          <TextField
-            label="Album name"
-            placeholder="Photos for Sam"
-            autoFocus
-            value={albumName}
-            maxLength={80}
-            onChange={(event) => {
-              setAlbumName(event.currentTarget.value);
-              setNameError(null);
-            }}
-            error={nameError}
-          />
-          <div className="dialog__actions">
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() => {
-                setOpen(null);
-              }}
-            >
-              Cancel
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy}>
-              Next: invite someone
-            </button>
-          </div>
-        </form>
-      </Dialog>
+        onPick={shareThrough}
+      />
 
       <Dialog
         open={open === 'delete'}

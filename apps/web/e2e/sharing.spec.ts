@@ -98,8 +98,8 @@ test('sharing one album with someone, who can only view it, then removing them',
   const bar = alice.getByRole('toolbar', { name: 'Selected photos' });
   await bar.getByRole('button', { name: 'Share' }).click();
   const share = alice.getByRole('dialog', { name: 'Share 2 photos' });
-  await share.getByLabel('Album name').fill('Lisbon');
-  await share.getByRole('button', { name: 'Next: invite someone' }).click();
+  await share.getByLabel('New album').fill('Lisbon');
+  await share.getByRole('button', { name: 'Create and share' }).click();
   await expect(alice.getByRole('heading', { level: 1, name: 'Share “Lisbon”' })).toBeVisible();
   const code = alice.getByTestId('invite-code');
   await expect(code).toHaveText(/^TWO-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
@@ -114,6 +114,7 @@ test('sharing one album with someone, who can only view it, then removing them',
   expect(await phrase(bob)).toEqual(await phrase(alice));
   await alice.getByRole('button', { name: 'They match, share' }).click();
   await expect(alice.getByText('“Lisbon” is shared with Bob.')).toBeVisible();
+
 
   // Bob gets the album, not Alice's library: it's under Shared with me, and his timeline
   // stays empty.
@@ -131,6 +132,18 @@ test('sharing one album with someone, who can only view it, then removing them',
   await bob.keyboard.press('Escape');
   await goTo(bob, 'Photos');
   await expect(bob.getByText('Your library is ready')).toBeVisible();
+
+  // Sharing more photos offers the album already shared, so no second album is made.
+  await goTo(alice, 'Photos');
+  await alice
+    .getByRole('button', { name: /^Select photo from / })
+    .nth(2)
+    .click();
+  await bar.getByRole('button', { name: 'Share' }).click();
+  const more = alice.getByRole('dialog', { name: 'Share 1 photo' });
+  await expect(more.getByRole('button', { name: /Lisbon.*Shared with Bob/ })).toBeVisible();
+  await more.getByRole('button', { name: /Lisbon/ }).click();
+  await expect(alice.getByRole('heading', { level: 1, name: 'Share “Lisbon”' })).toBeVisible();
 
   // Alice sees it under Shared by me, and removes Bob from the album's Share menu.
   await goTo(alice, 'Albums');

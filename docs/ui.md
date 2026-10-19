@@ -65,8 +65,11 @@ exists but is low-key (Settings → Sharing).
   (once per unlock, same answer for a wrong password as for no private space). Photos from
   a library shared with you are left out of a move, and can only go in that library's
   albums: the album picker only offers albums at least one selected photo can go in.
-- **Share** means sharing with people inside Twofold: the selected photos (your own only)
-  go in a new album you name, then the invite screen opens for that album.
+- **Share** means sharing with people inside Twofold, always through an album: inside one of
+  your albums it opens the invite for that album; elsewhere it asks which of your albums to
+  put the photos in (albums already shared come first, or make a new one), then opens that
+  album's invite. Everyone invited to an album sees the same album, so sharing with more
+  people never makes copies.
 - **Download** saves copies to the device: it decrypts the originals (up to 50 at a time)
   and downloads them. The dialog says downloaded copies aren't encrypted.
 - Every album has a vertical "more" menu, always visible on its card in Albums and next to
