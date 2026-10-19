@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import type { CSSProperties, SubmitEvent } from 'react';
+import type { CSSProperties } from 'react';
 
 import type { SpaceKeys } from '@twofold/crypto';
 
@@ -13,8 +13,8 @@ import { albumPhotos, useVault } from '../app/vault';
 import type { VaultState } from '../app/vault';
 import { Avatar } from '../components/Brand';
 import { Dialog } from '../components/Dialog';
-import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
+import { MoveSpaceDialog, moveLabel } from '../components/MoveSpaceDialog';
 import { PhotoImage } from '../components/PhotoImage';
 import { formatDay, formatTime, sortNewestFirst } from '../lib/format';
 import type { Person, Photo } from '../mock/data';
@@ -48,14 +48,12 @@ function closeTarget(context: PhotoContext): string {
 export function PhotoViewer({ photoId }: { photoId: string }) {
   const { search, navigate, back } = useRouter();
   const { state, space, toggleFavorite, deletePhoto, movePhoto, loadFull } = useVault();
-  const { otherSpaceOpen, openOtherSpace } = useAccount();
+  const { otherSpaceOpen } = useAccount();
   const me = useMe();
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const [showInfo, setShowInfo] = useState(false);
   const [dialog, setDialog] = useState<'delete' | 'move' | null>(null);
-  const [otherPassword, setOtherPassword] = useState('');
-  const [moveError, setMoveError] = useState<string | null>(null);
   const isPrivate = space === 'private';
   const stageRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -126,8 +124,6 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
 
   const closeDialog = () => {
     setDialog(null);
-    setOtherPassword('');
-    setMoveError(null);
   };
 
   /** After a photo leaves this list, show its neighbour, or go back to the grid. */
@@ -165,33 +161,6 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
       () => movePhoto(photo.id, otherKeys),
       isPrivate ? 'Moved to your library' : 'Moved to your private space',
     );
-  };
-
-  // A space can't reach the other one on its own, so the first move asks for the other
-  // space's password once. The key then stays in memory until Twofold locks, and later
-  // moves go straight through. From the main library, a wrong password gets the same answer
-  // as no private space at all.
-  const onMoveSubmit = (event: SubmitEvent) => {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    void openOtherSpace(otherPassword)
-      .then(
-        (keys) => keys,
-        () => null,
-      )
-      .then((keys) => {
-        setBusy(false);
-        if (!keys) {
-          setMoveError(
-            isPrivate
-              ? 'That isn’t your main password.'
-              : "That password doesn't open a private space. You can set one up in Settings.",
-          );
-          return;
-        }
-        move(keys);
-      });
   };
 
   const imageStyle: CSSProperties | undefined = zoom.zoomed
@@ -259,8 +228,8 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
                 if (otherSpaceOpen) move();
                 else setDialog('move');
               }}
-              aria-label={isPrivate ? 'Move to library' : 'Move to private space'}
-              title={isPrivate ? 'Move to library' : 'Move to private space'}
+              aria-label={moveLabel(space)}
+              title={moveLabel(space)}
             >
               <Icon name={isPrivate ? 'photos' : 'eye-off'} />
             </button>
@@ -396,37 +365,14 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
         </aside>
       )}
 
-      <Dialog
+      <MoveSpaceDialog
         open={dialog === 'move'}
+        space={space}
+        count={1}
+        busy={busy}
         onClose={closeDialog}
-        title={isPrivate ? 'Move to library' : 'Move to private space'}
-        description={
-          isPrivate
-            ? "Enter your main password. The photo will leave your private space and appear in your library. You won't be asked again until Twofold locks."
-            : "Enter your private password. The photo will leave your library and only appear when you open Twofold with that password. You won't be asked again until Twofold locks."
-        }
-      >
-        <form className="form" onSubmit={onMoveSubmit} noValidate>
-          <PasswordField
-            label={isPrivate ? 'Main password' : 'Private password'}
-            autoComplete="off"
-            value={otherPassword}
-            onChange={(event) => {
-              setOtherPassword(event.currentTarget.value);
-              setMoveError(null);
-            }}
-            error={moveError}
-          />
-          <div className="dialog__actions">
-            <button type="button" className="btn btn--ghost" onClick={closeDialog}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy}>
-              {busy ? 'Moving…' : 'Move'}
-            </button>
-          </div>
-        </form>
-      </Dialog>
+        onUnlocked={move}
+      />
 
       <Dialog
         open={dialog === 'delete'}

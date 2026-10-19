@@ -130,6 +130,31 @@ describe('remoteStore', () => {
     expect((await remoteStore(space, server.api).list()).albums).toEqual([album]);
   });
 
+  it('renames an album under a fresh seal, and deletes it', async () => {
+    const { server, space } = await setUp();
+    const store = remoteStore(space, server.api);
+    const album = await store.createAlbum('Trip');
+    const before = server.albums.get(album.id)?.album.meta;
+    await store.renameAlbum(album.id, 'Lisbon in spring');
+    const after = server.albums.get(album.id)?.album.meta ?? '';
+    expect(after).not.toBe(before);
+    expect(contains(fromBase64Url(after) ?? new Uint8Array(), bytes('Lisbon'))).toBe(false);
+    expect((await remoteStore(space, server.api).list()).albums).toEqual([
+      { id: album.id, title: 'Lisbon in spring' },
+    ]);
+    await store.removeAlbum(album.id);
+    expect((await remoteStore(space, server.api).list()).albums).toEqual([]);
+  });
+
+  it('can’t rename another space’s album', async () => {
+    const { server, space } = await setUp();
+    const album = await remoteStore(space, server.api).createAlbum('Trip');
+    const other = remoteStore(await newSpace(), server.api);
+    await expect(other.renameAlbum(album.id, 'Mine now')).rejects.toThrow();
+    await expect(other.removeAlbum(album.id)).rejects.toThrow();
+    expect((await remoteStore(space, server.api).list()).albums).toEqual([album]);
+  });
+
   it('shows nothing to a different space, even over the same records', async () => {
     const { server, space } = await setUp();
     await remoteStore(space, server.api).add(PHOTO, []);

@@ -96,6 +96,20 @@ describe('App', () => {
     );
   });
 
+  it('offers picking photos one by one and a whole month at a time', () => {
+    const html = render('/photos');
+    expect(html).toContain('>Select<');
+    expect(html).toContain('aria-label="Select all of October 2026"');
+    expect(html).toMatch(/aria-label="Select photo from [^"]+" aria-pressed="false"/);
+    expect(render('/favorites')).toContain('>Select<');
+    expect(render('/albums/kyoto')).toContain('>Select<');
+  });
+
+  it('offers actions on every album', () => {
+    expect(render('/albums/kyoto')).toContain('aria-label="Actions for Kyoto in autumn"');
+    expect(render('/albums')).toContain('aria-label="Actions for Lisbon weekend"');
+  });
+
   it('never renders a shared header without the encryption badge', () => {
     expect(render('/photos')).toContain('End-to-end encrypted');
   });

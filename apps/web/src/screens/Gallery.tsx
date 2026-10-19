@@ -1,5 +1,6 @@
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
+import { allSelected, useSelection } from '../app/selection';
 import { albumCover, albumPhotos, useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { LockBadge } from '../components/Brand';
@@ -7,6 +8,8 @@ import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { PhotoImage } from '../components/PhotoImage';
+import { SelectButton } from '../components/SelectButton';
+import { SelectionBar } from '../components/SelectionBar';
 import { formatDateRange, groupByMonth, pluralize } from '../lib/format';
 
 import './gallery.css';
@@ -22,6 +25,8 @@ export function Gallery() {
   );
   const highlightPhotos = highlight ? albumPhotos(state, highlight.id) : [];
   const highlightCover = highlight ? albumCover(state, highlight) : undefined;
+  const selection = useSelection();
+  const hasPhotos = status === 'ready' && state.photos.length > 0;
 
   return (
     <div className="page">
@@ -33,7 +38,9 @@ export function Gallery() {
             <LockBadge label={isPrivate ? 'Opens only with your private password' : undefined} />
           </>
         }
+        actions={hasPhotos && <SelectButton selection={selection} />}
       />
+      <SelectionBar selection={selection} allIds={state.photos.map((photo) => photo.id)} />
 
       {status === 'failed' ? (
         <EmptyState icon="lock" title="Couldn’t open your photos">
@@ -79,22 +86,44 @@ export function Gallery() {
             </Link>
           )}
 
-          {months.map((month) => (
-            <section key={month.key} className="month" aria-labelledby={`month-${month.key}`}>
-              <header className="month__header">
-                <h2 className="month__title" id={`month-${month.key}`}>
-                  {month.label}
-                </h2>
-                {month.locations.length > 0 && (
-                  <span className="month__places">
-                    <Icon name="pin" size={14} />
-                    {month.locations.join(' · ')}
-                  </span>
-                )}
-              </header>
-              <PhotoGrid photos={month.photos} context={{ kind: 'all' }} />
-            </section>
-          ))}
+          {months.map((month) => {
+            const ids = month.photos.map((photo) => photo.id);
+            const whole = allSelected(selection.selected, ids);
+            return (
+              <section
+                key={month.key}
+                className={`month${selection.selecting ? ' is-selecting' : ''}`}
+                aria-labelledby={`month-${month.key}`}
+              >
+                <header className="month__header">
+                  <h2 className="month__title" id={`month-${month.key}`}>
+                    {month.label}
+                  </h2>
+                  {month.locations.length > 0 && (
+                    <span className="month__places">
+                      <Icon name="pin" size={14} />
+                      {month.locations.join(' · ')}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className={`month__select${whole ? ' is-on' : ''}`}
+                    aria-pressed={whole}
+                    aria-label={`${whole ? 'Deselect' : 'Select'} all of ${month.label}`}
+                    onClick={() => {
+                      selection.setMany(ids, !whole);
+                    }}
+                  >
+                    <span className="month__select-check">
+                      <Icon name="check" size={12} />
+                    </span>
+                    {whole ? 'Deselect all' : 'Select all'}
+                  </button>
+                </header>
+                <PhotoGrid photos={month.photos} context={{ kind: 'all' }} selection={selection} />
+              </section>
+            );
+          })}
         </>
       )}
     </div>

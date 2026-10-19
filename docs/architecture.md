@@ -37,6 +37,9 @@ everything from one origin, so there is no CORS and the CSP can stay at
     after a 4-byte length; empty for photos the space doesn't have; the Worker reads four
     from R2 at a time, since it may only hold six R2 responses open), metadata updates,
     deletes, albums, and `DELETE /api/space` to wipe a space.
+    after a 4-byte length; empty for photos the space doesn't have), metadata updates,
+    deletes, albums (`POST /albums`, `PUT /albums/:id` to replace an album's sealed title,
+    `DELETE /albums/:id`, which keeps its photos), and `DELETE /api/space` to wipe a space.
     Owner-only: `/members` (who the space is shared with, add, remove) and `/joined` (the
     libraries this space joined). `DELETE /membership` lets a member leave. See
     [security.md](security.md#photo-storage).

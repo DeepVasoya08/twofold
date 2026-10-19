@@ -175,8 +175,14 @@ under). It never gets the space key or the space id.
 - **Access.** The owner registers the member's share token with `POST /api/space/members`;
   D1 keeps only its SHA-256, in a `members` row next to the space's tag. A request whose
   `x-twofold-space` header is a share token reaches the owner's photos and albums: the
-  member can view, add, favorite and delete photos, and add albums. The owner-only routes
+  member can view, add, favorite and delete photos, and add, rename and delete albums. The owner-only routes
   (who it's shared with, joined libraries, wiping the space) refuse share tokens.
+- **Deleting an album** removes its row; the server can't read which photos name it, so the
+  browser takes the album out of each photo's sealed metadata afterwards (best effort: a
+  photo that still names a deleted album just shows nothing for it).
+- **Sending copies.** Share on a selection or an album decrypts the originals into memory and
+  hands them to the device's share sheet, or downloads them where there is none. Those
+  copies leave Twofold unencrypted, and the dialog says so before anything is sent.
 - **Owner-only records.** Who a space is shared with (`members`) and which libraries it
   joined (`joined`) are sealed under a second `crypto_kdf` subkey of the space key (id 2),
   which members never receive. So even a server that showed a member those rows couldn't

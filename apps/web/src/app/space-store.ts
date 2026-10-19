@@ -56,6 +56,9 @@ export interface SpaceStore {
   update: (photo: Photo) => Promise<void>;
   remove: (photoId: string) => Promise<void>;
   createAlbum: (title: string) => Promise<Album>;
+  renameAlbum: (albumId: string, title: string) => Promise<void>;
+  /** Deletes an album. Its photos stay; take the album out of them with `update`. */
+  removeAlbum: (albumId: string) => Promise<void>;
   /** Downloads and decrypts a photo's files, to add them to another space. */
   read: (photoId: string) => Promise<NewPhoto>;
   /** Revokes every object URL this store made. */
@@ -389,6 +392,21 @@ export function remoteStore(
       return { id, title };
     },
 
+    renameAlbum: async (albumId, title) => {
+      const crypto = await loadCrypto();
+      const meta: AlbumMeta = { v: 1, title };
+      const api = await remote();
+      await api.updateAlbum(
+        albumId,
+        await crypto.sealRecord(await access(), 'album', albumId, encode(meta)),
+      );
+    },
+
+    removeAlbum: async (albumId) => {
+      const api = await remote();
+      await api.deleteAlbum(albumId);
+    },
+
     read: async (photoId) => {
       const { plain: full, entry } = await decrypt(photoId, 'full');
       const { plain: thumb } = await decrypt(photoId, 'thumb');
@@ -425,6 +443,7 @@ export function combinedStore(
   const photoStores = new Map<string, SpaceStore>();
   const albumStores = new Map<string, SpaceStore>();
   const storeOf = (photoId: string) => photoStores.get(photoId) ?? own;
+  const albumStoreOf = (albumId: string) => albumStores.get(albumId) ?? own;
 
   return {
     list: async () => {
@@ -486,6 +505,11 @@ export function combinedStore(
       photoStores.delete(photoId);
     },
     createAlbum: (title) => own.createAlbum(title),
+    renameAlbum: (albumId, title) => albumStoreOf(albumId).renameAlbum(albumId, title),
+    removeAlbum: async (albumId) => {
+      await albumStoreOf(albumId).removeAlbum(albumId);
+      albumStores.delete(albumId);
+    },
     read: (photoId) => storeOf(photoId).read(photoId),
     dispose: () => {
       own.dispose();
@@ -532,6 +556,8 @@ export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): Spac
     update: () => Promise.resolve(),
     remove: () => Promise.resolve(),
     createAlbum: (title) => Promise.resolve({ id: newId(), title }),
+    renameAlbum: () => Promise.resolve(),
+    removeAlbum: () => Promise.resolve(),
     read: () => Promise.reject(new FormError('This preview can’t move photos.')),
     dispose: () => undefined,
   };

@@ -185,6 +185,19 @@ describe('a shared library', () => {
     expect(photos[0]?.library).toBeUndefined();
   });
 
+  it('routes album renames and deletes to the library the album is in', async () => {
+    const w = await world();
+    const album = await remoteStore(w.alice, w.server.api).createAlbum('Trip');
+    await shareAliceWithBob(w);
+    const bobs = sessionStore(w.bob, 'Bob', w.server.api);
+    await bobs.list();
+    await bobs.renameAlbum(album.id, 'Our trip');
+    const alices = remoteStore(w.alice, w.server.api);
+    expect((await alices.list()).albums).toEqual([{ id: album.id, title: 'Our trip' }]);
+    await bobs.removeAlbum(album.id);
+    expect((await alices.list()).albums).toEqual([]);
+  });
+
   it('routes favorites and deletes to the library a photo is in', async () => {
     const w = await world();
     const added = await remoteStore(w.alice, w.server.api).add(PHOTO, []);

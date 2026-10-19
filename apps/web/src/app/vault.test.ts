@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Photo } from '../mock/data';
-import { albumCover, albumPhotos, emptyVaults, vaultReducer } from './vault';
+import {
+  albumCover,
+  albumPhotos,
+  emptyVaults,
+  fitsAlbum,
+  vaultReducer,
+  withDetails,
+} from './vault';
 import type { VaultState } from './vault';
 
 function photo(id: string, takenAt: string, albumIds: string[] = []): Photo {
@@ -35,10 +42,46 @@ describe('vaultReducer', () => {
     );
   });
 
-  it('deletes a photo and clears it as a cover', () => {
-    const next = vaultReducer(state, { type: 'delete-photo', photoId: 'a' });
-    expect(next.photos.map((p) => p.id)).toEqual(['b', 'c']);
-    expect(next.albums[0]?.coverPhotoId).toBeUndefined();
+  it('deletes photos and clears them as covers', () => {
+    const next = vaultReducer(state, { type: 'delete-photos', photoIds: ['a', 'c'] });
+    expect(next.photos.map((p) => p.id)).toEqual(['b']);
+    expect(next.albums[0]).toEqual({ id: 'trip', title: 'Trip' });
+  });
+
+  it('sets a favorite on many photos', () => {
+    const next = vaultReducer(state, {
+      type: 'set-details',
+      photoIds: ['a', 'c'],
+      change: { favorite: true },
+    });
+    expect(next.photos.map((p) => p.favorite)).toEqual([true, false, true]);
+  });
+
+  it('puts photos in an album and takes them out', () => {
+    const added = vaultReducer(state, {
+      type: 'set-details',
+      photoIds: ['b', 'c'],
+      change: { albumId: 'trip', included: true },
+    });
+    expect(added.photos.map((p) => p.albumIds)).toEqual([['trip'], ['trip'], ['trip']]);
+    const removed = vaultReducer(added, {
+      type: 'set-details',
+      photoIds: ['a'],
+      change: { albumId: 'trip', included: false },
+    });
+    expect(removed.photos.map((p) => p.albumIds)).toEqual([[], ['trip'], ['trip']]);
+  });
+
+  it('renames an album', () => {
+    const next = vaultReducer(state, { type: 'rename-album', albumId: 'trip', title: 'Lisbon' });
+    expect(next.albums).toEqual([{ id: 'trip', title: 'Lisbon', coverPhotoId: 'a' }]);
+  });
+
+  it('deletes an album and keeps its photos', () => {
+    const next = vaultReducer(state, { type: 'delete-album', albumId: 'trip' });
+    expect(next.albums).toEqual([]);
+    expect(next.photos.map((p) => p.id)).toEqual(['a', 'b', 'c']);
+    expect(next.photos.every((p) => p.albumIds.length === 0)).toBe(true);
   });
 
   it('adds uploads to the front', () => {
@@ -55,7 +98,33 @@ describe('vaultReducer', () => {
   });
 });
 
+describe('withDetails', () => {
+  it('returns the same photo when nothing changes', () => {
+    const a = photo('a', '2026-01-01T00:00:00Z', ['trip']);
+    expect(withDetails(a, { favorite: false })).toBe(a);
+    expect(withDetails(a, { albumId: 'trip', included: true })).toBe(a);
+    expect(withDetails(a, { albumId: 'other', included: false })).toBe(a);
+  });
+
+  it('adds an album after the ones it is in', () => {
+    const a = photo('a', '2026-01-01T00:00:00Z', ['trip']);
+    expect(withDetails(a, { albumId: 'other', included: true }).albumIds).toEqual([
+      'trip',
+      'other',
+    ]);
+  });
+});
+
 describe('album helpers', () => {
+  it('only fits photos into albums of their own library', () => {
+    const mine = photo('m', '2026-01-01T00:00:00Z');
+    const theirs = { ...mine, library: 'Mira' };
+    expect(fitsAlbum(mine, { id: 'x', title: 'X' })).toBe(true);
+    expect(fitsAlbum(theirs, { id: 'x', title: 'X' })).toBe(false);
+    expect(fitsAlbum(theirs, { id: 'y', title: 'Y', library: 'Mira' })).toBe(true);
+    expect(fitsAlbum(mine, { id: 'y', title: 'Y', library: 'Mira' })).toBe(false);
+  });
+
   it('lists album photos newest first', () => {
     expect(albumPhotos(state, 'trip').map((p) => p.id)).toEqual(['b', 'a']);
   });

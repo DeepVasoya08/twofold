@@ -13,6 +13,9 @@ import type { ReactNode } from 'react';
 import type { SpaceKeys } from '@twofold/crypto';
 import type { PhotoPart } from '@twofold/types';
 
+import { extensionOf } from '../lib/photo-types';
+import { settleEach } from '../lib/settle-each';
+import type { Settled } from '../lib/settle-each';
 import { FormError } from './account-ops';
 import type { Space } from './account-ops';
 import type { NewPhoto, SpaceStore, UploadStage } from './space-store';
@@ -40,9 +43,31 @@ export type VaultAction =
   | { type: 'set-image'; photoId: string; part: PhotoPart; url: string }
   | { type: 'set-thumbs'; urls: ReadonlyMap<string, string> }
   | { type: 'toggle-favorite'; photoId: string }
-  | { type: 'delete-photo'; photoId: string }
+  | { type: 'delete-photos'; photoIds: readonly string[] }
   | { type: 'add-photos'; photos: Photo[] }
-  | { type: 'create-album'; album: Album };
+  | { type: 'set-details'; photoIds: readonly string[]; change: PhotoDetails }
+  | { type: 'create-album'; album: Album }
+  | { type: 'rename-album'; albumId: string; title: string }
+  | { type: 'delete-album'; albumId: string };
+
+/** What a change to many photos sets on each: a favorite, or being in an album or not. */
+export type PhotoDetails = { favorite: boolean } | { albumId: string; included: boolean };
+
+/** A change to many photos, as asked for: the album comes whole, to check its library. */
+export type DetailsChange = { favorite: boolean } | { album: Album; included: boolean };
+
+/** A photo with `change` applied, or the same photo when it changes nothing. */
+export function withDetails(photo: Photo, change: PhotoDetails): Photo {
+  if ('favorite' in change) {
+    return photo.favorite === change.favorite ? photo : { ...photo, favorite: change.favorite };
+  }
+  const has = photo.albumIds.includes(change.albumId);
+  if (has === change.included) return photo;
+  const albumIds = change.included
+    ? [...photo.albumIds, change.albumId]
+    : photo.albumIds.filter((id) => id !== change.albumId);
+  return { ...photo, albumIds };
+}
 
 export function vaultReducer(state: VaultState, action: VaultAction): VaultState {
   switch (action.type) {
@@ -78,17 +103,45 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
           photo.id === action.photoId ? { ...photo, favorite: !photo.favorite } : photo,
         ),
       };
-    case 'delete-photo':
+    case 'delete-photos': {
+      const gone = new Set(action.photoIds);
       return {
-        photos: state.photos.filter((photo) => photo.id !== action.photoId),
-        albums: state.albums.map((album) =>
-          album.coverPhotoId === action.photoId ? { id: album.id, title: album.title } : album,
+        photos: state.photos.filter((photo) => !gone.has(photo.id)),
+        albums: state.albums.map((album) => {
+          if (album.coverPhotoId === undefined || !gone.has(album.coverPhotoId)) return album;
+          const rest = { ...album };
+          delete rest.coverPhotoId;
+          return rest;
+        }),
+      };
+    }
+    case 'set-details': {
+      const ids = new Set(action.photoIds);
+      return {
+        ...state,
+        photos: state.photos.map((photo) =>
+          ids.has(photo.id) ? withDetails(photo, action.change) : photo,
         ),
       };
+    }
     case 'add-photos':
       return { ...state, photos: [...action.photos, ...state.photos] };
     case 'create-album':
       return { ...state, albums: [action.album, ...state.albums] };
+    case 'rename-album':
+      return {
+        ...state,
+        albums: state.albums.map((album) =>
+          album.id === action.albumId ? { ...album, title: action.title } : album,
+        ),
+      };
+    case 'delete-album':
+      return {
+        photos: state.photos.map((photo) =>
+          withDetails(photo, { albumId: action.albumId, included: false }),
+        ),
+        albums: state.albums.filter((album) => album.id !== action.albumId),
+      };
   }
 }
 
@@ -97,6 +150,11 @@ export function albumPhotos(state: VaultState, albumId: string): Photo[] {
   return state.photos
     .filter((photo) => photo.albumIds.includes(albumId))
     .sort((a, b) => b.takenAt.localeCompare(a.takenAt));
+}
+
+/** Whether a photo can go in an album: both must be in the same library. */
+export function fitsAlbum(photo: Photo, album: Album): boolean {
+  return photo.library === album.library;
 }
 
 /** The album's chosen cover, or else its newest photo. */
@@ -127,6 +185,23 @@ export const mockVaults: VaultsState = {
   },
 };
 
+/**
+ * Thumbnails download only once their photo is near the screen, many per request. Requests
+ * made within this long of each other share a batch, and at most THUMB_REQUESTS batches are
+ * downloading at once.
+ */
+const THUMB_GATHER_MS = 30;
+const THUMB_REQUESTS = 2;
+/**
+ * Decrypted thumbnails reach the screen together, at most this often. One update per
+ * thumbnail would redraw the whole grid once per photo, which a large library can't afford.
+ */
+const THUMB_FLUSH_MS = 100;
+/** How many photos a change to many saves at once. */
+const SAVES_AT_ONCE = 4;
+/** Moving decrypts and re-encrypts whole originals, so fewer run at once. */
+const MOVES_AT_ONCE = 2;
+
 export type VaultStatus = 'loading' | 'ready' | 'failed';
 
 interface VaultValue {
@@ -141,12 +216,25 @@ interface VaultValue {
   ) => Promise<void>;
   toggleFavorite: (photoId: string) => Promise<void>;
   deletePhoto: (photoId: string) => Promise<void>;
+  /** Changes to many photos: each goes through or fails on its own. */
+  deletePhotos: (photoIds: readonly string[]) => Promise<Settled<string>>;
+  /**
+   * Sets a favorite, or puts photos in an album or takes them out, saving only the photos it
+   * changes. A photo can only go in an album of its own library.
+   */
+  setDetails: (photoIds: readonly string[], change: DetailsChange) => Promise<Settled<string>>;
   createAlbum: (title: string) => Promise<Album>;
+  renameAlbum: (albumId: string, title: string) => Promise<void>;
+  /** Deletes an album and takes it out of its photos, which stay in the library. */
+  deleteAlbum: (albumId: string) => Promise<void>;
+  /** Decrypts photos' originals into files, for sending copies elsewhere. */
+  originals: (photoIds: readonly string[]) => Promise<File[]>;
   /**
    * Moves a photo to the other space. Needs that space's keys: `Session.otherSpace`, or the
    * keys just opened for this move.
    */
   movePhoto: (photoId: string, otherKeys?: SpaceKeys) => Promise<void>;
+  movePhotos: (photoIds: readonly string[], otherKeys?: SpaceKeys) => Promise<Settled<string>>;
   /** Starts decrypting a photo's original; `fullSrc` is set when it's ready. */
   loadFull: (photoId: string) => void;
   /** Asks for photos' previews, for when they come near the screen. Asking twice is free. */
@@ -221,6 +309,19 @@ export function VaultProvider({
       if (!photo) throw new FormError('That photo isn’t in your vault anymore.');
       return photo;
     };
+    const otherStoreFor = (keys: SpaceKeys | undefined) => {
+      if (!keys) throw new FormError('Unlock the other space first.');
+      return storeFor(keys);
+    };
+    const moveOne = async (otherStore: SpaceStore, photoId: string) => {
+      if (find(photoId).library !== undefined) {
+        throw new FormError('Photos in a library shared with you stay in it.');
+      }
+      // Albums belong to one space, so a moved photo arrives unfiled. It is re-encrypted
+      // under a new key and id, so nothing ties the two copies together.
+      await otherStore.add(await store.read(photoId), []);
+      await store.remove(photoId);
+    };
     return {
       state,
       status,
@@ -241,25 +342,78 @@ export function VaultProvider({
       },
       deletePhoto: async (photoId) => {
         await store.remove(photoId);
-        dispatch({ type: 'delete-photo', photoId });
+        dispatch({ type: 'delete-photos', photoIds: [photoId] });
+      },
+      deletePhotos: async (photoIds) => {
+        const result = await settleEach(photoIds, SAVES_AT_ONCE, (photoId) =>
+          store.remove(photoId),
+        );
+        dispatch({ type: 'delete-photos', photoIds: result.done });
+        return result;
+      },
+      setDetails: async (photoIds, requested) => {
+        // The album comes whole, since one made a moment ago isn't in this render's state.
+        const album = 'album' in requested ? requested.album : null;
+        const change: PhotoDetails =
+          'album' in requested
+            ? { albumId: requested.album.id, included: requested.included }
+            : requested;
+        const result = await settleEach(photoIds, SAVES_AT_ONCE, async (photoId) => {
+          const photo = find(photoId);
+          if (album && !fitsAlbum(photo, album)) {
+            throw new FormError('Photos can only go in albums of their own library.');
+          }
+          const changed = withDetails(photo, change);
+          if (changed !== photo) await store.update(changed);
+        });
+        dispatch({ type: 'set-details', photoIds: result.done, change });
+        return result;
       },
       createAlbum: async (title) => {
         const album = await store.createAlbum(title);
         dispatch({ type: 'create-album', album });
         return album;
       },
-      movePhoto: async (photoId, keys = otherKeys) => {
-        if (!keys) throw new FormError('Unlock the other space first.');
-        if (find(photoId).library !== undefined) {
-          throw new FormError('Photos in a library shared with you stay in it.');
+      renameAlbum: async (albumId, title) => {
+        await store.renameAlbum(albumId, title);
+        dispatch({ type: 'rename-album', albumId, title });
+      },
+      deleteAlbum: async (albumId) => {
+        await store.removeAlbum(albumId);
+        // A photo that still names the deleted album shows nothing for it, so taking the
+        // album out of the photos' records is best effort.
+        const filed = state.photos.filter((photo) => photo.albumIds.includes(albumId));
+        await settleEach(filed, SAVES_AT_ONCE, (photo) =>
+          store.update(withDetails(photo, { albumId, included: false })),
+        );
+        dispatch({ type: 'delete-album', albumId });
+      },
+      originals: async (photoIds) => {
+        const files: File[] = [];
+        for (const [index, photoId] of photoIds.entries()) {
+          const { full, type } = await store.read(photoId);
+          const name = `twofold-${String(index + 1)}.${extensionOf(type)}`;
+          files.push(new File([full], name, { type }));
         }
-        const otherStore = storeFor(keys);
-        // Albums belong to one space, so a moved photo arrives unfiled. It is re-encrypted
-        // under a new key and id, so nothing ties the two copies together.
-        await otherStore.add(await store.read(photoId), []);
+        return files;
+      },
+      movePhoto: async (photoId, keys = otherKeys) => {
+        const otherStore = otherStoreFor(keys);
+        try {
+          await moveOne(otherStore, photoId);
+        } finally {
+          otherStore.dispose();
+        }
+        dispatch({ type: 'delete-photos', photoIds: [photoId] });
+      },
+      movePhotos: async (photoIds, keys = otherKeys) => {
+        const otherStore = otherStoreFor(keys);
+        const result = await settleEach(photoIds, MOVES_AT_ONCE, (photoId) =>
+          moveOne(otherStore, photoId),
+        );
         otherStore.dispose();
-        await store.remove(photoId);
-        dispatch({ type: 'delete-photo', photoId });
+        dispatch({ type: 'delete-photos', photoIds: result.done });
+        return result;
       },
       loadFull: (photoId) => {
         void store.image(photoId, 'full').then(
