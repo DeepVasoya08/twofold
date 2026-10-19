@@ -185,18 +185,6 @@ export const mockVaults: VaultsState = {
   },
 };
 
-/**
- * Thumbnails download only once their photo is near the screen, many per request. Requests
- * made within this long of each other share a batch, and at most THUMB_REQUESTS batches are
- * downloading at once.
- */
-const THUMB_GATHER_MS = 30;
-const THUMB_REQUESTS = 2;
-/**
- * Decrypted thumbnails reach the screen together, at most this often. One update per
- * thumbnail would redraw the whole grid once per photo, which a large library can't afford.
- */
-const THUMB_FLUSH_MS = 100;
 /** How many photos a change to many saves at once. */
 const SAVES_AT_ONCE = 4;
 /** Moving decrypts and re-encrypts whole originals, so fewer run at once. */
