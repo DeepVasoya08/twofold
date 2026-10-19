@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test';
 
 import {
   MAIN_PASSWORD,
+  choosePhotos,
   PRIVATE_PASSWORD,
   goTo,
   lock,
@@ -193,4 +194,72 @@ test('up to three photos upload at once, and all of them arrive', async ({ page 
   expect(most).toBe(3);
   await expect(page.getByText('7 photos added to your vault')).toBeVisible();
   await expect(page.locator('.photo-tile')).toHaveCount(7);
+});
+
+test('uploads keep going with the dialog closed and the tab in the background', async ({
+  page,
+  context,
+}) => {
+  await signUp(page);
+  // Slow each photo's upload down so there's time to close the dialog mid-way.
+  await page.route('**/api/space/photos/*/full', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.continue();
+  });
+
+  const dialog = await choosePhotos(page, 6);
+  await expect(dialog.getByText('You can close this and keep using Twofold.')).toBeVisible();
+  // A click on the backdrop closes the dialog.
+  await page.mouse.click(5, 5);
+  await expect(dialog).toBeHidden();
+
+  const progress = page.getByRole('button', { name: /of 6 photos uploaded/ });
+  await expect(progress).toBeVisible();
+  await expect(progress.getByRole('progressbar')).toBeVisible();
+
+  // Another tab in front doesn't stop them.
+  const other = await context.newPage();
+  await other.bringToFront();
+  await expect(page.locator('.photo-tile')).toHaveCount(6);
+  await page.bringToFront();
+  await other.close();
+
+  await expect(page.getByText('6 photos added to your vault')).toBeVisible();
+  await expect(progress).toBeHidden();
+
+  // The list started over: opening the dialog again shows no old uploads.
+  await page
+    .getByRole('button', { name: /^Upload/ })
+    .filter({ visible: true })
+    .first()
+    .click();
+  await expect(dialog.getByRole('list', { name: 'Uploads' })).toBeHidden();
+});
+
+test('the progress card reopens the upload list, and leaving mid-upload asks first', async ({
+  page,
+}) => {
+  await signUp(page);
+  await page.route('**/api/space/photos/*/full', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+
+  const dialog = await choosePhotos(page, 4);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole('button', { name: /of 4 photos uploaded/ }).click();
+  await expect(dialog.getByRole('list', { name: 'Uploads' }).getByRole('listitem')).toHaveCount(4);
+  await dialog.getByRole('button', { name: 'Cancel remaining' }).click();
+  await expect(dialog.getByRole('list', { name: 'Uploads' }).getByRole('listitem')).toHaveCount(3);
+
+  const asked = new Promise<string>((resolve) => {
+    page.once('dialog', (prompt) => {
+      resolve(prompt.type());
+      void prompt.dismiss();
+    });
+  });
+  await page.close({ runBeforeUnload: true });
+  expect(await asked).toBe('beforeunload');
 });

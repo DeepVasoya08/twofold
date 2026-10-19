@@ -97,6 +97,17 @@ of originals are in flight, and a photo bigger than that goes alone (`lib/upload
 which keeps memory in check on phones. The upload list shows that small preview once a photo
 has been read, never the original, so dropping hundreds of photos stays light.
 
+Uploads don't belong to the dialog: the queue (`app/uploader.ts`, provided by
+`app/uploads.tsx`) lives as long as the open vault, so closing the dialog (the X, Close, a
+click outside, Escape), moving around the app or switching browser tabs leaves photos
+uploading. While they run with the dialog closed, a small card (bottom right on desktop,
+under the top bar on phones) shows "3 of 6 photos uploaded" with an overall progress bar,
+and clicking it reopens the list. "Cancel remaining" drops photos that haven't started.
+Closing or reloading the tab can't keep uploading, so the browser asks before leaving while
+uploads run; locking drops the queue with the vault. When everything has finished with the
+dialog closed, the list starts over, unless a photo failed: then the card stays, saying how
+many couldn't upload, until the list has been opened.
+
 The grid shows a quiet placeholder until a photo's preview has been downloaded and
 decrypted. Previews are only asked for once their photo is near the screen (within about
 two phone screens, `lib/near-screen.ts`), and are downloaded up to 48 per request.

@@ -8,6 +8,7 @@ import { ToastProvider } from './toast';
 import type { Session, Space } from './account-ops';
 import { sessionStore } from './sharing';
 import { memoryStore, remoteStore } from './space-store';
+import { UploadsProvider } from './uploads';
 import { VaultProvider, emptyVaults } from './vault';
 import type { VaultsState } from './vault';
 
@@ -36,7 +37,7 @@ function OpenVault({
       storeFor={remoteStore}
       initialState={initialVault?.spaces[space]}
     >
-      {children}
+      <UploadsProvider>{children}</UploadsProvider>
     </VaultProvider>
   );
 }
