@@ -1,4 +1,4 @@
-import type { PhotoPart, StoredAlbum, StoredPhoto } from '@twofold/types';
+import type { PhotoPart, StoredAlbum, StoredPhoto, StoredProfilePhoto } from '@twofold/types';
 
 /**
  * Storage queries. Every query is scoped to a space tag (the SHA-256 of the space's access
@@ -243,4 +243,47 @@ export async function countPhotos(db: D1Database, space: string): Promise<number
     .bind(space)
     .first<{ count: number }>();
   return row?.count ?? 0;
+}
+
+export async function findProfilePhoto(
+  db: D1Database,
+  space: string,
+): Promise<StoredProfilePhoto | null> {
+  return db
+    .prepare('SELECT id, meta, image FROM profile_photos WHERE space = ?')
+    .bind(space)
+    .first<StoredProfilePhoto>();
+}
+
+/**
+ * Sets a space's profile photo and returns the bytes the one it replaced held (0 if none).
+ * A batch runs as one transaction, so of two replacements at once each sees the other's.
+ */
+export async function replaceProfilePhoto(
+  db: D1Database,
+  space: string,
+  photo: StoredProfilePhoto,
+  size: number,
+): Promise<number> {
+  const [previous] = await db.batch([
+    db.prepare('SELECT size FROM profile_photos WHERE space = ?').bind(space),
+    db
+      .prepare(
+        `INSERT INTO profile_photos (space, id, meta, image, size) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (space) DO UPDATE SET
+           id = excluded.id, meta = excluded.meta, image = excluded.image, size = excluded.size`,
+      )
+      .bind(space, photo.id, photo.meta, photo.image, size),
+  ]);
+  const row = previous?.results[0] as { size: number } | undefined;
+  return row?.size ?? 0;
+}
+
+/** Removes a space's profile photo and returns the bytes it held (0 if there was none). */
+export async function deleteProfilePhoto(db: D1Database, space: string): Promise<number> {
+  const row = await db
+    .prepare('DELETE FROM profile_photos WHERE space = ? RETURNING size')
+    .bind(space)
+    .first<{ size: number }>();
+  return row?.size ?? 0;
 }

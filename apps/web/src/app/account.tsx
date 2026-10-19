@@ -56,6 +56,8 @@ interface AccountValue {
    */
   openOtherSpace: (password: string) => Promise<SpaceKeys>;
   saveRecoveryKey: (recoveryKey: Uint8Array) => Promise<void>;
+  /** Changes the name shown on the account (it isn't secret; sign-up sent it too). */
+  changeName: (name: string) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
 }
 
@@ -67,6 +69,16 @@ function accountOf(state: AccountState): AccountResponse | null {
   if (state.status === 'locked') return state.account;
   if (state.status === 'unlocked') return state.session.account;
   return null;
+}
+
+/** The same state with the account's name changed. */
+export function withName(state: AccountState, name: string): AccountState {
+  if (state.status === 'locked') return { ...state, account: { ...state.account, name } };
+  if (state.status === 'unlocked') {
+    const { session } = state;
+    return { ...state, session: { ...session, account: { ...session.account, name } } };
+  }
+  return state;
 }
 
 export function AccountProvider({
@@ -206,6 +218,12 @@ export function AccountProvider({
       saveRecoveryKey: (recoveryKey) =>
         guard(async () => {
           await update(() => ops.saveRecoveryKey(requireSession(), recoveryKey));
+        }),
+      changeName: (name) =>
+        guard(async () => {
+          const changed = await api.updateName({ name });
+          // Only the name is taken from the answer: the keyring in memory stays as it is.
+          setState((current) => withName(current, changed.name));
         }),
       deleteAccount: (password) =>
         guard(async () => {

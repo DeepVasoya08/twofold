@@ -162,6 +162,22 @@ other accounts; see [Sharing](#sharing).
 - **Moving** a photo to the other space downloads and decrypts it, adds it to the other
   space under a new id and key, then deletes the original. The two copies share nothing
   the server can match.
+- **Profile photos** belong to a space too, one per space at most (`profile_photos`, keyed
+  by the space tag). The browser crops and shrinks the photo to a 256px JPEG, encrypts it
+  with `encryptFile` under a key of its own, and seals that key in an owner-only `profile`
+  record, so members of a shared space can't read or replace it (the routes refuse share
+  tokens too). The main library and the private space each have their own photo, so one
+  never shows the other exists. It counts against the storage quota like any upload (at
+  most 128 KiB of ciphertext), and wiping the space removes it. The account's **name** is
+  not secret: sign-up sends it in plaintext, and `PUT /api/account/name` changes it with the
+  session alone.
+- **Storage used** shown in the app is the encrypted size of the open space's own photos,
+  added up in the browser from the sizes the photo list already carries. The account's
+  total (`stored_bytes`) is never sent to the browser: in the main library it would include
+  a private space's photos and so show that one exists. The settings say the 1 GB limit
+  covers everything the account stores, which is also true without a private space (photos
+  added to libraries shared with you count too), so a "storage full" message before the main
+  library reaches 1 GB has an innocent explanation.
 - **Deleting the account** first wipes every space the device holds keys for (the open
   one, the other one if its password was typed this session, and the one the confirming
   password opens), then the account.

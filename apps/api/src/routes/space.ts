@@ -10,7 +10,13 @@ import {
   STORAGE_SIZES,
   THUMB_BATCH_MAX,
 } from '@twofold/types';
-import type { AlbumList, JoinedList, MemberList, PhotoPage } from '@twofold/types';
+import type {
+  AlbumList,
+  JoinedList,
+  MemberList,
+  PhotoPage,
+  ProfilePhotoResponse,
+} from '@twofold/types';
 
 import {
   findSessionAccount,
@@ -27,6 +33,7 @@ import {
   createPhotoSchema,
   emptySchema,
   photoPartSchema,
+  profilePhotoSchema,
   recordIdSchema,
   spaceTokenSchema,
   updateRecordSchema,
@@ -53,13 +60,16 @@ import {
   deleteAlbum,
   deleteAlbums,
   deletePhotoRows,
+  deleteProfilePhoto,
   findPhoto,
+  findProfilePhoto,
   insertAlbum,
   insertPendingPhoto,
   listAlbums,
   listPhotos,
   objectKey,
   objectKeys,
+  replaceProfilePhoto,
   somePhotos,
   stalePendingPhotos,
   updateAlbumMeta,
@@ -404,6 +414,39 @@ space.delete('/', requireOwner, async (c) => {
   }
   await deleteAlbums(c.env.DB, tag);
   await deleteSharing(c.env.DB, tag);
+  await releaseStorage(c.env.DB, c.get('account').id, await deleteProfilePhoto(c.env.DB, tag));
+  return c.body(null, 204);
+});
+
+/**
+ * The space's profile photo. Owner-only: members have the records key, but the photo's key
+ * is in an owner-only record, and they mustn't replace the owner's photo either.
+ */
+space.get('/profile-photo', requireOwner, async (c) =>
+  c.json<ProfilePhotoResponse>({ photo: await findProfilePhoto(c.env.DB, c.get('space')) }),
+);
+
+/** Sets or replaces the profile photo. It counts against storage like any photo. */
+space.put('/profile-photo', requireOwner, async (c) => {
+  const body = await readBody(c, profilePhotoSchema);
+  const image = body && fromBase64Url(body.image);
+  if (!body || !image) return c.json({ error: messages.badRequest }, 400);
+  const accountId = c.get('account').id;
+  if (!(await reserveStorage(c.env.DB, accountId, image.length, STORAGE_SIZES.accountQuota))) {
+    return c.json({ error: storageFull }, 413);
+  }
+  const replaced = await replaceProfilePhoto(c.env.DB, c.get('space'), body, image.length);
+  await releaseStorage(c.env.DB, accountId, replaced);
+  return c.body(null, 204);
+});
+
+space.delete('/profile-photo', requireOwner, async (c) => {
+  if (!(await readBody(c, emptySchema))) return c.json({ error: messages.badRequest }, 400);
+  await releaseStorage(
+    c.env.DB,
+    c.get('account').id,
+    await deleteProfilePhoto(c.env.DB, c.get('space')),
+  );
   return c.body(null, 204);
 });
 

@@ -7,6 +7,8 @@ import type { AccountState } from './account';
 import { ThemeProvider } from './theme';
 import { ToastProvider } from './toast';
 import type { Session, Space } from './account-ops';
+import { ProfileProvider } from './profile';
+import { memoryProfilePhoto, remoteProfilePhoto } from './profile-photo';
 import { sessionStore } from './sharing';
 import { memoryStore, remoteStore } from './space-store';
 import { UploadsProvider } from './uploads';
@@ -30,6 +32,9 @@ function OpenVault({
       ? sessionStore(session.opened.space, session.account.name)
       : memoryStore((initialVault ?? emptyVaults).spaces[space]),
   );
+  const [profileStore] = useState(() =>
+    session && !initialVault ? remoteProfilePhoto(session.opened.space) : memoryProfilePhoto(),
+  );
   return (
     <VaultProvider
       space={space}
@@ -38,10 +43,12 @@ function OpenVault({
       storeFor={remoteStore}
       initialState={initialVault?.spaces[space]}
     >
-      <UploadsProvider>
-        <IdleLock />
-        {children}
-      </UploadsProvider>
+      <ProfileProvider store={profileStore}>
+        <UploadsProvider>
+          <IdleLock />
+          {children}
+        </UploadsProvider>
+      </ProfileProvider>
     </VaultProvider>
   );
 }

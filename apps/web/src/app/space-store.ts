@@ -165,10 +165,17 @@ function addedBy(
   return { addedBy: 'contact', addedByName: meta.by?.name ?? membership?.ownerName ?? '' };
 }
 
-function toPhoto(id: string, meta: PhotoMeta, membership: Membership | null, src = ''): Photo {
+function toPhoto(
+  id: string,
+  meta: PhotoMeta,
+  membership: Membership | null,
+  size: number,
+  src = '',
+): Photo {
   return {
     id,
     src,
+    size,
     width: meta.width,
     height: meta.height,
     takenAt: meta.takenAt,
@@ -265,7 +272,7 @@ export function remoteStore(
           const key = meta && crypto.fromBase64Url(meta.key);
           if (!meta || key?.length !== 32) continue;
           known.set(stored.id, { key, meta });
-          photos.push(toPhoto(stored.id, meta, membership));
+          photos.push(toPhoto(stored.id, meta, membership, stored.thumbSize + stored.fullSize));
         }
         after = page.next ?? undefined;
       } while (after);
@@ -363,7 +370,13 @@ export function remoteStore(
         throw error;
       }
       known.set(id, { key, meta });
-      return toPhoto(id, meta, membership, track(id, 'thumb', photo.thumb, THUMB_TYPE));
+      return toPhoto(
+        id,
+        meta,
+        membership,
+        thumb.length + full.length,
+        track(id, 'thumb', photo.thumb, THUMB_TYPE),
+      );
     },
 
     update: async (photo) => {

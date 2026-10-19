@@ -69,6 +69,11 @@ export async function updateKeyring(
   return result.meta.changes === 1;
 }
 
+/** Changes the account's name. */
+export async function updateName(db: D1Database, accountId: string, name: string): Promise<void> {
+  await db.prepare('UPDATE accounts SET name = ? WHERE id = ?').bind(name, accountId).run();
+}
+
 /**
  * Adds an upload's bytes to the account's total, only if that stays within `limit`. One
  * statement, so parallel uploads can't together go over. Returns false if it would.

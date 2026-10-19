@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { useAccount, useMe } from '../app/account';
+import { useProfile } from '../app/profile';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useUploads } from '../app/uploads';
@@ -8,6 +9,7 @@ import { useVault } from '../app/vault';
 import { Avatar, LockBadge, Logo } from './Brand';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
+import { StorageMeter } from './StorageMeter';
 import { UploadDialog } from './UploadDialog';
 import { UploadProgress } from './UploadProgress';
 
@@ -52,6 +54,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
   const { space } = useVault();
   const { lock: lockAccount } = useAccount();
   const me = useMe();
+  const { photo } = useProfile();
   const { openDialog: openUpload } = useUploads();
   const isPrivate = space === 'private';
   // Locking drops the keys and every decrypted photo; the next password decides the space.
@@ -92,8 +95,11 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
             );
           })}
         </nav>
+        <div className="shell__storage">
+          <StorageMeter compact />
+        </div>
         <div className="shell__account">
-          <Avatar person={me} size="sm" />
+          <Avatar person={me} size="sm" src={photo} />
           <div className="shell__account-text">
             <span className="shell__account-name">{me.name}</span>
             <LockBadge label="Encrypted" />

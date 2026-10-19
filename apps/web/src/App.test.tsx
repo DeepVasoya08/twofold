@@ -137,6 +137,33 @@ describe('App', () => {
     expect(render('/settings', open)).toContain('can&#x27;t be recovered');
   });
 
+  it('shows the open space’s storage against the 1 GB limit', () => {
+    const sized: VaultsState = {
+      spaces: {
+        main: {
+          photos: mockVaults.spaces.main.photos.map((photo) => ({ ...photo, size: 1024 * 1024 })),
+          albums: [],
+        },
+        private: {
+          photos: mockVaults.spaces.private.photos.map((photo) => ({ ...photo, size: 1 })),
+          albums: [],
+        },
+      },
+    };
+    const count = mockVaults.spaces.main.photos.length;
+    const html = render('/settings', mainSession(), sized);
+    expect(html).toContain(`${String(count)} MB of 1 GB used`);
+    // The sidebar shows it on every screen.
+    expect(render('/photos', mainSession(), sized)).toContain(`${String(count)} MB of 1 GB used`);
+    expect(render('/settings', mainSession(), emptyVaults)).toContain('0 B of 1 GB used');
+  });
+
+  it('offers to edit the profile', () => {
+    const html = render('/settings');
+    expect(html).toContain('>Edit<');
+    expect(html).toContain('Edit profile');
+  });
+
   it('does not mention couples or partners anywhere', () => {
     const paths = [
       '/',

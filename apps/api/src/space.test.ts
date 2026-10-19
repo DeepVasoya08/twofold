@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { SPACE_HEADER, STORAGE_SIZES, THUMB_BATCH_MAX, readThumbBatch } from '@twofold/types';
-import type { AlbumList, PhotoPage, StoredPhoto } from '@twofold/types';
+import type { AlbumList, PhotoPage, ProfilePhotoResponse, StoredPhoto } from '@twofold/types';
 
 import type { Env } from './env';
 import { PAGE_SIZE, PENDING_TTL_MS } from './routes/space';
@@ -485,5 +485,87 @@ describe('storage quota', () => {
     useSpace(other, toBase64Url(randomBytes(16)));
     await upload(other);
     expect((await start()).status).toBe(413);
+  });
+});
+
+describe('profile photo', () => {
+  const path = '/space/profile-photo';
+  const stored = () =>
+    (sqlite.prepare('SELECT stored_bytes FROM accounts').get() as { stored_bytes: number })
+      .stored_bytes;
+  const newPhoto = (size = 2000) => ({
+    id: newId(),
+    meta: newMeta(),
+    image: toBase64Url(randomBytes(size)),
+  });
+  const get = async (c = client) => {
+    const res = await c.request('GET', path);
+    expect(res.status).toBe(200);
+    return (await res.json<ProfilePhotoResponse>()).photo;
+  };
+
+  it('is empty until set, then comes back as stored, per space', async () => {
+    expect(await get()).toBeNull();
+    const photo = newPhoto();
+    expect((await client.request('PUT', path, photo)).status).toBe(204);
+    expect(await get()).toEqual(photo);
+    // Another space of the same account has its own (none yet).
+    useSpace(client, toBase64Url(randomBytes(16)));
+    expect(await get()).toBeNull();
+  });
+
+  it('counts against storage, and gives the bytes back when replaced or removed', async () => {
+    await client.request('PUT', path, newPhoto(2000));
+    expect(stored()).toBe(2000);
+    await client.request('PUT', path, newPhoto(500));
+    expect(stored()).toBe(500);
+    expect((await client.request('DELETE', path, {})).status).toBe(204);
+    expect(stored()).toBe(0);
+    expect(await get()).toBeNull();
+    // Removing it again gives nothing back twice.
+    await upload();
+    expect((await client.request('DELETE', path, {})).status).toBe(204);
+    expect(stored()).toBe(1100);
+  });
+
+  it('is refused when storage is full', async () => {
+    sqlite.prepare('UPDATE accounts SET stored_bytes = ?').run(STORAGE_SIZES.accountQuota - 10);
+    const res = await client.request('PUT', path, newPhoto(100));
+    expect(res.status).toBe(413);
+    expect(await get()).toBeNull();
+  });
+
+  it('is gone with the rest of the space when the space is wiped', async () => {
+    await client.request('PUT', path, newPhoto(2000));
+    expect((await client.request('DELETE', '/space', {})).status).toBe(204);
+    expect(await get()).toBeNull();
+    expect(stored()).toBe(0);
+  });
+
+  it('refuses malformed and oversized photos', async () => {
+    const photo = newPhoto();
+    for (const bad of [
+      { ...photo, image: 'not base64!' },
+      { ...photo, id: 'short' },
+      { ...photo, image: toBase64Url(new Uint8Array(STORAGE_SIZES.maxProfilePhoto + 1)) },
+      { ...photo, extra: true },
+    ]) {
+      expect((await client.request('PUT', path, bad)).status).toBe(400);
+    }
+    expect(await get()).toBeNull();
+  });
+
+  it('is only for the space’s owner, not a member', async () => {
+    const memberToken = toBase64Url(randomBytes(16));
+    const member = { id: newId(), token: memberToken, meta: newMeta() };
+    expect((await client.request('POST', '/space/members', member)).status).toBe(201);
+    await client.request('PUT', path, newPhoto());
+    const guest = new Client(env);
+    const keyring = await makeKeyring([newLoginKey(), newLoginKey(), newLoginKey()]);
+    await guest.request('POST', '/auth/signup', { email: 'kim@example.com', name: 'Kim', keyring });
+    useSpace(guest, memberToken);
+    expect((await guest.request('GET', path)).status).toBe(403);
+    expect((await guest.request('PUT', path, newPhoto())).status).toBe(403);
+    expect((await guest.request('DELETE', path, {})).status).toBe(403);
   });
 });

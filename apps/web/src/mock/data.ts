@@ -30,6 +30,8 @@ export interface Photo {
   albumIds: string[];
   /** Set when the photo is in a library someone shared with you: whose library it is. */
   library?: string;
+  /** Encrypted bytes it takes up on the server (both files), once it is stored. */
+  size?: number;
 }
 
 export interface Album {

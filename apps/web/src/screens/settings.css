@@ -31,8 +31,38 @@
 }
 
 .profile__text {
+  flex: 1;
   display: grid;
   min-width: 0;
+}
+
+.profile__edit {
+  flex: none;
+}
+
+.profile-editor {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-editor__note,
+.settings-storage__note {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.settings-storage {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
 }
 
 .profile__name {
