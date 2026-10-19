@@ -1,9 +1,17 @@
 import { Hono } from 'hono';
 
-import { deleteAccount, deleteOtherSessions, updateKeyring } from '../db';
+import type { DeviceList } from '@twofold/types';
+
+import {
+  deleteAccount,
+  deleteOtherSession,
+  deleteOtherSessions,
+  listDevices,
+  updateKeyring,
+} from '../db';
 import { checkProof, clientAddress } from '../proof';
 import { messages, readBody, toAccountResponse } from '../respond';
-import { deleteAccountSchema, updateKeyringSchema } from '../schemas';
+import { deleteAccountSchema, deviceIdSchema, emptySchema, updateKeyringSchema } from '../schemas';
 import { clearSessionCookie, requireSession } from '../session';
 import type { AppEnv } from '../session';
 
@@ -50,6 +58,30 @@ account.put('/keyring', async (c) => {
   return c.json(
     toAccountResponse({ ...current, keyring: body.keyring, version: body.version + 1 }),
   );
+});
+
+/** Every device signed in to this account, this one first. */
+account.get('/devices', async (c) => {
+  const devices = await listDevices(c.env.DB, c.get('account').id, c.get('session'), Date.now());
+  return c.json<DeviceList>({ devices });
+});
+
+/**
+ * Signs out another device: its session is deleted, so its next request is refused and it
+ * drops its keys. This device signs out with POST /auth/logout instead.
+ */
+account.delete('/devices/:id', async (c) => {
+  const id = deviceIdSchema.safeParse(c.req.param('id'));
+  const body = await readBody(c, emptySchema);
+  if (!id.success || !body) return c.json({ error: messages.badRequest }, 400);
+  const deleted = await deleteOtherSession(
+    c.env.DB,
+    c.get('account').id,
+    id.data,
+    c.get('session'),
+  );
+  if (!deleted) return c.json({ error: 'That device is already signed out.' }, 404);
+  return c.body(null, 204);
 });
 
 account.delete('/', async (c) => {

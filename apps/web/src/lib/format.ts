@@ -100,3 +100,16 @@ export function initials(name: string): string {
     .map((part) => part.charAt(0).toUpperCase())
     .join('');
 }
+
+const HOUR_MS = 60 * 60 * 1000;
+const relativeFormat = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' });
+
+/** "Active 3 hours ago", from a last use kept to the hour. */
+export function formatLastActive(lastActive: number, now: number): string {
+  const hours = Math.floor((now - lastActive) / HOUR_MS);
+  if (hours < 1) return 'Active recently';
+  if (hours < 24) return `Active ${relativeFormat.format(-hours, 'hour')}`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `Active ${relativeFormat.format(-days, 'day')}`;
+  return `Active ${shortDayFormat.format(new Date(lastActive))}`;
+}

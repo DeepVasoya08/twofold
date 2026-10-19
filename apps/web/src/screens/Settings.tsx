@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode, SubmitEvent } from 'react';
 
 import type { SpaceKeys } from '@twofold/crypto';
+import type { Device } from '@twofold/types';
 
 import { useAccount, useMe } from '../app/account';
 import { useAutoLock } from '../app/auto-lock';
@@ -20,7 +21,9 @@ import { Dialog } from '../components/Dialog';
 import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
+import { api } from '../lib/api';
 import { AUTO_LOCK_CHOICES, parseAutoLock } from '../lib/auto-lock';
+import { formatLastActive, formatShortDay } from '../lib/format';
 import { MIN_PASSWORD_LENGTH } from '../lib/password';
 
 import './settings.css';
@@ -99,6 +102,99 @@ function useSharingLists(keys: SpaceKeys | null) {
     setVersion((current) => current + 1);
   }, []);
   return { lists, reload };
+}
+
+interface DeviceListState {
+  devices: Device[];
+  /** When the list arrived, for "Active 3 hours ago". */
+  loadedAt: number;
+}
+
+/** Every device signed in to the account, this one first. Null until loaded. */
+function useDevices() {
+  const [list, setList] = useState<DeviceListState | null>(null);
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    api.devices().then(
+      ({ devices }) => {
+        if (!cancelled) setList({ devices, loadedAt: Date.now() });
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
+  const reload = useCallback(() => {
+    setVersion((current) => current + 1);
+  }, []);
+  return { list, reload };
+}
+
+const UNKNOWN_DEVICE = 'Unknown device';
+
+function DeviceRows() {
+  const toast = useToast();
+  const { list, reload } = useDevices();
+  const [signingOut, setSigningOut] = useState<string | null>(null);
+
+  if (!list) {
+    return <Row icon="laptop" title="This device" description="Signed in now" />;
+  }
+
+  const signOut = (device: Device) => {
+    if (signingOut) return;
+    setSigningOut(device.id);
+    api
+      .signOutDevice(device.id)
+      .then(
+        () => {
+          toast.show(`Signed out ${device.name || 'that device'}`);
+        },
+        (error: unknown) => {
+          toast.show(errorMessage(error));
+        },
+      )
+      .finally(() => {
+        setSigningOut(null);
+        reload();
+      });
+  };
+
+  return list.devices.map((device) => {
+    const name = device.name || UNKNOWN_DEVICE;
+    const active = device.current
+      ? 'Active now'
+      : formatLastActive(device.lastActive, list.loadedAt);
+    const since = `Signed in ${formatShortDay(new Date(device.signedInAt).toISOString())}`;
+    return (
+      <Row
+        key={device.id}
+        icon={device.kind === 'computer' ? 'laptop' : 'phone'}
+        title={name}
+        description={`${active} · ${since}`}
+        action={
+          device.current ? (
+            <span className="pill">This device</span>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              aria-label={`Sign out ${name}`}
+              disabled={signingOut !== null}
+              aria-busy={signingOut === device.id}
+              onClick={() => {
+                signOut(device);
+              }}
+            >
+              {signingOut === device.id ? 'Signing out…' : 'Sign out'}
+            </button>
+          )
+        }
+      />
+    );
+  });
 }
 
 /** The password input in a dialog that an error is shown under. */
@@ -432,12 +528,7 @@ export function Settings() {
       </Section>
 
       <Section title="Devices">
-        <Row
-          icon="laptop"
-          title="This browser"
-          description="Signed in now"
-          action={<span className="pill">Current</span>}
-        />
+        <DeviceRows />
       </Section>
 
       <Section title="Appearance">
