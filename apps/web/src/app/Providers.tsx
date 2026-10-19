@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { AccountProvider, useAccount } from './account';
+import { AutoLockProvider, IdleLock } from './auto-lock';
 import type { AccountState } from './account';
 import { ThemeProvider } from './theme';
 import { ToastProvider } from './toast';
@@ -37,7 +38,10 @@ function OpenVault({
       storeFor={remoteStore}
       initialState={initialVault?.spaces[space]}
     >
-      <UploadsProvider>{children}</UploadsProvider>
+      <UploadsProvider>
+        <IdleLock />
+        {children}
+      </UploadsProvider>
     </VaultProvider>
   );
 }
@@ -79,15 +83,17 @@ export function Providers({
   return (
     <ThemeProvider>
       <ToastProvider>
-        {initialAccount ? (
-          <AccountProvider initialState={initialAccount}>
-            <SessionVault initialVault={initialVault}>{children}</SessionVault>
-          </AccountProvider>
-        ) : (
-          <AccountProvider>
-            <SessionVault initialVault={initialVault}>{children}</SessionVault>
-          </AccountProvider>
-        )}
+        <AutoLockProvider>
+          {initialAccount ? (
+            <AccountProvider initialState={initialAccount}>
+              <SessionVault initialVault={initialVault}>{children}</SessionVault>
+            </AccountProvider>
+          ) : (
+            <AccountProvider>
+              <SessionVault initialVault={initialVault}>{children}</SessionVault>
+            </AccountProvider>
+          )}
+        </AutoLockProvider>
       </ToastProvider>
     </ThemeProvider>
   );
