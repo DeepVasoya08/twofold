@@ -4,6 +4,7 @@ import { createMiddleware } from 'hono/factory';
 
 import { fromBase64Url, sha256, toBase64Url } from '@twofold/crypto/webcrypto';
 import {
+  MAX_ALBUM_MEMBERS,
   MAX_JOINED,
   MAX_MEMBERS,
   SPACE_HEADER,
@@ -11,6 +12,7 @@ import {
   THUMB_BATCH_MAX,
 } from '@twofold/types';
 import type {
+  AlbumItemList,
   AlbumList,
   JoinedList,
   MemberList,
@@ -18,6 +20,17 @@ import type {
   ProfilePhotoResponse,
 } from '@twofold/types';
 
+import {
+  albumItemIds,
+  deleteAlbumItem,
+  deleteAlbumSharing,
+  isAlbumShared,
+  listSharedAlbumPhotos,
+  putAlbumItem,
+  setAlbumShared,
+  sharedAlbumList,
+  sharedAlbumPhotoIds,
+} from '../album-share-db';
 import {
   findSessionAccount,
   releaseStorage,
@@ -41,6 +54,7 @@ import {
 import { requestSessionHash, sessionEnded } from '../session';
 import type { AppEnv } from '../session';
 import {
+  countAlbumMembers,
   countJoined,
   countMembers,
   deleteJoined,
@@ -91,7 +105,8 @@ const notFound = 'That photo isn’t here anymore.';
  *
  * The owner's token is the space id. A member's is a share token the owner registered; it
  * reaches the same photos and albums, but not the owner-only routes (sharing, joined
- * libraries, wiping the space), and the owner can revoke it.
+ * libraries, wiping the space), and the owner can revoke it. A token given one album reaches
+ * only that album's shared photos, and can't change anything.
  */
 export const space = new Hono<AppEnv>();
 
@@ -117,15 +132,35 @@ const requireSpace = createMiddleware<AppEnv>(async (c, next) => {
   ]);
   const account = sessionAccountFrom(session?.results ?? []);
   if (!account) return sessionEnded(c);
-  const member = members?.results[0] as { id: string; space: string } | undefined;
+  const member = members?.results[0] as
+    { id: string; space: string; album: string | null } | undefined;
   c.set('account', account);
   c.set('session', sessionHash);
   c.set('space', member?.space ?? hash);
   c.set('member', member?.id ?? null);
+  c.set('album', member?.album ?? null);
   return next();
 });
 
-space.use(requireSpace);
+/** What a token given one album may do: list it, download its photos, and leave. */
+const ALBUM_ROUTES: readonly { method: string; path: RegExp }[] = [
+  { method: 'GET', path: /\/space\/(photos|albums|thumbs)$/ },
+  { method: 'GET', path: /\/space\/photos\/[^/]+\/(thumb|full)$/ },
+  { method: 'DELETE', path: /\/space\/membership$/ },
+];
+
+const albumOnly = 'You can only see this album.';
+
+/** Keeps album-scoped tokens to the few read-only routes their album needs. */
+const limitAlbumTokens = createMiddleware<AppEnv>(async (c, next) => {
+  if (c.get('album') === null) return next();
+  const allowed = ALBUM_ROUTES.some(
+    (route) => route.method === c.req.method && route.path.test(c.req.path),
+  );
+  return allowed ? next() : c.json({ error: albumOnly }, 403);
+});
+
+space.use(requireSpace, limitAlbumTokens);
 
 const notOwner = 'Only the person who shared this library can do that.';
 
@@ -158,7 +193,10 @@ space.get('/photos', async (c) => {
   if (after !== '' && !recordIdSchema.safeParse(after).success) {
     return c.json({ error: messages.badRequest }, 400);
   }
-  const photos = await listPhotos(c.env.DB, c.get('space'), after, PAGE_SIZE);
+  const album = c.get('album');
+  const photos = album
+    ? await listSharedAlbumPhotos(c.env.DB, c.get('space'), album, after, PAGE_SIZE)
+    : await listPhotos(c.env.DB, c.get('space'), after, PAGE_SIZE);
   const next = photos.length === PAGE_SIZE ? (photos.at(-1)?.id ?? null) : null;
   return c.json<PhotoPage>({ photos, next });
 });
@@ -226,7 +264,10 @@ space.get('/thumbs', async (c) => {
     new Set(ids).size === ids.length &&
     ids.every((id) => recordIdSchema.safeParse(id).success);
   if (!valid) return c.json({ error: messages.badRequest }, 400);
-  const found = await committedPhotoIds(c.env.DB, c.get('space'), ids);
+  const album = c.get('album');
+  const found = album
+    ? await sharedAlbumPhotoIds(c.env.DB, c.get('space'), album, ids)
+    : await committedPhotoIds(c.env.DB, c.get('space'), ids);
   const read = (index: number) => {
     const id = ids[index];
     return id !== undefined && found.has(id) ? readThumb(c.env.BLOBS, id) : Promise.resolve(null);
@@ -319,12 +360,19 @@ space.get('/photos/:id/:part', async (c) => {
   const params = parsePhotoParams(c.req.param());
   if (!params) return c.json({ error: messages.badRequest }, 400);
   // The row and the file are fetched together; the file is only sent if the row says this
-  // space has the photo.
-  const [photo, object] = await Promise.all([
-    findPhoto(c.env.DB, c.get('space'), params.id),
+  // space has the photo (and, for a token given one album, that the album lists it).
+  const album = c.get('album');
+  const [visible, object] = await Promise.all([
+    album
+      ? sharedAlbumPhotoIds(c.env.DB, c.get('space'), album, [params.id]).then((found) =>
+          found.has(params.id),
+        )
+      : findPhoto(c.env.DB, c.get('space'), params.id).then(
+          (photo) => photo !== null && !photo.pending,
+        ),
     c.env.BLOBS.get(objectKey(params.id, params.part)),
   ]);
-  if (!photo || photo.pending || !object) {
+  if (!visible || !object) {
     await object?.body.cancel();
     return c.json({ error: notFound }, 404);
   }
@@ -357,9 +405,13 @@ space.delete('/photos/:id', async (c) => {
   return c.body(null, 204);
 });
 
-space.get('/albums', async (c) =>
-  c.json<AlbumList>({ albums: await listAlbums(c.env.DB, c.get('space')) }),
-);
+space.get('/albums', async (c) => {
+  const album = c.get('album');
+  const albums = album
+    ? await sharedAlbumList(c.env.DB, c.get('space'), album)
+    : await listAlbums(c.env.DB, c.get('space'));
+  return c.json<AlbumList>({ albums });
+});
 
 space.post('/albums', async (c) => {
   const body = await readBody(c, createAlbumSchema);
@@ -399,6 +451,67 @@ space.delete('/albums/:id', async (c) => {
   if (!(await deleteAlbum(c.env.DB, c.get('space'), id.data))) {
     return c.json({ error: albumNotFound }, 404);
   }
+  // Nobody keeps seeing an album that's gone.
+  await deleteAlbumSharing(c.env.DB, c.get('space'), id.data);
+  return c.body(null, 204);
+});
+
+/**
+ * Starts sharing an album, or replaces its title as the people it's shared with see it
+ * (sealed under the album's own key).
+ */
+space.put('/albums/:id/shared', async (c) => {
+  const id = recordIdSchema.safeParse(c.req.param('id'));
+  const body = await readBody(c, updateRecordSchema);
+  if (!id.success || !body) return c.json({ error: messages.badRequest }, 400);
+  if (!(await setAlbumShared(c.env.DB, c.get('space'), id.data, body.meta))) {
+    return c.json({ error: albumNotFound }, 404);
+  }
+  return c.body(null, 204);
+});
+
+/** Stops sharing an album with everyone: their tokens stop working at once. */
+space.delete('/albums/:id/shared', requireOwner, async (c) => {
+  const id = recordIdSchema.safeParse(c.req.param('id'));
+  if (!id.success || !(await readBody(c, emptySchema))) {
+    return c.json({ error: messages.badRequest }, 400);
+  }
+  await deleteAlbumSharing(c.env.DB, c.get('space'), id.data);
+  return c.body(null, 204);
+});
+
+/** The photos a shared album lists, so the device can bring it up to date. */
+space.get('/albums/:id/items', async (c) => {
+  const id = recordIdSchema.safeParse(c.req.param('id'));
+  if (!id.success) return c.json({ error: messages.badRequest }, 400);
+  return c.json<AlbumItemList>({
+    photoIds: await albumItemIds(c.env.DB, c.get('space'), id.data),
+  });
+});
+
+function parseItemParams(params: { id: string; photo: string }) {
+  const album = recordIdSchema.safeParse(params.id);
+  const photo = recordIdSchema.safeParse(params.photo);
+  return album.success && photo.success ? { album: album.data, photo: photo.data } : null;
+}
+
+/** Lists a photo in a shared album, with its details sealed under the album key. */
+space.put('/albums/:id/items/:photo', async (c) => {
+  const params = parseItemParams(c.req.param());
+  const body = await readBody(c, updateRecordSchema);
+  if (!params || !body) return c.json({ error: messages.badRequest }, 400);
+  if (!(await putAlbumItem(c.env.DB, c.get('space'), { ...params, meta: body.meta }))) {
+    return c.json({ error: 'That album isn’t shared, or the photo isn’t here.' }, 404);
+  }
+  return c.body(null, 204);
+});
+
+space.delete('/albums/:id/items/:photo', async (c) => {
+  const params = parseItemParams(c.req.param());
+  if (!params || !(await readBody(c, emptySchema))) {
+    return c.json({ error: messages.badRequest }, 400);
+  }
+  await deleteAlbumItem(c.env.DB, c.get('space'), params.album, params.photo);
   return c.body(null, 204);
 });
 
@@ -460,15 +573,28 @@ space.post('/members', requireOwner, async (c) => {
   const token = body && fromBase64Url(body.token);
   if (!body || !token) return c.json({ error: messages.badRequest }, 400);
   const tag = c.get('space');
-  if ((await countMembers(c.env.DB, tag)) >= MAX_MEMBERS) {
-    return c.json({ error: 'This library is shared with as many people as Twofold allows.' }, 409);
+  const album = body.album ?? null;
+  if (album === null) {
+    if ((await countMembers(c.env.DB, tag)) >= MAX_MEMBERS) {
+      return c.json(
+        { error: 'This library is shared with as many people as Twofold allows.' },
+        409,
+      );
+    }
+  } else {
+    if (!(await isAlbumShared(c.env.DB, tag, album))) {
+      return c.json({ error: albumNotFound }, 404);
+    }
+    if ((await countAlbumMembers(c.env.DB, tag, album)) >= MAX_ALBUM_MEMBERS) {
+      return c.json({ error: 'This album is shared with as many people as Twofold allows.' }, 409);
+    }
   }
   const tokenHash = toBase64Url(await sha256(token));
   // A share token must never be another space's own token, or it would reach both.
   if ((await countPhotos(c.env.DB, tokenHash)) > 0) {
     return c.json({ error: messages.badRequest }, 409);
   }
-  if (!(await insertMember(c.env.DB, tag, { id: body.id, tokenHash, meta: body.meta }))) {
+  if (!(await insertMember(c.env.DB, tag, { id: body.id, tokenHash, meta: body.meta, album }))) {
     return c.json({ error: messages.badRequest }, 409);
   }
   return c.body(null, 201);

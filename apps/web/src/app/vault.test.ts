@@ -6,6 +6,7 @@ import {
   albumPhotos,
   emptyVaults,
   fitsAlbum,
+  timelinePhotos,
   vaultReducer,
   withDetails,
 } from './vault';
@@ -123,6 +124,33 @@ describe('album helpers', () => {
     expect(fitsAlbum(theirs, { id: 'x', title: 'X' })).toBe(false);
     expect(fitsAlbum(theirs, { id: 'y', title: 'Y', library: 'Mira' })).toBe(true);
     expect(fitsAlbum(mine, { id: 'y', title: 'Y', library: 'Mira' })).toBe(false);
+  });
+
+  it('never fits anything into or out of an album shared with you', () => {
+    const theirs = { ...photo('t', '2026-01-01T00:00:00Z'), library: 'Mira' };
+    const shared = { ...theirs, sharedAlbum: true };
+    const sharedAlbum = { id: 's', title: 'S', library: 'Mira', sharedAlbum: true };
+    expect(fitsAlbum(theirs, sharedAlbum)).toBe(false);
+    expect(fitsAlbum(shared, sharedAlbum)).toBe(false);
+    expect(fitsAlbum(shared, { id: 'y', title: 'Y', library: 'Mira' })).toBe(false);
+  });
+
+  it('keeps photos from albums shared with you out of the timeline', () => {
+    const shared = { ...photo('s', '2026-04-01T00:00:00Z', ['x']), sharedAlbum: true };
+    const withShared = { ...state, photos: [...state.photos, shared] };
+    expect(timelinePhotos(withShared).map((p) => p.id)).toEqual(['a', 'b', 'c']);
+    expect(albumPhotos(withShared, 'x').map((p) => p.id)).toEqual(['s']);
+  });
+
+  it('records who an album is shared with, and forgets it when nobody is left', () => {
+    const shared = vaultReducer(state, {
+      type: 'set-shared-with',
+      albumId: 'trip',
+      names: ['Mira'],
+    });
+    expect(shared.albums[0]?.sharedWith).toEqual(['Mira']);
+    const cleared = vaultReducer(shared, { type: 'set-shared-with', albumId: 'trip', names: [] });
+    expect(cleared.albums[0]).toEqual({ id: 'trip', title: 'Trip', coverPhotoId: 'a' });
   });
 
   it('lists album photos newest first', () => {

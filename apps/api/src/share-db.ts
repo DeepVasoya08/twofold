@@ -5,42 +5,51 @@ import type { InviterView, JoinerView, StoredJoined, StoredMember } from '@twofo
  * row involves an account. Invites are addressed by hashes of their code and handle.
  */
 
-/** The space a member's share token opens, and which member it is. */
+/**
+ * The space a member's share token opens, which member it is, and the album it is limited
+ * to, if it was given one album rather than the whole library.
+ */
 export function memberByTokenQuery(db: D1Database, tokenHash: string): D1PreparedStatement {
-  return db.prepare('SELECT id, space FROM members WHERE token_hash = ?').bind(tokenHash);
+  return db.prepare('SELECT id, space, album FROM members WHERE token_hash = ?').bind(tokenHash);
 }
 
 export async function listMembers(db: D1Database, space: string): Promise<StoredMember[]> {
   const { results } = await db
-    .prepare('SELECT id, meta FROM members WHERE space = ? ORDER BY id')
+    .prepare('SELECT id, meta, album FROM members WHERE space = ? ORDER BY id')
     .bind(space)
     .all<StoredMember>();
   return results;
 }
 
-async function count(db: D1Database, table: 'members' | 'joined', space: string) {
+async function count(db: D1Database, sql: string, ...values: string[]) {
   const row = await db
-    .prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE space = ?`)
-    .bind(space)
+    .prepare(sql)
+    .bind(...values)
     .first<{ count: number }>();
   return row?.count ?? 0;
 }
 
-export const countMembers = (db: D1Database, space: string) => count(db, 'members', space);
-export const countJoined = (db: D1Database, space: string) => count(db, 'joined', space);
+/** People the whole library is shared with. */
+export const countMembers = (db: D1Database, space: string) =>
+  count(db, 'SELECT COUNT(*) AS count FROM members WHERE space = ? AND album IS NULL', space);
+/** People one album is shared with. */
+export const countAlbumMembers = (db: D1Database, space: string, album: string) =>
+  count(db, 'SELECT COUNT(*) AS count FROM members WHERE space = ? AND album = ?', space, album);
+export const countJoined = (db: D1Database, space: string) =>
+  count(db, 'SELECT COUNT(*) AS count FROM joined WHERE space = ?', space);
 
 /** Returns false if the id or token is taken. */
 export async function insertMember(
   db: D1Database,
   space: string,
-  member: { id: string; tokenHash: string; meta: string },
+  member: { id: string; tokenHash: string; meta: string; album: string | null },
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      `INSERT INTO members (id, token_hash, space, meta) VALUES (?, ?, ?, ?)
+      `INSERT INTO members (id, token_hash, space, meta, album) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT DO NOTHING`,
     )
-    .bind(member.id, member.tokenHash, space, member.meta)
+    .bind(member.id, member.tokenHash, space, member.meta, member.album)
     .run();
   return result.meta.changes === 1;
 }
@@ -82,11 +91,15 @@ export async function deleteJoined(db: D1Database, space: string, id: string): P
   return result.meta.changes === 1;
 }
 
-/** Forgets who a space is shared with and what it joined, when the space is wiped. */
+/**
+ * Forgets who a space is shared with, what it joined and its shared albums' items, when the
+ * space is wiped.
+ */
 export async function deleteSharing(db: D1Database, space: string): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM members WHERE space = ?').bind(space),
     db.prepare('DELETE FROM joined WHERE space = ?').bind(space),
+    db.prepare('DELETE FROM album_items WHERE space = ?').bind(space),
   ]);
 }
 

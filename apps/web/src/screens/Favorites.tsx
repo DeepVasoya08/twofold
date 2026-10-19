@@ -1,5 +1,5 @@
 import { useSelection } from '../app/selection';
-import { useVault } from '../app/vault';
+import { timelinePhotos, useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { PhotoGrid } from '../components/PhotoGrid';
@@ -9,7 +9,7 @@ import { pluralize, sortNewestFirst } from '../lib/format';
 
 export function Favorites() {
   const { state } = useVault();
-  const favorites = sortNewestFirst(state.photos.filter((photo) => photo.favorite));
+  const favorites = sortNewestFirst(timelinePhotos(state).filter((photo) => photo.favorite));
   const selection = useSelection();
 
   return (

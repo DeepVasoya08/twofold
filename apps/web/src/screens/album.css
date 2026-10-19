@@ -83,3 +83,23 @@
   align-items: center;
   gap: 8px;
 }
+
+.album-hero__shared {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  /* On phones the Download button shows just its icon. */
+  .album-toolbar__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

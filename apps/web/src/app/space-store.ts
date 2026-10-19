@@ -59,6 +59,15 @@ export interface SpaceStore {
   renameAlbum: (albumId: string, title: string) => Promise<void>;
   /** Deletes an album. Its photos stay; take the album out of them with `update`. */
   removeAlbum: (albumId: string) => Promise<void>;
+  /**
+   * Gets an album of your own ready to share with people: gives it a key of its own if it
+   * has none, and lists its photos (sealed under that key) for them. Returns the album key,
+   * which is what the people it's shared with get, never the space's records key. Photos put
+   * in or taken out of a shared album later are listed or unlisted as they change.
+   */
+  shareAlbum: (albumId: string) => Promise<Uint8Array>;
+  /** Stops sharing an album with everyone, and lets its key go. */
+  stopSharingAlbum: (albumId: string) => Promise<void>;
   /** Downloads and decrypts a photo's files, to add them to another space. */
   read: (photoId: string) => Promise<NewPhoto>;
   /** Revokes every object URL this store made. */
@@ -103,6 +112,8 @@ export interface Membership {
 interface AlbumMeta {
   v: 1;
   title: string;
+  /** The album's own key, base64url, once it has been shared. */
+  shareKey?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -141,11 +152,16 @@ function parsePhotoMeta(value: unknown): PhotoMeta | null {
 }
 
 function parseAlbumMeta(value: unknown): AlbumMeta | null {
-  if (!isRecord(value)) return null;
-  return value.v === 1 && typeof value.title === 'string' ? { v: 1, title: value.title } : null;
+  if (!isRecord(value) || value.v !== 1 || typeof value.title !== 'string') return null;
+  const meta: AlbumMeta = { v: 1, title: value.title };
+  if (typeof value.shareKey === 'string') meta.shareKey = value.shareKey;
+  else if (value.shareKey !== undefined) return null;
+  return meta;
 }
 
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
+
+const ALBUM_GONE = 'That album isn’t here anymore.';
 
 function decode(bytes: Uint8Array): unknown {
   try {
@@ -209,6 +225,7 @@ export function remoteStore(
   let apiPromise: Promise<SpaceApi> | null = null;
   const remote = () => (apiPromise ??= access().then((opened) => makeApi(opened.token)));
   const known = new Map<string, Known>();
+  const albumMetas = new Map<string, AlbumMeta>();
   const urls = new Map<string, string>();
 
   const track = (
@@ -243,6 +260,58 @@ export function remoteStore(
   const sealPhoto = async (id: string, meta: PhotoMeta) => {
     const crypto = await loadCrypto();
     return crypto.sealRecord(await access(), 'photo', id, encode(meta));
+  };
+
+  const sealAlbum = async (id: string, meta: AlbumMeta) => {
+    const crypto = await loadCrypto();
+    return crypto.sealRecord(await access(), 'album', id, encode(meta));
+  };
+
+  /** What a shared album's records are sealed under, or null if it isn't shared. */
+  const sharedAccess = async (albumId: string): Promise<SpaceAccess | null> => {
+    const key = albumMetas.get(albumId)?.shareKey;
+    if (!key) return null;
+    const crypto = await loadCrypto();
+    return crypto.albumAccess(
+      (await access()).token,
+      crypto.fromBase64Url(key) ?? new Uint8Array(),
+    );
+  };
+
+  /**
+   * Lists a photo in a shared album: its details sealed under the album key, without its
+   * favorite or the rest of its albums, which stay yours.
+   */
+  const listInAlbum = async (shared: SpaceAccess, albumId: string, photoId: string) => {
+    const entry = lookup(photoId);
+    const crypto = await loadCrypto();
+    const meta: PhotoMeta = { ...entry.meta, favorite: false, albumIds: [albumId] };
+    const api = await remote();
+    await api.putAlbumItem(
+      albumId,
+      photoId,
+      await crypto.sealRecord(shared, 'photo', photoId, encode(meta)),
+    );
+  };
+
+  /**
+   * Brings the shared albums a photo went into or left up to date. Best effort: the photo's
+   * own change is already saved, and sharing an album again lists anything missed.
+   */
+  const syncShared = async (photoId: string, before: readonly string[], after: string[]) => {
+    const api = await remote();
+    const changes = [
+      ...after.filter((id) => !before.includes(id)).map((id) => ({ id, listed: true })),
+      ...before.filter((id) => !after.includes(id)).map((id) => ({ id, listed: false })),
+    ];
+    await Promise.all(
+      changes.map(async ({ id, listed }) => {
+        const shared = await sharedAccess(id);
+        if (!shared) return;
+        if (listed) await listInAlbum(shared, id, photoId);
+        else await api.deleteAlbumItem(id, photoId);
+      }),
+    ).catch(() => undefined);
   };
 
   const decrypt = async (photoId: string, part: PhotoPart) => {
@@ -282,7 +351,9 @@ export function remoteStore(
           .openRecord(keys, 'album', stored.id, stored.meta)
           .catch(() => null);
         const meta = opened && parseAlbumMeta(decode(opened));
-        if (meta) albums.push({ id: stored.id, title: meta.title });
+        if (!meta) continue;
+        albumMetas.set(stored.id, meta);
+        albums.push({ id: stored.id, title: meta.title });
       }
       return { photos, albums };
     },
@@ -370,6 +441,7 @@ export function remoteStore(
         throw error;
       }
       known.set(id, { key, meta });
+      await syncShared(id, [], albumIds);
       return toPhoto(
         id,
         meta,
@@ -385,6 +457,7 @@ export function remoteStore(
       const api = await remote();
       await api.updatePhoto(photo.id, await sealPhoto(photo.id, meta));
       known.set(photo.id, { ...entry, meta });
+      await syncShared(photo.id, entry.meta.albumIds, meta.albumIds);
     },
 
     remove: async (photoId) => {
@@ -398,26 +471,72 @@ export function remoteStore(
       const id = await crypto.newRecordId();
       const meta: AlbumMeta = { v: 1, title };
       const api = await remote();
-      await api.createAlbum({
-        id,
-        meta: await crypto.sealRecord(await access(), 'album', id, encode(meta)),
-      });
+      await api.createAlbum({ id, meta: await sealAlbum(id, meta) });
+      albumMetas.set(id, meta);
       return { id, title };
     },
 
     renameAlbum: async (albumId, title) => {
       const crypto = await loadCrypto();
-      const meta: AlbumMeta = { v: 1, title };
+      // Keep the album's share key, if it has one.
+      const meta: AlbumMeta = { ...(albumMetas.get(albumId) ?? { v: 1 }), title };
       const api = await remote();
-      await api.updateAlbum(
-        albumId,
-        await crypto.sealRecord(await access(), 'album', albumId, encode(meta)),
-      );
+      await api.updateAlbum(albumId, await sealAlbum(albumId, meta));
+      albumMetas.set(albumId, meta);
+      const shared = await sharedAccess(albumId);
+      if (shared) {
+        await api.shareAlbum(
+          albumId,
+          await crypto.sealRecord(shared, 'album', albumId, encode({ v: 1, title })),
+        );
+      }
     },
 
     removeAlbum: async (albumId) => {
       const api = await remote();
       await api.deleteAlbum(albumId);
+      albumMetas.delete(albumId);
+    },
+
+    shareAlbum: async (albumId) => {
+      const crypto = await loadCrypto();
+      const api = await remote();
+      let meta = albumMetas.get(albumId);
+      if (!meta) throw new FormError(ALBUM_GONE);
+      if (!meta.shareKey) {
+        meta = { ...meta, shareKey: crypto.toBase64Url(await crypto.newAlbumKey()) };
+        await api.updateAlbum(albumId, await sealAlbum(albumId, meta));
+        albumMetas.set(albumId, meta);
+      }
+      const shared = await sharedAccess(albumId);
+      if (!shared) throw new FormError(ALBUM_GONE);
+      await api.shareAlbum(
+        albumId,
+        await crypto.sealRecord(shared, 'album', albumId, encode({ v: 1, title: meta.title })),
+      );
+      // List what's missing and unlist what left, whatever happened since it was last shared.
+      const listed = new Set((await api.listAlbumItems(albumId)).photoIds);
+      const filed = [...known]
+        .filter(([, entry]) => entry.meta.albumIds.includes(albumId))
+        .map(([id]) => id);
+      for (const photoId of filed) {
+        if (!listed.has(photoId)) await listInAlbum(shared, albumId, photoId);
+        listed.delete(photoId);
+      }
+      for (const photoId of listed) await api.deleteAlbumItem(albumId, photoId);
+      return shared.recordKey;
+    },
+
+    stopSharingAlbum: async (albumId) => {
+      const api = await remote();
+      const current = albumMetas.get(albumId);
+      if (!current) throw new FormError(ALBUM_GONE);
+      await api.unshareAlbum(albumId);
+      if (!current.shareKey) return;
+      // A new share gets a new key, so nobody who had this one can read what comes after.
+      const meta: AlbumMeta = { v: 1, title: current.title };
+      await api.updateAlbum(albumId, await sealAlbum(albumId, meta));
+      albumMetas.set(albumId, meta);
     },
 
     read: async (photoId) => {
@@ -434,13 +553,17 @@ export function remoteStore(
   };
 }
 
-/** A library someone shared with this space, and the store that reaches it. */
+/** A library or album someone shared with this space, and the store that reaches it. */
 export interface SharedSource {
   id: string;
   /** Whose library it is. */
   name: string;
+  /** Set when only one album was shared, which can be viewed but not changed. */
+  album?: boolean;
   store: SpaceStore;
 }
+
+const NOT_YOURS = 'Only the person whose album this is can share it.';
 
 /**
  * Your own space plus every library it has joined, as one store. Photos and albums from a
@@ -464,16 +587,31 @@ export function combinedStore(
       shared = await loadShared().catch(() => []);
       const photos = [...mine.photos];
       const albums = [...mine.albums];
+      const seen = new Map(photos.map((photo, index) => [photo.id, index]));
       for (const source of shared) {
         const loaded = await source.store.list().catch(() => null);
         if (!loaded) continue;
+        const marks = source.album
+          ? { library: source.name, sharedAlbum: true }
+          : { library: source.name };
+        const albumMarks = source.album ? { ...marks, joinedId: source.id } : marks;
         for (const photo of loaded.photos) {
+          const index = seen.get(photo.id);
+          const existing = index === undefined ? undefined : photos[index];
+          if (index !== undefined && existing) {
+            // Already here through another share: it's in this album too.
+            const albumIds = [...new Set([...existing.albumIds, ...photo.albumIds])];
+            photos[index] = { ...existing, albumIds };
+            continue;
+          }
+          seen.set(photo.id, photos.length);
           photoStores.set(photo.id, source.store);
-          photos.push({ ...photo, library: source.name });
+          photos.push({ ...photo, ...marks });
         }
         for (const album of loaded.albums) {
+          if (albumStores.has(album.id)) continue;
           albumStores.set(album.id, source.store);
-          albums.push({ ...album, library: source.name });
+          albums.push({ ...album, ...albumMarks });
         }
       }
       return { photos, albums };
@@ -523,6 +661,13 @@ export function combinedStore(
       await albumStoreOf(albumId).removeAlbum(albumId);
       albumStores.delete(albumId);
     },
+    // Only a space's owner can say who it's shared with, so only your own albums are shared.
+    shareAlbum: (albumId) =>
+      albumStores.has(albumId) ? Promise.reject(new FormError(NOT_YOURS)) : own.shareAlbum(albumId),
+    stopSharingAlbum: (albumId) =>
+      albumStores.has(albumId)
+        ? Promise.reject(new FormError(NOT_YOURS))
+        : own.stopSharingAlbum(albumId),
     read: (photoId) => storeOf(photoId).read(photoId),
     dispose: () => {
       own.dispose();
@@ -571,6 +716,8 @@ export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): Spac
     createAlbum: (title) => Promise.resolve({ id: newId(), title }),
     renameAlbum: () => Promise.resolve(),
     removeAlbum: () => Promise.resolve(),
+    shareAlbum: () => Promise.reject(new FormError('This preview can’t share albums.')),
+    stopSharingAlbum: () => Promise.resolve(),
     read: () => Promise.reject(new FormError('This preview can’t move photos.')),
     dispose: () => undefined,
   };

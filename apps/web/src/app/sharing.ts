@@ -7,14 +7,16 @@ import { combinedStore, remoteStore } from './space-store';
 import type { SharedSource, SpaceStore } from './space-store';
 
 /**
- * Sharing a space, and the libraries a space has joined.
+ * Sharing a space or one album of it, and what a space has joined.
  *
- * Sharing gives the other account a share token of its own and the space's records key,
- * through an invite (see docs/security.md): the two browsers swap public keys, both show a
- * safety phrase, and only once the inviter confirms it does the access travel, sealed to the
- * joiner's key. The owner keeps who it shared with, and the joiner keeps what it joined, as
- * records only the owner of each space can open. A library joined from the private space is
- * kept in the private space, so the main library never learns of it.
+ * Sharing gives the other account a share token of its own and a key, through an invite (see
+ * docs/security.md): the two browsers swap public keys, both show a safety phrase, and only
+ * once the inviter confirms it does the access travel, sealed to the joiner's key. Sharing a
+ * library hands over the space's records key; sharing an album hands over only that album's
+ * own key, with a token the server limits to that album. The owner keeps who it shared with,
+ * and the joiner keeps what it joined, as records only the owner of each space can open. A
+ * library or album joined from the private space is kept in the private space, so the main
+ * library never learns of it.
  */
 
 const loadCrypto = () => import('@twofold/crypto');
@@ -50,7 +52,10 @@ interface Hello {
   name: string;
 }
 
-/** What the inviter hands over: a token of the joiner's own, and the records key. */
+/**
+ * What the inviter hands over: a token of the joiner's own, and the key its records open
+ * with (the space's records key, or for one album, that album's key).
+ */
 export interface Grant {
   v: 1;
   token: string;
@@ -59,15 +64,19 @@ export interface Grant {
   name: string;
   /** The joiner's member id there, recorded on photos it adds. */
   memberId: string;
+  /** Set when one album was shared rather than the library: the album's id. */
+  album?: string;
 }
 
-/** Someone this space is shared with. */
+/** Someone this space, or one of its albums, is shared with. */
 export interface Member {
   id: string;
   name: string;
+  /** The album they were given, or null for the whole library. */
+  album: string | null;
 }
 
-/** A library this space has joined. */
+/** A library or album this space has joined. */
 export interface JoinedLibrary extends Grant {
   /** The joined record's own id. */
   id: string;
@@ -81,14 +90,18 @@ function parseHello(value: unknown): Hello | null {
 
 function parseGrant(value: unknown): Grant | null {
   if (!isRecord(value) || value.v !== 1) return null;
-  const { token, recordKey, memberId } = value;
+  const { token, recordKey, memberId, album } = value;
   const name = parseName(value.name);
   const ok =
     typeof token === 'string' &&
     typeof recordKey === 'string' &&
     typeof memberId === 'string' &&
+    (album === undefined || typeof album === 'string') &&
     name !== null;
-  return ok ? { v: 1, token, recordKey, name, memberId } : null;
+  if (!ok) return null;
+  const grant: Grant = { v: 1, token, recordKey, name, memberId };
+  if (album !== undefined) grant.album = album;
+  return grant;
 }
 
 const BROKEN =
@@ -151,9 +164,16 @@ export async function advanceInvite(
   return { stage: 'confirm', name: hello.name, phrase, joinerKey: view.joinerKey };
 }
 
+/** One album to share instead of the whole library: its id, and the key `shareAlbum` gave. */
+export interface AlbumTarget {
+  albumId: string;
+  albumKey: Uint8Array;
+}
+
 /**
- * Shares the space with the person who joined: registers a token of their own, records who
- * they are for this space's owner, and sends them the access sealed to their key.
+ * Shares the space (or one album of it) with the person who joined: registers a token of
+ * their own, records who they are for this space's owner, and sends them the access sealed
+ * to their key.
  */
 export async function confirmInvite(
   invite: Invite,
@@ -164,6 +184,7 @@ export async function confirmInvite(
     invites: inviteApi,
     space: spaceApi,
   },
+  album: AlbumTarget | null = null,
 ): Promise<Member> {
   const crypto = await loadCrypto();
   const access = await crypto.ownerAccess(space);
@@ -179,14 +200,16 @@ export async function confirmInvite(
       memberId,
       encode({ v: 1, name: joiner.name }),
     ),
+    ...(album ? { album: album.albumId } : {}),
   });
   const grant: Grant = {
     v: 1,
     token,
-    recordKey: crypto.toBase64Url(access.recordKey),
+    recordKey: crypto.toBase64Url(album ? album.albumKey : access.recordKey),
     name: myName,
     memberId,
   };
+  if (album) grant.album = album.albumId;
   try {
     await apis.invites.grant(
       invite.handle,
@@ -198,7 +221,7 @@ export async function confirmInvite(
     throw error;
   }
   await crypto.dropInviteKeys(invite.keys);
-  return { id: memberId, name: joiner.name };
+  return { id: memberId, name: joiner.name, album: album?.albumId ?? null };
 }
 
 export async function cancelInvite(invite: Invite, apis: InviteApi = inviteApi): Promise<void> {
@@ -321,7 +344,7 @@ export async function listMembers(
     const value = opened ? decode(opened) : null;
     const name = isRecord(value) && value.v === 1 ? parseName(value.name) : null;
     // A member whose record doesn't open is still a member; it can still be removed.
-    members.push({ id: stored.id, name: name ?? 'Someone' });
+    members.push({ id: stored.id, name: name ?? 'Someone', album: stored.album });
   }
   return members;
 }
@@ -369,6 +392,16 @@ export async function leaveLibrary(
   await makeApi((await crypto.ownerAccess(space)).token).removeJoined(library.id);
 }
 
+/** Leaves one library or album this space joined, by its joined record's id. */
+export async function leaveJoined(
+  space: SpaceKeys,
+  joinedId: string,
+  makeApi: (token: string) => SpaceApi = spaceApi,
+): Promise<void> {
+  const library = (await listJoined(space, makeApi)).find((each) => each.id === joinedId);
+  if (library) await leaveLibrary(space, library, makeApi);
+}
+
 /** Leaves every library this space joined. Used before the space is wiped. */
 export async function leaveAll(
   space: SpaceKeys,
@@ -381,32 +414,61 @@ export async function leaveAll(
   }
 }
 
-/** The stores for every library this space joined. */
+/** The stores for every library and album this space joined. */
 async function sharedSources(
   space: SpaceKeys,
   myName: string,
   makeApi: (token: string) => SpaceApi,
 ): Promise<SharedSource[]> {
   const crypto = await loadCrypto();
-  return (await listJoined(space, makeApi)).map((library) => ({
-    id: library.id,
-    name: library.name,
-    store: remoteStore(
-      crypto.memberAccess(
-        library.token,
-        crypto.fromBase64Url(library.recordKey) ?? new Uint8Array(),
+  return (await listJoined(space, makeApi)).map((library) => {
+    const key = crypto.fromBase64Url(library.recordKey) ?? new Uint8Array();
+    const source: SharedSource = {
+      id: library.id,
+      name: library.name,
+      store: remoteStore(
+        library.album
+          ? crypto.albumAccess(library.token, key)
+          : crypto.memberAccess(library.token, key),
+        makeApi,
+        { memberId: library.memberId, myName, ownerName: library.name },
       ),
-      makeApi,
-      { memberId: library.memberId, myName, ownerName: library.name },
-    ),
-  }));
+    };
+    if (library.album) source.album = true;
+    return source;
+  });
 }
 
-/** The open space's store: its own photos plus every library it joined. */
+/** Adds who each of your own albums is shared with, by name, to what `store` lists. */
+export function withAlbumMembers(store: SpaceStore, members: () => Promise<Member[]>): SpaceStore {
+  return {
+    ...store,
+    list: async () => {
+      const loaded = await store.list();
+      const names = new Map<string, string[]>();
+      for (const member of await members().catch(() => [])) {
+        if (member.album)
+          names.set(member.album, [...(names.get(member.album) ?? []), member.name]);
+      }
+      return {
+        ...loaded,
+        albums: loaded.albums.map((album) => {
+          const sharedWith = album.library === undefined ? names.get(album.id) : undefined;
+          return sharedWith ? { ...album, sharedWith } : album;
+        }),
+      };
+    },
+  };
+}
+
+/** The open space's store: its own photos plus every library and album it joined. */
 export function sessionStore(
   space: SpaceKeys,
   myName: string,
   makeApi: (token: string) => SpaceApi = spaceApi,
 ): SpaceStore {
-  return combinedStore(remoteStore(space, makeApi), () => sharedSources(space, myName, makeApi));
+  return withAlbumMembers(
+    combinedStore(remoteStore(space, makeApi), () => sharedSources(space, myName, makeApi)),
+    () => listMembers(space, makeApi),
+  );
 }

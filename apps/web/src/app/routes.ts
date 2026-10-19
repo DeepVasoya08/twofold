@@ -32,7 +32,15 @@ export const paths = {
   },
   settings: '/settings',
   share: '/settings/share',
+  /** Inviting someone to one album rather than the whole library. */
+  shareAlbum: (albumId: string) => `/settings/share?album=${encodeURIComponent(albumId)}`,
 } as const;
+
+/** The album a share link names, if it's for one album. */
+export function parseShareAlbum(search: string): string | null {
+  const album = new URLSearchParams(search).get('album');
+  return album === null ? null : decodeSegment(album);
+}
 
 const staticRoutes: Record<string, Route> = {
   '/': { name: 'welcome' },

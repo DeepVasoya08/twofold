@@ -196,9 +196,9 @@ under). It never gets the space key or the space id.
 - **Deleting an album** removes its row; the server can't read which photos name it, so the
   browser takes the album out of each photo's sealed metadata afterwards (best effort: a
   photo that still names a deleted album just shows nothing for it).
-- **Sending copies.** Share on a selection or an album decrypts the originals into memory and
-  hands them to the device's share sheet, or downloads them where there is none. Those
-  copies leave Twofold unencrypted, and the dialog says so before anything is sent.
+- **Downloading copies.** Download on a selection or an album decrypts the originals into
+  memory and saves them to the device. Those copies are not encrypted, and the dialog says
+  so before anything is saved.
 - **Owner-only records.** Who a space is shared with (`members`) and which libraries it
   joined (`joined`) are sealed under a second `crypto_kdf` subkey of the space key (id 2),
   which members never receive. So even a server that showed a member those rows couldn't
@@ -215,6 +215,40 @@ under). It never gets the space key or the space id.
   token stops working at once; a member can also leave (`DELETE /api/space/membership`).
   Deleting an account leaves the libraries its reachable spaces joined, and wiping a space
   removes its `members` and `joined` rows.
+
+### Sharing one album
+
+An album can be shared on its own, without the rest of the space. The person gets a share
+token limited to that album and **the album's own key**, never the space's records key.
+
+- **The album key.** Sharing an album the first time gives it 32 random bytes of its own
+  (`newAlbumKey`), kept in the album's sealed record so the owner and library members can
+  keep it up to date. The album's title, and each photo it holds, are sealed again under
+  that key (`crypto_aead_xchacha20poly1305_ietf`, the same construction and associated data
+  as space records): the photo's file key, type, size and date, without its favorite or
+  its other albums. `albums.shared_meta` and `album_items` hold those copies.
+- **What the token reaches.** The owner registers the member with `album` set. Requests
+  with that token only reach `GET /photos` and `/albums` (which return the album key's
+  copies instead of the space's records), `/thumbs` and `/photos/:id/:part` (only for
+  photos the album lists), and `DELETE /membership`. Everything else is refused, so they
+  can view and download but not change anything. Their key can't open the space's records,
+  so even a server that handed them other rows couldn't make them readable.
+- **Keeping it current.** When the owner (or a library member) puts a photo in a shared
+  album, takes it out, or renames the album, the browser updates the album's copies. A
+  deleted photo or album is removed from `album_items` by the server, and deleting an album
+  revokes everyone it was shared with. Opening the album's Share dialog to invite someone
+  lists anything that was missed.
+- **Stopping.** Removing someone revokes their token. **Stop sharing with everyone** also
+  deletes the album's copies and drops its key, so sharing it again uses a new key.
+- **On the other side.** The grant is kept as a `joined` record like a library, sealed
+  under the joiner's owner-only key in the space they joined from. The album and its
+  photos appear under Albums → Shared with me and stay out of the timeline.
+
+What this reveals: for shared albums only, the server can see which photo rows are in the
+album (`album_items` links an album id to photo ids) and how many. It still sees no
+contents, titles, dates or keys. Albums that aren't shared, and the private space, reveal
+nothing new. An album shared from the private space is kept in the private space's rows, so
+nothing links it to an account.
 
 ### Invites
 
@@ -248,8 +282,8 @@ hours, and the inviter's screen cancels its invite when it closes.
 ### Trade-offs we accepted
 
 - **Stopping sharing is enforced by the server, not by new keys.** A removed member still
-  knows the records key and the per-photo keys of photos it saw, and could decrypt any
-  ciphertext it got hold of later. The server refuses its token from the moment it's
+  knows the records key (or album key) and the per-photo keys of photos it saw, and could
+  decrypt any ciphertext it got hold of later. The server refuses its token from the moment it's
   removed, but a compromised server could still hand it new ciphertext. Rotating the space
   key on removal would close that and is left for later.
 - **A member can delete photos for everyone**, like the owner. Sharing is for people you

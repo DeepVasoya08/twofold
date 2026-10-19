@@ -1,0 +1,17 @@
+.download {
+  display: grid;
+  gap: 14px;
+}
+
+.download__note {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.download__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 14px;
+}

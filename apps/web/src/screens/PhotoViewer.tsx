@@ -9,7 +9,7 @@ import { Link, useRouter } from '../app/router';
 import { parsePhotoContext, paths } from '../app/routes';
 import type { PhotoContext } from '../app/routes';
 import { useToast } from '../app/toast';
-import { albumPhotos, useVault } from '../app/vault';
+import { albumPhotos, timelinePhotos, useVault } from '../app/vault';
 import type { VaultState } from '../app/vault';
 import { Avatar } from '../components/Brand';
 import { Dialog } from '../components/Dialog';
@@ -28,9 +28,9 @@ export function photosInContext(state: VaultState, context: PhotoContext): Photo
     case 'album':
       return albumPhotos(state, context.albumId);
     case 'favorites':
-      return sortNewestFirst(state.photos.filter((photo) => photo.favorite));
+      return sortNewestFirst(timelinePhotos(state).filter((photo) => photo.favorite));
     case 'all':
-      return sortNewestFirst(state.photos);
+      return sortNewestFirst(timelinePhotos(state));
   }
 }
 
@@ -118,6 +118,8 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
     photo.addedBy === 'me'
       ? me
       : { id: 'contact', name: photo.addedByName ?? 'Someone', email: '' };
+  // Photos from an album someone shared with you can be viewed and downloaded, nothing more.
+  const viewOnly = photo.sharedAlbum === true;
   // Photos in a library someone shared with you stay in it.
   const canMove = photo.library === undefined;
   const albums = state.albums.filter((album) => photo.albumIds.includes(album.id));
@@ -187,19 +189,21 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
           {photo.location && <span className="viewer__place">{photo.location}</span>}
         </div>
         <div className="viewer__actions">
-          <button
-            type="button"
-            className={`viewer__btn${photo.favorite ? ' is-favorite' : ''}`}
-            onClick={() => {
-              toggleFavorite(photo.id).catch((error: unknown) => {
-                toast.show(errorMessage(error));
-              });
-            }}
-            aria-label={photo.favorite ? 'Remove from favorites' : 'Add to favorites'}
-            aria-pressed={photo.favorite}
-          >
-            <Icon name="heart" filled={photo.favorite} />
-          </button>
+          {!viewOnly && (
+            <button
+              type="button"
+              className={`viewer__btn${photo.favorite ? ' is-favorite' : ''}`}
+              onClick={() => {
+                toggleFavorite(photo.id).catch((error: unknown) => {
+                  toast.show(errorMessage(error));
+                });
+              }}
+              aria-label={photo.favorite ? 'Remove from favorites' : 'Add to favorites'}
+              aria-pressed={photo.favorite}
+            >
+              <Icon name="heart" filled={photo.favorite} />
+            </button>
+          )}
           <button
             type="button"
             className={`viewer__btn${showInfo ? ' is-active' : ''}`}
@@ -234,16 +238,18 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
               <Icon name={isPrivate ? 'photos' : 'eye-off'} />
             </button>
           )}
-          <button
-            type="button"
-            className="viewer__btn"
-            onClick={() => {
-              setDialog('delete');
-            }}
-            aria-label="Delete"
-          >
-            <Icon name="trash" />
-          </button>
+          {!viewOnly && (
+            <button
+              type="button"
+              className="viewer__btn"
+              onClick={() => {
+                setDialog('delete');
+              }}
+              aria-label="Delete"
+            >
+              <Icon name="trash" />
+            </button>
+          )}
         </div>
       </header>
 
@@ -353,11 +359,13 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
               <dd>
                 End-to-end encrypted
                 <span>
-                  {photo.library !== undefined
-                    ? `Only people in ${photo.library}’s library can see it.`
-                    : isPrivate
-                      ? 'Only you, and anyone you share this private space with, can see it.'
-                      : 'Only you and people you share this library with can see it.'}
+                  {viewOnly
+                    ? `${photo.library ?? 'Someone'} shared it with you in an album. You can view and download it.`
+                    : photo.library !== undefined
+                      ? `Only people in ${photo.library}’s library can see it.`
+                      : isPrivate
+                        ? 'Only you, and anyone you share this private space with, can see it.'
+                        : 'Only you and people you share this library with can see it.'}
                 </span>
               </dd>
             </div>

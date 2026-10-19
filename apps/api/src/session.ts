@@ -15,8 +15,9 @@ const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
 export interface AppEnv {
   Bindings: Env;
   /**
-   * Set by requireSpace: `space` is the tag of the space being accessed, and `member` the
-   * member id when the request came with a share token rather than the owner's token.
+   * Set by requireSpace: `space` is the tag of the space being accessed, `member` the member
+   * id when the request came with a share token rather than the owner's token, and `album`
+   * the one album that token is limited to, if it was given an album rather than a library.
    */
   Variables: {
     account: AccountRecord;
@@ -24,6 +25,7 @@ export interface AppEnv {
     session: string;
     space: string;
     member: string | null;
+    album: string | null;
   };
 }
 

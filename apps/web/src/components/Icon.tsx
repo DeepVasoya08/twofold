@@ -76,6 +76,13 @@ const icons = {
       <circle cx="18.5" cy="12" r="1.25" />
     </>
   ),
+  'more-vertical': (
+    <>
+      <circle cx="12" cy="5.5" r="1.25" />
+      <circle cx="12" cy="12" r="1.25" />
+      <circle cx="12" cy="18.5" r="1.25" />
+    </>
+  ),
   share: (
     <>
       <path d="M12 15V4m0 0L8 8m4-4 4 4" />

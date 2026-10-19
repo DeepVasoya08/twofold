@@ -134,7 +134,7 @@ describe('members', () => {
     const member = await share();
     const res = await owner.request('GET', '/space/members');
     expect(await res.json<MemberList>()).toEqual({
-      members: [{ id: member.id, meta: expect.any(String) as string }],
+      members: [{ id: member.id, meta: expect.any(String) as string, album: null }],
     });
     const dump = JSON.stringify(sqlite.prepare('SELECT * FROM members').all());
     expect(dump).not.toContain(member.token);

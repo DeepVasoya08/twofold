@@ -37,12 +37,16 @@ everything from one origin, so there is no CORS and the CSP can stay at
     downloads, `GET /thumbs?ids=a,b,c` (up to 48 encrypted previews in one response, each
     after a 4-byte length; empty for photos the space doesn't have; the Worker reads four
     from R2 at a time, since it may only hold six R2 responses open), metadata updates,
-    deletes, albums, and `DELETE /api/space` to wipe a space.
-    after a 4-byte length; empty for photos the space doesn't have), metadata updates,
     deletes, albums (`POST /albums`, `PUT /albums/:id` to replace an album's sealed title,
     `DELETE /albums/:id`, which keeps its photos), and `DELETE /api/space` to wipe a space.
-    Owner-only: `/members` (who the space is shared with, add, remove) and `/joined` (the
-    libraries this space joined). `DELETE /membership` lets a member leave. See
+    Shared albums: `PUT /albums/:id/shared` (the title sealed under the album's own key),
+    `DELETE /albums/:id/shared` (owner only: stops sharing with everyone), and
+    `GET /albums/:id/items`, `PUT` and `DELETE /albums/:id/items/:photo` (which photos the
+    album lists for the people it's shared with, each sealed under the album key).
+    Owner-only: `/members` (who the space, or one album of it, is shared with; add, remove)
+    and `/joined` (the libraries and albums this space joined). `DELETE /membership` lets a
+    member leave. A token given one album only reaches `GET /photos`, `/albums`, `/thumbs`,
+    `/photos/:id/:part` (that album's listed photos) and `DELETE /membership`. See
     [security.md](security.md#photo-storage).
   - `/api/invites/*`: the invite rendezvous. The inviter creates an invite and drives it by
     a private handle (`GET /:handle`, `/reveal`, `/grant`, `DELETE`); the joiner drives it
@@ -53,7 +57,7 @@ everything from one origin, so there is no CORS and the CSP can stay at
     counts both guess limits in one batch, and a commit checks the files' sizes inside its
     own update. The API tests count round trips per request (`test/d1.ts`).
   - Tables: `accounts`, `sessions` (token hashes only), `login_failures`, `photos`,
-    `albums`, `members` and `joined` (keyed by space, never by account), and `invites`
+    `albums`, `album_items`, `members` and `joined` (keyed by space, never by account), and `invites`
     (short-lived, keyed by hashes of the code and handle).
   - API tests run the real migrations on Node's built-in SQLite (`src/test/d1.ts`) and an
     in-memory R2 (`src/test/r2.ts`).

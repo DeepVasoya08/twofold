@@ -88,37 +88,89 @@
   }
 }
 
-/* The "more" menu sits over the cover's corner: shown on hover, always on touch screens. */
+/* The "more" menu sits over the cover's top corner, always visible. */
 .album-grid__item {
   position: relative;
 }
 
 .album-card__menu {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  opacity: 0;
-  transition: opacity 0.15s var(--ease);
-}
-
-.album-grid__item:hover .album-card__menu,
-.album-card__menu:focus-within {
-  opacity: 1;
+  top: 16px;
+  right: 8px;
+  z-index: 2;
 }
 
 .album-card__menu .menu__button {
+  width: 34px;
+  height: 34px;
   border-color: transparent;
-  background: rgb(0 0 0 / 35%);
+  background: rgb(0 0 0 / 40%);
   color: #fff;
   backdrop-filter: blur(6px);
 }
 
 .album-card__menu .menu__button:hover {
-  background: rgb(0 0 0 / 50%);
+  background: rgb(0 0 0 / 55%);
 }
 
-@media (hover: none) {
-  .album-card__menu {
-    opacity: 1;
+.album-card__shared {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 100%;
+  margin-bottom: 24px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.album-tabs__tab {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+
+.album-tabs__tab[aria-selected='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.album-tabs__empty {
+  margin: 0 0 24px;
+  color: var(--text-2);
+  font-size: 15px;
+}
+
+@media (max-width: 560px) {
+  .album-tabs {
+    display: flex;
+    border-radius: var(--radius);
+  }
+
+  .album-tabs__tab {
+    flex: 1;
+    padding: 0 8px;
+    font-size: 13px;
   }
 }

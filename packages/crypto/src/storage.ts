@@ -81,6 +81,24 @@ export function memberAccess(token: string, recordKey: Uint8Array): SpaceAccess 
   return { token, recordKey: recordKey.slice() };
 }
 
+/**
+ * A new random key for one shared album. The album's title and its photos' details are
+ * sealed under it again for the people it's shared with, who get this key and never the
+ * space's records key, so they can open that album's photos and nothing else.
+ */
+export async function newAlbumKey(): Promise<Uint8Array> {
+  const sodium = await getSodium();
+  return sodium.crypto_kdf_keygen();
+}
+
+/**
+ * Access to one album someone shared: a token limited to that album, and the album's key.
+ * Its records seal and open like a space's, under the album key in place of the records key.
+ */
+export function albumAccess(token: string, albumKey: Uint8Array): SpaceAccess {
+  return memberAccess(token, albumKey);
+}
+
 /** A new random photo or album id. */
 export async function newRecordId(): Promise<string> {
   const sodium = await getSodium();
