@@ -105,6 +105,26 @@ test('the photo viewer zooms with the wheel, double-click and keys', async ({ pa
   await expect.poll(scale).toBe(1.5);
 });
 
+test('the photo viewer shows the zoom level while zooming', async ({ page }) => {
+  await signUp(page);
+  await uploadPhotos(page, 1);
+  await page.locator('.photo-tile').first().click();
+  await expect(page.locator('.viewer__image')).toBeVisible();
+  const level = page.getByRole('status', { name: 'Zoom level' });
+  // Opening a photo doesn't flash the level.
+  await expect(level).toHaveCSS('opacity', '0');
+
+  await page.keyboard.press('+');
+  await expect(level).toHaveText('150%');
+  await expect(level).toHaveCSS('opacity', '1');
+  // It fades once zooming stops.
+  await expect(level).toHaveCSS('opacity', '0', { timeout: 3000 });
+
+  await page.locator('.viewer__image').dblclick();
+  await expect(level).toHaveText('100%');
+  await expect(level).toHaveCSS('opacity', '1');
+});
+
 test('deleting a photo asks first', async ({ page }) => {
   await signUp(page);
   await uploadPhotos(page, 1);

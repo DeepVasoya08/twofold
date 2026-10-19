@@ -117,8 +117,9 @@ decrypts the original.
 
 The photo viewer zooms with the mouse wheel or a trackpad pinch (towards the pointer),
 a two-finger pinch on touch screens, a double-click (toggles 2.5×), and the `+`, `-` and
-`0` keys. A zoomed photo pans by dragging; a fitted one swipes to the next photo. The
-maths is in `lib/zoom.ts`, the gestures in `screens/use-zoom.ts`.
+`0` keys. A zoomed photo pans by dragging; a fitted one swipes to the next photo. After
+each zoom change the level (as a percentage of the fitted size) shows at the top of the
+photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `screens/use-zoom.ts`.
 
 ## Structure (`apps/web/src`)
 

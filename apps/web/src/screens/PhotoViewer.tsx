@@ -317,6 +317,13 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
             <Icon name="chevron-right" size={26} />
           </button>
         )}
+        <span
+          className={`viewer__zoom${zoom.levelShown ? ' is-shown' : ''}`}
+          role="status"
+          aria-label="Zoom level"
+        >
+          {zoom.percent}%
+        </span>
         {index >= 0 && (
           <span className="viewer__count">
             {index + 1} / {list.length}

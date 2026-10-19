@@ -81,3 +81,8 @@ export function panBy(view: ZoomView, dx: number, dy: number): ZoomView {
 export function isZoomed(view: ZoomView): boolean {
   return view.scale > MIN_SCALE;
 }
+
+/** The zoom level as a whole percentage of the fitted size, as the viewer shows it. */
+export function zoomPercent(scale: number): number {
+  return Math.round(scale * 100);
+}

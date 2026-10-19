@@ -10,10 +10,13 @@ import {
   panBy,
   wheelFactor,
   zoomAt,
+  zoomPercent,
 } from '../lib/zoom';
 import type { Point, ZoomView } from '../lib/zoom';
 
 const SWIPE_PX = 50;
+/** How long the zoom level stays on screen after the last change. */
+const LEVEL_SHOWN_MS = 1200;
 
 interface Gesture {
   pointers: Map<number, Point>;
@@ -32,7 +35,7 @@ function midpoint(a: Point, b: Point): Point {
 /**
  * Wheel, pinch, drag and double-click zoom for the photo viewer. `resetKey` changes when a
  * different photo is shown, which starts it fitted again. A one-finger swipe on a fitted
- * photo calls `onSwipe` instead.
+ * photo calls `onSwipe` instead. The zoom level shows for a moment after each change.
  */
 export function useZoom({
   stageRef,
@@ -49,11 +52,29 @@ export function useZoom({
   const [shownKey, setShownKey] = useState(resetKey);
   const [dragging, setDragging] = useState(false);
   const gesture = useRef<Gesture>({ pointers: new Map(), swipeFrom: null });
+  // The scale the level was last shown for, so any change to it shows the level again.
+  const [levelScale, setLevelScale] = useState(FITTED.scale);
+  const [levelShown, setLevelShown] = useState(false);
 
   if (shownKey !== resetKey) {
     setShownKey(resetKey);
     setView(FITTED);
+    setLevelScale(FITTED.scale);
+    setLevelShown(false);
+  } else if (view.scale !== levelScale) {
+    setLevelScale(view.scale);
+    setLevelShown(true);
   }
+
+  useEffect(() => {
+    if (!levelShown) return;
+    const timer = setTimeout(() => {
+      setLevelShown(false);
+    }, LEVEL_SHOWN_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [levelShown, levelScale]);
 
   /** Applies a change, kept inside the limits for the image as it is drawn now. */
   const update = useCallback(
@@ -163,6 +184,9 @@ export function useZoom({
   return {
     view,
     zoomed: isZoomed(view),
+    /** The zoom level in percent, and whether it's on screen: it shows briefly after each change. */
+    percent: zoomPercent(view.scale),
+    levelShown,
     dragging,
     zoomBy,
     reset,
