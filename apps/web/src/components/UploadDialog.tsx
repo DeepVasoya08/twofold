@@ -8,6 +8,8 @@ import { useVault } from '../app/vault';
 import { pluralize } from '../lib/format';
 import { PHOTO_TYPES, PHOTO_TYPES_TEXT, isPhotoType } from '../lib/photo-types';
 import { makeThumbnail } from '../lib/thumbnail';
+import { canStartUpload } from '../lib/upload-queue';
+import type { InFlight } from '../lib/upload-queue';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 
@@ -74,7 +76,8 @@ interface UploadDialogProps {
 }
 
 /**
- * Encrypts each photo on this device, then uploads the ciphertext, one photo at a time.
+ * Encrypts each photo on this device, then uploads the ciphertext, up to three photos at a
+ * time (fewer when they're big; see lib/upload-queue.ts), in the order they were added.
  * Cancelling stops the photos that haven't started yet.
  */
 export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
@@ -84,7 +87,9 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const queue = useRef<{ id: number; file: File }[]>([]);
-  const busy = useRef(false);
+  const inFlight = useRef<InFlight>({ count: 0, bytes: 0 });
+  /** Photos stored since the queue last ran dry, for one toast at the end. */
+  const stored = useRef(0);
   const nextId = useRef(0);
   /** Every preview URL made, so closing revokes them all, even one made as it closed. */
   const previews = useRef(new Set<string>());
@@ -101,29 +106,45 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
     );
   };
 
-  const pump = async () => {
-    if (busy.current) return;
-    busy.current = true;
-    let added = 0;
-    for (let job = queue.current.shift(); job; job = queue.current.shift()) {
-      const { id, file } = job;
-      try {
-        setStage(id, 'encrypting');
-        const photo = await preparePhoto(file);
-        const url = URL.createObjectURL(new Blob([photo.thumb], { type: 'image/jpeg' }));
-        previews.current.add(url);
-        setItems((current) => current.map((item) => (item.id === id ? { ...item, url } : item)));
-        await upload(photo, albumId, (stage) => {
-          setStage(id, stage);
-        });
-        setStage(id, 'done');
-        added += 1;
-      } catch (error) {
-        setStage(id, 'failed', errorMessage(error));
-      }
+  const uploadOne = async (id: number, file: File) => {
+    try {
+      setStage(id, 'encrypting');
+      const photo = await preparePhoto(file);
+      const url = URL.createObjectURL(new Blob([photo.thumb], { type: 'image/jpeg' }));
+      previews.current.add(url);
+      setItems((current) => current.map((item) => (item.id === id ? { ...item, url } : item)));
+      await upload(photo, albumId, (stage) => {
+        setStage(id, stage);
+      });
+      setStage(id, 'done');
+      stored.current += 1;
+    } catch (error) {
+      setStage(id, 'failed', errorMessage(error));
     }
-    busy.current = false;
-    if (added > 0) toast.show(`${pluralize(added, 'photo')} added to your vault`);
+  };
+
+  /** Starts queued photos while there's room, in order, and toasts once all are done. */
+  const pump = () => {
+    for (let job = queue.current[0]; job; job = queue.current[0]) {
+      const { id, file } = job;
+      if (!canStartUpload(inFlight.current, file.size)) break;
+      queue.current.shift();
+      inFlight.current = {
+        count: inFlight.current.count + 1,
+        bytes: inFlight.current.bytes + file.size,
+      };
+      void uploadOne(id, file).finally(() => {
+        inFlight.current = {
+          count: inFlight.current.count - 1,
+          bytes: inFlight.current.bytes - file.size,
+        };
+        pump();
+      });
+    }
+    if (inFlight.current.count === 0 && stored.current > 0) {
+      toast.show(`${pluralize(stored.current, 'photo')} added to your vault`);
+      stored.current = 0;
+    }
   };
 
   const addFiles = (files: FileList | null) => {
@@ -145,7 +166,7 @@ export function UploadDialog({ open, onClose, albumId }: UploadDialogProps) {
       return { id: nextId.current, name: file.name, url: '', stage: 'waiting' };
     });
     setItems((current) => [...current, ...added]);
-    void pump();
+    pump();
   };
 
   const close = () => {
