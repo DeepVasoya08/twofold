@@ -115,7 +115,6 @@ test('sharing one album with someone, who can only view it, then removing them',
   await alice.getByRole('button', { name: 'They match, share' }).click();
   await expect(alice.getByText('“Lisbon” is shared with Bob.')).toBeVisible();
 
-
   // Bob gets the album, not Alice's library: it's under Shared with me, and his timeline
   // stays empty.
   await expect(bob.getByText('Alice shared an album with you')).toBeVisible();
