@@ -1,0 +1,122 @@
+/* Over the top of the page while photos are selected, clear of the toasts at the bottom. */
+.selection-bar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: var(--sidebar);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: selection-bar-in 0.18s var(--ease);
+}
+
+@keyframes selection-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+.selection-bar__count {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selection-bar__all {
+  flex: none;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.selection-bar__all:hover {
+  background: var(--accent-soft);
+}
+
+.selection-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.selection-bar__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.selection-bar__btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.selection-bar__btn--danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.selection-bar__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* Labels only where there's room for all of them. */
+@media (max-width: 1360px) {
+  .selection-bar__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .selection-bar__btn {
+    justify-content: center;
+    width: 40px;
+    padding: 0;
+  }
+}
+
+@media (max-width: 860px) {
+  .selection-bar {
+    left: 0;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 6px 8px;
+  }
+
+  .selection-bar__actions {
+    order: 3;
+    justify-content: space-around;
+    width: 100%;
+  }
+
+  .selection-bar__count {
+    font-size: 15px;
+  }
+}

@@ -50,6 +50,7 @@ import {
   committedPhotoIds,
   countAlbums,
   countPhotos,
+  deleteAlbum,
   deleteAlbums,
   deletePhotoRows,
   findPhoto,
@@ -61,6 +62,7 @@ import {
   objectKeys,
   somePhotos,
   stalePendingPhotos,
+  updateAlbumMeta,
   updatePhotoMeta,
 } from '../space-db';
 import type { PhotoSize } from '../space-db';
@@ -345,6 +347,34 @@ space.post('/albums', async (c) => {
     return c.json({ error: messages.badRequest }, 409);
   }
   return c.body(null, 201);
+});
+
+const albumNotFound = 'That album isn’t here anymore.';
+
+/** Replaces an album's sealed metadata (renaming it). */
+space.put('/albums/:id', async (c) => {
+  const id = recordIdSchema.safeParse(c.req.param('id'));
+  const body = await readBody(c, updateRecordSchema);
+  if (!id.success || !body) return c.json({ error: messages.badRequest }, 400);
+  if (!(await updateAlbumMeta(c.env.DB, c.get('space'), id.data, body.meta))) {
+    return c.json({ error: albumNotFound }, 404);
+  }
+  return c.body(null, 204);
+});
+
+/**
+ * Deletes an album. Its photos stay in the space; the browser takes the album out of their
+ * sealed metadata, which the server can't read.
+ */
+space.delete('/albums/:id', async (c) => {
+  const id = recordIdSchema.safeParse(c.req.param('id'));
+  if (!id.success || !(await readBody(c, emptySchema))) {
+    return c.json({ error: messages.badRequest }, 400);
+  }
+  if (!(await deleteAlbum(c.env.DB, c.get('space'), id.data))) {
+    return c.json({ error: albumNotFound }, 404);
+  }
+  return c.body(null, 204);
 });
 
 /** Deletes everything in the space: every photo, its files, every album, and its sharing. */

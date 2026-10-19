@@ -69,3 +69,67 @@
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   }
 }
+
+/* Selecting: a check in each tile's corner, shown on hover and while picking. */
+
+.photo-grid__item {
+  position: relative;
+}
+
+.photo-tile__check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 22%);
+  color: transparent;
+  opacity: 0;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 30%);
+  transition:
+    opacity 0.15s var(--ease),
+    background-color 0.15s var(--ease);
+}
+
+.photo-grid__item:hover .photo-tile__check,
+.photo-tile__check:focus-visible,
+.photo-grid.is-selecting .photo-tile__check {
+  opacity: 1;
+}
+
+.photo-grid__item.is-selected .photo-tile__check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.photo-grid__item.is-selected .photo-tile {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.photo-grid__item.is-selected .photo-tile img {
+  transform: scale(0.92);
+  border-radius: 8px;
+}
+
+.photo-grid.is-selecting .photo-tile:hover img {
+  transform: none;
+}
+
+.photo-grid.is-selecting .photo-grid__item.is-selected .photo-tile:hover img {
+  transform: scale(0.92);
+}
+
+/* Touch screens can't hover: the check only shows once picking has started. */
+@media (hover: none) {
+  .photo-grid:not(.is-selecting) .photo-tile__check {
+    opacity: 0;
+    pointer-events: none;
+  }
+}

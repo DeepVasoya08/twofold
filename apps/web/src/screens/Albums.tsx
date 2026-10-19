@@ -6,6 +6,7 @@ import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useToast } from '../app/toast';
 import { albumCover, albumPhotos, useVault } from '../app/vault';
+import { AlbumActions } from '../components/AlbumActions';
 import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
 import { TextField } from '../components/Field';
@@ -80,7 +81,7 @@ export function Albums() {
           const cover = albumCover(state, album);
           const range = formatDateRange(photos.map((photo) => photo.takenAt));
           return (
-            <li key={album.id}>
+            <li key={album.id} className="album-grid__item">
               <Link to={paths.album(album.id)} className="album-card">
                 <span className="album-card__cover">
                   {cover ? (
@@ -114,6 +115,7 @@ export function Albums() {
                     : `${pluralize(photos.length, 'photo')}${range ? ` · ${range}` : ''}`}
                 </span>
               </Link>
+              <AlbumActions album={album} className="album-card__menu" />
             </li>
           );
         })}
