@@ -4,6 +4,7 @@ import type { ReactNode, SubmitEvent } from 'react';
 import type { SpaceKeys } from '@twofold/crypto';
 
 import { useAccount, useMe } from '../app/account';
+import { useAutoLock } from '../app/auto-lock';
 import { errorInput, errorMessage } from '../app/account-ops';
 import { useRouter } from '../app/router';
 import { paths } from '../app/routes';
@@ -19,6 +20,7 @@ import { Dialog } from '../components/Dialog';
 import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
+import { AUTO_LOCK_CHOICES, parseAutoLock } from '../lib/auto-lock';
 import { MIN_PASSWORD_LENGTH } from '../lib/password';
 
 import './settings.css';
@@ -121,7 +123,7 @@ export function Settings() {
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [passwordError, setPasswordError] = useState<PasswordError | null>(null);
-  const [autoLock, setAutoLock] = useState('15');
+  const autoLock = useAutoLock();
   const keys = account.state.status === 'unlocked' ? account.state.session.opened.space : null;
   const sharing = useSharingLists(keys);
   const [change, setChange] = useState<SharingChange | null>(null);
@@ -414,15 +416,16 @@ export function Settings() {
             <select
               className="select"
               aria-label="Auto-lock after"
-              value={autoLock}
+              value={String(autoLock.minutes)}
               onChange={(event) => {
-                setAutoLock(event.currentTarget.value);
+                autoLock.setMinutes(parseAutoLock(event.currentTarget.value));
               }}
             >
-              <option value="1">1 minute</option>
-              <option value="5">5 minutes</option>
-              <option value="15">15 minutes</option>
-              <option value="0">When I close the tab</option>
+              {AUTO_LOCK_CHOICES.map((choice) => (
+                <option key={choice.minutes} value={String(choice.minutes)}>
+                  {choice.label}
+                </option>
+              ))}
             </select>
           }
         />

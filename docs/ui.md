@@ -5,7 +5,7 @@ call the API and `packages/crypto`, and photos, favorites and albums are stored 
 encrypted in each space (design in [security.md](security.md)). Unlocking downloads and
 decrypts the open space; locking or reloading drops everything decrypted. The mock library in `apps/web/src/mock/` (placeholder landscape
 "photos" drawn as SVG data URIs) now only decorates the welcome and sign-in screens and
-feeds unit tests. Sharing and invite codes are real too; auto-lock is still mock UI.
+feeds unit tests. Sharing and invite codes are real too, and so is auto-lock.
 
 Twofold presents itself as a private, end-to-end encrypted photo library for anyone. Sharing
 exists but is low-key (Settings → Sharing).
@@ -62,6 +62,13 @@ private space that already exists, since the main library can't know whether the
 - Password hashing runs in a Web Worker, so spinners keep moving and the page stays usable
   while a login or unlock works. Signing out in the meantime ("Use another account")
   cancels it: the library doesn't open afterwards.
+- Auto-lock (Settings) locks after 1, 5 or 15 minutes without use (default 15), or only
+  when the tab closes. Pointer, key, wheel, touch and scroll count as use; a hidden tab gets
+  none, so its time counts as idle, and the check runs again when the tab is shown. Uploads
+  in progress count as use, so a long upload isn't dropped, and the countdown restarts when
+  they finish. The choice is a per-browser preference in localStorage
+  (`twofold.autoLockMinutes`); nothing secret is stored with it. Logic in
+  `lib/idle-timer.ts` and `app/auto-lock.tsx`.
 - Delete account asks for a password.
 - State lives in `app/account.tsx` (who is signed in, which slot is open) and
   `app/account-ops.ts` (every operation that touches keys); `app/access.ts` decides
