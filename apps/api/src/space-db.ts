@@ -80,11 +80,42 @@ export async function insertPendingPhoto(
   return result.meta.changes === 1;
 }
 
-export async function commitPhoto(db: D1Database, space: string, id: string): Promise<void> {
-  await db
-    .prepare('UPDATE photos SET pending_since = NULL WHERE space = ? AND id = ?')
-    .bind(space, id)
+/**
+ * Commits an upload whose files are there at its declared sizes. Returns false if nothing was
+ * committed: the photo is missing, already committed, or the sizes don't match.
+ */
+export async function commitPhoto(
+  db: D1Database,
+  space: string,
+  id: string,
+  sizes: { thumbSize: number; fullSize: number },
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE photos SET pending_since = NULL
+        WHERE space = ? AND id = ? AND pending_since IS NOT NULL
+          AND thumb_size = ? AND full_size = ?`,
+    )
+    .bind(space, id, sizes.thumbSize, sizes.fullSize)
     .run();
+  return result.meta.changes === 1;
+}
+
+/** Which of these photos are committed in this space: the ones a thumbnail batch may return. */
+export async function committedPhotoIds(
+  db: D1Database,
+  space: string,
+  ids: readonly string[],
+): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const { results } = await db
+    .prepare(
+      `SELECT id FROM photos WHERE space = ? AND pending_since IS NULL
+          AND id IN (${ids.map(() => '?').join(', ')})`,
+    )
+    .bind(space, ...ids)
+    .all<{ id: string }>();
+  return new Set(results.map((row) => row.id));
 }
 
 /** A photo row's id and the bytes it holds (both files), for deleting it. */

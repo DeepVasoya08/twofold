@@ -7,6 +7,7 @@ import type { AccountResponse, Keyring } from '@twofold/types';
 import type { Env } from './env';
 import { MAX_EMAIL_FAILURES, MAX_FAILURES } from './proof';
 import { createTestDb } from './test/d1';
+import type { RoundTrips } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 
 let env: Env;
@@ -14,12 +15,14 @@ let sqlite: DatabaseSync;
 let client: Client;
 let keys: [Uint8Array, Uint8Array, Uint8Array];
 let keyring: Keyring;
+let trips: RoundTrips;
 
 const EMAIL = 'someone@example.com';
 
 beforeEach(async () => {
   const test = createTestDb();
   sqlite = test.sqlite;
+  trips = test.trips;
   env = { DB: test.db, BLOBS: {} as R2Bucket };
   client = new Client(env);
   keys = [newLoginKey(), newLoginKey(), newLoginKey()];
@@ -226,6 +229,15 @@ describe('POST /api/auth/login', () => {
     for (let i = 0; i < MAX_FAILURES - 1; i++) await login(newLoginKey());
     expect((await login(keys[0])).status).toBe(200);
     expect(sqlite.prepare('SELECT * FROM login_failures').all()).toEqual([]);
+  });
+
+  it('logs in in four database round trips, and refuses a wrong key in two', async () => {
+    let before = trips.count;
+    expect((await login(keys[0])).status).toBe(200);
+    expect(trips.count - before).toBe(4);
+    before = trips.count;
+    expect((await login(newLoginKey())).status).toBe(401);
+    expect(trips.count - before).toBe(2);
   });
 });
 

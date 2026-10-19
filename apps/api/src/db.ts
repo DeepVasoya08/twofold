@@ -108,16 +108,25 @@ export async function deleteAccount(db: D1Database, accountId: string): Promise<
   ]);
 }
 
-export async function insertSession(
+/** The account behind an unexpired session, as a statement so it can share a batch. */
+export function sessionAccountQuery(
   db: D1Database,
-  session: { tokenHash: string; accountId: string; createdAt: number; expiresAt: number },
-): Promise<void> {
-  await db
+  tokenHash: string,
+  now: number,
+): D1PreparedStatement {
+  return db
     .prepare(
-      'INSERT INTO sessions (token_hash, account_id, created_at, expires_at) VALUES (?, ?, ?, ?)',
+      `SELECT a.id, a.email, a.name, a.keyring, a.version
+         FROM sessions s JOIN accounts a ON a.id = s.account_id
+        WHERE s.token_hash = ? AND s.expires_at > ?`,
     )
-    .bind(session.tokenHash, session.accountId, session.createdAt, session.expiresAt)
-    .run();
+    .bind(tokenHash, now);
+}
+
+/** Reads the row sessionAccountQuery found, if any. */
+export function sessionAccountFrom(rows: readonly unknown[]): AccountRecord | null {
+  const row = rows[0] as AccountRow | undefined;
+  return row ? toRecord(row) : null;
 }
 
 /** The account behind an unexpired session. */
@@ -126,15 +135,8 @@ export async function findSessionAccount(
   tokenHash: string,
   now: number,
 ): Promise<AccountRecord | null> {
-  const row = await db
-    .prepare(
-      `SELECT a.id, a.email, a.name, a.keyring, a.version
-         FROM sessions s JOIN accounts a ON a.id = s.account_id
-        WHERE s.token_hash = ? AND s.expires_at > ?`,
-    )
-    .bind(tokenHash, now)
-    .first<AccountRow>();
-  return row ? toRecord(row) : null;
+  const { results } = await sessionAccountQuery(db, tokenHash, now).all();
+  return sessionAccountFrom(results);
 }
 
 /** Signs out every other device: used after the keyring changes. */
@@ -149,9 +151,22 @@ export async function deleteOtherSessions(
     .run();
 }
 
-/** Forgets sessions that have run out, so old login times aren't kept. */
-export async function deleteExpiredSessions(db: D1Database, now: number): Promise<void> {
-  await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now).run();
+/**
+ * Starts a session, first forgetting sessions that have run out (so old login times aren't
+ * kept), in one round trip.
+ */
+export async function insertSession(
+  db: D1Database,
+  session: { tokenHash: string; accountId: string; createdAt: number; expiresAt: number },
+): Promise<void> {
+  await db.batch([
+    db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(session.createdAt),
+    db
+      .prepare(
+        'INSERT INTO sessions (token_hash, account_id, created_at, expires_at) VALUES (?, ?, ?, ?)',
+      )
+      .bind(session.tokenHash, session.accountId, session.createdAt, session.expiresAt),
+  ]);
 }
 
 export async function deleteSession(db: D1Database, tokenHash: string): Promise<void> {
@@ -160,17 +175,17 @@ export async function deleteSession(db: D1Database, tokenHash: string): Promise<
 
 /**
  * Counts an attempt as a failure before it is checked, starting a new window if the old one
- * has passed, and returns the count including this attempt. Counting first, in one
+ * has passed; the statement returns the count including this attempt. Counting first, in one
  * statement, means concurrent requests can't all read a count under the limit and then all
  * be checked: each one gets its own number.
  */
-export async function takeAttempt(
+export function attemptQuery(
   db: D1Database,
   email: string,
   now: number,
   windowStart: number,
-): Promise<number> {
-  const row = await db
+): D1PreparedStatement {
+  return db
     .prepare(
       `INSERT INTO login_failures (email, window_start, failures) VALUES (?1, ?2, 1)
        ON CONFLICT (email) DO UPDATE SET
@@ -178,10 +193,25 @@ export async function takeAttempt(
          window_start = CASE WHEN window_start > ?3 THEN window_start ELSE ?2 END
        RETURNING failures`,
     )
-    .bind(email, now, windowStart)
-    .first<{ failures: number }>();
+    .bind(email, now, windowStart);
+}
+
+/** The count an attemptQuery returned. */
+export function attemptCount(rows: readonly unknown[]): number {
+  const row = rows[0] as { failures: number } | undefined;
   if (!row) throw new Error('The attempt was not counted');
   return row.failures;
+}
+
+/** Counts one attempt (see attemptQuery) and returns the count including it. */
+export async function takeAttempt(
+  db: D1Database,
+  email: string,
+  now: number,
+  windowStart: number,
+): Promise<number> {
+  const { results } = await attemptQuery(db, email, now, windowStart).all();
+  return attemptCount(results);
 }
 
 /** Gives back an attempt that turned out not to be a failure. */
@@ -193,10 +223,13 @@ export async function returnAttempt(db: D1Database, email: string): Promise<void
 }
 
 /** Forgets failure counts whose window has passed, and the emails typed with them. */
-export async function deleteFinishedWindows(db: D1Database, windowStart: number): Promise<void> {
-  await db.prepare('DELETE FROM login_failures WHERE window_start <= ?').bind(windowStart).run();
+export function finishedWindowsQuery(db: D1Database, windowStart: number): D1PreparedStatement {
+  return db.prepare('DELETE FROM login_failures WHERE window_start <= ?').bind(windowStart);
 }
 
-export async function clearFailures(db: D1Database, email: string): Promise<void> {
-  await db.prepare('DELETE FROM login_failures WHERE email = ?').bind(email).run();
+/** Forgets the failure counts of these keys (an email, or an email and address). */
+export async function clearFailures(db: D1Database, keys: readonly string[]): Promise<void> {
+  await db.batch(
+    keys.map((key) => db.prepare('DELETE FROM login_failures WHERE email = ?').bind(key)),
+  );
 }

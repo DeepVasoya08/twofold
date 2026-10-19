@@ -4,7 +4,7 @@ import { createMiddleware } from 'hono/factory';
 
 import { newSessionToken, sessionTokenHash } from '@twofold/crypto/webcrypto';
 
-import { deleteExpiredSessions, deleteSession, findSessionAccount, insertSession } from './db';
+import { deleteSession, findSessionAccount, insertSession } from './db';
 import type { AccountRecord } from './db';
 import type { Env } from './env';
 
@@ -41,7 +41,6 @@ function isSecure(c: Context): boolean {
 export async function startSession(c: Context<AppEnv>, accountId: string): Promise<void> {
   const token = newSessionToken();
   const now = Date.now();
-  await deleteExpiredSessions(c.env.DB, now);
   await insertSession(c.env.DB, {
     tokenHash: await sessionTokenHash(token),
     accountId,
@@ -67,15 +66,23 @@ export function clearSessionCookie(c: Context): void {
   deleteCookie(c, cookieName(c), { path: '/', secure: isSecure(c) });
 }
 
+/** SHA-256 of the session token this request carries, if it carries one. */
+export async function requestSessionHash(c: Context): Promise<string | null> {
+  const token = getCookie(c, cookieName(c));
+  return token ? sessionTokenHash(token) : null;
+}
+
+/** The 401 for a request without a live session. */
+export function sessionEnded(c: Context): Response {
+  clearSessionCookie(c);
+  return c.json({ error: 'Your session has ended. Log in again.' }, 401);
+}
+
 /** Rejects the request with 401 unless it carries a live session. */
 export const requireSession = createMiddleware<AppEnv>(async (c, next) => {
-  const token = getCookie(c, cookieName(c));
-  const sessionHash = token ? await sessionTokenHash(token) : null;
+  const sessionHash = await requestSessionHash(c);
   const account = sessionHash ? await findSessionAccount(c.env.DB, sessionHash, Date.now()) : null;
-  if (!account || !sessionHash) {
-    clearSessionCookie(c);
-    return c.json({ error: 'Your session has ended. Log in again.' }, 401);
-  }
+  if (!account || !sessionHash) return sessionEnded(c);
   c.set('account', account);
   c.set('session', sessionHash);
   return next();

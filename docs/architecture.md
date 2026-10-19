@@ -32,7 +32,9 @@ everything from one origin, so there is no CORS and the CSP can stay at
     `x-twofold-space` header. Uploads are three steps: `POST /photos` (id, sealed metadata,
     sizes), `PUT /photos/:id/thumb` and `/full` (ciphertext, streamed to R2 at
     `photos/<id>/<part>`), then `POST /photos/:id/commit`. Also listing (paged by id),
-    downloads, metadata updates, deletes, albums, and `DELETE /api/space` to wipe a space.
+    downloads, `GET /thumbs?ids=a,b,c` (up to 48 encrypted previews in one response, each
+    after a 4-byte length; empty for photos the space doesn't have), metadata updates,
+    deletes, albums, and `DELETE /api/space` to wipe a space.
     Owner-only: `/members` (who the space is shared with, add, remove) and `/joined` (the
     libraries this space joined). `DELETE /membership` lets a member leave. See
     [security.md](security.md#photo-storage).
@@ -40,6 +42,10 @@ everything from one origin, so there is no CORS and the CSP can stay at
     a private handle (`GET /:handle`, `/reveal`, `/grant`, `DELETE`); the joiner drives it
     by the code (`GET /join/:code`, `/key`, `/hello`, `DELETE`). See
     [security.md](security.md#sharing).
+  - Round trips to D1 are kept few, since each one can cost a long way to the database's
+    region: every space request checks its session and space token in one batch, login
+    counts both guess limits in one batch, and a commit checks the files' sizes inside its
+    own update. The API tests count round trips per request (`test/d1.ts`).
   - Tables: `accounts`, `sessions` (token hashes only), `login_failures`, `photos`,
     `albums`, `members` and `joined` (keyed by space, never by account), and `invites`
     (short-lived, keyed by hashes of the code and handle).

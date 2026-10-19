@@ -4,6 +4,11 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { SQLInputValue } from 'node:sqlite';
 
+/** How many times the API has gone to the database: each query, or each batch, is one. */
+export interface RoundTrips {
+  count: number;
+}
+
 /**
  * A small D1 stand-in on Node's built-in SQLite, with the real migrations applied, so API
  * tests run the same SQL as production. Only the parts of D1 the API uses are here.
@@ -11,33 +16,50 @@ import type { SQLInputValue } from 'node:sqlite';
 class Statement {
   constructor(
     private readonly db: DatabaseSync,
+    private readonly trips: RoundTrips,
     private readonly sql: string,
     private readonly params: SQLInputValue[] = [],
   ) {}
 
   bind(...params: SQLInputValue[]): Statement {
-    return new Statement(this.db, this.sql, params);
+    return new Statement(this.db, this.trips, this.sql, params);
   }
 
   first<T>(): Promise<T | null> {
+    this.trips.count += 1;
     const row = this.db.prepare(this.sql).get(...this.params);
     return Promise.resolve((row ?? null) as T | null);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- D1's own signature
   all<T>(): Promise<{ results: T[] }> {
+    this.trips.count += 1;
     const rows = this.db.prepare(this.sql).all(...this.params);
     return Promise.resolve({ results: rows as T[] });
   }
 
   run(): Promise<{ meta: { changes: number } }> {
+    this.trips.count += 1;
     const result = this.db.prepare(this.sql).run(...this.params);
     return Promise.resolve({ meta: { changes: Number(result.changes) } });
+  }
+
+  /** What D1 gives for each statement in a batch: rows (for a query) and the change count. */
+  runInBatch(): { results: unknown[]; meta: { changes: number } } {
+    const statement = this.db.prepare(this.sql);
+    if (statement.columns().length === 0) {
+      const result = statement.run(...this.params);
+      return { results: [], meta: { changes: Number(result.changes) } };
+    }
+    const results = statement.all(...this.params);
+    const changes = Number(this.db.prepare('SELECT changes() AS n').get()?.n ?? 0);
+    return { results, meta: { changes: /^\s*select/i.test(this.sql) ? 0 : changes } };
   }
 }
 
 class TestD1 {
   readonly sqlite = new DatabaseSync(':memory:');
+  readonly trips: RoundTrips = { count: 0 };
 
   constructor() {
     this.sqlite.exec('PRAGMA foreign_keys = ON');
@@ -50,16 +72,16 @@ class TestD1 {
   }
 
   prepare(sql: string): Statement {
-    return new Statement(this.sqlite, sql);
+    return new Statement(this.sqlite, this.trips, sql);
   }
 
-  async batch(statements: Statement[]): Promise<{ meta: { changes: number } }[]> {
+  batch(statements: Statement[]): Promise<{ results: unknown[]; meta: { changes: number } }[]> {
+    this.trips.count += 1;
     this.sqlite.exec('BEGIN');
     try {
-      const results = [];
-      for (const statement of statements) results.push(await statement.run());
+      const results = statements.map((statement) => statement.runInBatch());
       this.sqlite.exec('COMMIT');
-      return results;
+      return Promise.resolve(results);
     } catch (error) {
       this.sqlite.exec('ROLLBACK');
       throw error;
@@ -67,7 +89,7 @@ class TestD1 {
   }
 }
 
-export function createTestDb(): { db: D1Database; sqlite: DatabaseSync } {
+export function createTestDb(): { db: D1Database; sqlite: DatabaseSync; trips: RoundTrips } {
   const d1 = new TestD1();
-  return { db: d1 as unknown as D1Database, sqlite: d1.sqlite };
+  return { db: d1 as unknown as D1Database, sqlite: d1.sqlite, trips: d1.trips };
 }

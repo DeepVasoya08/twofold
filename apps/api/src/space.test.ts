@@ -2,13 +2,14 @@ import { fromBase64Url, randomBytes, sha256, toBase64Url } from '@twofold/crypto
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { SPACE_HEADER, STORAGE_SIZES } from '@twofold/types';
+import { SPACE_HEADER, STORAGE_SIZES, THUMB_BATCH_MAX, readThumbBatch } from '@twofold/types';
 import type { AlbumList, PhotoPage, StoredPhoto } from '@twofold/types';
 
 import type { Env } from './env';
 import { PAGE_SIZE, PENDING_TTL_MS } from './routes/space';
 import { STALE_PENDING_SQL } from './space-db';
 import { createTestDb } from './test/d1';
+import type { RoundTrips } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
 import type { TestR2 } from './test/r2';
@@ -18,6 +19,7 @@ let sqlite: DatabaseSync;
 let r2: TestR2;
 let client: Client;
 let token: string;
+let trips: RoundTrips;
 
 const newId = () => toBase64Url(randomBytes(16));
 const newMeta = () => toBase64Url(randomBytes(300));
@@ -30,6 +32,7 @@ beforeEach(async () => {
   const db = createTestDb();
   const blobs = createTestR2();
   sqlite = db.sqlite;
+  trips = db.trips;
   r2 = blobs.r2;
   env = { DB: db.db, BLOBS: blobs.bucket };
   client = new Client(env);
@@ -216,6 +219,74 @@ describe('uploading', () => {
     expect(plan).toEqual([
       'SEARCH photos USING INDEX photos_pending (space=? AND pending_since<?)',
     ]);
+  });
+});
+
+async function getThumbs(ids: string[], c = client) {
+  const res = await c.request('GET', `/space/thumbs?ids=${ids.join(',')}`);
+  if (res.status !== 200) return res.status;
+  return readThumbBatch(new Uint8Array(await res.arrayBuffer()), ids.length);
+}
+
+describe('thumbnail batches', () => {
+  it('returns many thumbnails in the order asked', async () => {
+    const first = await upload();
+    const second = await upload();
+    expect(await getThumbs([second.photo.id, first.photo.id])).toEqual([second.thumb, first.thumb]);
+  });
+
+  it('leaves out photos that are missing, still uploading or in another space', async () => {
+    const mine = await upload();
+    const pending = { id: newId(), meta: newMeta(), thumbSize: 10, fullSize: 20 };
+    await client.request('POST', '/space/photos', pending);
+    await putFile(client, pending.id, 'thumb', randomBytes(10));
+    useSpace(client, toBase64Url(randomBytes(16)));
+    const elsewhere = await upload();
+    useSpace(client, token);
+    expect(await getThumbs([mine.photo.id, pending.id, elsewhere.photo.id, newId()])).toEqual([
+      mine.thumb,
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it('refuses malformed, repeated or too many ids', async () => {
+    expect(await getThumbs([])).toBe(400);
+    expect(await getThumbs(['not-an-id'])).toBe(400);
+    const id = newId();
+    expect(await getThumbs([id, id])).toBe(400);
+    expect(await getThumbs(Array.from({ length: THUMB_BATCH_MAX + 1 }, newId))).toBe(400);
+    expect(await getThumbs(Array.from({ length: THUMB_BATCH_MAX }, newId))).toHaveLength(
+      THUMB_BATCH_MAX,
+    );
+  });
+
+  it('needs a session like every space route', async () => {
+    client.cookie = null;
+    expect(await getThumbs([newId()])).toBe(401);
+  });
+});
+
+describe('database round trips', () => {
+  async function tripsFor(request: () => Promise<Response>): Promise<number> {
+    const before = trips.count;
+    await request();
+    return trips.count - before;
+  }
+
+  it('checks the session and the space together, then answers in one more', async () => {
+    const { photo } = await upload();
+    expect(await tripsFor(() => client.request('GET', `/space/thumbs?ids=${photo.id}`))).toBe(2);
+    expect(await tripsFor(() => client.request('GET', `/space/photos/${photo.id}/full`))).toBe(2);
+    expect(await tripsFor(() => client.request('GET', '/space/photos'))).toBe(2);
+  });
+
+  it('uploads a photo in ten round trips across its four requests', async () => {
+    // Two of them (the abandoned-upload check and the quota reservation) run side by side.
+    const before = trips.count;
+    await upload();
+    expect(trips.count - before).toBe(10);
   });
 });
 

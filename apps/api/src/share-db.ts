@@ -6,14 +6,8 @@ import type { InviterView, JoinerView, StoredJoined, StoredMember } from '@twofo
  */
 
 /** The space a member's share token opens, and which member it is. */
-export async function findMemberByToken(
-  db: D1Database,
-  tokenHash: string,
-): Promise<{ id: string; space: string } | null> {
-  return db
-    .prepare('SELECT id, space FROM members WHERE token_hash = ?')
-    .bind(tokenHash)
-    .first<{ id: string; space: string }>();
+export function memberByTokenQuery(db: D1Database, tokenHash: string): D1PreparedStatement {
+  return db.prepare('SELECT id, space FROM members WHERE token_hash = ?').bind(tokenHash);
 }
 
 export async function listMembers(db: D1Database, space: string): Promise<StoredMember[]> {
