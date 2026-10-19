@@ -358,6 +358,42 @@ describe('albums', () => {
   it('refuses a malformed album', async () => {
     expect((await client.request('POST', '/space/albums', { id: newId() })).status).toBe(400);
   });
+
+  it('renames an album by replacing its sealed metadata', async () => {
+    const album = { id: newId(), meta: newMeta() };
+    await client.request('POST', '/space/albums', album);
+    const meta = newMeta();
+    expect((await client.request('PUT', `/space/albums/${album.id}`, { meta })).status).toBe(204);
+    const res = await client.request('GET', '/space/albums');
+    expect(await res.json<AlbumList>()).toEqual({ albums: [{ id: album.id, meta }] });
+    expect((await client.request('PUT', `/space/albums/${album.id}`, {})).status).toBe(400);
+    expect((await client.request('PUT', `/space/albums/${newId()}`, { meta })).status).toBe(404);
+  });
+
+  it('deletes one album and keeps its photos', async () => {
+    const { photo } = await upload();
+    const album = { id: newId(), meta: newMeta() };
+    const other = { id: newId(), meta: newMeta() };
+    await client.request('POST', '/space/albums', album);
+    await client.request('POST', '/space/albums', other);
+    expect((await client.request('DELETE', `/space/albums/${album.id}`, {})).status).toBe(204);
+    expect((await client.request('DELETE', `/space/albums/${album.id}`, {})).status).toBe(404);
+    const res = await client.request('GET', '/space/albums');
+    expect(await res.json<AlbumList>()).toEqual({ albums: [other] });
+    expect((await listPhotos()).photos).toEqual([photo]);
+  });
+
+  it('can’t rename or delete another space’s album', async () => {
+    const album = { id: newId(), meta: newMeta() };
+    await client.request('POST', '/space/albums', album);
+    useSpace(client, toBase64Url(randomBytes(16)));
+    const path = `/space/albums/${album.id}`;
+    expect((await client.request('PUT', path, { meta: newMeta() })).status).toBe(404);
+    expect((await client.request('DELETE', path, {})).status).toBe(404);
+    useSpace(client, token);
+    const res = await client.request('GET', '/space/albums');
+    expect(await res.json<AlbumList>()).toEqual({ albums: [album] });
+  });
 });
 
 describe('storage quota', () => {

@@ -35,7 +35,8 @@ everything from one origin, so there is no CORS and the CSP can stay at
     `photos/<id>/<part>`), then `POST /photos/:id/commit`. Also listing (paged by id),
     downloads, `GET /thumbs?ids=a,b,c` (up to 48 encrypted previews in one response, each
     after a 4-byte length; empty for photos the space doesn't have), metadata updates,
-    deletes, albums, and `DELETE /api/space` to wipe a space.
+    deletes, albums (`POST /albums`, `PUT /albums/:id` to replace an album's sealed title,
+    `DELETE /albums/:id`, which keeps its photos), and `DELETE /api/space` to wipe a space.
     Owner-only: `/members` (who the space is shared with, add, remove) and `/joined` (the
     libraries this space joined). `DELETE /membership` lets a member leave. See
     [security.md](security.md#photo-storage).

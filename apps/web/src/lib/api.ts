@@ -172,6 +172,11 @@ export function spaceApi(token: string) {
     deletePhoto: (id: string) => call<undefined>('DELETE', photo(id), {}, headers),
     createAlbum: (body: CreateAlbumRequest) =>
       call<undefined>('POST', '/space/albums', body, headers),
+    updateAlbum: (id: string, meta: string) =>
+      call<undefined>('PUT', `/space/albums/${encodeURIComponent(id)}`, { meta }, headers),
+    /** Deletes the album only; its photos stay. */
+    deleteAlbum: (id: string) =>
+      call<undefined>('DELETE', `/space/albums/${encodeURIComponent(id)}`, {}, headers),
     /** Deletes every photo and album in the space. */
     wipe: () => call<undefined>('DELETE', '/space', {}, headers),
     listMembers: () => call<MemberList>('GET', '/space/members', undefined, headers),

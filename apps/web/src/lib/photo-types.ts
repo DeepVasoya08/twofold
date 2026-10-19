@@ -17,3 +17,10 @@ export const PHOTO_TYPES_TEXT = 'JPEG, PNG, GIF, WebP, HEIC and AVIF';
 export function isPhotoType(type: string): boolean {
   return PHOTO_TYPES.includes(type.toLowerCase());
 }
+
+/** A file name extension for one of the photo formats, for naming copies sent elsewhere. */
+export function extensionOf(type: string): string {
+  const subtype = type.toLowerCase().split('/')[1] ?? '';
+  if (subtype === 'jpeg') return 'jpg';
+  return isPhotoType(type) ? subtype : 'bin';
+}

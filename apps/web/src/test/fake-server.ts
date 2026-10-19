@@ -87,6 +87,19 @@ export class FakeServer {
         this.albums.set(album.id, { token: space, album });
         return Promise.resolve(undefined);
       },
+      updateAlbum: (id, meta) => {
+        const entry = this.albums.get(id);
+        if (entry?.token !== space) return Promise.reject(new ApiError(404, 'Not here'));
+        entry.album.meta = meta;
+        return Promise.resolve(undefined);
+      },
+      deleteAlbum: (id) => {
+        if (this.albums.get(id)?.token !== space) {
+          return Promise.reject(new ApiError(404, 'Not here'));
+        }
+        this.albums.delete(id);
+        return Promise.resolve(undefined);
+      },
       wipe: async () => {
         ownerOnly();
         await Promise.resolve();

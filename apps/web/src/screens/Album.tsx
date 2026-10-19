@@ -1,17 +1,23 @@
-import { Link } from '../app/router';
+import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
+import { useSelection } from '../app/selection';
 import { albumCover, albumPhotos, useVault } from '../app/vault';
+import { AlbumActions } from '../components/AlbumActions';
 import { PageHeader } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { PhotoImage } from '../components/PhotoImage';
+import { SelectButton } from '../components/SelectButton';
+import { SelectionBar } from '../components/SelectionBar';
 import { formatDateRange, pluralize } from '../lib/format';
 
 import './album.css';
 
 export function Album({ albumId }: { albumId: string }) {
   const { state } = useVault();
+  const { navigate } = useRouter();
+  const selection = useSelection();
   const album = state.albums.find((candidate) => candidate.id === albumId);
 
   if (!album) {
@@ -38,12 +44,32 @@ export function Album({ albumId }: { albumId: string }) {
   const range = formatDateRange(photos.map((photo) => photo.takenAt));
   const places = [...new Set(photos.flatMap((photo) => (photo.location ? [photo.location] : [])))];
 
+  const actions = (
+    <AlbumActions
+      album={album}
+      onDeleted={() => {
+        navigate(paths.albums, { replace: true });
+      }}
+    />
+  );
+
   return (
     <div className="page">
-      <Link to={paths.albums} className="page-header__back">
-        <Icon name="chevron-left" size={16} />
-        Albums
-      </Link>
+      <div className="album-toolbar">
+        <Link to={paths.albums} className="page-header__back">
+          <Icon name="chevron-left" size={16} />
+          Albums
+        </Link>
+        <div className="album-toolbar__actions">
+          {photos.length > 0 && <SelectButton selection={selection} />}
+          {actions}
+        </div>
+      </div>
+      <SelectionBar
+        selection={selection}
+        allIds={photos.map((photo) => photo.id)}
+        albumId={album.id}
+      />
 
       {cover ? (
         <header className="album-hero">
@@ -72,7 +98,11 @@ export function Album({ albumId }: { albumId: string }) {
           Use Upload to add photos straight into this album.
         </EmptyState>
       ) : (
-        <PhotoGrid photos={photos} context={{ kind: 'album', albumId: album.id }} />
+        <PhotoGrid
+          photos={photos}
+          context={{ kind: 'album', albumId: album.id }}
+          selection={selection}
+        />
       )}
     </div>
   );

@@ -209,6 +209,29 @@ export async function insertAlbum(
   return result.meta.changes === 1;
 }
 
+/** Replaces an album's sealed metadata (its title). Returns false if it isn't in the space. */
+export async function updateAlbumMeta(
+  db: D1Database,
+  space: string,
+  id: string,
+  meta: string,
+): Promise<boolean> {
+  const result = await db
+    .prepare('UPDATE albums SET meta = ? WHERE id = ? AND space = ?')
+    .bind(meta, id, space)
+    .run();
+  return result.meta.changes === 1;
+}
+
+/** Deletes one album; its photos stay. Returns false if it isn't in the space. */
+export async function deleteAlbum(db: D1Database, space: string, id: string): Promise<boolean> {
+  const result = await db
+    .prepare('DELETE FROM albums WHERE id = ? AND space = ?')
+    .bind(id, space)
+    .run();
+  return result.meta.changes === 1;
+}
+
 export async function deleteAlbums(db: D1Database, space: string): Promise<void> {
   await db.prepare('DELETE FROM albums WHERE space = ?').bind(space).run();
 }

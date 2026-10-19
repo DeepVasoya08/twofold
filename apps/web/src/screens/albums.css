@@ -87,3 +87,38 @@
     font-size: 13px;
   }
 }
+
+/* The "more" menu sits over the cover's corner: shown on hover, always on touch screens. */
+.album-grid__item {
+  position: relative;
+}
+
+.album-card__menu {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease);
+}
+
+.album-grid__item:hover .album-card__menu,
+.album-card__menu:focus-within {
+  opacity: 1;
+}
+
+.album-card__menu .menu__button {
+  border-color: transparent;
+  background: rgb(0 0 0 / 35%);
+  color: #fff;
+  backdrop-filter: blur(6px);
+}
+
+.album-card__menu .menu__button:hover {
+  background: rgb(0 0 0 / 50%);
+}
+
+@media (hover: none) {
+  .album-card__menu {
+    opacity: 1;
+  }
+}

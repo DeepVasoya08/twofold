@@ -42,6 +42,33 @@ exists but is low-key (Settings → Sharing).
   **Stop**) and the libraries it joined (with **Leave**).
 - The lock button (sidebar, or top bar on phones) forgets which space was open.
 
+## Selecting photos and album actions
+
+- Every photo grid (timeline, album, favorites) lets photos be picked. With a mouse, each
+  tile shows a check in its corner on hover; on touch screens, **Select** in the page header
+  starts picking, and then a tap selects instead of opening. Each month in the timeline has
+  **Select all** for that month, and the selection bar has **Select all** for the page.
+  Escape or the × stops picking.
+- The selection bar sits over the top of the page: **Add to album** (pick an album, or make
+  one and add to it), **Remove from album** (inside an album), **Share**, **Add to
+  favorites** / **Remove from favorites**, **Move to private space** / **Move to library**,
+  and **Delete**. Changes run a few photos at a time; afterwards only the photos that
+  didn't go through stay selected, and a toast says how many did.
+- Moving a selection asks for the other space's password exactly as moving one photo does
+  (once per unlock, same answer for a wrong password as for no private space). Photos from
+  a library shared with you are left out of a move, and can only go in that library's
+  albums: the album picker only offers albums at least one selected photo can go in.
+- **Share** sends copies: it decrypts the originals (up to 50 at a time) and opens the
+  device's share sheet, or downloads them where there is none (most desktop browsers). The
+  dialog says the copies leave Twofold unencrypted. Invites stay per space, so an album's
+  Share also offers **Invite someone**, which says it shares the whole library or private
+  space, not one album.
+- Every album has a "more" menu (on its card in Albums, and next to **Select** inside it):
+  **Rename**, **Share** and **Delete album**. Deleting an album keeps its photos.
+- Code: `app/selection.ts` (selection state), `components/SelectionBar.tsx`,
+  `AlbumPicker.tsx`, `ShareDialog.tsx`, `AlbumActions.tsx`, `MoveSpaceDialog.tsx` (shared
+  with the viewer), and the vault's batch changes in `app/vault.tsx`.
+
 Unlocking tries the password against every key slot on the device (see
 [security.md](security.md#key-slots)), so the server never learns which space opened.
 Setting up a private space from the main library always looks the same and replaces any
@@ -82,7 +109,7 @@ Routes are the same in both spaces; the content depends on which space is open.
 | `/photos`              | Library or private space: timeline grouped by month             |
 | `/photos/:id`          | Photo viewer; `?from=favorites` or `?from=album:<id>` scopes it |
 | `/albums`              | Albums, with "New album"                                        |
-| `/albums/:id`          | One album                                                       |
+| `/albums/:id`          | One album, with Rename, Share and Delete album                  |
 | `/favorites`           | Favorites                                                       |
 | `/settings`            | Profile, passwords, sharing, security, devices, appearance      |
 | `/settings/share`      | Invite someone to the open space, or join with a code           |
