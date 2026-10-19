@@ -1,6 +1,7 @@
 import { KEY_SIZES, SLOT_COUNT } from '@twofold/types';
 import type { KdfParams, Keyring, Slots } from '@twofold/types';
 
+import { hashPassword } from './password-hash';
 import { getSodium } from './sodium';
 import { fromBase64Url, loginVerifier, toBase64Url } from './webcrypto';
 
@@ -55,15 +56,20 @@ export class InvalidKeyringError extends Error {
   }
 }
 
-function checkKdf(kdf: KdfParams): void {
-  const ok =
+/** True if the parameters are between MIN_KDF and MAX_KDF. */
+export function kdfInRange(kdf: KdfParams): boolean {
+  return (
     Number.isInteger(kdf.opsLimit) &&
     Number.isInteger(kdf.memLimit) &&
     kdf.opsLimit >= MIN_KDF.opsLimit &&
     kdf.memLimit >= MIN_KDF.memLimit &&
     kdf.opsLimit <= MAX_KDF.opsLimit &&
-    kdf.memLimit <= MAX_KDF.memLimit;
-  if (!ok) throw new InvalidKeyringError('Key derivation parameters are out of range');
+    kdf.memLimit <= MAX_KDF.memLimit
+  );
+}
+
+function checkKdf(kdf: KdfParams): void {
+  if (!kdfInRange(kdf)) throw new InvalidKeyringError('Key derivation parameters are out of range');
 }
 
 function decode(text: string, size: number, what: string): Uint8Array {
@@ -82,7 +88,10 @@ async function secretFromMaster(master: Uint8Array): Promise<SlotSecret> {
   return secret;
 }
 
-/** Runs Argon2id on a password. This is the slow step (well under a second on most devices). */
+/**
+ * Runs Argon2id on a password. This is the slow step (well under a second on most devices);
+ * the web app runs it in a Web Worker (see setPasswordHasher).
+ */
 export async function deriveFromPassword(
   password: string,
   saltText: string,
@@ -90,15 +99,7 @@ export async function deriveFromPassword(
 ): Promise<SlotSecret> {
   checkKdf(kdf);
   const salt = decode(saltText, KEY_SIZES.salt, 'salt');
-  const sodium = await getSodium();
-  const master = sodium.crypto_pwhash(
-    32,
-    password.normalize('NFC'),
-    salt,
-    kdf.opsLimit,
-    kdf.memLimit,
-    sodium.crypto_pwhash_ALG_ARGON2ID13,
-  );
+  const master = await hashPassword({ password: password.normalize('NFC'), salt, kdf });
   return secretFromMaster(master);
 }
 

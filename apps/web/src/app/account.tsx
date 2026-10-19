@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 
 import type { SpaceKeys } from '@twofold/crypto';
@@ -51,6 +59,8 @@ interface AccountValue {
   deleteAccount: (password: string) => Promise<void>;
 }
 
+const SIGNED_OUT_MEANWHILE = 'You signed out before Twofold finished opening. Try again.';
+
 const AccountContext = createContext<AccountValue | null>(null);
 
 function accountOf(state: AccountState): AccountResponse | null {
@@ -70,6 +80,12 @@ export function AccountProvider({
   const [state, setState] = useState<AccountState>(initialState ?? { status: 'loading' });
   const [generation, setGeneration] = useState(0);
   const [pendingSignUp, setPendingSignUp] = useState<PendingSignUp | null>(null);
+  /**
+   * Bumped when someone locks or signs out. Password hashing runs in a Web Worker, so the
+   * page stays usable while a login or unlock is still working; if they sign out meanwhile,
+   * that login must not open the library afterwards.
+   */
+  const keysDropped = useRef(0);
 
   useEffect(() => {
     if (initialState) return;
@@ -92,18 +108,35 @@ export function AccountProvider({
     setState({ status: 'unlocked', session });
   }, []);
 
-  /** Runs an operation; a 401 means the session ended elsewhere, so sign out here too. */
-  const guard = useCallback(async <T,>(run: () => Promise<T>): Promise<T> => {
-    try {
-      return await run();
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        setGeneration((current) => current + 1);
-        setState({ status: 'signed-out' });
-      }
-      throw error;
-    }
+  /** Runs a login or unlock, and opens its session only if nobody locked or signed out since. */
+  const openFrom = useCallback(
+    async (start: () => Promise<Session>) => {
+      const dropped = keysDropped.current;
+      const session = await start();
+      if (keysDropped.current !== dropped) throw new ops.FormError(SIGNED_OUT_MEANWHILE);
+      open(session);
+    },
+    [open],
+  );
+
+  const dropKeys = useCallback((next: AccountState) => {
+    keysDropped.current += 1;
+    setGeneration((current) => current + 1);
+    setState(next);
   }, []);
+
+  /** Runs an operation; a 401 means the session ended elsewhere, so sign out here too. */
+  const guard = useCallback(
+    async <T,>(run: () => Promise<T>): Promise<T> => {
+      try {
+        return await run();
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) dropKeys({ status: 'signed-out' });
+        throw error;
+      }
+    },
+    [dropKeys],
+  );
 
   const value = useMemo<AccountValue>(() => {
     const session = state.status === 'unlocked' ? state.session : null;
@@ -112,8 +145,13 @@ export function AccountProvider({
       if (!session) throw new ops.FormError('Unlock Twofold first.');
       return session;
     };
-    const update = (next: Session) => {
+    /** Keeps an operation's new session, unless the keys were dropped while it ran. */
+    const update = async (start: () => Promise<Session>): Promise<Session | null> => {
+      const dropped = keysDropped.current;
+      const next = await start();
+      if (keysDropped.current !== dropped) return null;
       setState({ status: 'unlocked', session: next });
+      return next;
     };
     return {
       state,
@@ -132,55 +170,50 @@ export function AccountProvider({
         open(await ops.completeSignUp(pendingSignUp));
         setPendingSignUp(null);
       },
-      logIn: async (email, password) => {
-        open(await ops.logIn(email, password));
-      },
+      logIn: (email, password) => openFrom(() => ops.logIn(email, password)),
       unlock: (password) =>
-        guard(async () => {
-          // Fetch the keyring again in case a password changed on another device.
-          const fresh = await api.account();
-          open(await ops.unlock(fresh, password));
-        }),
-      recover: async (email, words, newPassword) => {
-        open(await ops.recover(email, words, newPassword));
-      },
+        guard(() =>
+          openFrom(async () => {
+            // Fetch the keyring again in case a password changed on another device.
+            const fresh = await api.account();
+            return ops.unlock(fresh, password);
+          }),
+        ),
+      recover: (email, words, newPassword) =>
+        openFrom(() => ops.recover(email, words, newPassword)),
       lock: () => {
         if (!account) return;
-        setGeneration((current) => current + 1);
-        setState({ status: 'locked', account });
+        dropKeys({ status: 'locked', account });
       },
       logOut: async () => {
-        setGeneration((current) => current + 1);
-        setState({ status: 'signed-out' });
+        dropKeys({ status: 'signed-out' });
         await api.logOut().catch(() => undefined);
       },
       changeMainPassword: (current, next) =>
         guard(async () => {
-          update(await ops.changeMainPassword(requireSession(), current, next));
+          await update(() => ops.changeMainPassword(requireSession(), current, next));
         }),
       setPrivatePassword: (current, next) =>
         guard(async () => {
-          update(await ops.setPrivatePassword(requireSession(), current, next));
+          await update(() => ops.setPrivatePassword(requireSession(), current, next));
         }),
       otherSpaceOpen: session?.otherSpace !== undefined,
       openOtherSpace: async (password) => {
-        const next = await ops.openOtherSpace(requireSession(), password);
-        update(next);
-        if (!next.otherSpace) throw new ops.FormError('Unlock the other space first.');
+        const next = await update(() => ops.openOtherSpace(requireSession(), password));
+        if (!next?.otherSpace) throw new ops.FormError('Unlock the other space first.');
         return next.otherSpace;
       },
       saveRecoveryKey: (recoveryKey) =>
         guard(async () => {
-          update(await ops.saveRecoveryKey(requireSession(), recoveryKey));
+          await update(() => ops.saveRecoveryKey(requireSession(), recoveryKey));
         }),
       deleteAccount: (password) =>
         guard(async () => {
           await ops.deleteAccount(requireSession(), password, leaveAll);
-          setGeneration((current) => current + 1);
-          setState({ status: 'signed-out' });
+          dropKeys({ status: 'signed-out' });
         }),
     };
-  }, [state, generation, pendingSignUp, open, guard]);
+  }, [state, generation, pendingSignUp, open, openFrom, dropKeys, guard]);
 
   return <AccountContext value={value}>{children}</AccountContext>;
 }

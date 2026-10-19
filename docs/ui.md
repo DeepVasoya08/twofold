@@ -59,6 +59,9 @@ private space that already exists, since the main library can't know whether the
   creates the account.
 - `/signup/recovery-key` doubles as "New key" from Settings in the main library. The private
   space can't make a recovery key; its Settings say the private password can't be recovered.
+- Password hashing runs in a Web Worker, so spinners keep moving and the page stays usable
+  while a login or unlock works. Signing out in the meantime ("Use another account")
+  cancels it: the library doesn't open afterwards.
 - Delete account asks for a password.
 - State lives in `app/account.tsx` (who is signed in, which slot is open) and
   `app/account-ops.ts` (every operation that touches keys); `app/access.ts` decides

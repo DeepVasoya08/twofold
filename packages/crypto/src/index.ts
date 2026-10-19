@@ -7,6 +7,10 @@
 import { getSodium } from './sodium';
 
 export * from './keyring';
+export { setPasswordHasher } from './password-hash';
+export type { PasswordHasher } from './password-hash';
+export { workerHasher } from './hash-worker';
+export type { HashWorker } from './hash-worker';
 export * from './recovery-key';
 export * from './sharing';
 export * from './storage';
