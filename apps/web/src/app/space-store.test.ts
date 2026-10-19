@@ -9,6 +9,7 @@ import { STORAGE_SIZES, THUMB_BATCH_MAX } from '@twofold/types';
 import { FakeServer } from '../test/fake-server';
 import { combinedStore, memoryStore, remoteStore } from './space-store';
 import type { NewPhoto } from './space-store';
+import { PartialThumbs } from './thumb-loader';
 
 function bytes(text: string): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode(text);
@@ -267,17 +268,18 @@ describe('remoteStore', () => {
 });
 
 describe('combinedStore', () => {
+  const photo = (id: string) => ({
+    id,
+    src: `blob:${id}`,
+    width: 1,
+    height: 1,
+    takenAt: '2026-10-16T09:30:00.000Z',
+    addedBy: 'me' as const,
+    favorite: false,
+    albumIds: [],
+  });
+
   it('asks each library only for its own previews', async () => {
-    const photo = (id: string) => ({
-      id,
-      src: `blob:${id}`,
-      width: 1,
-      height: 1,
-      takenAt: '2026-10-16T09:30:00.000Z',
-      addedBy: 'me' as const,
-      favorite: false,
-      albumIds: [],
-    });
     const own = memoryStore({ photos: [photo('mine')], albums: [] });
     const theirs = memoryStore({ photos: [photo('theirs')], albums: [] });
     const store = combinedStore(own, () =>
@@ -286,5 +288,22 @@ describe('combinedStore', () => {
     await store.list();
     const urls = await store.thumbs(['mine', 'theirs']);
     expect(Object.fromEntries(urls)).toEqual({ mine: 'blob:mine', theirs: 'blob:theirs' });
+  });
+
+  it('reports previews that failed, with the ones that came back', async () => {
+    const own = memoryStore({ photos: [photo('mine')], albums: [] });
+    const theirs = {
+      ...memoryStore({ photos: [photo('theirs')], albums: [] }),
+      thumbs: () => Promise.reject(new Error('offline')),
+    };
+    const store = combinedStore(own, () =>
+      Promise.resolve([{ id: 's', name: 'Ana', store: theirs }]),
+    );
+    await store.list();
+    const error = await store.thumbs(['mine', 'theirs']).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(PartialThumbs);
+    const partial = error as PartialThumbs;
+    expect(Object.fromEntries(partial.found)).toEqual({ mine: 'blob:mine' });
+    expect(partial.failed).toEqual(['theirs']);
   });
 });

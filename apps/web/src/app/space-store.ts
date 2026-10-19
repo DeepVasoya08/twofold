@@ -7,6 +7,7 @@ import { isPhotoType } from '../lib/photo-types';
 import type { SpaceApi } from '../lib/api';
 import type { Album, Photo } from '../mock/data';
 import { FormError } from './account-ops';
+import { PartialThumbs } from './thumb-loader';
 
 /**
  * One space's photos and albums, stored encrypted on the server. Every photo has its own
@@ -472,12 +473,21 @@ export function combinedStore(
         byStore.set(store, [...(byStore.get(store) ?? []), photoId]);
       }
       const found = new Map<string, string>();
-      const results = await Promise.all(
+      const failed: string[] = [];
+      await Promise.all(
         [...byStore].map(([store, ids]) =>
-          store.thumbs(ids).catch(() => new Map<string, string>()),
+          store.thumbs(ids).then(
+            (urls) => {
+              for (const [id, url] of urls) found.set(id, url);
+            },
+            () => {
+              failed.push(...ids);
+            },
+          ),
         ),
       );
-      for (const result of results) for (const [id, url] of result) found.set(id, url);
+      // Failures must reach the loader, or those tiles would never be tried again.
+      if (failed.length > 0) throw new PartialThumbs(found, failed);
       return found;
     },
     add: async (photo, albumIds, onStage) => {

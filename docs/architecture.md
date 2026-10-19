@@ -34,6 +34,9 @@ everything from one origin, so there is no CORS and the CSP can stay at
     sizes), `PUT /photos/:id/thumb` and `/full` (ciphertext, streamed to R2 at
     `photos/<id>/<part>`), then `POST /photos/:id/commit`. Also listing (paged by id),
     downloads, `GET /thumbs?ids=a,b,c` (up to 48 encrypted previews in one response, each
+    after a 4-byte length; empty for photos the space doesn't have; the Worker reads four
+    from R2 at a time, since it may only hold six R2 responses open), metadata updates,
+    deletes, albums, and `DELETE /api/space` to wipe a space.
     after a 4-byte length; empty for photos the space doesn't have), metadata updates,
     deletes, albums (`POST /albums`, `PUT /albums/:id` to replace an album's sealed title,
     `DELETE /albums/:id`, which keeps its photos), and `DELETE /api/space` to wipe a space.

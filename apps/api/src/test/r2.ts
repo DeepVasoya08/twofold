@@ -1,24 +1,59 @@
 /**
  * A small in-memory R2 stand-in with the parts of R2Bucket the API uses: put (streams too),
  * get, head and delete.
+ *
+ * Like a real Worker, it allows only CONNECTION_LIMIT objects whose bodies haven't been read
+ * yet: getting one more closes the oldest, so its body fails when read.
  */
+export const CONNECTION_LIMIT = 6;
+
 class TestObject {
+  private controller: ReadableStreamDefaultController<Uint8Array> | null = null;
+  private readonly stream: ReadableStream<Uint8Array>;
+
   constructor(
     readonly key: string,
     readonly data: Uint8Array,
-  ) {}
+    private readonly done: (object: TestObject) => void = () => undefined,
+  ) {
+    this.stream = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        this.controller = controller;
+      },
+      pull: (controller) => {
+        controller.enqueue(this.data.slice());
+        controller.close();
+        this.done(this);
+      },
+      cancel: () => {
+        this.done(this);
+      },
+    });
+  }
 
   get size(): number {
     return this.data.length;
   }
 
-  get body(): ReadableStream {
-    return new Blob([this.data]).stream();
+  get body(): ReadableStream<Uint8Array> {
+    return this.stream;
+  }
+
+  arrayBuffer(): Promise<ArrayBuffer> {
+    return new Response(this.stream).arrayBuffer();
+  }
+
+  /** What the runtime does to an unread body when it needs the connection back. */
+  close(): void {
+    this.controller?.error(new Error('Response closed due to connection limit'));
+    this.done(this);
   }
 }
 
 export class TestR2 {
   readonly objects = new Map<string, Uint8Array>();
+  /** Objects got but not read yet, oldest first. */
+  readonly unread: TestObject[] = [];
 
   async put(key: string, value: ReadableStream | ArrayBuffer | Uint8Array): Promise<TestObject> {
     const data =
@@ -31,11 +66,19 @@ export class TestR2 {
 
   get(key: string): Promise<TestObject | null> {
     const data = this.objects.get(key);
-    return Promise.resolve(data ? new TestObject(key, data) : null);
+    if (!data) return Promise.resolve(null);
+    if (this.unread.length >= CONNECTION_LIMIT) this.unread[0]?.close();
+    const object = new TestObject(key, data, (read) => {
+      const index = this.unread.indexOf(read);
+      if (index >= 0) this.unread.splice(index, 1);
+    });
+    this.unread.push(object);
+    return Promise.resolve(object);
   }
 
   head(key: string): Promise<TestObject | null> {
-    return this.get(key);
+    const data = this.objects.get(key);
+    return Promise.resolve(data ? new TestObject(key, data) : null);
   }
 
   delete(keys: string | string[]): Promise<void> {

@@ -235,6 +235,15 @@ describe('thumbnail batches', () => {
     expect(await getThumbs([second.photo.id, first.photo.id])).toEqual([second.thumb, first.thumb]);
   });
 
+  it('reads a full batch without holding more R2 bodies open than a Worker may', async () => {
+    const photos = [];
+    for (let index = 0; index < 19; index += 1) photos.push(await upload());
+    expect(await getThumbs(photos.map(({ photo }) => photo.id))).toEqual(
+      photos.map(({ thumb }) => thumb),
+    );
+    expect(r2.unread).toHaveLength(0);
+  });
+
   it('leaves out photos that are missing, still uploading or in another space', async () => {
     const mine = await upload();
     const pending = { id: newId(), meta: newMeta(), thumbSize: 10, fullSize: 20 };

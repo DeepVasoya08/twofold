@@ -154,36 +154,52 @@ space.get('/photos', async (c) => {
 });
 
 /**
- * Streams thumbnails one after another, each after its 4-byte length (0 for a missing one),
- * so a batch never has to be held in the Worker's memory.
+ * How many thumbnails are read from R2 at once. A Worker gets only six connections at a time,
+ * and an R2 object whose body hasn't been read yet keeps its connection. With more unread
+ * bodies than that, Cloudflare closes the oldest ones, which broke whole batches. So each
+ * thumbnail is read in full as soon as it arrives, a few at a time, never all at once.
  */
-function thumbStream(parts: readonly (R2ObjectBody | null)[]): ReadableStream<Uint8Array> {
+export const THUMB_READS = 4;
+
+/** Reads one thumbnail in full, or null if it isn't there. */
+async function readThumb(bucket: R2Bucket, id: string): Promise<Uint8Array | null> {
+  const object = await bucket.get(objectKey(id, 'thumb'));
+  return object ? new Uint8Array(await object.arrayBuffer()) : null;
+}
+
+/**
+ * Streams thumbnails one after another, each after its 4-byte length (0 for a missing one).
+ * Only THUMB_READS are read ahead, so a batch never has to be held in the Worker's memory.
+ */
+function thumbStream(
+  count: number,
+  read: (index: number) => Promise<Uint8Array | null>,
+): ReadableStream<Uint8Array> {
+  const reads: Promise<Uint8Array | null>[] = [];
+  const start = (index: number) => {
+    if (index >= count) return;
+    const reading = read(index);
+    // Seen later, in order; this only keeps an early failure from going unhandled.
+    reading.catch(() => undefined);
+    reads[index] = reading;
+  };
   let next = 0;
-  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   return new ReadableStream<Uint8Array>({
+    start() {
+      for (let index = 0; index < THUMB_READS; index += 1) start(index);
+    },
     async pull(controller) {
-      if (reader) {
-        const chunk = await reader.read();
-        if (!chunk.done) {
-          controller.enqueue(chunk.value);
-          return;
-        }
-        reader = null;
-      }
-      const object = parts[next];
-      if (next === parts.length) {
+      if (next === count) {
         controller.close();
         return;
       }
+      const thumb = await reads[next];
+      start(next + THUMB_READS);
       next += 1;
       const header = new Uint8Array(4);
-      new DataView(header.buffer).setUint32(0, object?.size ?? 0);
+      new DataView(header.buffer).setUint32(0, thumb?.length ?? 0);
       controller.enqueue(header);
-      if (object) reader = (object.body as ReadableStream<Uint8Array>).getReader();
-    },
-    async cancel() {
-      await reader?.cancel();
-      for (const object of parts.slice(next)) await object?.body.cancel();
+      if (thumb) controller.enqueue(thumb);
     },
   });
 }
@@ -200,15 +216,14 @@ space.get('/thumbs', async (c) => {
     new Set(ids).size === ids.length &&
     ids.every((id) => recordIdSchema.safeParse(id).success);
   if (!valid) return c.json({ error: messages.badRequest }, 400);
-  const [found, objects] = await Promise.all([
-    committedPhotoIds(c.env.DB, c.get('space'), ids),
-    Promise.all(ids.map((id) => c.env.BLOBS.get(objectKey(id, 'thumb')))),
-  ]);
-  const parts = ids.map((id, index) => (found.has(id) ? (objects[index] ?? null) : null));
-  for (const [index, object] of objects.entries()) {
-    if (object && !parts[index]) await object.body.cancel();
-  }
-  return c.body(thumbStream(parts), 200, { 'content-type': 'application/octet-stream' });
+  const found = await committedPhotoIds(c.env.DB, c.get('space'), ids);
+  const read = (index: number) => {
+    const id = ids[index];
+    return id !== undefined && found.has(id) ? readThumb(c.env.BLOBS, id) : Promise.resolve(null);
+  };
+  return c.body(thumbStream(ids.length, read), 200, {
+    'content-type': 'application/octet-stream',
+  });
 });
 
 /** Starts an upload. The two files follow, then a commit makes the photo visible. */
