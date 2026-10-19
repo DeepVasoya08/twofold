@@ -4,8 +4,9 @@ import { createMiddleware } from 'hono/factory';
 
 import { newSessionToken, sessionTokenHash } from '@twofold/crypto/webcrypto';
 
-import { deleteSession, findSessionAccount, insertSession } from './db';
+import { ACTIVE_STEP_MS, deleteSession, findSession, insertSession, touchSession } from './db';
 import type { AccountRecord } from './db';
+import { describeDevice } from './device';
 import type { Env } from './env';
 
 export const SESSION_DAYS = 30;
@@ -46,6 +47,7 @@ export async function startSession(c: Context<AppEnv>, accountId: string): Promi
     accountId,
     createdAt: now,
     expiresAt: now + SESSION_MS,
+    device: describeDevice(c.req.header('user-agent')),
   });
   setCookie(c, cookieName(c), token, {
     httpOnly: true,
@@ -78,12 +80,20 @@ export function sessionEnded(c: Context): Response {
   return c.json({ error: 'Your session has ended. Log in again.' }, 401);
 }
 
-/** Rejects the request with 401 unless it carries a live session. */
+/**
+ * Rejects the request with 401 unless it carries a live session. Account routes also mark
+ * the session used, at most once an hour; storage routes don't, so a device's last use
+ * isn't a record of when a space was opened.
+ */
 export const requireSession = createMiddleware<AppEnv>(async (c, next) => {
   const sessionHash = await requestSessionHash(c);
-  const account = sessionHash ? await findSessionAccount(c.env.DB, sessionHash, Date.now()) : null;
-  if (!account || !sessionHash) return sessionEnded(c);
-  c.set('account', account);
+  const now = Date.now();
+  const session = sessionHash ? await findSession(c.env.DB, sessionHash, now) : null;
+  if (!session || !sessionHash) return sessionEnded(c);
+  if (now - session.lastActive >= ACTIVE_STEP_MS) {
+    await touchSession(c.env.DB, sessionHash, now, describeDevice(c.req.header('user-agent')));
+  }
+  c.set('account', session.account);
   c.set('session', sessionHash);
   return next();
 });

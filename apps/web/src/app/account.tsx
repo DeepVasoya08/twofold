@@ -12,7 +12,7 @@ import type { ReactNode } from 'react';
 import type { SpaceKeys } from '@twofold/crypto';
 import type { AccountResponse } from '@twofold/types';
 
-import { ApiError, api } from '../lib/api';
+import { ApiError, api, onSessionEnded } from '../lib/api';
 import type { Person } from '../mock/data';
 import * as ops from './account-ops';
 import { leaveAll } from './sharing';
@@ -136,6 +136,32 @@ export function AccountProvider({
     setGeneration((current) => current + 1);
     setState(next);
   }, []);
+
+  const signedIn = state.status === 'locked' || state.status === 'unlocked';
+
+  // Any signed-in request refused with a 401 means this device was signed out elsewhere
+  // (from another device's list, or by a password change), so its keys go too.
+  useEffect(() => {
+    if (!signedIn) return;
+    onSessionEnded(() => {
+      dropKeys({ status: 'signed-out' });
+    });
+    return () => {
+      onSessionEnded(null);
+    };
+  }, [signedIn, dropKeys]);
+
+  // A tab left open isn't asking the server anything, so check when it's looked at again.
+  useEffect(() => {
+    if (!signedIn || initialState) return;
+    const check = () => {
+      if (document.visibilityState === 'visible') api.account().catch(() => undefined);
+    };
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [signedIn, initialState]);
 
   /** Runs an operation; a 401 means the session ended elsewhere, so sign out here too. */
   const guard = useCallback(

@@ -54,6 +54,9 @@ export const deleteAccountSchema = z.strictObject({ loginKey });
 
 export const updateNameSchema = z.strictObject({ name });
 
+/** A session's public id: 16 random bytes in lowercase hex, made by SQLite. */
+export const deviceIdSchema = z.string().regex(/^[0-9a-f]{32}$/);
+
 const recordId = base64Url(STORAGE_SIZES.recordId);
 
 /** A sealed record: nonce, ciphertext and tag, at most STORAGE_SIZES.maxRecord bytes. */

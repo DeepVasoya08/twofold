@@ -1,5 +1,6 @@
-import type { Keyring } from '@twofold/types';
+import type { Device, DeviceKind, Keyring } from '@twofold/types';
 
+import type { DeviceLabel } from './device';
 import { keyringSchema } from './schemas';
 
 /** An account row with its keyring parsed. */
@@ -156,22 +157,139 @@ export async function deleteOtherSessions(
     .run();
 }
 
+/** A session's last use is kept to the hour, so it can't be lined up with other records. */
+export const ACTIVE_STEP_MS = 60 * 60 * 1000;
+
+export function activeHour(now: number): number {
+  return now - (now % ACTIVE_STEP_MS);
+}
+
 /**
  * Starts a session, first forgetting sessions that have run out (so old login times aren't
- * kept), in one round trip.
+ * kept), in one round trip. Its public id is made by SQLite, like the ids given to sessions
+ * from before devices were listed.
  */
 export async function insertSession(
   db: D1Database,
-  session: { tokenHash: string; accountId: string; createdAt: number; expiresAt: number },
+  session: {
+    tokenHash: string;
+    accountId: string;
+    createdAt: number;
+    expiresAt: number;
+    device: DeviceLabel;
+  },
 ): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(session.createdAt),
     db
       .prepare(
-        'INSERT INTO sessions (token_hash, account_id, created_at, expires_at) VALUES (?, ?, ?, ?)',
+        `INSERT INTO sessions
+           (token_hash, id, account_id, created_at, expires_at, device, device_kind, last_active)
+         VALUES (?, lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(session.tokenHash, session.accountId, session.createdAt, session.expiresAt),
+      .bind(
+        session.tokenHash,
+        session.accountId,
+        session.createdAt,
+        session.expiresAt,
+        session.device.name,
+        session.device.kind,
+        activeHour(session.createdAt),
+      ),
   ]);
+}
+
+/** A live session with its account, and when it was last marked used. */
+export interface SessionRecord {
+  account: AccountRecord;
+  lastActive: number;
+}
+
+export async function findSession(
+  db: D1Database,
+  tokenHash: string,
+  now: number,
+): Promise<SessionRecord | null> {
+  const row = await db
+    .prepare(
+      `SELECT a.id, a.email, a.name, a.keyring, a.version, s.last_active
+         FROM sessions s JOIN accounts a ON a.id = s.account_id
+        WHERE s.token_hash = ? AND s.expires_at > ?`,
+    )
+    .bind(tokenHash, now)
+    .first<AccountRow & { last_active: number }>();
+  return row ? { account: toRecord(row), lastActive: row.last_active } : null;
+}
+
+/**
+ * Marks a session used this hour, relabeling it from the browser using it (sessions from
+ * before devices were listed have no label until then).
+ */
+export async function touchSession(
+  db: D1Database,
+  tokenHash: string,
+  now: number,
+  device: DeviceLabel,
+): Promise<void> {
+  await db
+    .prepare(
+      'UPDATE sessions SET last_active = ?, device = ?, device_kind = ? WHERE token_hash = ?',
+    )
+    .bind(activeHour(now), device.name, device.kind, tokenHash)
+    .run();
+}
+
+interface DeviceRow {
+  id: string;
+  device: string;
+  device_kind: string;
+  created_at: number;
+  last_active: number;
+  current: number;
+}
+
+function toDeviceKind(kind: string): DeviceKind {
+  return kind === 'phone' || kind === 'tablet' ? kind : 'computer';
+}
+
+/** The account's live sessions, most recently used first. */
+export async function listDevices(
+  db: D1Database,
+  accountId: string,
+  currentTokenHash: string,
+  now: number,
+): Promise<Device[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, device, device_kind, created_at, last_active, token_hash = ? AS current
+         FROM sessions
+        WHERE account_id = ? AND expires_at > ?
+        ORDER BY current DESC, last_active DESC, created_at DESC`,
+    )
+    .bind(currentTokenHash, accountId, now)
+    .all<DeviceRow>();
+  return results.map((row) => ({
+    id: row.id,
+    name: row.device,
+    kind: toDeviceKind(row.device_kind),
+    signedInAt: row.created_at,
+    lastActive: row.last_active,
+    current: row.current === 1,
+  }));
+}
+
+/** Signs out one of the account's other devices. False if there is no such device. */
+export async function deleteOtherSession(
+  db: D1Database,
+  accountId: string,
+  id: string,
+  keepTokenHash: string,
+): Promise<boolean> {
+  const result = await db
+    .prepare('DELETE FROM sessions WHERE id = ? AND account_id = ? AND token_hash != ?')
+    .bind(id, accountId, keepTokenHash)
+    .run();
+  return result.meta.changes > 0;
 }
 
 export async function deleteSession(db: D1Database, tokenHash: string): Promise<void> {
