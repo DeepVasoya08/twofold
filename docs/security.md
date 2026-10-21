@@ -410,6 +410,40 @@ than minutes. A live server can still link the sessions on both sides, as it cou
   the share token it uses. Nothing at rest records it, and `pending_invites` rows are keyed
   by space like everything else.
 
+## People (face grouping)
+
+Face grouping finds faces and groups photos of the same person entirely on the device. The
+server stores only what it stores for photos: ciphertext it can't read.
+
+- **Off by default, per device.** Turning it on is saved in this browser's `localStorage`
+  (`twofold.faceGrouping`), not on the account, and applies to whichever space is open, so
+  the setting says nothing about whether a private space exists.
+- **On the device.** The models are YuNet (face detection, MIT) and SFace (face
+  fingerprints, Apache 2.0), run by ONNX Runtime Web (WebAssembly) in a Web Worker
+  (`apps/web/src/lib/people`). They are served from Twofold's own origin, and each file is
+  checked against a pinned SHA-256 before it is loaded, so a changed model is refused. The
+  worker reads the 640px preview the grid already downloads and decrypts; nothing is kept
+  after a photo is looked at: no pixels, no object URLs, nothing in storage or caches.
+- **Face data.** For each photo the scan keeps each face's box, score and a 128-number
+  fingerprint (quantised to bytes). Results are saved in **segments** of many photos,
+  sealed with `crypto_aead_xchacha20poly1305_ietf` under `crypto_kdf` subkey 3 of the space
+  key (context `twfspace`), with the kind and segment id as associated data, and padded to
+  16 KiB blocks so the size says little about how many faces were found
+  (`sealFaceSegment` in `packages/crypto/src/storage.ts`). A segment is at most 256 KiB
+  and can't be replaced, only deleted; segments are merged as they go stale.
+- **People.** A name, the faces confirmed as that person, faces marked "not this person"
+  and whether they're hidden are an owner record of kind `person`, sealed like other
+  records. Unnamed groups are worked out on the device each time and never stored.
+- **Owner only.** Face data and people belong to the space's owner: the routes
+  (`/api/space/faces`, `/people`, `/face-data`) refuse share tokens, so members of a shared
+  library never see them. Each member who turns face grouping on analyses on their own
+  device, into their own space. Segments count against the storage quota.
+- **Deleting.** Settings → People → "Delete face data" removes every segment and person
+  for the open space (`DELETE /api/space/face-data`), and wiping a space removes them too.
+- **Trade-off.** A face fingerprint is biometric data. It never leaves the device
+  unencrypted and only the space key opens it, but anyone who has that key (the password)
+  can read it, the same as the photos themselves.
+
 ## Sessions and the API
 
 - Passwords never reach the API. It sees the keyring (salt, KDF settings, sealed slots,
@@ -453,7 +487,8 @@ than minutes. A live server can still link the sessions on both sides, as it cou
 - Keys live only in React state (`apps/web/src/app/account.tsx`). Locking, signing out or
   reloading drops them and remounts the vault, which drops every decrypted photo and
   revokes its object URLs.
-- Nothing is written to `localStorage`, IndexedDB or caches.
+- Nothing secret is written to `localStorage`, IndexedDB or caches. `localStorage` holds
+  only this device's settings: the auto-lock time and whether face grouping is on.
 - Only raster photo formats are stored or shown (JPEG, PNG, GIF, WebP, HEIC, AVIF;
   `apps/web/src/lib/photo-types.ts`). An SVG is a document that can carry script, so it is
   refused on upload and left out if a record names it.

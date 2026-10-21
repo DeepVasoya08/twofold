@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
-import { KEY_SIZES, MEMBER_ACCESS, SHARE_SIZES, STORAGE_SIZES } from '@twofold/types';
+import {
+  FACE_SEGMENT_DELETE_MAX,
+  FACE_SIZES,
+  KEY_SIZES,
+  MEMBER_ACCESS,
+  SHARE_SIZES,
+  STORAGE_SIZES,
+} from '@twofold/types';
 
 /** Length of an unpadded base64url string encoding `bytes` bytes. */
 function base64UrlLength(bytes: number): number {
@@ -143,3 +150,16 @@ export const updateMemberSchema = z.strictObject({ access: memberAccess });
 export const createJoinedSchema = z.strictObject({ id: recordId, meta: sealedRecord });
 
 export const createPendingInviteSchema = z.strictObject({ id: recordId, meta: sealedRecord });
+
+/** A sealed face segment: nonce, ciphertext and tag, at most FACE_SIZES.maxSegment bytes. */
+export const faceSegmentSchema = z.strictObject({
+  data: z
+    .string()
+    .min(base64UrlLength(40))
+    .max(base64UrlLength(FACE_SIZES.maxSegment))
+    .regex(/^[A-Za-z0-9_-]+$/),
+});
+
+export const deleteFaceSegmentsSchema = z.strictObject({
+  ids: z.array(recordId).min(1).max(FACE_SEGMENT_DELETE_MAX),
+});

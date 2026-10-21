@@ -43,6 +43,7 @@ import {
   sessionAccountFrom,
   sessionAccountQuery,
 } from '../db';
+import { deleteFaceData } from '../face-db';
 import { messages, readBody } from '../respond';
 import {
   createAlbumSchema,
@@ -103,6 +104,8 @@ import {
   updatePhotoMeta,
 } from '../space-db';
 import type { PhotoSize } from '../space-db';
+import { requireOwner } from './owner';
+import { people } from './people';
 
 export const PAGE_SIZE = 500;
 export const MAX_ALBUMS = 1000;
@@ -191,13 +194,8 @@ const limitMemberTokens = createMiddleware<AppEnv>(async (c, next) => {
 
 space.use(requireSpace, limitMemberTokens);
 
-const notOwner = 'Only the person who shared this library can do that.';
-
-/** Owner-only routes refuse share tokens. */
-const requireOwner = createMiddleware<AppEnv>(async (c, next) => {
-  if (c.get('member') !== null) return c.json({ error: notOwner }, 403);
-  return next();
-});
+// People are kept per space like everything else, and only for its owner.
+space.route('/', people);
 
 /**
  * Deletes photos and their files, and gives their bytes back to the account deleting them.
@@ -560,7 +558,10 @@ space.delete('/albums/:id/items/:photo', async (c) => {
   return c.body(null, 204);
 });
 
-/** Deletes everything in the space: every photo, its files, every album, and its sharing. */
+/**
+ * Deletes everything in the space: every photo, its files, every album, its sharing, and its
+ * people.
+ */
 space.delete('/', requireOwner, async (c) => {
   if (!(await readBody(c, emptySchema))) return c.json({ error: messages.badRequest }, 400);
   const tag = c.get('space');
@@ -572,7 +573,8 @@ space.delete('/', requireOwner, async (c) => {
   }
   await deleteAlbums(c.env.DB, tag);
   await deleteSharing(c.env.DB, tag);
-  await releaseStorage(c.env.DB, c.get('account').id, await deleteProfilePhoto(c.env.DB, tag));
+  const freed = (await deleteProfilePhoto(c.env.DB, tag)) + (await deleteFaceData(c.env.DB, tag));
+  await releaseStorage(c.env.DB, c.get('account').id, freed);
   return c.body(null, 204);
 });
 

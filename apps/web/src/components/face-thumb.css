@@ -1,0 +1,38 @@
+.face-thumb {
+  position: relative;
+  display: block;
+  flex: none;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--surface-2);
+  aspect-ratio: 1;
+}
+
+.face-thumb--sm {
+  width: 44px;
+}
+
+.face-thumb--md {
+  width: 100%;
+}
+
+.face-thumb--lg {
+  width: 96px;
+}
+
+.face-thumb__image {
+  position: absolute;
+  max-width: none;
+  height: auto;
+}
+
+.face-thumb .photo-placeholder {
+  position: absolute;
+  inset: 0;
+}
+
+.face-thumb--empty {
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+}

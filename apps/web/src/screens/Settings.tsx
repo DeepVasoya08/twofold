@@ -27,6 +27,7 @@ import { Avatar } from '../components/Brand';
 import { Dialog } from '../components/Dialog';
 import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
+import { PeopleSettings } from '../components/PeopleSettings';
 import type { IconName } from '../components/Icon';
 import { ProfileDialog } from '../components/ProfileDialog';
 import { StorageMeter } from '../components/StorageMeter';
@@ -655,6 +656,10 @@ export function Settings() {
             </select>
           }
         />
+      </Section>
+
+      <Section title="People">
+        <PeopleSettings />
       </Section>
 
       <Section title="Devices">

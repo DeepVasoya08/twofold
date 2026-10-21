@@ -18,6 +18,7 @@ describe('matchRoute', () => {
     ['/photos/', 'gallery'],
     ['/albums', 'albums'],
     ['/favorites', 'favorites'],
+    ['/people', 'people'],
     ['/settings', 'settings'],
     ['/settings/share', 'share'],
   ])('maps %s to %s', (path, name) => {
@@ -31,6 +32,10 @@ describe('matchRoute', () => {
 
   it('round-trips ids through paths', () => {
     expect(matchRoute(paths.album('a b'))).toEqual({ name: 'album', albumId: 'a b' });
+    expect(matchRoute(paths.person('group:abc#2'))).toEqual({
+      name: 'person',
+      groupId: 'group:abc#2',
+    });
   });
 
   it('rejects unknown, nested and malformed paths', () => {
@@ -56,11 +61,17 @@ describe('photo context', () => {
       kind: 'album',
       albumId: 'kyoto',
     });
+    const person = paths.photo('p1', { kind: 'person', groupId: 'group:a#1' });
+    expect(parsePhotoContext(person.slice(person.indexOf('?')))).toEqual({
+      kind: 'person',
+      groupId: 'group:a#1',
+    });
   });
 
   it('falls back to the timeline for anything else', () => {
     expect(parsePhotoContext('')).toEqual({ kind: 'all' });
     expect(parsePhotoContext('?from=album:')).toEqual({ kind: 'all' });
+    expect(parsePhotoContext('?from=person:')).toEqual({ kind: 'all' });
     expect(parsePhotoContext('?from=weird')).toEqual({ kind: 'all' });
   });
 });

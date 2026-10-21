@@ -459,3 +459,54 @@ export type CreatePendingInviteRequest = StoredPendingInvite;
 export interface PendingInviteList {
   invites: StoredPendingInvite[];
 }
+
+/**
+ * People: faces found and grouped on the device. What the face models produce is sealed in
+ * segments, each a batch of results for many photos, so another device can download them
+ * instead of looking at every photo again. People (names, the faces confirmed or turned
+ * down) are small owner-only records. Both are owner-only: someone a library is shared with
+ * finds faces on their own device and keeps the results in their own space.
+ */
+export const FACE_SIZES = {
+  /** Largest sealed segment, in bytes before base64url. */
+  maxSegment: 256 * 1024,
+} as const;
+
+/** Most segments one space keeps; the device merges them well before this. */
+export const MAX_FACE_SEGMENTS = 400;
+/** Most people one space keeps. */
+export const MAX_PEOPLE = 1000;
+/** Segments per `GET /space/faces` page. */
+export const FACE_SEGMENT_PAGE = 16;
+/** Most segments one `DELETE /space/faces` removes. */
+export const FACE_SEGMENT_DELETE_MAX = 100;
+
+/** A sealed segment of face results. */
+export interface StoredFaceSegment {
+  id: string;
+  data: string;
+}
+
+export interface FaceSegmentPage {
+  segments: StoredFaceSegment[];
+  /** Pass as `after` for the next page; null on the last one. */
+  next: string | null;
+}
+
+export interface PutFaceSegmentRequest {
+  data: string;
+}
+
+/** Removes segments merged into a newer one. */
+export interface DeleteFaceSegmentsRequest {
+  ids: string[];
+}
+
+/** A person: their name and faces, sealed for the owner. */
+export type StoredPerson = StoredAlbum;
+
+export type PutPersonRequest = UpdateRecordRequest;
+
+export interface PersonList {
+  people: StoredPerson[];
+}

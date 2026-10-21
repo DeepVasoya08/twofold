@@ -12,6 +12,9 @@ export type Route =
   | { name: 'albums' }
   | { name: 'album'; albumId: string }
   | { name: 'favorites' }
+  | { name: 'people' }
+  /** One person, or a group of faces nobody has named yet. */
+  | { name: 'person'; groupId: string }
   | { name: 'photo'; photoId: string }
   | { name: 'settings' }
   | { name: 'share' }
@@ -34,6 +37,8 @@ export const paths = {
   albums: '/albums',
   album: (albumId: string) => `/albums/${encodeURIComponent(albumId)}`,
   favorites: '/favorites',
+  people: '/people',
+  person: (groupId: string) => `/people/${encodeURIComponent(groupId)}`,
   photo: (photoId: string, from?: PhotoContext) => {
     const base = `/photos/${encodeURIComponent(photoId)}`;
     return from && from.kind !== 'all' ? `${base}?from=${formatContext(from)}` : base;
@@ -86,6 +91,7 @@ const staticRoutes: Record<string, Route> = {
   '/photos': { name: 'gallery' },
   '/albums': { name: 'albums' },
   '/favorites': { name: 'favorites' },
+  '/people': { name: 'people' },
   '/settings': { name: 'settings' },
   '/settings/share': { name: 'share' },
   '/join': { name: 'join-code' },
@@ -109,6 +115,10 @@ export function matchRoute(pathname: string): Route {
   const albumId = album?.[1] === undefined ? null : decodeSegment(album[1]);
   if (albumId) return { name: 'album', albumId };
 
+  const person = /^\/people\/([^/]+)$/.exec(path);
+  const groupId = person?.[1] === undefined ? null : decodeSegment(person[1]);
+  if (groupId) return { name: 'person', groupId };
+
   const join = /^\/join\/([^/]+)$/.exec(path);
   if (join?.[1] !== undefined && LINK_TOKEN.test(join[1])) return { name: 'join', token: join[1] };
 
@@ -121,10 +131,20 @@ export function matchRoute(pathname: string): Route {
 
 /** Which list a photo was opened from, so the viewer's next/previous stay inside it. */
 export type PhotoContext =
-  { kind: 'all' } | { kind: 'favorites' } | { kind: 'album'; albumId: string };
+  | { kind: 'all' }
+  | { kind: 'favorites' }
+  | { kind: 'album'; albumId: string }
+  | { kind: 'person'; groupId: string };
 
 function formatContext(context: PhotoContext): string {
-  return context.kind === 'album' ? `album:${encodeURIComponent(context.albumId)}` : context.kind;
+  switch (context.kind) {
+    case 'album':
+      return `album:${encodeURIComponent(context.albumId)}`;
+    case 'person':
+      return `person:${encodeURIComponent(context.groupId)}`;
+    default:
+      return context.kind;
+  }
 }
 
 export function parsePhotoContext(search: string): PhotoContext {
@@ -133,6 +153,10 @@ export function parsePhotoContext(search: string): PhotoContext {
   if (from?.startsWith('album:')) {
     const albumId = decodeSegment(from.slice('album:'.length));
     if (albumId) return { kind: 'album', albumId };
+  }
+  if (from?.startsWith('person:')) {
+    const groupId = decodeSegment(from.slice('person:'.length));
+    if (groupId) return { kind: 'person', groupId };
   }
   return { kind: 'all' };
 }

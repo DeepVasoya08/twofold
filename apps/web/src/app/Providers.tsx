@@ -15,8 +15,42 @@ import { sessionStore } from './sharing';
 import { StorageProvider } from './storage';
 import { memoryStore, remoteStore } from './space-store';
 import { UploadsProvider } from './uploads';
+import { PeopleProvider } from './people';
+import { memoryPeopleStore, remotePeopleStore } from './people-store';
+import { workerFaceFinder } from '../lib/people/face-finder';
+import type { FaceFinder } from '../lib/people/face-finder';
 import { VaultProvider, emptyVaults } from './vault';
 import type { VaultsState } from './vault';
+
+/**
+ * Finds faces in a Web Worker, loaded only once face grouping runs. Without Web Workers or
+ * OffscreenCanvas (older browsers), every request fails and People says so.
+ */
+function startFaceFinder(): FaceFinder {
+  return workerFaceFinder(() => {
+    const ready = import('../lib/people/spawn-face-worker').then(({ spawnFaceWorker }) =>
+      spawnFaceWorker(),
+    );
+    // Messages sent before the worker module has loaded wait for it.
+    return {
+      postMessage: (message) => {
+        void ready.then((started) => {
+          started.postMessage(message);
+        });
+      },
+      addEventListener: (type, listener) => {
+        void ready.then((started) => {
+          started.addEventListener(type, listener);
+        });
+      },
+      terminate: () => {
+        void ready.then((started) => {
+          started.terminate();
+        });
+      },
+    };
+  });
+}
 
 /** The open space's vault, with a store made once from the keys it was mounted with. */
 function OpenVault({
@@ -38,6 +72,9 @@ function OpenVault({
   const [profileStore] = useState(() =>
     session && !initialVault ? remoteProfilePhoto(session.opened.space) : memoryProfilePhoto(),
   );
+  const [peopleStore] = useState(() =>
+    session && !initialVault ? remotePeopleStore(session.opened.space) : memoryPeopleStore(),
+  );
   return (
     <VaultProvider
       space={space}
@@ -53,10 +90,15 @@ function OpenVault({
         <ProfileProvider store={profileStore}>
           <StorageProvider remote={session !== null && !initialVault}>
             <UploadsProvider>
-              <DownloadsProvider>
-                <IdleLock />
-                {children}
-              </DownloadsProvider>
+              <PeopleProvider
+                store={peopleStore}
+                makeFinder={session && !initialVault ? startFaceFinder : null}
+              >
+                <DownloadsProvider>
+                  <IdleLock />
+                  {children}
+                </DownloadsProvider>
+              </PeopleProvider>
             </UploadsProvider>
           </StorageProvider>
         </ProfileProvider>

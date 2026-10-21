@@ -129,6 +129,26 @@ Unlocking tries the password against every key slot on the device (see
 Setting up a private space from the main library always looks the same and replaces any
 private space that already exists, since the main library can't know whether there is one.
 
+## People
+
+Face grouping is off until it's turned on, from the People page or Settings → People, and
+the choice is per device. Once on, the device downloads the face models (about 14 MB, once)
+and looks at every photo's preview in the background, 12 at a time
+(`app/people.tsx`, `lib/people/face-scan.ts`). It pauses while photos upload or the tab is
+hidden, saves what it found every 48 photos, and picks up new photos as they arrive. The
+page title says how far it has got ("120 of 900 photos looked at").
+
+Faces are grouped on the device (`lib/people/grouping.ts`): a face joins a named person
+when it looks enough like them, and the rest are clustered. A group shows once someone is
+in at least 3 photos. Each card shows a crop of the face (`components/FaceThumb.tsx`).
+On a person's page you can add a name or rename, merge with someone else, hide them from
+People (and show them again), and select photos to take out with "Not this person", which
+the grouping then remembers. The photo viewer opened from a person steps through only
+their photos.
+
+Settings → People turns it off on this device (what was found stays, encrypted) or
+deletes all face data for the open space.
+
 ## Accounts and locking
 
 - Signed out: only the welcome, sign-up, log-in and recovery screens are reachable; library
@@ -178,10 +198,12 @@ Routes are the same in both spaces; the content depends on which space is open.
 | `/unlock`              | Unlock (returning user, key not in memory)                         |
 | `/recover`             | Reset the password with the recovery key                           |
 | `/photos`              | Library or private space: timeline grouped by month                |
-| `/photos/:id`          | Photo viewer; `?from=favorites` or `?from=album:<id>` scopes it    |
+| `/photos/:id`          | Photo viewer; `?from=favorites`, `album:<id>` or `person:<id>`     |
 | `/albums`              | Albums, with tabs and "New album"                                  |
 | `/albums/:id`          | One album, with Download and its menu                              |
 | `/favorites`           | Favorites                                                          |
+| `/people`              | People found in photos (or turning face grouping on)               |
+| `/people/:id`          | One person's photos: name, merge, hide, "Not this person"          |
 | `/settings`            | Profile, passwords, sharing, security, devices, appearance         |
 | `/settings/share`      | Invite someone to the open space (or `?album=` one album), or join |
 | `/join/:token`         | Someone's invite link: accept it                                   |

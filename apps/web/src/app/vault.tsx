@@ -286,6 +286,11 @@ interface VaultValue {
    * Photos `onScreen` already are downloaded first.
    */
   requestThumbs: (photoIds: readonly string[], onScreen?: boolean) => void;
+  /**
+   * Downloads and decrypts previews to look at on this device, keeping none of them (see
+   * SpaceStore.previews). Never changes, so background work can hold on to it.
+   */
+  previews: SpaceStore['previews'];
 }
 
 const VaultContext = createContext<VaultValue | null>(null);
@@ -328,6 +333,11 @@ export function VaultProvider({
     // Newest first, like the rest of the timeline.
     if (photos.length > 0) dispatch({ type: 'add-photos', photos: [...photos].reverse() });
   }, []);
+
+  const previews = useCallback<SpaceStore['previews']>(
+    (photoIds, onPreview) => store.previews(photoIds, onPreview),
+    [store],
+  );
 
   const thumbLoader = useRef<VaultValue['requestThumbs'] | null>(null);
   const requestThumbs = useCallback((photoIds: readonly string[], onScreen?: boolean) => {
@@ -502,8 +512,9 @@ export function VaultProvider({
         );
       },
       requestThumbs,
+      previews,
     };
-  }, [state, status, space, store, otherKeys, storeFor, requestThumbs, showUploaded]);
+  }, [state, status, space, store, otherKeys, storeFor, requestThumbs, showUploaded, previews]);
 
   return (
     <VaultContext value={value}>

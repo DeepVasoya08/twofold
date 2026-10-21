@@ -14,6 +14,8 @@ import { JoinCode } from './screens/JoinCode';
 import { JoinInvite } from './screens/JoinInvite';
 import { LogIn } from './screens/LogIn';
 import { NotFound } from './screens/NotFound';
+import { People } from './screens/People';
+import { Person } from './screens/Person';
 import { PhotoViewer } from './screens/PhotoViewer';
 import { Privacy } from './screens/Privacy';
 import { Recover } from './screens/Recover';
@@ -39,6 +41,8 @@ const titles: Record<Route['name'], string> = {
   albums: 'Albums · Twofold',
   album: 'Album · Twofold',
   favorites: 'Favorites · Twofold',
+  people: 'People · Twofold',
+  person: 'People · Twofold',
   photo: 'Photo · Twofold',
   settings: 'Settings · Twofold',
   share: 'Share · Twofold',
@@ -91,6 +95,18 @@ function Screen({ route }: { route: Route }) {
       return (
         <AppShell>
           <Favorites />
+        </AppShell>
+      );
+    case 'people':
+      return (
+        <AppShell>
+          <People />
+        </AppShell>
+      );
+    case 'person':
+      return (
+        <AppShell>
+          <Person groupId={route.groupId} />
         </AppShell>
       );
     case 'settings':
