@@ -32,6 +32,12 @@ const nav: { to: string; label: string; icon: IconName; match: (path: string) =>
     match: (path) => path.startsWith(paths.albums),
   },
   {
+    to: paths.people,
+    label: 'People',
+    icon: 'person',
+    match: (path) => path.startsWith(paths.people),
+  },
+  {
     to: paths.favorites,
     label: 'Favorites',
     icon: 'heart',

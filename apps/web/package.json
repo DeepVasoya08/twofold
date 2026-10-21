@@ -15,6 +15,7 @@
   "dependencies": {
     "@twofold/crypto": "workspace:*",
     "@twofold/types": "workspace:*",
+    "onnxruntime-web": "1.30.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

@@ -11,9 +11,11 @@ import {
   newAlbumKey,
   newFileKey,
   newRecordId,
+  openFaceSegment,
   openOwnerRecord,
   openRecord,
   ownerAccess,
+  sealFaceSegment,
   sealOwnerRecord,
   sealRecord,
   spaceToken,
@@ -216,6 +218,64 @@ describe('profile photo records', () => {
     );
     await expect(openRecord(await ownerAccess(space), 'photo', 'p1', sealed)).rejects.toThrow(
       DecryptionError,
+    );
+  });
+});
+
+describe('person records', () => {
+  it('open only as a person, for the owner', async () => {
+    const space = await newSpace();
+    const sealed = await sealOwnerRecord(space, 'person', 'x1', text('Ada'));
+    expect(new TextDecoder().decode(await openOwnerRecord(space, 'person', 'x1', sealed))).toBe(
+      'Ada',
+    );
+    await expect(openOwnerRecord(space, 'member', 'x1', sealed)).rejects.toThrow(DecryptionError);
+    await expect(openRecord(await ownerAccess(space), 'album', 'x1', sealed)).rejects.toThrow(
+      DecryptionError,
+    );
+  });
+});
+
+describe('sealFaceSegment / openFaceSegment', () => {
+  it('round-trips in its own space', async () => {
+    const space = await newSpace();
+    const data = bytes(5000);
+    const sealed = await sealFaceSegment(space, 's1', data);
+    expect(await openFaceSegment(space, 's1', sealed)).toEqual(data);
+  });
+
+  it('pads to 16 KiB steps, so sizes say little about what is inside', async () => {
+    const space = await newSpace();
+    const small = fromBase64Url(await sealFaceSegment(space, 's1', bytes(10)));
+    const larger = fromBase64Url(await sealFaceSegment(space, 's2', bytes(16_000)));
+    expect(small?.length).toBe(larger?.length);
+    const next = fromBase64Url(await sealFaceSegment(space, 's3', bytes(16_384)));
+    expect(next?.length).toBe((small?.length ?? 0) + 16 * 1024);
+  });
+
+  it('refuses the wrong key, another id, the records key, and tampering', async () => {
+    const space = await newSpace();
+    const sealed = await sealFaceSegment(space, 's1', bytes(100));
+    await expect(openFaceSegment(await newSpace(), 's1', sealed)).rejects.toThrow(DecryptionError);
+    await expect(openFaceSegment(space, 's2', sealed)).rejects.toThrow(DecryptionError);
+    // Neither members (records key) nor owner records can open it.
+    await expect(openRecord(await ownerAccess(space), 'photo', 's1', sealed)).rejects.toThrow(
+      DecryptionError,
+    );
+    await expect(openOwnerRecord(space, 'person', 's1', sealed)).rejects.toThrow(DecryptionError);
+    const raw = fromBase64Url(sealed);
+    if (!raw) throw new Error('bad base64url');
+    await expect(openFaceSegment(space, 's1', toBase64Url(flip(raw, 30)))).rejects.toThrow(
+      DecryptionError,
+    );
+    await expect(openFaceSegment(space, 's1', toBase64Url(raw.subarray(0, 100)))).rejects.toThrow(
+      DecryptionError,
+    );
+  });
+
+  it('refuses a segment that would be too large', async () => {
+    await expect(sealFaceSegment(await newSpace(), 's1', bytes(256 * 1024))).rejects.toThrow(
+      'too large',
     );
   });
 });

@@ -119,6 +119,12 @@ const icons = {
       <path d="m11 12 9-9M16.5 6.5l3 3M13.5 9.5l2 2" />
     </>
   ),
+  person: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4.5 21a7.5 7.5 0 0 1 15 0" />
+    </>
+  ),
   users: (
     <>
       <circle cx="9" cy="8" r="3.5" />

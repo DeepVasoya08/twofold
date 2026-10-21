@@ -36,6 +36,9 @@ export class FakeServer {
   profilePhotos = new Map<string, StoredProfilePhoto>();
   /** By record id: each space's invites in progress. */
   pending = new Map<string, { token: string; invite: StoredPendingInvite }>();
+  /** By `token/id`: each space's sealed face segments and people. */
+  faceSegments = new Map<string, { token: string; id: string; data: string }>();
+  people = new Map<string, { token: string; id: string; meta: string }>();
 
   api = (token: string): SpaceApi => {
     const member = this.members.get(token);
@@ -300,6 +303,52 @@ export class FakeServer {
         ownerOnly();
         await Promise.resolve();
         this.profilePhotos.delete(space);
+      },
+      listFaceSegments: async (after = '') => {
+        ownerOnly();
+        await Promise.resolve();
+        const segments = [...this.faceSegments.values()]
+          .filter((entry) => entry.token === space && entry.id > after)
+          .sort((a, b) => (a.id < b.id ? -1 : 1))
+          .map(({ id, data }) => ({ id, data }));
+        return { segments, next: null };
+      },
+      putFaceSegment: async (id, data) => {
+        ownerOnly();
+        await Promise.resolve();
+        if (this.faceSegments.has(`${space}/${id}`)) throw new ApiError(409, 'Taken');
+        this.faceSegments.set(`${space}/${id}`, { token: space, id, data });
+      },
+      deleteFaceSegments: async (ids) => {
+        ownerOnly();
+        await Promise.resolve();
+        for (const id of ids) this.faceSegments.delete(`${space}/${id}`);
+      },
+      deleteFaceData: async () => {
+        ownerOnly();
+        await Promise.resolve();
+        for (const [key, entry] of this.faceSegments) {
+          if (entry.token === space) this.faceSegments.delete(key);
+        }
+        for (const [key, entry] of this.people) if (entry.token === space) this.people.delete(key);
+      },
+      listPeople: async () => {
+        ownerOnly();
+        await Promise.resolve();
+        const people = [...this.people.values()]
+          .filter((entry) => entry.token === space)
+          .map(({ id, meta }) => ({ id, meta }));
+        return { people };
+      },
+      putPerson: async (id, meta) => {
+        ownerOnly();
+        await Promise.resolve();
+        this.people.set(`${space}/${id}`, { token: space, id, meta });
+      },
+      deletePerson: async (id) => {
+        ownerOnly();
+        await Promise.resolve();
+        if (!this.people.delete(`${space}/${id}`)) throw new ApiError(404, 'Not here');
       },
     };
   };

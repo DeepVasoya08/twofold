@@ -72,6 +72,16 @@ export interface SpaceStore {
     photoIds: readonly string[],
     onThumb?: (photoId: string, url: string) => void,
   ) => Promise<Map<string, string>>;
+  /**
+   * Downloads and decrypts previews to look at on this device (for finding faces), without
+   * keeping them: each reaches `onPreview` as bytes, in memory only, and no object URL is
+   * made. Photos it doesn't know, or whose preview is missing or didn't decrypt, reach it as
+   * null. Throws if a download fails.
+   */
+  previews: (
+    photoIds: readonly string[],
+    onPreview: (photoId: string, bytes: Uint8Array<ArrayBuffer> | null) => void,
+  ) => Promise<void>;
   add: (
     photo: NewPhoto,
     albumIds: string[],
@@ -356,6 +366,34 @@ export function remoteStore(
     return { plain: new Uint8Array(plain), entry };
   };
 
+  /**
+   * Downloads and decrypts previews in batches, handing each to `deliver` as soon as it's
+   * decrypted (null if the server had none or it didn't decrypt). Throws if a download fails.
+   */
+  const downloadThumbs = async (
+    photoIds: readonly string[],
+    deliver: (photoId: string, plain: Uint8Array<ArrayBuffer> | null) => void,
+  ) => {
+    const api = await remote();
+    const crypto = await loadCrypto();
+    const open = async (photoId: string | undefined, sealed: Uint8Array | null) => {
+      if (photoId === undefined) return;
+      const entry = known.get(photoId);
+      const plain =
+        sealed && entry ? await crypto.decryptFile(entry.key, sealed).catch(() => null) : null;
+      deliver(photoId, plain && new Uint8Array(plain));
+    };
+    for (let start = 0; start < photoIds.length; start += THUMB_BATCH_MAX) {
+      const ids = photoIds.slice(start, start + THUMB_BATCH_MAX);
+      // Previews decrypt one after another, in the order they arrive.
+      let decrypting = Promise.resolve();
+      const downloading = api.getThumbs(ids, (index, sealed) => {
+        decrypting = decrypting.then(() => open(ids[index], sealed));
+      });
+      await downloading.finally(() => decrypting);
+    }
+  };
+
   return {
     list: async () => {
       const api = await remote();
@@ -419,38 +457,29 @@ export function remoteStore(
         else if (known.has(photoId)) missing.push(photoId);
       }
       if (missing.length === 0) return found;
-      const api = await remote();
-      const crypto = await loadCrypto();
       // Photos the server answered for, with a preview or without one: not worth asking again.
       const answered = new Set<string>();
-      const show = async (photoId: string | undefined, sealed: Uint8Array | null) => {
-        if (photoId === undefined) return;
-        answered.add(photoId);
-        const entry = known.get(photoId);
-        if (!sealed || !entry) return;
-        // A preview that doesn't decrypt was tampered with: it stays a placeholder.
-        const plain = await crypto.decryptFile(entry.key, sealed).catch(() => null);
-        if (!plain) return;
-        const url = track(photoId, 'thumb', new Uint8Array(plain), THUMB_TYPE);
-        found.set(photoId, url);
-        onThumb?.(photoId, url);
-      };
       try {
-        for (let start = 0; start < missing.length; start += THUMB_BATCH_MAX) {
-          const ids = missing.slice(start, start + THUMB_BATCH_MAX);
-          // Previews decrypt one after another, in the order they arrive.
-          let decrypting = Promise.resolve();
-          const downloading = api.getThumbs(ids, (index, sealed) => {
-            decrypting = decrypting.then(() => show(ids[index], sealed));
-          });
-          await downloading.finally(() => decrypting);
-        }
+        await downloadThumbs(missing, (photoId, plain) => {
+          answered.add(photoId);
+          // A preview that doesn't decrypt was tampered with: it stays a placeholder.
+          if (!plain) return;
+          const url = track(photoId, 'thumb', plain, THUMB_TYPE);
+          found.set(photoId, url);
+          onThumb?.(photoId, url);
+        });
       } catch (error) {
         const failed = missing.filter((photoId) => !answered.has(photoId));
         if (answered.size === 0) throw error;
         throw new PartialThumbs(found, failed);
       }
       return found;
+    },
+
+    previews: async (photoIds, onPreview) => {
+      const ids = photoIds.filter((photoId) => known.has(photoId));
+      for (const photoId of photoIds) if (!known.has(photoId)) onPreview(photoId, null);
+      if (ids.length > 0) await downloadThumbs(ids, onPreview);
     },
 
     add: async (photo, albumIds, onStage) => {
@@ -740,6 +769,14 @@ export function combinedStore(
       if (failed.length > 0) throw new PartialThumbs(found, failed);
       return found;
     },
+    previews: async (photoIds, onPreview) => {
+      const byStore = new Map<SpaceStore, string[]>();
+      for (const photoId of photoIds) {
+        const store = storeOf(photoId);
+        byStore.set(store, [...(byStore.get(store) ?? []), photoId]);
+      }
+      await Promise.all([...byStore].map(([store, ids]) => store.previews(ids, onPreview)));
+    },
     add: async (photo, albumIds, onStage) => {
       const albumStore = albumIds[0] === undefined ? undefined : albumStores.get(albumIds[0]);
       const target = changeable(albumStore ?? own);
@@ -799,6 +836,11 @@ export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): Spac
             .map((photo) => [photo.id, photo.src]),
         ),
       ),
+    previews: (photoIds, onPreview) => {
+      // Fixed photos have no encrypted previews to look at.
+      for (const photoId of photoIds) onPreview(photoId, null);
+      return Promise.resolve();
+    },
     add: (photo, albumIds) => {
       const url = URL.createObjectURL(new Blob([photo.full], { type: photo.type }));
       return Promise.resolve({

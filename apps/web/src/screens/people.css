@@ -1,0 +1,97 @@
+.people-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 28px 22px;
+}
+
+.person-card {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: var(--text);
+  text-align: center;
+}
+
+.person-card:hover {
+  text-decoration: none;
+}
+
+.person-card .face-thumb {
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+  transition: transform 0.3s var(--ease);
+}
+
+.person-card:hover .face-thumb {
+  transform: translateY(-2px);
+}
+
+.person-card__name {
+  font-weight: 600;
+}
+
+.person-card__name.is-unnamed {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.person-card__meta {
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.people__empty {
+  color: var(--text-2);
+}
+
+.people__error {
+  margin-bottom: 20px;
+  color: var(--danger);
+}
+
+.people__toggle {
+  margin-top: 28px;
+}
+
+.person-hero {
+  margin: -8px 0 24px;
+}
+
+.merge-list {
+  display: grid;
+  gap: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.merge-list__choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  color: var(--text);
+  text-align: left;
+}
+
+.merge-list__choice:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.merge-list__name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.merge-list__meta {
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+@media (max-width: 860px) {
+  .people-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px 14px;
+  }
+}

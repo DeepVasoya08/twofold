@@ -1,4 +1,4 @@
-import { STORAGE_SIZES } from '@twofold/types';
+import { FACE_SIZES, STORAGE_SIZES } from '@twofold/types';
 
 import type { SpaceKeys } from './keyring';
 import { getSodium } from './sodium';
@@ -20,9 +20,11 @@ import { fromBase64Url, toBase64Url } from './webcrypto';
  */
 
 const KDF_CONTEXT = 'twfspace';
-const SUBKEY = { records: 1, owner: 2 } as const;
+const SUBKEY = { records: 1, owner: 2, faces: 3 } as const;
 const CHUNK_BYTES = 64 * 1024;
 const PAD_BLOCK = 256;
+/** Face segments are padded to 16 KiB steps, so their size says little about what's inside. */
+const FACE_PAD_BLOCK = 16 * 1024;
 const RECORD_KEY_BYTES = 32;
 
 /** Records everyone with access to a space can open: photos and albums. */
@@ -30,10 +32,21 @@ export type RecordKind = 'photo' | 'album';
 
 /**
  * Records only the space's owner can open: who it is shared with, the libraries it has
- * joined, the key of its profile photo, and invites still in progress (either side's secret
- * key for one invite). They use a subkey that members never receive.
+ * joined, the key of its profile photo, invites still in progress (either side's secret key
+ * for one invite), and people (a name and the faces confirmed or turned down). They use a
+ * subkey that members never receive.
  */
-export type OwnerRecordKind = 'member' | 'joined' | 'profile' | 'invite';
+export type OwnerRecordKind = 'member' | 'joined' | 'profile' | 'invite' | 'person';
+
+/** What's sealed under a space's own key: its records, and segments of face results. */
+type SealedKind = RecordKind | OwnerRecordKind | 'faces';
+
+interface Sealing {
+  padBlock: number;
+  maxBytes: number;
+}
+
+const RECORD_SEALING: Sealing = { padBlock: PAD_BLOCK, maxBytes: STORAGE_SIZES.maxRecord };
 
 export class DecryptionError extends Error {
   constructor(message = 'This data could not be decrypted') {
@@ -106,19 +119,20 @@ export async function newRecordId(): Promise<string> {
   return toBase64Url(sodium.randombytes_buf(STORAGE_SIZES.recordId));
 }
 
-function associatedData(kind: RecordKind | OwnerRecordKind, id: string): Uint8Array {
+function associatedData(kind: SealedKind, id: string): Uint8Array {
   return new TextEncoder().encode(`twofold:${kind}:${id}`);
 }
 
 async function sealWith(
   key: Uint8Array,
-  kind: RecordKind | OwnerRecordKind,
+  kind: SealedKind,
   id: string,
   data: Uint8Array,
+  sealing = RECORD_SEALING,
 ): Promise<string> {
   const sodium = await getSodium();
   const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-  const padded = sodium.pad(data, PAD_BLOCK);
+  const padded = sodium.pad(data, sealing.padBlock);
   const box = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
     padded,
     associatedData(kind, id),
@@ -129,15 +143,16 @@ async function sealWith(
   const sealed = new Uint8Array(nonce.length + box.length);
   sealed.set(nonce, 0);
   sealed.set(box, nonce.length);
-  if (sealed.length > STORAGE_SIZES.maxRecord) throw new Error('This record is too large');
+  if (sealed.length > sealing.maxBytes) throw new Error('This record is too large');
   return toBase64Url(sealed);
 }
 
 async function openWith(
   key: Uint8Array,
-  kind: RecordKind | OwnerRecordKind,
+  kind: SealedKind,
   id: string,
   sealedText: string,
+  sealing = RECORD_SEALING,
 ): Promise<Uint8Array> {
   const sodium = await getSodium();
   const sealed = fromBase64Url(sealedText);
@@ -153,7 +168,7 @@ async function openWith(
       sealed.subarray(0, nonceBytes),
       key,
     );
-    return sodium.unpad(padded, PAD_BLOCK);
+    return sodium.unpad(padded, sealing.padBlock);
   } catch {
     throw new DecryptionError();
   }
@@ -179,15 +194,12 @@ export function openRecord(
   return openWith(access.recordKey, kind, id, sealedText);
 }
 
-async function ownerKey(space: SpaceKeys): Promise<Uint8Array> {
+async function subkey(space: SpaceKeys, id: number): Promise<Uint8Array> {
   const sodium = await getSodium();
-  return sodium.crypto_kdf_derive_from_key(
-    RECORD_KEY_BYTES,
-    SUBKEY.owner,
-    KDF_CONTEXT,
-    space.spaceKey,
-  );
+  return sodium.crypto_kdf_derive_from_key(RECORD_KEY_BYTES, id, KDF_CONTEXT, space.spaceKey);
 }
+
+const ownerKey = (space: SpaceKeys) => subkey(space, SUBKEY.owner);
 
 /** Seals a record only the space's owner can open (members never get this subkey). */
 export async function sealOwnerRecord(
@@ -216,6 +228,42 @@ export async function openOwnerRecord(
   const key = await ownerKey(space);
   try {
     return await openWith(key, kind, id, sealedText);
+  } finally {
+    sodium.memzero(key);
+  }
+}
+
+const FACE_SEALING: Sealing = { padBlock: FACE_PAD_BLOCK, maxBytes: FACE_SIZES.maxSegment };
+
+/**
+ * Seals a segment of face results (which faces each photo has, and their fingerprints)
+ * under a subkey of the space key that members never receive, bound to the segment's id.
+ * Padded to 16 KiB steps, so its size doesn't show how many faces it holds.
+ */
+export async function sealFaceSegment(
+  space: SpaceKeys,
+  id: string,
+  data: Uint8Array,
+): Promise<string> {
+  const sodium = await getSodium();
+  const key = await subkey(space, SUBKEY.faces);
+  try {
+    return await sealWith(key, 'faces', id, data, FACE_SEALING);
+  } finally {
+    sodium.memzero(key);
+  }
+}
+
+/** Opens a face segment. Throws DecryptionError if it doesn't open. */
+export async function openFaceSegment(
+  space: SpaceKeys,
+  id: string,
+  sealedText: string,
+): Promise<Uint8Array> {
+  const sodium = await getSodium();
+  const key = await subkey(space, SUBKEY.faces);
+  try {
+    return await openWith(key, 'faces', id, sealedText, FACE_SEALING);
   } finally {
     sodium.memzero(key);
   }

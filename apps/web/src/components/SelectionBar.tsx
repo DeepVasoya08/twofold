@@ -31,6 +31,14 @@ interface Action {
   danger?: boolean;
 }
 
+/** An action a page adds to the bar: what it runs, and what to say once it's done. */
+export interface ExtraAction {
+  label: string;
+  icon: IconName;
+  run: (photoIds: readonly string[]) => Promise<Settled<string>>;
+  done: (photos: string) => string;
+}
+
 /**
  * Actions for the selected photos, in a bar over the top of the page: add to an album (or
  * take out of the one being viewed), share with someone, download, favorite, move to the
@@ -41,12 +49,18 @@ export function SelectionBar({
   selection,
   allIds,
   albumId,
+  extra,
 }: {
   selection: Selection;
   /** Every photo on the page, for selecting them all. */
   allIds: readonly string[];
   /** The album being viewed, which offers taking photos out of it. */
   albumId?: string | undefined;
+  /**
+   * One more action for this page, offered for any photos (it changes nothing in them), such
+   * as saying photos aren't of the person being viewed.
+   */
+  extra?: ExtraAction | undefined;
 }) {
   const vault = useVault();
   const downloads = useDownloads();
@@ -206,7 +220,18 @@ export function SelectionBar({
     },
   });
 
-  const shown = viewOnly ? [download] : actions;
+  const pageActions: Action[] = extra
+    ? [
+        {
+          label: extra.label,
+          icon: extra.icon,
+          onClick: () => {
+            run(() => extra.run(ids), extra.done);
+          },
+        },
+      ]
+    : [];
+  const shown = viewOnly ? [...pageActions, download] : [...pageActions, ...actions];
   const shared = photos.some((photo) => photo.library !== undefined);
   const everything = allSelected(selection.selected, allIds);
   return (

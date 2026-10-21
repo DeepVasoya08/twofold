@@ -82,7 +82,10 @@ export async function uploadPhotos(
   await dialog.getByRole('button', { name: 'Done' }).click();
 }
 
-export async function goTo(page: Page, link: 'Photos' | 'Albums' | 'Favorites' | 'Settings') {
+export async function goTo(
+  page: Page,
+  link: 'Photos' | 'Albums' | 'People' | 'Favorites' | 'Settings',
+) {
   await page.getByRole('link', { name: link }).filter({ visible: true }).first().click();
 }
 

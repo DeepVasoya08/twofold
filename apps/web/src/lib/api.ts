@@ -13,6 +13,7 @@ import type {
   DeleteAccountRequest,
   DeviceList,
   ErrorResponse,
+  FaceSegmentPage,
   InviterView,
   JoinedList,
   JoinerView,
@@ -21,6 +22,7 @@ import type {
   MemberList,
   MembershipResponse,
   PendingInviteList,
+  PersonList,
   PhotoPage,
   PhotoPart,
   PreLoginRequest,
@@ -304,6 +306,25 @@ export function spaceApi(token: string) {
     putProfilePhoto: (body: StoredProfilePhoto) =>
       call<undefined>('PUT', '/space/profile-photo', body, headers),
     deleteProfilePhoto: () => call<undefined>('DELETE', '/space/profile-photo', {}, headers),
+    /** Sealed face results, a page at a time. Owner-only, like everything about people. */
+    listFaceSegments: (after?: string) =>
+      call<FaceSegmentPage>(
+        'GET',
+        `/space/faces${after ? `?after=${encodeURIComponent(after)}` : ''}`,
+        undefined,
+        headers,
+      ),
+    putFaceSegment: (id: string, data: string) =>
+      call<undefined>('PUT', `/space/faces/${encodeURIComponent(id)}`, { data }, headers),
+    deleteFaceSegments: (ids: string[]) =>
+      call<undefined>('DELETE', '/space/faces', { ids }, headers),
+    /** Forgets every face and person in the space. */
+    deleteFaceData: () => call<undefined>('DELETE', '/space/face-data', {}, headers),
+    listPeople: () => call<PersonList>('GET', '/space/people', undefined, headers),
+    putPerson: (id: string, meta: string) =>
+      call<undefined>('PUT', `/space/people/${encodeURIComponent(id)}`, { meta }, headers),
+    deletePerson: (id: string) =>
+      call<undefined>('DELETE', `/space/people/${encodeURIComponent(id)}`, {}, headers),
   };
 }
 

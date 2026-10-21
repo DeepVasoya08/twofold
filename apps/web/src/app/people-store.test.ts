@@ -1,0 +1,122 @@
+import { describe, expect, it } from 'vitest';
+
+import { newSpace, openOwnerRecord, spaceToken } from '@twofold/crypto';
+
+import { FakeServer } from '../test/fake-server';
+import { face, photoId, unitVector } from '../lib/people/test-faces';
+import type { FaceResults } from '../lib/people/segment';
+import { memoryPeopleStore, parsePerson, remotePeopleStore } from './people-store';
+import type { Person } from '../lib/people/grouping';
+
+const results = (from: number, count: number): FaceResults =>
+  new Map(Array.from({ length: count }, (_, n) => [photoId(from + n), [face(unitVector(n))]]));
+
+const ada = (id: string): Person => ({
+  id,
+  name: 'Ada',
+  faces: [`${photoId(1)}#0`],
+  rejected: [],
+  hidden: false,
+});
+
+describe('remotePeopleStore', () => {
+  it('saves results sealed, and loads them back on another device', async () => {
+    const server = new FakeServer();
+    const space = await newSpace();
+    const store = remotePeopleStore(space, server.api);
+    const ids = await store.saveResults(results(0, 3));
+    expect(ids).toHaveLength(1);
+    // The server holds only ciphertext: no photo id appears in what it keeps.
+    const stored = [...server.faceSegments.values()];
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.data).not.toContain(photoId(0));
+
+    const loaded = await remotePeopleStore(space, server.api).load();
+    expect([...loaded.results.keys()]).toEqual([photoId(0), photoId(1), photoId(2)]);
+    expect(loaded.segments).toEqual(ids);
+  });
+
+  it('keeps everything in the space it belongs to', async () => {
+    const server = new FakeServer();
+    const store = remotePeopleStore(await newSpace(), server.api);
+    await store.saveResults(results(0, 2));
+    await store.savePerson(ada(await store.newId()));
+    const other = await remotePeopleStore(await newSpace(), server.api).load();
+    expect(other.results.size).toBe(0);
+    expect(other.people).toEqual([]);
+  });
+
+  it('leaves out segments that do not open, so they are merged away', async () => {
+    const server = new FakeServer();
+    const space = await newSpace();
+    const store = remotePeopleStore(space, server.api);
+    await store.saveResults(results(0, 2));
+    const token = spaceToken(space);
+    server.faceSegments.set(`${token}/bad`, { token, id: 'bad', data: 'AAAA' });
+    const loaded = await store.load();
+    expect(loaded.results.size).toBe(2);
+    expect(loaded.segments).toContain('bad');
+  });
+
+  it('replaces segments with merged ones, saving the new ones first', async () => {
+    const server = new FakeServer();
+    const store = remotePeopleStore(await newSpace(), server.api);
+    const first = await store.saveResults(results(0, 2));
+    const second = await store.saveResults(results(2, 2));
+    const fresh = await store.replaceSegments(results(0, 3), [...first, ...second]);
+    const loaded = await store.load();
+    expect(loaded.segments).toEqual(fresh);
+    expect(loaded.results.size).toBe(3);
+  });
+
+  it('seals people for the owner only, and deletes and forgets them', async () => {
+    const server = new FakeServer();
+    const space = await newSpace();
+    const store = remotePeopleStore(space, server.api);
+    const person = ada(await store.newId());
+    await store.savePerson(person);
+    const stored = [...server.people.values()][0];
+    expect(stored?.meta).not.toContain('Ada');
+    const opened = await openOwnerRecord(space, 'person', person.id, stored?.meta ?? '');
+    expect(new TextDecoder().decode(opened)).toContain('Ada');
+    expect((await store.load()).people).toEqual([person]);
+
+    await store.deletePerson(person.id);
+    expect((await store.load()).people).toEqual([]);
+
+    await store.savePerson(person);
+    await store.saveResults(results(0, 1));
+    await store.forget();
+    const empty = await store.load();
+    expect(empty.people).toEqual([]);
+    expect(empty.results.size).toBe(0);
+  });
+});
+
+describe('parsePerson', () => {
+  it('reads a saved person and refuses anything else', () => {
+    const valid = { v: 1, name: 'Ada', faces: ['a#0'], rejected: [], hidden: true };
+    expect(parsePerson('p', valid)).toEqual({
+      id: 'p',
+      name: 'Ada',
+      faces: ['a#0'],
+      rejected: [],
+      hidden: true,
+    });
+    expect(parsePerson('p', { ...valid, v: 2 })).toBeNull();
+    expect(parsePerson('p', { ...valid, faces: [1] })).toBeNull();
+    expect(parsePerson('p', { ...valid, hidden: 'yes' })).toBeNull();
+    expect(parsePerson('p', null)).toBeNull();
+  });
+});
+
+describe('memoryPeopleStore', () => {
+  it('keeps what it is given', async () => {
+    const store = memoryPeopleStore();
+    await store.saveResults(results(0, 2));
+    await store.savePerson(ada('p1'));
+    const loaded = await store.load();
+    expect(loaded.results.size).toBe(2);
+    expect(loaded.people).toHaveLength(1);
+  });
+});
