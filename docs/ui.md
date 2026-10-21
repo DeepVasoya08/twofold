@@ -31,11 +31,17 @@ exists but is low-key (Settings → Sharing).
   belong to one space, so a moved photo arrives unfiled. A move re-encrypts the photo
   under a new key and id in the other space, then deletes the original.
 - Each space is shared separately (Settings → Sharing → Invite). Sharing the library never
-  shares the private space. The Share screen gives a link (**Copy link**, and **Share link**
-  where the browser can share) and a code to type under "I have a code" instead. They can
-  accept any time in the next 7 days; leaving the screen doesn't cancel anything. Invites
-  still waiting are listed on the Share screen and in the album's people list, with
-  **Cancel**.
+  shares the private space; private photos can only be shared from inside it, and the Share
+  screen says so. The Share screen first asks **What can they do?**: **View only** (see and
+  download, the default) or **Add and edit** (also add photos, favorite, organize albums and
+  delete photos). The choice is kept in the invite and can be changed until it's confirmed,
+  and later in Settings. Then it gives a link (**Copy link**, and **Share link** where the
+  browser can share) and a code to type instead. They can accept any time in the next 7
+  days; leaving the screen doesn't cancel anything. Invites still waiting are listed on the
+  Share screen and in the album's people list, with **Cancel**.
+- Codes are typed on their own screen, **Enter an invite code** (`/join`), reached from
+  Settings → Shared with you → **Enter code**, from Albums → Shared with me, and from the
+  Share screen. It also takes a whole pasted invite link, and refuses your own invite.
 - Opening a link (`/join/<token>`) asks to sign in, sign up or unlock first, then comes back
   to it. It doesn't say who sent it until they reveal it: **Accept** sends this side's key,
   and the page says what's happening next, with **Don't join**. Either person can leave at
@@ -48,10 +54,17 @@ exists but is low-key (Settings → Sharing).
   four words and "Waiting for <name> to confirm". Nothing is shared until the inviter
   confirms; what was shared turns up on the joiner's next visit.
 - A library you join appears inside the space you joined it from, mixed in with your own
-  photos. Its albums appear too, and photos uploaded into one of them go to that library
-  under your name. Photos from a joined library can be favorited or deleted for everyone,
-  but not moved to the other space. Settings lists who the open space is shared with (with
-  **Stop**) and the libraries it joined (with **Leave**).
+  photos, each tile marked with a small "shared" badge and the owner's name (icon only on
+  phones), and its albums marked **Shared with you**. When the timeline has shared photos,
+  Photos offers **All**, **Mine** and **Shared with me**. With **Add and edit**, photos
+  uploaded into one of its albums go to that library under your name, and its photos can be
+  favorited or deleted for everyone. With **View only**, its photos and albums only offer
+  **Download**, and uploads always go to your own library. Either way they can't be moved
+  to the other space.
+- Settings → Sharing says how many people the open space is shared with, and lists each
+  with what they can do (a **View only** / **Add and edit** picker that applies at once) and
+  **Stop**. Settings → Shared with you lists the libraries it joined, with what you can do
+  there and **Leave**, and **Enter code**.
 - One album can be shared instead of a whole library: **Share** in an album's menu lists
   who has access (with **Remove**, and **Stop sharing with everyone**) and offers **Invite
   someone**, which opens the same invite screen for just that album
@@ -99,7 +112,7 @@ exists but is low-key (Settings → Sharing).
 - Every album has a vertical "more" menu, always visible on its card in Albums and next to
   **Select** inside it. Your albums: **Share**, **Download**, **Rename** and **Delete
   album** (deleting keeps the photos). Albums of a library shared with you: **Download**,
-  **Rename** and **Delete album**. An album shared with you: **Download** and **Leave
+  **Rename** and **Delete album** (only **Download** when it's shared view-only). An album shared with you: **Download** and **Leave
   album**. Inside an album there is also a **Download** button.
 - Albums has three tabs: **All albums**, **Shared with me** (other people's albums, shared
   alone or with their library) and **Shared by me** (your albums shared with at least one

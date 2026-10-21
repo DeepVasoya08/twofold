@@ -38,6 +38,11 @@ export interface Photo {
    * and download it, but not change it, and it stays out of your timeline.
    */
   sharedAlbum?: boolean;
+  /**
+   * Set when the photo is someone else's and you can only view and download it: it came
+   * through a shared album, or its library was shared with you view-only.
+   */
+  viewOnly?: boolean;
   /** Encrypted bytes it takes up on the server (both files), once it is stored. */
   size?: number;
 }
@@ -50,6 +55,8 @@ export interface Album {
   library?: string;
   /** Set when someone shared just this album with you. It can be viewed, not changed. */
   sharedAlbum?: boolean;
+  /** Set when the album is someone else's and you can only view it. */
+  viewOnly?: boolean;
   /** The people you've shared this album with, by name. */
   sharedWith?: string[];
   /** For an album shared with you: the record of it in your space, for leaving it. */

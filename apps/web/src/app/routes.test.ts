@@ -106,3 +106,16 @@ describe('invite links', () => {
     );
   });
 });
+
+describe('the invite code screen', () => {
+  it('has its own path, and comes back after signing in', () => {
+    expect(matchRoute(paths.joinCode)).toEqual({ name: 'join-code' });
+    expect(matchRoute(`${paths.joinCode}/`)).toEqual({ name: 'join-code' });
+    expect(parseNext(withNext('', paths.joinCode))).toBe(paths.joinCode);
+    const route = matchRoute(paths.joinCode);
+    const options = { space: null, signingUp: false };
+    expect(redirectFor(route, signedOut, options)).toBe(withNext(paths.login, paths.joinCode));
+    expect(redirectFor(route, lockedAccount, options)).toBe(withNext(paths.unlock, paths.joinCode));
+    expect(redirectFor(route, mainSession(), { ...options, space: 'main' })).toBeNull();
+  });
+});

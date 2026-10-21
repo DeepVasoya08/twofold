@@ -10,7 +10,7 @@ import { paths } from '../app/routes';
 import { allSelected, batchMessage } from '../app/selection';
 import type { Selection } from '../app/selection';
 import { useToast } from '../app/toast';
-import { useVault } from '../app/vault';
+import { isViewOnly, useVault } from '../app/vault';
 import { pluralize } from '../lib/format';
 import type { Settled } from '../lib/settle-each';
 import type { Album } from '../mock/data';
@@ -70,7 +70,7 @@ export function SelectionBar({
   const album = albumId ? state.albums.find((each) => each.id === albumId) : undefined;
   // Only your own photos can be shared, through an album of your own.
   const shareable = count > 0 && photos.every((photo) => photo.library === undefined);
-  const viewOnly = photos.some((photo) => photo.sharedAlbum);
+  const viewOnly = photos.some(isViewOnly);
 
   const run = (change: () => Promise<Settled<string>>, done: (photos: string) => string) => {
     if (busy) return;

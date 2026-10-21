@@ -5,7 +5,7 @@ import { errorMessage } from '../app/account-ops';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useToast } from '../app/toast';
-import { albumCover, albumPhotos, useVault } from '../app/vault';
+import { albumCover, albumPhotos, isViewOnly, useVault } from '../app/vault';
 import { AlbumActions } from '../components/AlbumActions';
 import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
@@ -131,6 +131,11 @@ export function Albums() {
 
       <div role="tabpanel" id="album-tab-panel" aria-labelledby={`album-tab-${tab}`}>
         {shown.length === 0 && <p className="album-tabs__empty">{EMPTY[tab]}</p>}
+        {tab === 'with-me' && (
+          <p className="album-tabs__code">
+            Got an invite code from someone? <Link to={paths.joinCode}>Enter it here</Link>
+          </p>
+        )}
         <ul className="album-grid">
           {shown.map((album) => {
             const photos = albumPhotos(state, album.id);
@@ -161,6 +166,11 @@ export function Albums() {
                     ) : (
                       <span className="album-card__empty">
                         <Icon name="image-plus" size={28} />
+                      </span>
+                    )}
+                    {album.library !== undefined && (
+                      <span className="album-card__badge" data-testid="shared-badge">
+                        <Icon name="users" size={12} /> Shared with you
                       </span>
                     )}
                   </span>
@@ -214,7 +224,9 @@ export function Albums() {
 
 /** Who an album is shared with or by, for its card. */
 function sharedLine(album: Album): string | null {
-  if (album.library !== undefined) return `From ${album.library}`;
+  if (album.library !== undefined) {
+    return `From ${album.library}${isViewOnly(album) ? ' · view only' : ''}`;
+  }
   if (album.sharedWith && album.sharedWith.length > 0) {
     return `Shared with ${album.sharedWith.join(', ')}`;
   }

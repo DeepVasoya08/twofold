@@ -115,6 +115,13 @@
   flex: none;
 }
 
+.settings-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .theme-picker {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

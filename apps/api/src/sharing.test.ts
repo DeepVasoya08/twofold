@@ -58,7 +58,7 @@ beforeEach(async () => {
 
 /** Shares the owner's space and returns the member's token and id. */
 async function share(): Promise<{ token: string; id: string }> {
-  const member = { id: newId(), token: random(16), meta: newMeta() };
+  const member = { id: newId(), token: random(16), meta: newMeta(), access: 'edit' };
   expect((await owner.request('POST', '/space/members', member)).status).toBe(201);
   return member;
 }
@@ -142,7 +142,7 @@ describe('members', () => {
     const member = await share();
     const res = await owner.request('GET', '/space/members');
     expect(await res.json<MemberList>()).toEqual({
-      members: [{ id: member.id, meta: expect.any(String) as string, album: null }],
+      members: [{ id: member.id, meta: expect.any(String) as string, album: null, access: 'edit' }],
     });
     const dump = JSON.stringify(sqlite.prepare('SELECT * FROM members').all());
     expect(dump).not.toContain(member.token);

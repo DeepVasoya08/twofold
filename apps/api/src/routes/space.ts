@@ -16,7 +16,9 @@ import type {
   AlbumItemList,
   AlbumList,
   JoinedList,
+  MemberAccess,
   MemberList,
+  MembershipResponse,
   PendingInviteList,
   PhotoPage,
   ProfilePhotoResponse,
@@ -53,6 +55,7 @@ import {
   profilePhotoSchema,
   recordIdSchema,
   spaceTokenSchema,
+  updateMemberSchema,
   updateRecordSchema,
 } from '../schemas';
 import { requestSessionHash, sessionEnded } from '../session';
@@ -69,6 +72,7 @@ import {
   insertJoined,
   insertMember,
   insertPendingInvite,
+  updateMemberAccess,
   updatePendingInvite,
   memberByTokenQuery,
   listJoined,
@@ -114,8 +118,9 @@ const notFound = 'That photo isn’t here anymore.';
  *
  * The owner's token is the space id. A member's is a share token the owner registered; it
  * reaches the same photos and albums, but not the owner-only routes (sharing, joined
- * libraries, invites in progress, wiping the space), and the owner can revoke it. A token given one album reaches
- * only that album's shared photos, and can't change anything.
+ * libraries, invites in progress, wiping the space), and the owner can revoke it. A view-only
+ * member's token can only read. A token given one album reaches only that album's shared
+ * photos, and can't change anything.
  */
 export const space = new Hono<AppEnv>();
 
@@ -142,12 +147,14 @@ const requireSpace = createMiddleware<AppEnv>(async (c, next) => {
   const account = sessionAccountFrom(session?.results ?? []);
   if (!account) return sessionEnded(c);
   const member = members?.results[0] as
-    { id: string; space: string; album: string | null } | undefined;
+    { id: string; space: string; album: string | null; access: MemberAccess } | undefined;
   c.set('account', account);
   c.set('session', sessionHash);
   c.set('space', member?.space ?? hash);
   c.set('member', member?.id ?? null);
   c.set('album', member?.album ?? null);
+  // Someone given one album can only view, whatever their row says.
+  c.set('access', member ? (member.album === null ? member.access : 'view') : 'edit');
   return next();
 });
 
@@ -155,21 +162,34 @@ const requireSpace = createMiddleware<AppEnv>(async (c, next) => {
 const ALBUM_ROUTES: readonly { method: string; path: RegExp }[] = [
   { method: 'GET', path: /\/space\/(photos|albums|thumbs)$/ },
   { method: 'GET', path: /\/space\/photos\/[^/]+\/(thumb|full)$/ },
+  { method: 'GET', path: /\/space\/membership$/ },
   { method: 'DELETE', path: /\/space\/membership$/ },
 ];
 
 const albumOnly = 'You can only see this album.';
+const viewOnly = 'You can view this library, but not change it.';
 
-/** Keeps album-scoped tokens to the few read-only routes their album needs. */
-const limitAlbumTokens = createMiddleware<AppEnv>(async (c, next) => {
-  if (c.get('album') === null) return next();
-  const allowed = ALBUM_ROUTES.some(
-    (route) => route.method === c.req.method && route.path.test(c.req.path),
-  );
-  return allowed ? next() : c.json({ error: albumOnly }, 403);
+/**
+ * Keeps album-scoped tokens to the few read-only routes their album needs, and view-only
+ * members to reading (and leaving). Owner-only reads are refused later, by requireOwner.
+ */
+const limitMemberTokens = createMiddleware<AppEnv>(async (c, next) => {
+  if (c.get('album') !== null) {
+    const allowed = ALBUM_ROUTES.some(
+      (route) => route.method === c.req.method && route.path.test(c.req.path),
+    );
+    return allowed ? next() : c.json({ error: albumOnly }, 403);
+  }
+  if (c.get('access') === 'view') {
+    const allowed =
+      c.req.method === 'GET' ||
+      (c.req.method === 'DELETE' && c.req.path.endsWith('/space/membership'));
+    return allowed ? next() : c.json({ error: viewOnly }, 403);
+  }
+  return next();
 });
 
-space.use(requireSpace, limitAlbumTokens);
+space.use(requireSpace, limitMemberTokens);
 
 const notOwner = 'Only the person who shared this library can do that.';
 
@@ -619,10 +639,24 @@ space.post('/members', requireOwner, async (c) => {
   if ((await countPhotos(c.env.DB, tokenHash)) > 0) {
     return c.json({ error: messages.badRequest }, 409);
   }
-  if (!(await insertMember(c.env.DB, tag, { id: body.id, tokenHash, meta: body.meta, album }))) {
+  // Someone given one album can only view it; otherwise they get what the owner chose.
+  const access: MemberAccess = album === null ? (body.access ?? 'view') : 'view';
+  const member = { id: body.id, tokenHash, meta: body.meta, album, access };
+  if (!(await insertMember(c.env.DB, tag, member))) {
     return c.json({ error: messages.badRequest }, 409);
   }
   return c.body(null, 201);
+});
+
+/** Changes what someone the whole library is shared with may do. Takes effect at once. */
+space.put('/members/:id', requireOwner, async (c) => {
+  const id = recordIdSchema.safeParse(c.req.param('id'));
+  const body = await readBody(c, updateMemberSchema);
+  if (!id.success || !body) return c.json({ error: messages.badRequest }, 400);
+  if (!(await updateMemberAccess(c.env.DB, c.get('space'), id.data, body.access))) {
+    return c.json({ error: 'They don’t have access to this library anymore.' }, 404);
+  }
+  return c.body(null, 204);
 });
 
 /** Stops sharing with one member: their token stops working at once. */
@@ -635,6 +669,12 @@ space.delete('/members/:id', requireOwner, async (c) => {
     return c.json({ error: 'They already don’t have access.' }, 404);
   }
   return c.body(null, 204);
+});
+
+/** What this member's token may do. The owner's own token isn't a membership. */
+space.get('/membership', (c) => {
+  if (c.get('member') === null) return c.json({ error: messages.badRequest }, 400);
+  return c.json<MembershipResponse>({ access: c.get('access') });
 });
 
 /** A member leaves: their own token stops working. */

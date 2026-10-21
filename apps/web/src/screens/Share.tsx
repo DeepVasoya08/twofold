@@ -1,34 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import type { SubmitEvent } from 'react';
+
+import type { MemberAccess } from '@twofold/types';
 
 import { useMe } from '../app/account';
 import { errorMessage } from '../app/account-ops';
 import { usePendingInvites } from '../app/invites';
-import { useRouter } from '../app/router';
+import { Link, useRouter } from '../app/router';
 import { parseShareAlbum, paths } from '../app/routes';
 import { useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { Avatar } from '../components/Brand';
-import { TextField } from '../components/Field';
 import { FormAlert } from '../components/FormAlert';
 import { Icon } from '../components/Icon';
-import { JoinProgressView, PendingInviteList, inviteLink, useCopy } from '../components/Invites';
+import { PendingInviteList, inviteLink, useCopy } from '../components/Invites';
 
 import './share.css';
-
-/** Normalizes what someone types into the TWO-XXXX-XXXX invite format. */
-export function normalizeInviteCode(input: string): string {
-  const raw = input.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const body = raw.startsWith('TWO') ? raw.slice(3) : raw;
-  return `TWO-${body.slice(0, 4)}-${body.slice(4, 8)}`;
-}
-
-/** Codes never use 0, 1, I or O, so they can't be misread. */
-export function isInviteCode(code: string): boolean {
-  return /^TWO-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(code);
-}
-
-type Mode = 'invite' | 'join';
 
 /** One album being shared instead of the whole library. */
 interface SharedAlbum {
@@ -40,6 +26,50 @@ interface SharedAlbum {
 function useWatchInvites() {
   const { watch } = usePendingInvites();
   useEffect(() => watch(), [watch]);
+}
+
+/** What someone can do in a library shared with them, in a few words. */
+export const ACCESS_LABELS: Record<MemberAccess, { title: string; detail: string }> = {
+  view: { title: 'View only', detail: 'They can see and download photos. Nothing else.' },
+  edit: {
+    title: 'Add and edit',
+    detail: 'They can also add photos, favorite, organize albums and delete photos.',
+  },
+};
+
+/** Picks what someone invited to the whole library will be able to do. */
+function AccessPicker({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: MemberAccess;
+  disabled: boolean;
+  onChange: (access: MemberAccess) => void;
+}) {
+  return (
+    <fieldset className="access-picker" disabled={disabled}>
+      <legend className="access-picker__legend">What can they do?</legend>
+      {(['view', 'edit'] as const).map((access) => (
+        <label key={access} className="access-picker__option">
+          <input
+            type="radio"
+            name="invite-access"
+            value={access}
+            checked={value === access}
+            onChange={() => {
+              onChange(access);
+            }}
+          />
+          <span className="access-picker__text">
+            <span className="access-picker__title">{ACCESS_LABELS[access].title}</span>
+            <span className="access-picker__detail">{ACCESS_LABELS[access].detail}</span>
+          </span>
+        </label>
+      ))}
+      <span className="access-picker__note">You can change this later in Settings.</span>
+    </fieldset>
+  );
 }
 
 /**
@@ -55,6 +85,8 @@ function InvitePanel({ where, album }: { where: string; album: SharedAlbum | nul
   const [current, setCurrent] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  // The access just picked, shown at once while it's being kept in the invite's record.
+  const [picked, setPicked] = useState<MemberAccess | null>(null);
   const starting = useRef(false);
   useWatchInvites();
 
@@ -91,7 +123,7 @@ function InvitePanel({ where, album }: { where: string; album: SharedAlbum | nul
           <p>
             {album
               ? `“${album.title}” is shared with ${finished.name}. You can remove them any time from the album’s Share menu.`
-              : `Your ${where} is shared with ${finished.name}. You can stop sharing any time in Settings.`}
+              : `Your ${where} is shared with ${finished.name}. You can change what they can do, or stop sharing, any time in Settings.`}
           </p>
         </div>
         <button type="button" className="btn btn--secondary" onClick={again}>
@@ -130,6 +162,18 @@ function InvitePanel({ where, album }: { where: string; album: SharedAlbum | nul
         setCancelling(false);
       });
   };
+  const onAccess = (access: MemberAccess) => {
+    if (!invite || picked !== null) return;
+    setPicked(access);
+    pending
+      .setAccess(invite.id, access)
+      .catch((error: unknown) => {
+        setFailed(errorMessage(error));
+      })
+      .finally(() => {
+        setPicked(null);
+      });
+  };
   const onShareLink = () => {
     if (!link) return;
     navigator
@@ -139,6 +183,13 @@ function InvitePanel({ where, album }: { where: string; album: SharedAlbum | nul
 
   return (
     <div className="share">
+      {album === null && (
+        <AccessPicker
+          value={picked ?? invite?.access ?? 'view'}
+          disabled={!invite || picked !== null}
+          onChange={onAccess}
+        />
+      )}
       <div className="invite-card">
         <span className="invite-card__label">Invite link</span>
         <span className="invite-card__link" data-testid="invite-link">
@@ -227,82 +278,6 @@ function InvitePanel({ where, album }: { where: string; album: SharedAlbum | nul
   );
 }
 
-/** Enters someone's code, then shows how the invite is going. */
-function JoinPanel({ where }: { where: string }) {
-  const pending = usePendingInvites();
-  const [code, setCode] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [joined, setJoined] = useState<string | null>(null);
-  useWatchInvites();
-
-  const entry = pending.joins.find((each) => each.join.ref === joined);
-  const ended = joined !== null && pending.ended.joins.includes(joined);
-
-  const onJoin = (event: SubmitEvent) => {
-    event.preventDefault();
-    if (busy) return;
-    const normalized = normalizeInviteCode(code);
-    if (!isInviteCode(normalized)) {
-      setError(
-        'That code doesn’t look right. It’s 8 letters and numbers after TWO, without 0, 1, I or O.',
-      );
-      return;
-    }
-    setBusy(true);
-    pending
-      .accept(normalized)
-      .then(
-        () => {
-          setJoined(normalized);
-        },
-        (caught: unknown) => {
-          setError(errorMessage(caught));
-        },
-      )
-      .finally(() => {
-        setBusy(false);
-      });
-  };
-
-  if (entry) return <JoinProgressView entry={entry} where={where} />;
-
-  return (
-    <form
-      role="tabpanel"
-      id="panel-join"
-      aria-labelledby="tab-join"
-      className="form"
-      onSubmit={onJoin}
-      noValidate
-    >
-      <FormAlert message={ended ? 'That invite ended, so nothing was shared.' : null} />
-      <TextField
-        label="Invite code"
-        className="field--code"
-        placeholder="TWO-XXXX-XXXX"
-        autoComplete="off"
-        autoCapitalize="characters"
-        spellCheck={false}
-        value={code}
-        onChange={(event) => {
-          setCode(event.currentTarget.value.toUpperCase());
-          setError(null);
-        }}
-        error={error}
-      />
-      <button
-        type="submit"
-        className="btn btn--primary btn--block btn--lg"
-        disabled={busy}
-        aria-busy={busy}
-      >
-        {busy ? 'Joining…' : 'Join'}
-      </button>
-    </form>
-  );
-}
-
 /**
  * Invite someone to the open space or to one of its albums, or join a library or album
  * someone shared with you.
@@ -310,7 +285,6 @@ function JoinPanel({ where }: { where: string }) {
 export function Share() {
   const { space, state: vault, status } = useVault();
   const { search } = useRouter();
-  const [mode, setMode] = useState<Mode>('invite');
 
   const where = space === 'private' ? 'private space' : 'library';
   const albumId = parseShareAlbum(search);
@@ -354,43 +328,17 @@ export function Share() {
       />
 
       <div className="share-card">
-        <div className="segmented" role="tablist" aria-label="Sharing">
-          <button
-            type="button"
-            role="tab"
-            id="tab-invite"
-            aria-selected={mode === 'invite'}
-            aria-controls="panel-invite"
-            className="segmented__option"
-            onClick={() => {
-              setMode('invite');
-            }}
-          >
-            Send an invite
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="tab-join"
-            aria-selected={mode === 'join'}
-            aria-controls="panel-join"
-            className="segmented__option"
-            onClick={() => {
-              setMode('join');
-            }}
-          >
-            I have a code
-          </button>
-        </div>
-
-        {mode === 'invite' ? (
-          <div role="tabpanel" id="panel-invite" aria-labelledby="tab-invite">
-            <InvitePanel where={where} album={null} />
-          </div>
-        ) : (
-          <JoinPanel where={where} />
-        )}
+        <InvitePanel where={where} album={null} />
       </div>
+      <p className="share__aside">
+        <Icon name="shield" size={16} />
+        {space === 'private'
+          ? 'Only this private space is shared. Your main library isn’t.'
+          : 'Only this library is shared. Photos in your private space never are; share those from inside it.'}
+      </p>
+      <p className="share__aside">
+        Did someone send you a code? <Link to={paths.joinCode}>Enter it here</Link>
+      </p>
     </div>
   );
 }

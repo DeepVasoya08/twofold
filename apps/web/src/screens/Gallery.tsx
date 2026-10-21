@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
 import { allSelected, useSelection } from '../app/selection';
@@ -11,15 +13,41 @@ import { PhotoImage } from '../components/PhotoImage';
 import { SelectButton } from '../components/SelectButton';
 import { SelectionBar } from '../components/SelectionBar';
 import { formatDateRange, groupByMonth, pluralize } from '../lib/format';
+import type { Photo } from '../mock/data';
 
 import './gallery.css';
 
 const HIGHLIGHT_MIN_PHOTOS = 3;
 
+/** Whose photos the timeline shows: everyone's, only yours, or only ones shared with you. */
+export type OwnerFilter = 'all' | 'mine' | 'shared';
+
+const FILTERS: readonly { id: OwnerFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'mine', label: 'Mine' },
+  { id: 'shared', label: 'Shared with me' },
+];
+
+export function filterByOwner(photos: readonly Photo[], filter: OwnerFilter): Photo[] {
+  switch (filter) {
+    case 'all':
+      return [...photos];
+    case 'mine':
+      return photos.filter((photo) => photo.library === undefined);
+    case 'shared':
+      return photos.filter((photo) => photo.library !== undefined);
+  }
+}
+
 export function Gallery() {
   const { state, space, status } = useVault();
   const isPrivate = space === 'private';
-  const photos = timelinePhotos(state);
+  const timeline = timelinePhotos(state);
+  // Only worth offering once something in the timeline is someone else's.
+  const hasShared = timeline.some((photo) => photo.library !== undefined);
+  const [chosen, setFilter] = useState<OwnerFilter>('all');
+  const filter = hasShared ? chosen : 'all';
+  const photos = filterByOwner(timeline, filter);
   const months = groupByMonth(photos);
   const highlight = state.albums.find(
     (album) => albumPhotos(state, album.id).length >= HIGHLIGHT_MIN_PHOTOS,
@@ -35,13 +63,30 @@ export function Gallery() {
         title={isPrivate ? 'Private space' : 'Photos'}
         subtitle={
           <>
-            {pluralize(photos.length, 'photo')} <span aria-hidden="true">·</span>{' '}
+            {pluralize(timeline.length, 'photo')} <span aria-hidden="true">·</span>{' '}
             <LockBadge label={isPrivate ? 'Opens only with your private password' : undefined} />
           </>
         }
         actions={hasPhotos && <SelectButton selection={selection} />}
       />
       <SelectionBar selection={selection} allIds={photos.map((photo) => photo.id)} />
+      {hasShared && status === 'ready' && (
+        <div className="owner-filter" role="group" aria-label="Show photos">
+          {FILTERS.map((each) => (
+            <button
+              key={each.id}
+              type="button"
+              className="owner-filter__option"
+              aria-pressed={filter === each.id}
+              onClick={() => {
+                setFilter(each.id);
+              }}
+            >
+              {each.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {status === 'failed' ? (
         <EmptyState icon="lock" title="Couldn’t open your photos">
@@ -51,6 +96,12 @@ export function Gallery() {
         <p className="gallery__status" role="status">
           Decrypting your photos…
         </p>
+      ) : photos.length === 0 && filter !== 'all' ? (
+        <EmptyState icon="users" title="Nothing here">
+          {filter === 'mine'
+            ? 'Everything here was shared with you. Photos you upload show up under Mine.'
+            : 'Nobody has shared photos with you yet.'}
+        </EmptyState>
       ) : photos.length === 0 ? (
         isPrivate ? (
           <EmptyState icon="eye-off" title="Your private space is empty">
@@ -65,7 +116,7 @@ export function Gallery() {
         )
       ) : (
         <>
-          {highlight && highlightCover && (
+          {filter === 'all' && highlight && highlightCover && (
             <Link to={paths.album(highlight.id)} className="memory">
               <PhotoImage
                 className="memory__image"

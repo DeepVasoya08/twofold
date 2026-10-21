@@ -204,7 +204,7 @@ describe('sharing an album', () => {
     await shareAlbum(album);
     expect((await owner.request('POST', '/space/members', member)).status).toBe(201);
     const listed = await (await owner.request('GET', '/space/members')).json<MemberList>();
-    expect(listed.members).toEqual([{ id: member.id, meta: member.meta, album }]);
+    expect(listed.members).toEqual([{ id: member.id, meta: member.meta, album, access: 'view' }]);
   });
 
   it('limits how many people one album is shared with, apart from the library', async () => {
@@ -258,7 +258,7 @@ describe('sharing an album', () => {
   it('lets library members keep a shared album’s items up to date, but not stop sharing', async () => {
     const album = await addAlbum();
     await shareAlbum(album);
-    const libraryMember = { id: newId(), token: random(16), meta: newMeta() };
+    const libraryMember = { id: newId(), token: random(16), meta: newMeta(), access: 'edit' };
     expect((await owner.request('POST', '/space/members', libraryMember)).status).toBe(201);
     useSpace(guest, libraryMember.token);
     const added = await upload(guest);

@@ -2,7 +2,7 @@ import { useDownloads } from '../app/downloads';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useSelection } from '../app/selection';
-import { albumCover, albumPhotos, useVault } from '../app/vault';
+import { albumCover, albumPhotos, isViewOnly, useVault } from '../app/vault';
 import { AlbumActions } from '../components/AlbumActions';
 import { PageHeader } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
@@ -56,9 +56,11 @@ export function Album({ albumId }: { albumId: string }) {
   );
   const sharing = album.sharedAlbum
     ? `Shared with you by ${album.library ?? 'someone'}`
-    : album.sharedWith
-      ? `Shared with ${album.sharedWith.join(', ')}`
-      : null;
+    : album.library !== undefined
+      ? `From ${album.library}’s library${album.viewOnly ? ' · view only' : ''}`
+      : album.sharedWith
+        ? `Shared with ${album.sharedWith.join(', ')}`
+        : null;
 
   return (
     <div className="page">
@@ -120,7 +122,7 @@ export function Album({ albumId }: { albumId: string }) {
 
       {photos.length === 0 ? (
         <EmptyState icon="image-plus" title="Nothing in here yet">
-          {album.sharedAlbum
+          {isViewOnly(album)
             ? 'Photos added to this album will show up here.'
             : 'Use Upload to add photos straight into this album.'}
         </EmptyState>

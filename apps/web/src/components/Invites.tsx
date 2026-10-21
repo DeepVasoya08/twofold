@@ -143,7 +143,7 @@ export function InviteRequests() {
   const { invites, joins } = usePendingInvites();
   const { pathname } = useRouter();
   const route = matchRoute(pathname).name;
-  const showJoins = route !== 'share' && route !== 'join';
+  const showJoins = route !== 'share' && route !== 'join' && route !== 'join-code';
   const asking = invites.filter((entry) => entry.progress.stage === 'confirm');
   const waiting = showJoins ? joins.filter((entry) => entry.progress.stage === 'check') : [];
   if (asking.length === 0 && waiting.length === 0) return null;

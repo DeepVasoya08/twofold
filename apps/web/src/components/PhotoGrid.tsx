@@ -55,7 +55,8 @@ const PhotoTile = memo(function PhotoTile({
   selecting,
   toggle,
 }: PhotoTileProps) {
-  const label = `Photo from ${formatShortDay(photo.takenAt)}${photo.location ? `, ${photo.location}` : ''}`;
+  const shared = photo.library === undefined ? '' : `, shared by ${photo.library}`;
+  const label = `Photo from ${formatShortDay(photo.takenAt)}${photo.location ? `, ${photo.location}` : ''}${shared}`;
   return (
     <li className={`photo-grid__item${selected ? ' is-selected' : ''}`}>
       <Link
@@ -76,6 +77,12 @@ const PhotoTile = memo(function PhotoTile({
           decoding="async"
           draggable={false}
         />
+        {photo.library !== undefined && (
+          <span className="photo-tile__shared" aria-hidden="true" data-testid="shared-badge">
+            <Icon name="users" size={12} />
+            <span className="photo-tile__shared-name">{photo.library}</span>
+          </span>
+        )}
         {photo.favorite && (
           <span className="photo-tile__fav" aria-hidden="true">
             <Icon name="heart" size={14} filled />

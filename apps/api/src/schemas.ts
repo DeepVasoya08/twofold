@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { KEY_SIZES, SHARE_SIZES, STORAGE_SIZES } from '@twofold/types';
+import { KEY_SIZES, MEMBER_ACCESS, SHARE_SIZES, STORAGE_SIZES } from '@twofold/types';
 
 /** Length of an unpadded base64url string encoding `bytes` bytes. */
 function base64UrlLength(bytes: number): number {
@@ -128,12 +128,17 @@ export const revealSchema = z.strictObject({ inviterKey: publicKey, intro: peerM
 
 export const grantSchema = z.strictObject({ grant: peerMessage });
 
+const memberAccess = z.enum(MEMBER_ACCESS);
+
 export const createMemberSchema = z.strictObject({
   id: recordId,
   token: spaceTokenSchema,
   meta: sealedRecord,
   album: recordId.optional(),
+  access: memberAccess.optional(),
 });
+
+export const updateMemberSchema = z.strictObject({ access: memberAccess });
 
 export const createJoinedSchema = z.strictObject({ id: recordId, meta: sealedRecord });
 

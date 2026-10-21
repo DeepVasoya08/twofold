@@ -1,6 +1,6 @@
 import type { InviteKeys, SpaceKeys } from '@twofold/crypto';
 import { INVITE_TTL_MS } from '@twofold/types';
-import type { InviterView, JoinerView } from '@twofold/types';
+import type { InviterView, JoinerView, MemberAccess } from '@twofold/types';
 
 import { ApiError, inviteApi, spaceApi } from '../lib/api';
 import type { InviteApi, SpaceApi } from '../lib/api';
@@ -87,6 +87,8 @@ export interface Member {
   name: string;
   /** The album they were given, or null for the whole library. */
   album: string | null;
+  /** What they may do. Someone given one album can only view. */
+  access: MemberAccess;
 }
 
 /** A library or album this space has joined. */
@@ -147,6 +149,8 @@ interface InviterDetails {
   link: string;
   /** The album shared, or null for the whole library. */
   album: string | null;
+  /** What they'll be able to do in the library. An album can only be viewed. */
+  access: MemberAccess;
   expiresAt: number;
   /**
    * The joiner's key, pinned here before this side's key is revealed. Every later step uses
@@ -164,18 +168,28 @@ interface JoinerDetails {
   commitment: string;
 }
 
+/** What an invite gives. Invites kept before there was a choice give the least. */
+function parseAccess(value: unknown): MemberAccess | null {
+  if (value === undefined || value === 'view') return 'view';
+  return value === 'edit' ? 'edit' : null;
+}
+
 function parseDetails(value: unknown): InviterDetails | JoinerDetails | null {
   if (!isRecord(value) || value.v !== 1) return null;
   if (value.role === 'inviter') {
     const { handle, code, link, album, expiresAt, joinerKey } = value;
+    const access = parseAccess(value.access);
     const ok =
       typeof handle === 'string' &&
       typeof code === 'string' &&
       typeof link === 'string' &&
       (album === null || typeof album === 'string') &&
+      access !== null &&
       typeof expiresAt === 'number' &&
       (joinerKey === null || typeof joinerKey === 'string');
-    return ok ? { v: 1, role: 'inviter', handle, code, link, album, expiresAt, joinerKey } : null;
+    return ok
+      ? { v: 1, role: 'inviter', handle, code, link, album, access, expiresAt, joinerKey }
+      : null;
   }
   if (value.role === 'joiner') {
     const { ref, commitment } = value;
@@ -229,6 +243,8 @@ export interface Invite {
   keys: InviteKeys;
   /** The album shared, or null for the whole library. */
   album: string | null;
+  /** What they'll be able to do in the library, once they're in. */
+  access: MemberAccess;
   expiresAt: number;
   /** The joiner's key, once pinned (just before this side's key is revealed). */
   joinerKey: string | null;
@@ -244,12 +260,16 @@ export type InviteProgress =
   /** The server doesn't have it anymore: it expired, was cancelled, or was finished. */
   | { stage: 'gone' };
 
-/** Starts an invite for the library (`album` null) or one album, and keeps it in `space`. */
+/**
+ * Starts an invite for the library (`album` null) or one album, and keeps it in `space`. A
+ * library invite starts out view-only; `setInviteAccess` changes that until it's confirmed.
+ */
 export async function startInvite(
   space: SpaceKeys,
   album: string | null,
   apis: SharingApis = defaultApis,
 ): Promise<Invite> {
+  const access: MemberAccess = 'view';
   const crypto = await loadCrypto();
   const keys = await crypto.newInviteKeys();
   const commitment = await crypto.inviteCommitment(keys.publicKey);
@@ -273,12 +293,13 @@ export async function startInvite(
       code,
       link,
       album,
+      access,
       expiresAt,
       joinerKey: null,
     };
     try {
       const id = await keepPending(space, keys, details, apis);
-      return { id, code, link, handle, keys, album, expiresAt, joinerKey: null };
+      return { id, code, link, handle, keys, album, access, expiresAt, joinerKey: null };
     } catch (error) {
       // Without the record, nobody could ever finish it.
       await apis.invites.cancel(handle).catch(() => undefined);
@@ -297,15 +318,10 @@ function tookAlready(error: unknown): undefined {
   throw error;
 }
 
-/** Records the joiner's key in the invite's sealed record, before anything is revealed. */
-async function pinJoiner(
-  invite: Invite,
-  joinerKey: string,
-  space: SpaceKeys,
-  apis: SharingApis,
-): Promise<void> {
+/** Replaces the invite's sealed record with what `invite` now says. */
+async function keepInvite(invite: Invite, space: SpaceKeys, apis: SharingApis): Promise<void> {
   const crypto = await loadCrypto();
-  const { id, handle, code, link, album, expiresAt, keys } = invite;
+  const { id, handle, code, link, album, access, expiresAt, joinerKey, keys } = invite;
   const details: InviterDetails = {
     v: 1,
     role: 'inviter',
@@ -313,12 +329,39 @@ async function pinJoiner(
     code,
     link,
     album,
+    access,
     expiresAt,
     joinerKey,
   };
   const meta = await crypto.sealPendingInvite(space, id, keys, encode(details));
   await apis.space((await crypto.ownerAccess(space)).token).updatePendingInvite(id, meta);
+}
+
+/** Records the joiner's key in the invite's sealed record, before anything is revealed. */
+async function pinJoiner(
+  invite: Invite,
+  joinerKey: string,
+  space: SpaceKeys,
+  apis: SharingApis,
+): Promise<void> {
+  await keepInvite({ ...invite, joinerKey }, space, apis);
   invite.joinerKey = joinerKey;
+}
+
+/**
+ * Changes what a library invite will let them do, any time before it's confirmed (and on
+ * every device, since it's kept in the invite's record). An album can only ever be viewed.
+ */
+export async function setInviteAccess(
+  invite: Invite,
+  access: MemberAccess,
+  space: SpaceKeys,
+  apis: SharingApis = defaultApis,
+): Promise<void> {
+  if (invite.album !== null)
+    throw new FormError('Someone you share an album with can only view it.');
+  await keepInvite({ ...invite, access }, space, apis);
+  invite.access = access;
 }
 
 /**
@@ -407,7 +450,7 @@ export async function confirmInvite(
       memberId,
       encode({ v: 1, name: joiner.name }),
     ),
-    ...(album ? { album: album.albumId } : {}),
+    ...(album ? { album: album.albumId } : { access: invite.access }),
   });
   const grant: Grant = {
     v: 1,
@@ -429,7 +472,12 @@ export async function confirmInvite(
   }
   await crypto.dropInviteKeys(invite.keys);
   await forgetPending(space, invite.id, apis);
-  return { id: memberId, name: joiner.name, album: album?.albumId ?? null };
+  return {
+    id: memberId,
+    name: joiner.name,
+    album: album?.albumId ?? null,
+    access: album ? 'view' : invite.access,
+  };
 }
 
 /** Cancels an invite: the server forgets it, and so does the space. */
@@ -624,7 +672,7 @@ export async function listPending(
     const details = opened && parseDetails(decode(opened.details));
     if (!opened || !details) continue;
     if (details.role === 'inviter') {
-      const { handle, code, link, album, expiresAt, joinerKey } = details;
+      const { handle, code, link, album, access, expiresAt, joinerKey } = details;
       invites.push({
         id: stored.id,
         keys: opened.keys,
@@ -632,6 +680,7 @@ export async function listPending(
         code,
         link,
         album,
+        access,
         expiresAt,
         joinerKey,
       });
@@ -664,9 +713,25 @@ export async function listMembers(
     const value = opened ? decode(opened) : null;
     const name = isRecord(value) && value.v === 1 ? parseName(value.name) : null;
     // A member whose record doesn't open is still a member; it can still be removed.
-    members.push({ id: stored.id, name: name ?? 'Someone', album: stored.album });
+    members.push({
+      id: stored.id,
+      name: name ?? 'Someone',
+      album: stored.album,
+      access: stored.album === null ? stored.access : 'view',
+    });
   }
   return members;
+}
+
+/** Changes what someone the whole library is shared with may do. It applies at once. */
+export async function updateMemberAccess(
+  space: SpaceKeys,
+  memberId: string,
+  access: MemberAccess,
+  makeApi: (token: string) => SpaceApi = spaceApi,
+): Promise<void> {
+  const crypto = await loadCrypto();
+  await makeApi((await crypto.ownerAccess(space)).token).updateMember(memberId, access);
 }
 
 /** Stops sharing with one member. Their token stops working at once. */
@@ -734,6 +799,23 @@ export async function leaveAll(
   }
 }
 
+/**
+ * What this space may do in a library it joined, as its owner last set it. If that can't be
+ * found out, it's treated as view-only: the server decides either way.
+ */
+export async function joinedAccess(
+  library: Pick<JoinedLibrary, 'token' | 'album'>,
+  makeApi: (token: string) => SpaceApi = spaceApi,
+): Promise<MemberAccess> {
+  if (library.album !== undefined) return 'view';
+  return makeApi(library.token)
+    .membership()
+    .then(
+      ({ access }) => access,
+      () => 'view' as const,
+    );
+}
+
 /** The stores for every library and album this space joined. */
 async function sharedSources(
   space: SpaceKeys,
@@ -753,6 +835,8 @@ async function sharedSources(
         makeApi,
         { memberId: library.memberId, myName, ownerName: library.name },
       ),
+      // Asked for alongside its photos, not before them.
+      editable: joinedAccess(library, makeApi).then((access) => access === 'edit'),
     };
     if (library.album) source.album = true;
     return source;

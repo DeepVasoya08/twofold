@@ -174,3 +174,31 @@
     font-size: 13px;
   }
 }
+
+.album-card__badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 45%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  backdrop-filter: blur(6px);
+}
+
+.album-tabs__code {
+  margin: 0 0 20px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.album-tabs__code a {
+  color: var(--accent-text);
+  font-weight: 600;
+}
