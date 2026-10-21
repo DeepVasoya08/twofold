@@ -25,22 +25,26 @@ test('sharing a library view-only with an invite code, changing it, then stoppin
   const code = alice.getByTestId('invite-code');
   await expect(code).toHaveText(/^TWO-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
   await expect(alice.getByRole('radio', { name: /View only/ })).toBeChecked();
+  const typed = (await code.textContent()) ?? '';
+  // Alice moves on; the invite stays open.
+  await goTo(alice, 'Photos');
 
   // Bob enters it from Settings, on a screen of its own.
   await goTo(bob, 'Settings');
   await bob.getByRole('button', { name: 'Enter code' }).click();
   await expect(bob.getByRole('heading', { level: 1, name: 'Enter an invite code' })).toBeVisible();
-  await bob.getByLabel('Invite code').fill((await code.textContent()) ?? '');
+  await bob.getByLabel('Invite code').fill(typed);
   await bob.getByRole('button', { name: 'Join' }).click();
 
-  // Both see the same four words; Alice confirms.
-  await expect(alice.getByText('Bob wants to join')).toBeVisible();
+  // Both see the same four words, without reloading anything, though Alice left the Share
+  // screen; Alice confirms.
+  await expect(alice.getByText('Bob wants to join')).toBeVisible({ timeout: 20_000 });
   await expect(bob.getByRole('list', { name: 'Safety phrase' })).toBeVisible();
   const words = await phrase(alice);
   expect(words).toHaveLength(4);
   expect(await phrase(bob)).toEqual(words);
   await alice.getByRole('button', { name: 'They match, share' }).click();
-  await expect(alice.getByText('Your library is shared with Bob.')).toBeVisible();
+  await expect(alice.getByText('Bob has access now')).toBeVisible();
 
   // Bob's library now shows Alice's photos, decrypted with the key she sent, marked as hers.
   await expect(bob.getByText('You joined Alice’s library')).toBeVisible();
@@ -75,7 +79,8 @@ test('sharing a library view-only with an invite code, changing it, then stoppin
   // Alice sees Bob in Settings, lets him add and edit, and he can favorite her photos.
   await goTo(alice, 'Settings');
   await expect(alice.getByText('Shared with 1 person')).toBeVisible();
-  await expect(alice.getByText(/View only: they can see and download/)).toBeVisible();
+  await expect(alice.getByText('Bob (View only)')).toBeVisible();
+  await expect(alice.getByText(/Permission: View only/)).toBeVisible();
   await alice.getByLabel('What Bob can do').selectOption('edit');
   await expect(alice.getByText('Bob can add and edit now')).toBeVisible();
   await lock(bob);
@@ -96,12 +101,16 @@ test('sharing a library view-only with an invite code, changing it, then stoppin
     .click();
   await expect(alice.getByText('Not shared')).toBeVisible();
 
-  // Bob's access ends at once: after unlocking again, only his own photo is left.
+  // Bob's access ends at once: after unlocking again, only his own photo is left, and
+  // Alice's library leaves his Shared with you.
   await lock(bob);
   await unlockWith(bob, MAIN_PASSWORD);
   await expect(bob.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
   await expect(decryptedTiles(bob)).toHaveCount(1);
   await expect(bob.getByTestId('shared-badge')).toHaveCount(0);
+  await goTo(bob, 'Settings');
+  await expect(bob.getByText('Enter an invite code')).toBeVisible();
+  await expect(bob.getByText('Alice’s library')).toHaveCount(0);
 });
 
 test('sharing a library with add and edit, joined by pasting the invite link', async ({

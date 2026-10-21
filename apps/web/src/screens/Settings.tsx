@@ -11,9 +11,8 @@ import { errorInput, errorMessage } from '../app/account-ops';
 import { useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import {
-  joinedAccess,
   leaveLibrary,
-  listJoined,
+  listStillJoined,
   listMembers,
   removeMember,
   updateMemberAccess,
@@ -32,6 +31,7 @@ import type { IconName } from '../components/Icon';
 import { ProfileDialog } from '../components/ProfileDialog';
 import { StorageMeter } from '../components/StorageMeter';
 import { api } from '../lib/api';
+import { onVisibleAgain } from '../lib/when-visible';
 import { AUTO_LOCK_CHOICES, parseAutoLock } from '../lib/auto-lock';
 import { formatLastActive, formatShortDay, pluralize } from '../lib/format';
 import { MIN_PASSWORD_LENGTH } from '../lib/password';
@@ -98,9 +98,16 @@ interface SharingLists {
 
 /** What someone can do in a library, for a settings row. */
 const ACCESS_DESCRIPTION: Record<MemberAccess, string> = {
-  view: 'View only: they can see and download photos.',
-  edit: 'Add and edit: they can also add, change and delete photos.',
+  view: 'Permission: View only. They can see and download photos.',
+  edit: 'Permission: Add and edit. They can also add, change and delete photos.',
 };
+
+const ACCESS_NAME: Record<MemberAccess, string> = { view: 'View only', edit: 'Add and edit' };
+
+/** Everyone the library is shared with and their permission, as one line. */
+export function sharedWithLine(members: readonly Pick<Member, 'name' | 'access'>[]): string {
+  return members.map((member) => `${member.name} (${ACCESS_NAME[member.access]})`).join(', ');
+}
 
 function parseAccess(value: string): MemberAccess {
   return value === 'edit' ? 'edit' : 'view';
@@ -119,17 +126,15 @@ function useSharingLists(keys: SpaceKeys | null) {
   useEffect(() => {
     if (!keys) return;
     let cancelled = false;
-    const withAccess = (libraries: JoinedLibrary[]) =>
-      Promise.all(
-        libraries
-          // Albums shared one at a time are managed from the album, not here.
-          .filter((library) => library.album === undefined)
-          .map(async (library) => ({ ...library, access: await joinedAccess(library) })),
-      );
-    Promise.all([listMembers(keys), listJoined(keys).then(withAccess)]).then(
+    // Libraries whose owner stopped sharing them drop out (and are forgotten) here.
+    Promise.all([listMembers(keys), listStillJoined(keys)]).then(
       ([members, joined]) => {
         if (!cancelled) {
-          setLists({ members: members.filter((member) => member.album === null), joined });
+          setLists({
+            members: members.filter((member) => member.album === null),
+            // Albums shared one at a time are managed from the album, not here.
+            joined: joined.filter((library) => library.album === undefined),
+          });
         }
       },
       () => undefined,
@@ -141,6 +146,8 @@ function useSharingLists(keys: SpaceKeys | null) {
   const reload = useCallback(() => {
     setVersion((current) => current + 1);
   }, []);
+  // The other side may have stopped sharing or left meanwhile.
+  useEffect(() => onVisibleAgain(reload), [reload]);
   return { lists, reload };
 }
 
@@ -503,7 +510,7 @@ export function Settings() {
             description={
               sharing.lists.members.length === 0
                 ? `Only you can see this ${where}.`
-                : `They see this ${where} and nothing else. You decide what each person can do.`
+                : sharedWithLine(sharing.lists.members)
             }
           />
         )}
