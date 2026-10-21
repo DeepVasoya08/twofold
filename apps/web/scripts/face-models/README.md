@@ -4,9 +4,9 @@ The People feature runs two open models from the [OpenCV Zoo](https://github.com
 in the browser. Both are committed under `src/lib/people/models/`, with their licences, and the
 app checks each file's SHA-256 before using it (`src/lib/people/models.ts`).
 
-| File | Source | Licence | SHA-256 |
-|---|---|---|---|
-| `yunet-2023mar.onnx` | `models/face_detection_yunet/face_detection_yunet_2023mar.onnx`, unchanged | MIT | `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4` |
+| File                    | Source                                                                                  | Licence    | SHA-256                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------ |
+| `yunet-2023mar.onnx`    | `models/face_detection_yunet/face_detection_yunet_2023mar.onnx`, unchanged              | MIT        | `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4` |
 | `sface-2021dec-w8.onnx` | `models/face_recognition_sface/face_recognition_sface_2021dec.onnx`, converted as below | Apache 2.0 | `3cf74f70840d6016cefd988b06d6884bbef89583ba274121fec15988d1745f48` |
 
 ## Why SFace is converted
