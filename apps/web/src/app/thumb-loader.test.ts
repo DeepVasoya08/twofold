@@ -4,7 +4,9 @@ import { THUMB_BATCH_MAX } from '@twofold/types';
 
 import {
   PartialThumbs,
+  THUMB_FLUSH_MS,
   THUMB_GATHER_MS,
+  THUMB_ON_SCREEN_BATCH,
   THUMB_RETRIES,
   THUMB_RETRY_MS,
   createThumbLoader,
@@ -12,19 +14,26 @@ import {
 
 const urlsFor = (ids: readonly string[]) => new Map(ids.map((id) => [id, `blob:${id}`]));
 
-function setup(fetch: (ids: readonly string[]) => Promise<ReadonlyMap<string, string>>) {
+function setup(
+  fetch: (
+    ids: readonly string[],
+    onThumb: (id: string, url: string) => void,
+  ) => Promise<ReadonlyMap<string, string>>,
+) {
   const shown = new Map<string, string>();
   const calls: string[][] = [];
+  let updates = 0;
   const loader = createThumbLoader({
-    fetch: (ids) => {
+    fetch: (ids, onThumb) => {
       calls.push([...ids]);
-      return fetch(ids);
+      return fetch(ids, onThumb);
     },
     onReady: (urls) => {
+      updates += 1;
       for (const [id, url] of urls) shown.set(id, url);
     },
   });
-  return { loader, shown, calls };
+  return { loader, shown, calls, updates: () => updates };
 }
 
 beforeEach(() => {
@@ -47,6 +56,40 @@ describe('createThumbLoader', () => {
     loader.request(ids);
     await vi.runAllTimersAsync();
     expect(calls).toHaveLength(2);
+  });
+
+  it('downloads photos on the screen first, in a smaller batch', async () => {
+    const { loader, calls } = setup((ids) => Promise.resolve(urlsFor(ids)));
+    const near = Array.from({ length: 30 }, (_, index) => `near${String(index)}`);
+    const visible = Array.from({ length: 15 }, (_, index) => `seen${String(index)}`);
+    loader.request(near);
+    loader.request(visible, true);
+    await vi.runAllTimersAsync();
+    expect(calls[0]).toEqual(visible.slice(0, THUMB_ON_SCREEN_BATCH));
+    expect(calls[1]).toEqual(visible.slice(THUMB_ON_SCREEN_BATCH));
+    expect(calls[2]).toEqual(near);
+  });
+
+  it('shows previews as they arrive, before the rest of their batch', async () => {
+    let finish: () => void = () => undefined;
+    const { loader, shown, updates } = setup(
+      (ids, onThumb) =>
+        new Promise((resolve) => {
+          onThumb('a', 'blob:a');
+          finish = () => {
+            onThumb('b', 'blob:b');
+            resolve(urlsFor(ids));
+          };
+        }),
+    );
+    loader.request(['a', 'b']);
+    await vi.advanceTimersByTimeAsync(THUMB_GATHER_MS + THUMB_FLUSH_MS);
+    expect(Object.fromEntries(shown)).toEqual({ a: 'blob:a' });
+    finish();
+    await vi.runAllTimersAsync();
+    expect(Object.fromEntries(shown)).toEqual({ a: 'blob:a', b: 'blob:b' });
+    // What arrived early isn't handed over a second time with the whole batch.
+    expect(updates()).toBe(2);
   });
 
   it('tries a failed batch again, so its tiles don’t stay empty', async () => {

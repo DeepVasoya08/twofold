@@ -145,25 +145,95 @@ export const STORAGE_SIZES = {
 export const THUMB_BATCH_MAX = 48;
 
 /**
- * Splits a thumbnail batch response into one entry per id asked for, in order: the encrypted
- * thumbnail, or null where the server had none. Returns null if the response is malformed.
+ * Reads a thumbnail batch response as it arrives, so each thumbnail can be shown without
+ * waiting for the rest. `push` takes the next bytes and returns the thumbnails they
+ * complete, in order (null where the server had none); it returns null once the response
+ * turns out to be malformed. `finished` says whether exactly `count` thumbnails came, with
+ * nothing after them.
+ */
+export class ThumbBatchParser {
+  /** Bytes received but not yet read, kept as they came so a large thumbnail is copied once. */
+  private chunks: Uint8Array[] = [];
+  private buffered = 0;
+  /** How many bytes the next step needs: a length, or the thumbnail it announced. */
+  private needed = 4;
+  private length: number | null = null;
+  private read = 0;
+  private broken = false;
+
+  constructor(private readonly count: number) {}
+
+  push(chunk: Uint8Array): (Uint8Array<ArrayBuffer> | null)[] | null {
+    if (this.broken) return null;
+    if (chunk.length > 0) {
+      this.chunks.push(chunk);
+      this.buffered += chunk.length;
+    }
+    const parts: (Uint8Array<ArrayBuffer> | null)[] = [];
+    while (this.buffered >= this.needed && this.buffered > 0) {
+      if (this.read === this.count) return this.fail();
+      const bytes = this.take(this.needed);
+      if (this.length === null) {
+        const length = new DataView(bytes.buffer).getUint32(0);
+        if (length > STORAGE_SIZES.maxThumb) return this.fail();
+        if (length === 0) {
+          parts.push(null);
+          this.read += 1;
+        } else {
+          this.length = length;
+          this.needed = length;
+        }
+      } else {
+        parts.push(bytes);
+        this.read += 1;
+        this.length = null;
+        this.needed = 4;
+      }
+    }
+    return parts;
+  }
+
+  /** True once exactly `count` thumbnails came, with nothing after them. */
+  get finished(): boolean {
+    return !this.broken && this.read === this.count && this.buffered === 0;
+  }
+
+  private fail(): null {
+    this.broken = true;
+    this.chunks = [];
+    return null;
+  }
+
+  /** Removes the first `size` buffered bytes and returns them as one array. */
+  private take(size: number): Uint8Array<ArrayBuffer> {
+    const out = new Uint8Array(size);
+    let filled = 0;
+    while (filled < size) {
+      const first = this.chunks[0];
+      if (!first) break;
+      const used = Math.min(first.length, size - filled);
+      out.set(first.subarray(0, used), filled);
+      filled += used;
+      if (used === first.length) this.chunks.shift();
+      else this.chunks[0] = first.subarray(used);
+    }
+    this.buffered -= size;
+    return out;
+  }
+}
+
+/**
+ * Splits a whole thumbnail batch response into one entry per id asked for, in order: the
+ * encrypted thumbnail, or null where the server had none. Returns null if the response is
+ * malformed.
  */
 export function readThumbBatch(
   bytes: Uint8Array<ArrayBuffer>,
   count: number,
 ): (Uint8Array<ArrayBuffer> | null)[] | null {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const parts: (Uint8Array<ArrayBuffer> | null)[] = [];
-  let offset = 0;
-  while (parts.length < count) {
-    if (offset + 4 > bytes.length) return null;
-    const length = view.getUint32(offset);
-    offset += 4;
-    if (offset + length > bytes.length) return null;
-    parts.push(length === 0 ? null : bytes.slice(offset, offset + length));
-    offset += length;
-  }
-  return offset === bytes.length ? parts : null;
+  const parser = new ThumbBatchParser(count);
+  const parts = parser.push(bytes);
+  return parts && parser.finished ? parts : null;
 }
 
 /** Which encrypted file of a photo: a small preview, or the original. */

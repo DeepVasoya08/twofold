@@ -113,7 +113,9 @@ test('moved photos stay in their new space, and moving back asks for the main pa
   await expect(decryptedTiles(page)).toHaveCount(2);
 });
 
-test('previews download in batches, and only for photos near the screen', async ({ page }) => {
+test('previews download in batches, on-screen first, and only for photos near the screen', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 500 });
   await signUp(page);
   await uploadPhotos(page, 60);
@@ -131,6 +133,9 @@ test('previews download in batches, and only for photos near the screen', async 
   await unlockWith(page, MAIN_PASSWORD);
   await expect(page.locator('.photo-tile')).toHaveCount(60);
   await expect(decryptedTiles(page).first()).toBeVisible();
+  // What's on the screen comes first, in a small batch of its own.
+  const firstBatch = new URL(batches[0] ?? 'http://x/').searchParams.get('ids') ?? '';
+  expect(firstBatch.split(',').length).toBeLessThanOrEqual(12);
   // Once the first screen has loaded, photos far down the timeline are still waiting for
   // someone to scroll to them.
   await page.waitForLoadState('networkidle');

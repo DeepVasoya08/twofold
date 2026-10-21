@@ -269,8 +269,11 @@ interface VaultValue {
   movePhotos: (photoIds: readonly string[], otherKeys?: SpaceKeys) => Promise<Settled<string>>;
   /** Starts decrypting a photo's original; `fullSrc` is set when it's ready. */
   loadFull: (photoId: string) => void;
-  /** Asks for photos' previews, for when they come near the screen. Asking twice is free. */
-  requestThumbs: (photoIds: readonly string[]) => void;
+  /**
+   * Asks for photos' previews, for when they come near the screen. Asking twice is free.
+   * Photos `onScreen` already are downloaded first.
+   */
+  requestThumbs: (photoIds: readonly string[], onScreen?: boolean) => void;
 }
 
 const VaultContext = createContext<VaultValue | null>(null);
@@ -300,9 +303,9 @@ export function VaultProvider({
   const [state, dispatch] = useReducer(vaultReducer, initialState ?? { photos: [], albums: [] });
   const [status, setStatus] = useState<VaultStatus>(initialState ? 'ready' : 'loading');
 
-  const thumbLoader = useRef<((photoIds: readonly string[]) => void) | null>(null);
-  const requestThumbs = useCallback((photoIds: readonly string[]) => {
-    thumbLoader.current?.(photoIds);
+  const thumbLoader = useRef<VaultValue['requestThumbs'] | null>(null);
+  const requestThumbs = useCallback((photoIds: readonly string[], onScreen?: boolean) => {
+    thumbLoader.current?.(photoIds, onScreen);
   }, []);
 
   useEffect(() => {
@@ -311,7 +314,7 @@ export function VaultProvider({
     // A function, so checks after an await see the cleanup's change.
     const stopped = () => cancelled;
     const loader = createThumbLoader({
-      fetch: (photoIds) => store.thumbs(photoIds),
+      fetch: (photoIds, onThumb) => store.thumbs(photoIds, onThumb),
       onReady: (urls) => {
         dispatch({ type: 'set-thumbs', urls });
       },
