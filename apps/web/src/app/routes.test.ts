@@ -7,6 +7,8 @@ import { lockedAccount, mainSession, signedOut } from '../test/sessions';
 describe('matchRoute', () => {
   it.each([
     ['/', 'welcome'],
+    ['/privacy', 'privacy'],
+    ['/terms', 'terms'],
     ['/signup', 'signup'],
     ['/signup/recovery-key', 'recovery-key'],
     ['/login', 'login'],

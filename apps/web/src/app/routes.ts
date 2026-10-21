@@ -1,6 +1,8 @@
 /** Every screen the app can show, parsed from the URL path. */
 export type Route =
   | { name: 'welcome' }
+  | { name: 'privacy' }
+  | { name: 'terms' }
   | { name: 'signup' }
   | { name: 'recovery-key' }
   | { name: 'login' }
@@ -21,6 +23,8 @@ export type Route =
 
 export const paths = {
   welcome: '/',
+  privacy: '/privacy',
+  terms: '/terms',
   signup: '/signup',
   recoveryKey: '/signup/recovery-key',
   login: '/login',
@@ -72,6 +76,8 @@ export function parseShareAlbum(search: string): string | null {
 
 const staticRoutes: Record<string, Route> = {
   '/': { name: 'welcome' },
+  '/privacy': { name: 'privacy' },
+  '/terms': { name: 'terms' },
   '/signup': { name: 'signup' },
   '/signup/recovery-key': { name: 'recovery-key' },
   '/login': { name: 'login' },

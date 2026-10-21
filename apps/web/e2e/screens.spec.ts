@@ -40,7 +40,7 @@ test('every screen renders under the production CSP without errors', async ({ pa
 
 test('sign up checks the form before making keys', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('link', { name: 'Get started' }).click();
+  await page.getByRole('link', { name: 'Get started' }).first().click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByText('Tell us what to call you.')).toBeVisible();
 });

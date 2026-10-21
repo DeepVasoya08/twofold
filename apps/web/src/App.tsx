@@ -15,16 +15,21 @@ import { JoinInvite } from './screens/JoinInvite';
 import { LogIn } from './screens/LogIn';
 import { NotFound } from './screens/NotFound';
 import { PhotoViewer } from './screens/PhotoViewer';
+import { Privacy } from './screens/Privacy';
 import { Recover } from './screens/Recover';
 import { RecoveryKey } from './screens/RecoveryKey';
 import { Settings } from './screens/Settings';
 import { Share } from './screens/Share';
 import { SignUp } from './screens/SignUp';
+import { Terms } from './screens/Terms';
 import { Unlock } from './screens/Unlock';
 import { Welcome } from './screens/Welcome';
+import { isPublicRoute, publicPage } from './site/pages';
 
 const titles: Record<Route['name'], string> = {
-  welcome: 'Twofold',
+  welcome: publicPage('welcome').title,
+  privacy: publicPage('privacy').title,
+  terms: publicPage('terms').title,
   signup: 'Create your vault · Twofold',
   'recovery-key': 'Recovery key · Twofold',
   login: 'Log in · Twofold',
@@ -46,6 +51,10 @@ function Screen({ route }: { route: Route }) {
   switch (route.name) {
     case 'welcome':
       return <Welcome />;
+    case 'privacy':
+      return <Privacy />;
+    case 'terms':
+      return <Terms />;
     case 'signup':
       return <SignUp />;
     case 'recovery-key':
@@ -135,8 +144,11 @@ export function App() {
     document.title = titles[route.name];
   }, [route.name]);
 
-  // Until the API says who is signed in, show nothing rather than the wrong screen.
-  if (state.status === 'loading') return null;
+  // Until the API says who is signed in, show nothing rather than the wrong screen. Public
+  // pages show straight away, as they were prerendered; the landing page still sends an
+  // unlocked account on to its photos once that's known.
+  if (state.status === 'loading')
+    return isPublicRoute(route.name) ? <Screen route={route} /> : null;
   const redirect = redirectFor(route, state, {
     space,
     signingUp: pendingSignUp !== null,

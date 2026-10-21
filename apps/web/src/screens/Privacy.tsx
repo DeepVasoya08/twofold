@@ -1,0 +1,188 @@
+import { Link } from '../app/router';
+import { paths } from '../app/routes';
+import { Fill, LegalPage } from '../components/LegalPage';
+import { serviceFacts } from '../legal/details';
+
+export function Privacy() {
+  return (
+    <LegalPage
+      title="Privacy Policy"
+      summary={
+        <>
+          <strong>The short version.</strong>
+          <ul>
+            <li>
+              Your photos, previews, albums and photo details are encrypted on your device. We store
+              them, but we can’t read them.
+            </li>
+            <li>
+              To run your account we keep your email address, your name, how much storage you use,
+              and a short list of your signed-in devices.
+            </li>
+            <li>No ads, no trackers, no selling data, and no scanning of your photos.</li>
+            <li>You can delete your account from Settings at any time.</li>
+          </ul>
+        </>
+      }
+    >
+      <h2>Who we are</h2>
+      <p>
+        Twofold is run by <Fill field="operator" label="legal name of the operator" /> (“we”, “us”).
+        This policy explains what information Twofold handles when you use the website and app, and
+        what we do with it. If anything here is unclear, write to{' '}
+        <Fill field="contactEmail" label="contact email" />.
+      </p>
+
+      <h2>What we can’t see</h2>
+      <p>
+        Twofold is end-to-end encrypted. Your password is turned into encryption keys on your
+        device, and your password itself is never sent to us. The following are encrypted on your
+        device before they are uploaded, and we have no way to decrypt them:
+      </p>
+      <ul>
+        <li>your photos and their previews;</li>
+        <li>
+          photo details such as when and where a photo was taken, favorites, and which albums a
+          photo is in;
+        </li>
+        <li>album names, your profile photo, and the records of who you share with;</li>
+        <li>whether you have a private space, and anything in it.</li>
+      </ul>
+      <p>
+        Because we can’t read this content, we can’t search it, scan it, recover it for you, or hand
+        it over in readable form to anyone.
+      </p>
+
+      <h2>What we collect and keep</h2>
+      <h3>Your account</h3>
+      <ul>
+        <li>
+          <strong>Email address and name</strong>, which you give us when you sign up. Your name is
+          shown to people you share with.
+        </li>
+        <li>
+          <strong>Your encrypted keyring</strong>: values derived from your passwords and recovery
+          key that let your devices check a password and unlock your keys. They don’t reveal your
+          passwords or keys.
+        </li>
+        <li>
+          <strong>Storage used</strong>: the total size of the encrypted files you’ve stored, to
+          enforce the {serviceFacts.storageLimit} limit.
+        </li>
+      </ul>
+      <h3>Your devices</h3>
+      <p>
+        For each signed-in device we keep a random session id, a general device description made
+        from your browser’s user agent (like “Chrome on Android”, with no version or model), and
+        when it was last used, rounded to the hour. You can see this list in Settings and sign any
+        device out. Sessions expire after 30 days.
+      </p>
+      <h3>Your encrypted files</h3>
+      <p>
+        We store the encrypted photos and previews you upload, under random names, along with their
+        sizes and when they were uploaded.
+      </p>
+      <h3>Security</h3>
+      <p>
+        To stop people guessing passwords, we count failed sign-in attempts for each email address
+        together with a one-way hash of the internet (IP) address they came from. These counts are
+        deleted after 15 minutes.
+      </p>
+      <h3>Invites</h3>
+      <p>
+        When you invite someone, we hold the encrypted invite until it’s accepted or cancelled, or
+        for up to {String(serviceFacts.inviteExpiryDays)} days.
+      </p>
+
+      <h2>What we don’t do</h2>
+      <ul>
+        <li>We don’t show ads, and we don’t sell or rent your information.</li>
+        <li>We don’t use analytics or tracking services, or third-party cookies.</li>
+        <li>We don’t scan, analyze or train anything on your photos.</li>
+        <li>
+          We don’t keep per-request access logs of your use of the app. Our hosting provider still
+          processes your IP address to deliver the service, as described below.
+        </li>
+      </ul>
+
+      <h2>Cookies and storage in your browser</h2>
+      <p>
+        Twofold uses one essential cookie to keep you signed in. It is only sent to Twofold and
+        can’t be read by scripts. Your browser also remembers a few preferences, such as when
+        Twofold should lock itself. Decrypted photos and keys are kept in memory only and are never
+        saved in your browser’s storage.
+      </p>
+
+      <h2>How we use information</h2>
+      <p>We use the information above only to:</p>
+      <ul>
+        <li>create and secure your account, and keep you signed in;</li>
+        <li>store and deliver your encrypted files, and enforce storage limits;</li>
+        <li>let you share with people you invite;</li>
+        <li>prevent abuse, such as password guessing;</li>
+        <li>contact you about your account or important changes to the service.</li>
+      </ul>
+      <p>
+        Where the law requires a legal basis, we rely on performing our contract with you (running
+        the service you signed up for) and our legitimate interest in keeping it secure.
+      </p>
+
+      <h2>Who processes your information</h2>
+      <p>
+        Twofold runs on <strong>Cloudflare</strong>, which hosts the app, its database and the
+        encrypted file storage. The database and encrypted files are currently stored in{' '}
+        {serviceFacts.dataRegion}. Cloudflare processes your IP address and request details to
+        deliver and protect the service, under its own privacy policy. We don’t use any other
+        service providers to handle your data.
+      </p>
+      <p>
+        We will only disclose information if the law requires it. What we can disclose is limited to
+        what this policy says we keep; we can’t provide your photos in readable form.
+      </p>
+
+      <h2>Sharing with other people</h2>
+      <p>
+        When you share your library or an album, the people you invite get the keys they need to see
+        those photos. They can download copies, and if you stop sharing, we can’t remove copies they
+        already saved. Only share with people you trust.
+      </p>
+
+      <h2>How long we keep information, and deleting it</h2>
+      <p>
+        We keep your account information for as long as you have an account. You can delete your
+        account in Settings. That deletes your account, its sessions, and the photos in every space
+        your device has the keys for when you delete it. Encrypted data we can’t link to you any
+        more (for example, a private space whose password wasn’t entered) can’t be decrypted by
+        anyone, and may stay in storage. Deleted data can also remain in our provider’s backups for
+        up to 30 days.
+      </p>
+
+      <h2>Your rights</h2>
+      <p>
+        Depending on where you live, you may have the right to access, correct, export or delete
+        your personal information, and to object to or restrict how we use it. You can change your
+        name and delete your account yourself in Settings, and download your photos at any time. For
+        anything else, write to <Fill field="contactEmail" label="contact email" />. You can also
+        complain to your local data protection authority.
+      </p>
+
+      <h2>Children</h2>
+      <p>
+        Twofold isn’t meant for children under <Fill field="minimumAge" label="minimum age" />, and
+        we don’t knowingly create accounts for them.
+      </p>
+
+      <h2>Changes to this policy</h2>
+      <p>
+        If we change this policy, we’ll update the date at the top, and tell you in the app or by
+        email before significant changes take effect.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Questions or requests: <Fill field="contactEmail" label="contact email" />. See also our{' '}
+        <Link to={paths.terms}>Terms of Use</Link>.
+      </p>
+    </LegalPage>
+  );
+}

@@ -68,11 +68,12 @@ or in the output of `pnpm exec wrangler whoami`.
 
 In the repository, open **Settings → Secrets and variables → Actions**:
 
-| Kind     | Tab           | Name                    | Value                            |
-| -------- | ------------- | ----------------------- | -------------------------------- |
-| Secret   | **Secrets**   | `CLOUDFLARE_API_TOKEN`  | the token from step 2            |
-| Secret   | **Secrets**   | `CLOUDFLARE_ACCOUNT_ID` | your Cloudflare account ID       |
-| Variable | **Variables** | `D1_DATABASE_ID`        | the ID from `wrangler d1 create` |
+| Kind     | Tab           | Name                    | Value                                             |
+| -------- | ------------- | ----------------------- | ------------------------------------------------- |
+| Secret   | **Secrets**   | `CLOUDFLARE_API_TOKEN`  | the token from step 2                             |
+| Secret   | **Secrets**   | `CLOUDFLARE_ACCOUNT_ID` | your Cloudflare account ID                        |
+| Variable | **Variables** | `D1_DATABASE_ID`        | the ID from `wrangler d1 create`                  |
+| Variable | **Variables** | `SITE_URL` (optional)   | the public origin, e.g. `https://twofold.example` |
 
 `D1_DATABASE_ID` must be a **variable**, not a secret: the workflow reads
 `vars.D1_DATABASE_ID`, so a secret with that name is invisible to it and the
@@ -103,6 +104,10 @@ To serve the app on your own domain, open **Workers & Pages → twofold → Sett
 Domains & Routes** and add a **Custom Domain**. The domain must be a zone on the same
 Cloudflare account. The token from step 2 does not need zone permissions for this,
 because you add the domain in the dashboard, not from CI.
+
+Then set the `SITE_URL` repository variable (step 3) to the new origin and redeploy. The
+build writes it into the landing and legal pages' canonical links and link previews, the
+sitemap and robots.txt; without it they point at `https://twofold.deepvasoya08.workers.dev`.
 
 ## Checking a deploy
 
