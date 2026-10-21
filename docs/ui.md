@@ -40,7 +40,8 @@ exists but is low-key (Settings → Sharing).
   to it. It doesn't say who sent it until they reveal it: **Accept** sends this side's key,
   and the page says what's happening next, with **Don't join**. Either person can leave at
   any point; each step is taken the next time their side opens Twofold (on load, when the
-  app comes back into view, and every few seconds while someone is partway through).
+  app comes back into view after at least half a minute, and every few seconds while
+  someone is partway through).
 - When someone has accepted, the inviter sees "<name> wants to join <your library or the
   album>. Check these 4 words with them" at the top of every screen of that space, on any of
   their devices, with **They match, share** and **Cancel**. The person joining sees the same
@@ -190,6 +191,11 @@ Photos already on the screen go first, 12 per request, so they don't wait behind
 below the fold. Each preview is decrypted as soon as its bytes arrive, without waiting for
 the rest of its request. When the vault opens, your own library, every library or album
 shared with you, and who your albums are shared with are all fetched at the same time.
+Each grid tile is memoized and only re-renders when its own photo (or its selection)
+changes, so previews arriving don't redraw the whole grid; images ask for their previews
+through a context of their own that never changes. Coming back to the tab checks the
+session (and invites) at most every 30 seconds (`lib/when-visible.ts`), not on every
+switch.
 Decrypted previews reach the grid in batches, at most every 100 ms, so a large library
 redraws a few times a second rather than once per photo. A request that fails is tried
 again after 1, 2 and 4 seconds (`app/thumb-loader.ts`), so a dropped connection doesn't

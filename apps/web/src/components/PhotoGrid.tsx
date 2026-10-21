@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
 import type { PhotoContext } from '../app/routes';
@@ -20,51 +22,79 @@ export function PhotoGrid({ photos, context, selection }: PhotoGridProps) {
   const selecting = selection?.selecting ?? false;
   return (
     <ul className={`photo-grid${selecting ? ' is-selecting' : ''}`}>
-      {photos.map((photo) => {
-        const label = `Photo from ${formatShortDay(photo.takenAt)}${photo.location ? `, ${photo.location}` : ''}`;
-        const selected = selection?.selected.has(photo.id) ?? false;
-        return (
-          <li key={photo.id} className={`photo-grid__item${selected ? ' is-selected' : ''}`}>
-            <Link
-              to={paths.photo(photo.id, context)}
-              className="photo-tile"
-              aria-label={label}
-              onClick={(event) => {
-                if (!selection || !selecting) return;
-                event.preventDefault();
-                selection.toggle(photo.id);
-              }}
-            >
-              <PhotoImage
-                photoId={photo.id}
-                src={photo.src}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                draggable={false}
-              />
-              {photo.favorite && (
-                <span className="photo-tile__fav" aria-hidden="true">
-                  <Icon name="heart" size={14} filled />
-                </span>
-              )}
-            </Link>
-            {selection && (
-              <button
-                type="button"
-                className="photo-tile__check"
-                aria-label={`Select ${label.charAt(0).toLowerCase()}${label.slice(1)}`}
-                aria-pressed={selected}
-                onClick={() => {
-                  selection.toggle(photo.id);
-                }}
-              >
-                <Icon name="check" size={16} />
-              </button>
-            )}
-          </li>
-        );
-      })}
+      {photos.map((photo) => (
+        <PhotoTile
+          key={photo.id}
+          photo={photo}
+          href={paths.photo(photo.id, context)}
+          selected={selection?.selected.has(photo.id) ?? false}
+          selecting={selecting}
+          toggle={selection?.toggle}
+        />
+      ))}
     </ul>
   );
 }
+
+interface PhotoTileProps {
+  photo: Photo;
+  href: string;
+  selected: boolean;
+  selecting: boolean;
+  toggle: ((photoId: string) => void) | undefined;
+}
+
+/**
+ * One tile. Memoized: a preview arriving changes only its own photo, so the rest of the grid
+ * (hundreds of tiles in a big library) doesn't render again each time.
+ */
+const PhotoTile = memo(function PhotoTile({
+  photo,
+  href,
+  selected,
+  selecting,
+  toggle,
+}: PhotoTileProps) {
+  const label = `Photo from ${formatShortDay(photo.takenAt)}${photo.location ? `, ${photo.location}` : ''}`;
+  return (
+    <li className={`photo-grid__item${selected ? ' is-selected' : ''}`}>
+      <Link
+        to={href}
+        className="photo-tile"
+        aria-label={label}
+        onClick={(event) => {
+          if (!toggle || !selecting) return;
+          event.preventDefault();
+          toggle(photo.id);
+        }}
+      >
+        <PhotoImage
+          photoId={photo.id}
+          src={photo.src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+        />
+        {photo.favorite && (
+          <span className="photo-tile__fav" aria-hidden="true">
+            <Icon name="heart" size={14} filled />
+          </span>
+        )}
+      </Link>
+      {toggle && (
+        <button
+          type="button"
+          className="photo-tile__check"
+          aria-label={`Select ${label.charAt(0).toLowerCase()}${label.slice(1)}`}
+          aria-pressed={selected}
+          onClick={() => {
+            toggle(photo.id);
+          }}
+        >
+          <Icon name="check" size={16} />
+        </button>
+      )}
+    </li>
+  );
+});

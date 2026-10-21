@@ -278,6 +278,14 @@ interface VaultValue {
 
 const VaultContext = createContext<VaultValue | null>(null);
 
+const noRequests = () => undefined;
+
+/**
+ * Just `requestThumbs`, which never changes, apart from the vault (which changes with every
+ * preview that arrives), so every image on screen doesn't re-render each time one does.
+ */
+const RequestThumbsContext = createContext<VaultValue['requestThumbs']>(noRequests);
+
 /**
  * Decrypted photos for the open session, in memory only. Mount it with a key that changes
  * whenever keys are dropped, so locking throws everything away.
@@ -480,14 +488,16 @@ export function VaultProvider({
     };
   }, [state, status, space, store, otherKeys, storeFor, requestThumbs]);
 
-  return <VaultContext value={value}>{children}</VaultContext>;
+  return (
+    <VaultContext value={value}>
+      <RequestThumbsContext value={requestThumbs}>{children}</RequestThumbsContext>
+    </VaultContext>
+  );
 }
-
-const noRequests = () => undefined;
 
 /** Asks for previews when inside a vault; does nothing outside one (as in static previews). */
 export function useRequestThumbs(): VaultValue['requestThumbs'] {
-  return useContext(VaultContext)?.requestThumbs ?? noRequests;
+  return useContext(RequestThumbsContext);
 }
 
 export function useVault(): VaultValue {

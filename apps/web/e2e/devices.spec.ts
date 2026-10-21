@@ -21,7 +21,9 @@ test('Settings lists each signed-in device, and can sign one out', async ({ page
   await expect(page.getByText('Signed out Safari on iPhone')).toBeVisible();
   await expect(list.getByText('Safari on iPhone')).toHaveCount(0);
 
-  // When the phone is looked at again it asks the server, is refused, and drops its keys.
+  // When the phone is looked at again (a while later: quick tab switches don't ask) it asks
+  // the server, is refused, and drops its keys.
+  await phone.clock.setFixedTime(Date.now() + 60_000);
   await phone.evaluate(() => {
     document.dispatchEvent(new Event('visibilitychange'));
   });
@@ -31,4 +33,21 @@ test('Settings lists each signed-in device, and can sign one out', async ({ page
   await page.reload();
   await expect(page).toHaveURL('/unlock');
   await phoneContext.close();
+});
+
+test('switching back to the tab quickly doesn’t send requests', async ({ page }) => {
+  await signUp(page);
+  await expect(page.getByText('Your library is ready')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const sent: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/api/')) sent.push(request.url());
+  });
+  for (let i = 0; i < 5; i += 1) {
+    await page.evaluate(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+  }
+  await page.waitForTimeout(500);
+  expect(sent).toEqual([]);
 });

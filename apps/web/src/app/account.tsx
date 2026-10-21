@@ -13,6 +13,7 @@ import type { SpaceKeys } from '@twofold/crypto';
 import type { AccountResponse } from '@twofold/types';
 
 import { ApiError, api, onSessionEnded } from '../lib/api';
+import { onVisibleAgain } from '../lib/when-visible';
 import type { Person } from '../mock/data';
 import * as ops from './account-ops';
 import { leaveAll } from './sharing';
@@ -151,16 +152,13 @@ export function AccountProvider({
     };
   }, [signedIn, dropKeys]);
 
-  // A tab left open isn't asking the server anything, so check when it's looked at again.
+  // A tab left open isn't asking the server anything, so check when it's looked at again
+  // (at most every half minute, so flicking between tabs doesn't ask each time).
   useEffect(() => {
     if (!signedIn || initialState) return;
-    const check = () => {
-      if (document.visibilityState === 'visible') api.account().catch(() => undefined);
-    };
-    document.addEventListener('visibilitychange', check);
-    return () => {
-      document.removeEventListener('visibilitychange', check);
-    };
+    return onVisibleAgain(() => {
+      api.account().catch(() => undefined);
+    });
   }, [signedIn, initialState]);
 
   /** Runs an operation; a 401 means the session ended elsewhere, so sign out here too. */
