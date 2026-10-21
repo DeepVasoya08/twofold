@@ -134,9 +134,10 @@ private space that already exists, since the main library can't know whether the
   (one per space, so the private space starts with initials). The photo is cropped to a
   square on the device and encrypted before upload (`app/profile.tsx`,
   `app/profile-photo.ts`, `components/ProfileDialog.tsx`).
-- Storage used shows as "12.4 MB of 1 GB used" in Settings → Storage and at the bottom of
-  the sidebar. It counts only the open space's own photos, never the account's total, so
-  the main library can't hint at a private space (`lib/storage-usage.ts`).
+- Storage used shows in Settings → Storage and at the bottom of the sidebar. The main
+  library shows "12.4 MB of 1 GB used here", counting only its own photos, so it can't hint
+  at a private space. The private space shows "19.1 MB of 1 GB used in total": both spaces,
+  against the one shared 1 GB (`app/storage.tsx`, `lib/storage-usage.ts`).
 - State lives in `app/account.tsx` (who is signed in, which slot is open) and
   `app/account-ops.ts` (every operation that touches keys); `app/access.ts` decides
   redirects.

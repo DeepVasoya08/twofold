@@ -1,16 +1,18 @@
 import { STORAGE_SIZES } from '@twofold/types';
 
-import { useVault } from '../app/vault';
-import { spaceBytes, usageLabel, usedFraction } from '../lib/storage-usage';
+import { useStorageUsage } from '../app/storage';
+import { usageLabel, usedFraction } from '../lib/storage-usage';
 
 import './storage-meter.css';
 
-/** How much of the 1 GB the open space's photos take up, as a bar and a label. */
+/**
+ * How much of the shared 1 GB is used, as a bar and a label: the main library's own photos,
+ * or in the private space the account's total (see app/storage.tsx).
+ */
 export function StorageMeter({ compact = false }: { compact?: boolean }) {
-  const { state } = useVault();
-  const bytes = spaceBytes(state.photos);
+  const { bytes, scope } = useStorageUsage();
   const fraction = usedFraction(bytes);
-  const label = usageLabel(bytes);
+  const label = usageLabel(bytes, scope);
   return (
     <div className={`storage-meter${compact ? ' storage-meter--compact' : ''}`}>
       <div

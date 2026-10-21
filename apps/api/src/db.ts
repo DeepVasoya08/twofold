@@ -94,6 +94,15 @@ export async function reserveStorage(
   return result.meta.changes === 1;
 }
 
+/** How many bytes the account stores across all its spaces (uploads in progress included). */
+export async function storedBytes(db: D1Database, accountId: string): Promise<number> {
+  const row = await db
+    .prepare('SELECT stored_bytes FROM accounts WHERE id = ?')
+    .bind(accountId)
+    .first<{ stored_bytes: number }>();
+  return row?.stored_bytes ?? 0;
+}
+
 /** Gives bytes back to the account that deleted them (never below zero). */
 export async function releaseStorage(
   db: D1Database,

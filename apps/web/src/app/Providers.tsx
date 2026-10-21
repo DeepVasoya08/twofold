@@ -11,6 +11,7 @@ import { PendingInvitesProvider } from './invites';
 import { ProfileProvider } from './profile';
 import { memoryProfilePhoto, remoteProfilePhoto } from './profile-photo';
 import { sessionStore } from './sharing';
+import { StorageProvider } from './storage';
 import { memoryStore, remoteStore } from './space-store';
 import { UploadsProvider } from './uploads';
 import { VaultProvider, emptyVaults } from './vault';
@@ -49,10 +50,12 @@ function OpenVault({
         myName={session?.account.name ?? ''}
       >
         <ProfileProvider store={profileStore}>
-          <UploadsProvider>
-            <IdleLock />
-            {children}
-          </UploadsProvider>
+          <StorageProvider remote={session !== null && !initialVault}>
+            <UploadsProvider>
+              <IdleLock />
+              {children}
+            </UploadsProvider>
+          </StorageProvider>
         </ProfileProvider>
       </PendingInvitesProvider>
     </VaultProvider>
