@@ -284,8 +284,16 @@ export interface AccountStorage {
   limit: number;
 }
 
-/** Starts a photo upload. The two files follow with PUT, then a commit makes it visible. */
+/**
+ * Starts a photo upload. The two files follow with PUT (in either order, or together); the
+ * one that lands second makes the photo visible, so a separate commit is only a fallback.
+ */
 export type CreatePhotoRequest = StoredPhoto;
+
+/** The answer to uploading one file: whether that made the photo visible. */
+export interface PutFileResponse {
+  committed: boolean;
+}
 
 export type CreateAlbumRequest = StoredAlbum;
 

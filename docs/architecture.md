@@ -18,8 +18,9 @@ everything from one origin, so there is no CORS and the CSP can stay at
   `apps/web/dist`. Unknown paths fall back to `index.html` (SPA routing). Response headers
   for assets come from `apps/web/public/_headers`. All encryption and decryption happens
   here, through `packages/crypto`; password hashing (Argon2id) runs in a Web Worker
-  bundled from `@twofold/crypto/password-worker`, and decrypting originals in one bundled
-  from `@twofold/crypto/decrypt-worker`.
+  bundled from `@twofold/crypto/password-worker`, encrypting and decrypting originals in one
+  bundled from `@twofold/crypto/file-crypto-worker`, and upload previews are drawn in
+  `lib/thumbnail-worker.ts` (an OffscreenCanvas).
 - **apps/api** — the Worker code, a Hono app mounted at `/api`. Only `/api/*` requests run
   Worker code (`run_worker_first`); everything else is answered from assets, and unknown
   `/api/*` routes return 404 rather than the app shell. Stores and serves
@@ -34,9 +35,11 @@ everything from one origin, so there is no CORS and the CSP can stay at
     the private space). See
     [security.md](security.md#sessions-and-the-api).
   - `/api/space/*`: one space's encrypted photos and albums, addressed by the
-    `x-twofold-space` header. Uploads are three steps: `POST /photos` (id, sealed metadata,
-    sizes), `PUT /photos/:id/thumb` and `/full` (ciphertext, streamed to R2 at
-    `photos/<id>/<part>`), then `POST /photos/:id/commit`. Also listing (paged by id),
+    `x-twofold-space` header. Uploads are two steps: `POST /photos` (id, sealed metadata,
+    sizes), then `PUT /photos/:id/thumb` and `/full` together (ciphertext, streamed to R2 at
+    `photos/<id>/<part>`). Whichever file lands second sees the other and commits the photo,
+    answering `{ committed: true }`; `POST /photos/:id/commit` is only a fallback for when
+    neither saw the other. Also listing (paged by id),
     downloads, `GET /thumbs?ids=a,b,c` (up to 48 encrypted previews in one response, each
     after a 4-byte length; empty for photos the space doesn't have; the Worker reads four
     from R2 at a time, since it may only hold six R2 responses open, and streams each one

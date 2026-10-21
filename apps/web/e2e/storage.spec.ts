@@ -294,3 +294,47 @@ test('previews still appear on a phone when a preview download fails', async ({ 
   // Every tile near the screen fills in, not just a few.
   await expect(page.locator('.photo-tile .photo-placeholder')).toHaveCount(0, { timeout: 10_000 });
 });
+
+test('a batch of uploads shows up all at once, made off the page and with no extra commits', async ({
+  page,
+}) => {
+  await signUp(page);
+  const workers: string[] = [];
+  page.on('worker', (worker) => workers.push(worker.url()));
+  const commits: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/commit')) commits.push(request.url());
+  });
+  // Hold the last photo back so the others finish well before it.
+  let held = 0;
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/space/photos/*/full', async (route) => {
+    held += 1;
+    if (held === 4) await gate;
+    await route.continue();
+  });
+  const storage = page.getByRole('meter', { name: 'Storage' }).filter({ visible: true }).first();
+  const before = await storage.getAttribute('aria-valuetext');
+
+  const dialog = await choosePhotos(page, 4);
+  await page.mouse.click(5, 5);
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button', { name: /3 of 4 photos uploaded/ })).toBeVisible();
+
+  // Three are stored, but the library and its storage figure wait for the fourth.
+  await expect(page.locator('.photo-tile')).toHaveCount(0);
+  expect(await storage.getAttribute('aria-valuetext')).toBe(before);
+
+  release();
+  await expect(page.getByText('4 photos added to your vault')).toBeVisible();
+  await expect(page.locator('.photo-tile')).toHaveCount(4);
+  await expect(storage).not.toHaveAttribute('aria-valuetext', before ?? '');
+
+  // Previews and encryption ran in workers; the second file of each photo committed it.
+  expect(workers.some((url) => url.includes('thumbnail-worker'))).toBe(true);
+  expect(workers.some((url) => url.includes('file-crypto-worker'))).toBe(true);
+  expect(commits).toEqual([]);
+});
