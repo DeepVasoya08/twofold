@@ -49,7 +49,7 @@ function putFile(c: Client, id: string, part: 'thumb' | 'full', data: Uint8Array
   });
 }
 
-/** Uploads and commits a photo with random contents. */
+/** Uploads a photo with random contents; the second file commits it. */
 async function upload(
   c = client,
 ): Promise<{ photo: StoredPhoto; thumb: Uint8Array; full: Uint8Array }> {
@@ -57,9 +57,9 @@ async function upload(
   const full = randomBytes(1000);
   const photo = { id: newId(), meta: newMeta(), thumbSize: thumb.length, fullSize: full.length };
   expect((await c.request('POST', '/space/photos', photo)).status).toBe(201);
-  expect((await putFile(c, photo.id, 'thumb', thumb)).status).toBe(204);
-  expect((await putFile(c, photo.id, 'full', full)).status).toBe(204);
-  expect((await c.request('POST', `/space/photos/${photo.id}/commit`, {})).status).toBe(204);
+  expect((await putFile(c, photo.id, 'thumb', thumb)).status).toBe(200);
+  const last = await putFile(c, photo.id, 'full', full);
+  expect(await last.json()).toEqual({ committed: true });
   return { photo, thumb, full };
 }
 
@@ -145,15 +145,33 @@ describe('uploading', () => {
     expect(new Uint8Array(await fullRes.arrayBuffer())).toEqual(full);
   });
 
-  it('hides a photo until it is committed, and refuses to commit missing files', async () => {
+  it('hides a photo until both files are in, then the second one commits it', async () => {
     const photo = { id: newId(), meta: newMeta(), thumbSize: 10, fullSize: 20 };
     await client.request('POST', '/space/photos', photo);
     expect((await listPhotos()).photos).toEqual([]);
     expect((await client.request('GET', `/space/photos/${photo.id}/thumb`)).status).toBe(404);
-    await putFile(client, photo.id, 'thumb', randomBytes(10));
+    const first = await putFile(client, photo.id, 'full', randomBytes(20));
+    expect(await first.json()).toEqual({ committed: false });
     expect((await client.request('POST', `/space/photos/${photo.id}/commit`, {})).status).toBe(409);
-    await putFile(client, photo.id, 'full', randomBytes(20));
+    expect((await listPhotos()).photos).toEqual([]);
+    const second = await putFile(client, photo.id, 'thumb', randomBytes(10));
+    expect(await second.json()).toEqual({ committed: true });
+    expect((await listPhotos()).photos).toEqual([photo]);
+    // A commit after that is still fine, for a browser that didn't see the answer.
     expect((await client.request('POST', `/space/photos/${photo.id}/commit`, {})).status).toBe(204);
+  });
+
+  it('commits a photo whose files are uploaded at the same time', async () => {
+    const photo = { id: newId(), meta: newMeta(), thumbSize: 10, fullSize: 20 };
+    await client.request('POST', '/space/photos', photo);
+    const answers = await Promise.all([
+      putFile(client, photo.id, 'thumb', randomBytes(10)),
+      putFile(client, photo.id, 'full', randomBytes(20)),
+    ]);
+    const committed = await Promise.all(
+      answers.map((res) => res.json<{ committed: boolean }>().then((body) => body.committed)),
+    );
+    expect(committed).toContain(true);
     expect((await listPhotos()).photos).toEqual([photo]);
   });
 
@@ -291,11 +309,12 @@ describe('database round trips', () => {
     expect(await tripsFor(() => client.request('GET', '/space/photos'))).toBe(2);
   });
 
-  it('uploads a photo in ten round trips across its four requests', async () => {
+  it('uploads a photo in nine round trips across its three requests', async () => {
     // Two of them (the abandoned-upload check and the quota reservation) run side by side.
+    // The second file's upload commits the photo, so there is no fourth request.
     const before = trips.count;
     await upload();
-    expect(trips.count - before).toBe(10);
+    expect(trips.count - before).toBe(9);
   });
 });
 

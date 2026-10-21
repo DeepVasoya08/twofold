@@ -65,5 +65,5 @@ test('downloading several photos saves one zip of the original files', async ({ 
   // Only the zip arrived, not a file per photo.
   expect(downloads).toEqual([zip.suggestedFilename()]);
   // The originals were decrypted off the main thread.
-  expect(workers.some((url) => url.includes('decrypt-worker'))).toBe(true);
+  expect(workers.some((url) => url.includes('file-crypto-worker'))).toBe(true);
 });

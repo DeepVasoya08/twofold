@@ -3,6 +3,7 @@ import { isUploadRunning } from '../lib/upload-progress';
 import type { UploadStatus } from '../lib/upload-progress';
 import { canStartUpload } from '../lib/upload-queue';
 import type { InFlight } from '../lib/upload-queue';
+import type { Photo } from '../mock/data';
 import { errorMessage } from './account-ops';
 import type { NewPhoto, UploadStage } from './space-store';
 
@@ -11,6 +12,8 @@ import type { NewPhoto, UploadStage } from './space-store';
  * moving around the app or switching browser tabs doesn't stop photos on their way. Each
  * photo is encrypted on this device, then the ciphertext is uploaded, up to three photos at
  * a time (fewer when they're big; see lib/upload-queue.ts), in the order they were added.
+ * Stored photos are held back and handed over together once the queue runs dry, so the
+ * library (and the storage figure worked out from it) changes once, not after every photo.
  */
 
 export interface UploadItem {
@@ -35,14 +38,14 @@ export interface UploaderState {
 export interface UploaderDeps {
   /** Reads a file into the original bytes and a small preview. */
   prepare: (file: File) => Promise<NewPhoto>;
-  /** Encrypts and stores a photo in the open space. */
+  /** Encrypts and stores a photo in the open space, without showing it yet. */
   upload: (
     photo: NewPhoto,
     albumId: string | undefined,
     onStage: (stage: UploadStage) => void,
-  ) => Promise<void>;
-  /** Called once each time the queue runs dry, with how many photos were stored. */
-  onStored: (count: number) => void;
+  ) => Promise<Photo>;
+  /** Called once each time the queue runs dry, with every photo stored since the last time. */
+  onStored: (photos: Photo[]) => void;
   /** Makes and drops in-memory preview URLs (object URLs in the browser). */
   preview: { make: (bytes: Uint8Array<ArrayBuffer>) => string; revoke: (url: string) => void };
 }
@@ -58,8 +61,8 @@ export class Uploader {
   private readonly listeners = new Set<() => void>();
   private queue: Job[] = [];
   private inFlight: InFlight = { count: 0, bytes: 0 };
-  /** Photos stored since the queue last ran dry, for one notice at the end. */
-  private stored = 0;
+  /** Photos stored since the queue last ran dry, shown together at the end. */
+  private stored: Photo[] = [];
   private nextId = 0;
   /** Every preview URL made, so clearing revokes them all, even one made as it cleared. */
   private readonly previews = new Set<string>();
@@ -130,7 +133,7 @@ export class Uploader {
   /** Stops what hasn't started and forgets the list, as when the vault locks. */
   dispose(): void {
     this.queue = [];
-    this.stored = 0;
+    this.stored = [];
     this.clear();
   }
 
@@ -166,11 +169,12 @@ export class Uploader {
       const url = preview.make(photo.thumb);
       this.previews.add(url);
       this.update(id, { url });
-      await upload(photo, albumId, (stage) => {
+      const stored = await upload(photo, albumId, (stage) => {
         this.update(id, { status: stage });
       });
       this.update(id, { status: 'done' });
-      this.stored += 1;
+      // Locking while it uploaded dropped the list; the photo shows on the next unlock.
+      if (this.listed(id)) this.stored.push(stored);
     } catch (error) {
       this.update(id, { status: 'failed', error: errorMessage(error) });
     }
@@ -191,12 +195,13 @@ export class Uploader {
     this.settle();
   }
 
-  /** Once the queue runs dry: one notice, and a closed dialog's list starts over. */
+  /** Once the queue runs dry: the new photos all at once, and a closed dialog starts over. */
   private settle(): void {
     if (this.inFlight.count > 0 || this.queue.length > 0) return;
-    if (this.stored > 0) {
-      this.deps.onStored(this.stored);
-      this.stored = 0;
+    if (this.stored.length > 0) {
+      const stored = this.stored;
+      this.stored = [];
+      this.deps.onStored(stored);
     }
     // Failures stay, so the progress indicator can point at them until they've been seen.
     const failed = this.state.items.some((item) => item.status === 'failed');
