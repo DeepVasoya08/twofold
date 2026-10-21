@@ -9,7 +9,8 @@ import {
 import type { ReactNode } from 'react';
 
 import { pluralize } from '../lib/format';
-import { makeThumbnail } from '../lib/thumbnail';
+import { pageThumbnailer, workerThumbnailer } from '../lib/thumbnailer';
+import type { Thumbnailer } from '../lib/thumbnailer';
 import { summarizeUploads } from '../lib/upload-progress';
 import type { UploadSummary } from '../lib/upload-progress';
 import { FormError } from './account-ops';
@@ -39,9 +40,20 @@ interface UploadsValue {
 
 const UploadsContext = createContext<UploadsValue | null>(null);
 
+let thumbnailer: Promise<Thumbnailer> | null = null;
+
+/** Previews are made in a Web Worker where there is one, so the page stays smooth. */
+const loadThumbnailer = () =>
+  (thumbnailer ??=
+    typeof Worker === 'undefined'
+      ? Promise.resolve(pageThumbnailer)
+      : import('../lib/spawn-thumbnail-worker').then(({ spawnThumbnailWorker }) =>
+          workerThumbnailer(spawnThumbnailWorker),
+        ));
+
 /** Reads a file into what the vault stores: the original bytes and a JPEG preview. */
 async function preparePhoto(file: File): Promise<NewPhoto> {
-  const thumbnail = await makeThumbnail(file);
+  const thumbnail = await (await loadThumbnailer())(file);
   if (!thumbnail) throw new FormError('Twofold can’t read this image.');
   return {
     thumb: thumbnail.bytes,
@@ -65,22 +77,23 @@ const preview: UploaderDeps['preview'] = {
  * Mounted inside the vault, so locking (which remounts the vault) drops the queue.
  */
 export function UploadsProvider({ children }: { children: ReactNode }) {
-  const { upload } = useVault();
+  const { upload, showUploaded } = useVault();
   const toast = useToast();
   const [uploader] = useState(
-    () => new Uploader({ prepare: preparePhoto, upload, onStored: () => undefined, preview }),
+    () => new Uploader({ prepare: preparePhoto, upload, onStored: showUploaded, preview }),
   );
 
   useEffect(() => {
     uploader.connect({
       prepare: preparePhoto,
       upload,
-      onStored: (count) => {
-        toast.show(`${pluralize(count, 'photo')} added to your vault`);
+      onStored: (photos) => {
+        showUploaded(photos);
+        toast.show(`${pluralize(photos.length, 'photo')} added to your vault`);
       },
       preview,
     });
-  }, [uploader, upload, toast]);
+  }, [uploader, upload, showUploaded, toast]);
 
   useEffect(
     () => () => {

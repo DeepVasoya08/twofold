@@ -225,11 +225,17 @@ interface VaultValue {
   state: VaultState;
   status: VaultStatus;
   space: Space;
+  /**
+   * Encrypts and stores a photo. It isn't shown until `showUploaded`, so a batch of uploads
+   * changes the library once instead of after every photo.
+   */
   upload: (
     photo: NewPhoto,
     albumId: string | undefined,
     onStage?: (stage: UploadStage) => void,
-  ) => Promise<void>;
+  ) => Promise<Photo>;
+  /** Shows photos that `upload` stored, all in one change. */
+  showUploaded: (photos: Photo[]) => void;
   toggleFavorite: (photoId: string) => Promise<void>;
   deletePhoto: (photoId: string) => Promise<void>;
   /** Changes to many photos: each goes through or fails on its own. */
@@ -311,6 +317,12 @@ export function VaultProvider({
   const [state, dispatch] = useReducer(vaultReducer, initialState ?? { photos: [], albums: [] });
   const [status, setStatus] = useState<VaultStatus>(initialState ? 'ready' : 'loading');
 
+  // Stable, so the upload queue can hold on to it across renders.
+  const showUploaded = useCallback((photos: Photo[]) => {
+    // Newest first, like the rest of the timeline.
+    if (photos.length > 0) dispatch({ type: 'add-photos', photos: [...photos].reverse() });
+  }, []);
+
   const thumbLoader = useRef<VaultValue['requestThumbs'] | null>(null);
   const requestThumbs = useCallback((photoIds: readonly string[], onScreen?: boolean) => {
     thumbLoader.current?.(photoIds, onScreen);
@@ -375,10 +387,8 @@ export function VaultProvider({
       state,
       status,
       space,
-      upload: async (photo, albumId, onStage) => {
-        const added = await store.add(photo, albumId ? [albumId] : [], onStage);
-        dispatch({ type: 'add-photos', photos: [added] });
-      },
+      upload: (photo, albumId, onStage) => store.add(photo, albumId ? [albumId] : [], onStage),
+      showUploaded,
       toggleFavorite: async (photoId) => {
         const photo = findChangeable(photoId);
         dispatch({ type: 'toggle-favorite', photoId });
@@ -486,7 +496,7 @@ export function VaultProvider({
       },
       requestThumbs,
     };
-  }, [state, status, space, store, otherKeys, storeFor, requestThumbs]);
+  }, [state, status, space, store, otherKeys, storeFor, requestThumbs, showUploaded]);
 
   return (
     <VaultContext value={value}>

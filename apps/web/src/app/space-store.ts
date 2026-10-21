@@ -15,15 +15,15 @@ import { PartialThumbs } from './thumb-loader';
  * space key. Decrypted images only ever exist as in-memory object URLs, revoked on dispose.
  */
 
-let decrypterChosen = false;
+let fileCryptoChosen = false;
 
 const loadCrypto = async () => {
   const crypto = await import('@twofold/crypto');
-  // Originals decrypt in a Web Worker so a large one doesn't freeze the page.
-  if (!decrypterChosen && typeof Worker !== 'undefined') {
-    decrypterChosen = true;
-    const { spawnDecryptWorker } = await import('../lib/decrypt-worker');
-    crypto.setFileDecrypter(crypto.workerDecrypter(spawnDecryptWorker));
+  // Originals encrypt and decrypt in a Web Worker so a large one doesn't freeze the page.
+  if (!fileCryptoChosen && typeof Worker !== 'undefined') {
+    fileCryptoChosen = true;
+    const { spawnFileCryptoWorker } = await import('../lib/file-crypto-worker');
+    crypto.setFileCrypto(crypto.workerFileCrypto(spawnFileCryptoWorker));
   }
   return crypto;
 };
@@ -463,7 +463,7 @@ export function remoteStore(
       const id = await crypto.newRecordId();
       const key = await crypto.newFileKey();
       const thumb = new Uint8Array(await crypto.encryptFile(key, photo.thumb));
-      const full = new Uint8Array(await crypto.encryptFile(key, photo.full));
+      const full = new Uint8Array(await crypto.encryptLargeFile(key, photo.full));
       if (thumb.length > STORAGE_SIZES.maxThumb) throw new FormError(TOO_LARGE);
       const meta: PhotoMeta = {
         v: 1,
@@ -485,9 +485,17 @@ export function remoteStore(
         fullSize: full.length,
       });
       try {
-        await api.putFile(id, 'thumb', thumb);
-        await api.putFile(id, 'full', full);
-        await api.commitPhoto(id);
+        // Both files go up together. Whichever lands second commits the photo; only if
+        // neither saw the other is a separate commit needed. Both settle before any cleanup,
+        // so a file still on its way can't land after the photo is let go.
+        const puts = await Promise.allSettled([
+          api.putFile(id, 'thumb', thumb),
+          api.putFile(id, 'full', full),
+        ]);
+        const failed = puts.find((put) => put.status === 'rejected');
+        if (failed) throw failed.reason;
+        const committed = puts.some((put) => put.status === 'fulfilled' && put.value.committed);
+        if (!committed) await api.commitPhoto(id);
       } catch (error) {
         // Let the half-finished upload go now, so its space comes back to this account.
         await api.deletePhoto(id).catch(() => undefined);

@@ -23,6 +23,7 @@ import type {
   PreLoginRequest,
   PreLoginResponse,
   ProfilePhotoResponse,
+  PutFileResponse,
   SignUpRequest,
   StoredProfilePhoto,
   UpdateKeyringRequest,
@@ -182,9 +183,19 @@ export function spaceApi(token: string) {
     listAlbums: () => call<AlbumList>('GET', '/space/albums', undefined, headers),
     createPhoto: (body: CreatePhotoRequest) =>
       call<undefined>('POST', '/space/photos', body, headers),
-    putFile: async (id: string, part: PhotoPart, bytes: Uint8Array<ArrayBuffer>) => {
-      await send('PUT', `${photo(id)}/${part}`, { bytes }, headers);
+    /** Uploads one encrypted file; the answer says whether that made the photo visible. */
+    putFile: async (
+      id: string,
+      part: PhotoPart,
+      bytes: Uint8Array<ArrayBuffer>,
+    ): Promise<PutFileResponse> => {
+      const res = await send('PUT', `${photo(id)}/${part}`, { bytes }, headers);
+      const body: unknown = await res.json().catch(() => null);
+      const committed =
+        typeof body === 'object' && body !== null && 'committed' in body && body.committed === true;
+      return { committed };
     },
+    /** Makes an uploaded photo visible, when neither file's upload already did. */
     commitPhoto: (id: string) => call<undefined>('POST', `${photo(id)}/commit`, {}, headers),
     getFile: (id: string, part: PhotoPart) => download(`${photo(id)}/${part}`, headers),
     /**

@@ -20,6 +20,7 @@ import type {
   PendingInviteList,
   PhotoPage,
   ProfilePhotoResponse,
+  PutFileResponse,
 } from '@twofold/types';
 
 import {
@@ -319,11 +320,17 @@ function parsePhotoParams(params: { id: string; part?: string }) {
   return id.success && part.success ? { id: id.data, part: part.data } : null;
 }
 
-/** Uploads one encrypted file of a pending photo. Its size must match what was declared. */
+/**
+ * Uploads one encrypted file of a pending photo. Its size must match what was declared. If
+ * the other file is already there, this commits the photo too, which saves the browser a
+ * request per photo. When both files land at once, each looks for the other after storing
+ * its own, so at least one of them sees both and commits (committing twice is harmless).
+ */
 space.put('/photos/:id/:part', async (c) => {
   const params = parsePhotoParams(c.req.param());
   if (!params) return c.json({ error: messages.badRequest }, 400);
-  const photo = await findPhoto(c.env.DB, c.get('space'), params.id);
+  const tag = c.get('space');
+  const photo = await findPhoto(c.env.DB, tag, params.id);
   if (!photo?.pending) return c.json({ error: notFound }, 404);
   const expected = params.part === 'thumb' ? photo.thumbSize : photo.fullSize;
   const length = Number(c.req.header('content-length'));
@@ -335,10 +342,20 @@ space.put('/photos/:id/:part', async (c) => {
     await c.env.BLOBS.delete(key);
     return c.json({ error: messages.badRequest }, 400);
   }
-  return c.body(null, 204);
+  const other = params.part === 'thumb' ? 'full' : 'thumb';
+  const otherStored = await c.env.BLOBS.head(objectKey(params.id, other));
+  const sizes = {
+    thumbSize: params.part === 'thumb' ? stored.size : (otherStored?.size ?? -1),
+    fullSize: params.part === 'full' ? stored.size : (otherStored?.size ?? -1),
+  };
+  const committed = otherStored !== null && (await commitPhoto(c.env.DB, tag, params.id, sizes));
+  return c.json({ committed } satisfies PutFileResponse);
 });
 
-/** Makes an uploaded photo visible, once both files are there at their declared sizes. */
+/**
+ * Makes an uploaded photo visible, once both files are there at their declared sizes. Uploading
+ * the second file usually does this already; this is for when neither upload saw the other.
+ */
 space.post('/photos/:id/commit', async (c) => {
   const id = recordIdSchema.safeParse(c.req.param('id'));
   if (!id.success || !(await readBody(c, emptySchema))) {

@@ -7,7 +7,7 @@
     ".": "./src/index.ts",
     "./webcrypto": "./src/webcrypto.ts",
     "./password-worker": "./src/password-worker.ts",
-    "./decrypt-worker": "./src/decrypt-worker.ts"
+    "./file-crypto-worker": "./src/file-crypto-worker.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
