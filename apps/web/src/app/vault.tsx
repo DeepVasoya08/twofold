@@ -13,7 +13,10 @@ import type { ReactNode } from 'react';
 import type { SpaceKeys } from '@twofold/crypto';
 import type { PhotoPart } from '@twofold/types';
 
-import { extensionOf } from '../lib/photo-types';
+import { copyNames } from '../lib/copy-names';
+import { downloadAll } from '../lib/download-progress';
+import type { DownloadProgress } from '../lib/download-progress';
+import type { PhotoCopy } from '../lib/save-copies';
 import { settleEach } from '../lib/settle-each';
 import type { Settled } from '../lib/settle-each';
 import { FormError } from './account-ops';
@@ -249,8 +252,15 @@ interface VaultValue {
   stopSharingAlbum: (albumId: string) => Promise<void>;
   /** Records who an album is shared with now, by name, after someone is added or removed. */
   setSharedWith: (albumId: string, names: string[]) => void;
-  /** Decrypts photos' originals into files, for sending copies elsewhere. */
-  originals: (photoIds: readonly string[]) => Promise<File[]>;
+  /**
+   * Downloads and decrypts photos' originals, a few at a time, for saving copies to the
+   * device. Each is named by when it was taken. Reports progress after each photo; stops
+   * when `signal` aborts.
+   */
+  originals: (
+    photoIds: readonly string[],
+    options?: { onProgress?: (progress: DownloadProgress) => void; signal?: AbortSignal },
+  ) => Promise<PhotoCopy[]>;
   /**
    * Moves a photo to the other space. Needs that space's keys: `Session.otherSpace`, or the
    * keys just opened for this move.
@@ -429,14 +439,16 @@ export function VaultProvider({
       setSharedWith: (albumId, names) => {
         dispatch({ type: 'set-shared-with', albumId, names });
       },
-      originals: async (photoIds) => {
-        const files: File[] = [];
-        for (const [index, photoId] of photoIds.entries()) {
-          const { full, type } = await store.read(photoId);
-          const name = `twofold-${String(index + 1)}.${extensionOf(type)}`;
-          files.push(new File([full], name, { type }));
-        }
-        return files;
+      originals: async (photoIds, options) => {
+        const items = photoIds.map((id) => ({ id, size: find(id).size ?? 0 }));
+        const originals = await downloadAll(items, (id) => store.original(id), options);
+        const names = copyNames(originals);
+        return originals.map(({ full, type, takenAt }, index) => ({
+          name: names[index] ?? '',
+          type,
+          takenAt,
+          data: full,
+        }));
       },
       movePhoto: async (photoId, keys = otherKeys) => {
         const otherStore = otherStoreFor(keys);

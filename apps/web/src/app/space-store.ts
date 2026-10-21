@@ -15,7 +15,27 @@ import { PartialThumbs } from './thumb-loader';
  * space key. Decrypted images only ever exist as in-memory object URLs, revoked on dispose.
  */
 
-const loadCrypto = () => import('@twofold/crypto');
+let decrypterChosen = false;
+
+const loadCrypto = async () => {
+  const crypto = await import('@twofold/crypto');
+  // Originals decrypt in a Web Worker so a large one doesn't freeze the page.
+  if (!decrypterChosen && typeof Worker !== 'undefined') {
+    decrypterChosen = true;
+    const { spawnDecryptWorker } = await import('../lib/decrypt-worker');
+    crypto.setFileDecrypter(crypto.workerDecrypter(spawnDecryptWorker));
+  }
+  return crypto;
+};
+
+/** A photo's decrypted original and what's needed to save a copy of it. */
+export interface Original {
+  /** The original file, byte for byte. */
+  full: Uint8Array<ArrayBuffer>;
+  /** The original's media type. */
+  type: string;
+  takenAt: string;
+}
 
 /** The decrypted files and details of a photo, for adding it to a space. */
 export interface NewPhoto {
@@ -75,6 +95,11 @@ export interface SpaceStore {
   stopSharingAlbum: (albumId: string) => Promise<void>;
   /** Downloads and decrypts a photo's files, to add them to another space. */
   read: (photoId: string) => Promise<NewPhoto>;
+  /**
+   * Downloads and decrypts only a photo's original, to save a copy of it. Nothing is kept:
+   * the bytes are the caller's, in memory only.
+   */
+  original: (photoId: string) => Promise<Original>;
   /** Revokes every object URL this store made. */
   dispose: () => void;
 }
@@ -324,7 +349,10 @@ export function remoteStore(
     const api = await remote();
     const crypto = await loadCrypto();
     const sealed = await api.getFile(photoId, part);
-    const plain = await crypto.decryptFile(entry.key, sealed);
+    const plain =
+      part === 'full'
+        ? await crypto.decryptLargeFile(entry.key, sealed)
+        : await crypto.decryptFile(entry.key, sealed);
     return { plain: new Uint8Array(plain), entry };
   };
 
@@ -571,6 +599,11 @@ export function remoteStore(
       return { thumb, full, type, width, height, takenAt };
     },
 
+    original: async (photoId) => {
+      const { plain: full, entry } = await decrypt(photoId, 'full');
+      return { full, type: entry.meta.type, takenAt: entry.meta.takenAt };
+    },
+
     dispose: () => {
       for (const url of urls.values()) URL.revokeObjectURL(url);
       urls.clear();
@@ -710,6 +743,7 @@ export function combinedStore(
         ? Promise.reject(new FormError(NOT_YOURS))
         : own.stopSharingAlbum(albumId),
     read: (photoId) => storeOf(photoId).read(photoId),
+    original: (photoId) => storeOf(photoId).original(photoId),
     dispose: () => {
       own.dispose();
       for (const source of shared) source.store.dispose();
@@ -760,6 +794,7 @@ export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): Spac
     shareAlbum: () => Promise.reject(new FormError('This preview can’t share albums.')),
     stopSharingAlbum: () => Promise.resolve(),
     read: () => Promise.reject(new FormError('This preview can’t move photos.')),
+    original: () => Promise.reject(new FormError('This preview can’t download photos.')),
     dispose: () => undefined,
   };
 }
