@@ -192,7 +192,7 @@ under). It never gets the space key or the space id.
   D1 keeps only its SHA-256, in a `members` row next to the space's tag. A request whose
   `x-twofold-space` header is a share token reaches the owner's photos and albums: the
   member can view, add, favorite and delete photos, and add, rename and delete albums. The owner-only routes
-  (who it's shared with, joined libraries, wiping the space) refuse share tokens.
+  (who it's shared with, joined libraries, invites in progress, wiping the space) refuse share tokens.
 - **Deleting an album** removes its row; the server can't read which photos name it, so the
   browser takes the album out of each photo's sealed metadata afterwards (best effort: a
   photo that still names a deleted album just shows nothing for it).
@@ -210,9 +210,9 @@ under). It never gets the space key or the space id.
   the plaintext comes back. One worker serves a batch and shuts down after a few idle
   seconds. If it can't start or fails, the page decrypts on its own thread; a wrong key or
   tampered file fails the same way in both.
-- **Owner-only records.** Who a space is shared with (`members`) and which libraries it
-  joined (`joined`) are sealed under a second `crypto_kdf` subkey of the space key (id 2),
-  which members never receive. So even a server that showed a member those rows couldn't
+- **Owner-only records.** Who a space is shared with (`members`), which libraries it
+  joined (`joined`) and the invites it has in progress (`pending_invites`) are sealed under
+  a second `crypto_kdf` subkey of the space key (id 2), which members never receive. So even a server that showed a member those rows couldn't
   make it read them, and joining a library doesn't open the libraries its owner joined.
 - **Where shares live.** Both lists are stored per space, like photos, so nothing links
   them to an account. A library joined from the private space is kept in the private
@@ -263,32 +263,98 @@ nothing links it to an account.
 
 ### Invites
 
-An invite moves the access from one browser to another through a server we don't trust,
-in steps both sides poll for (`packages/crypto/src/sharing.ts`, `apps/api/src/routes/invites.ts`):
+An invite moves the access from one browser to another through a server we don't trust
+(`packages/crypto/src/sharing.ts`, `apps/api/src/routes/invites.ts`,
+`apps/web/src/app/sharing.ts`). Neither person has to be online at the same time as the
+other: each side keeps its half of the invite as a sealed record of its own open space, and
+takes its next step whenever that space is next open, on any device.
 
-1. The inviter makes a code (`TWO-XXXX-XXXX`, 8 characters from 32, so 40 bits), a random
-   handle that stays on its device, and a `crypto_box` key pair. It sends the code, the
-   handle and a **commitment** to its public key (keyed BLAKE2b), not the key itself. D1
-   keeps the code and handle only as SHA-256, with no account or space.
-2. The joiner enters the code, reads the commitment and sends its own public key. Only the
-   first key is accepted, so a code works once.
-3. The inviter reveals its public key. The joiner checks it against the commitment, then
-   sends its name sealed to the inviter's key (`crypto_box`, `hello`).
-4. Both show a **safety phrase**: 4 BIP-39 words (44 bits) hashed from both public keys.
-   If anyone swapped a key, the phrases differ. Because the inviter committed before seeing
-   the joiner's key, and the joiner's key is sent before the inviter's is revealed, a
-   server in the middle has to pick its fake keys blind: one guess at 2^-44 per invite.
-5. Only when the inviter confirms the words match does it register the member and send
-   the access (`grant`: share token, records key, its own name, the member id) sealed to
-   the joiner's key. The joiner keeps it as an owner-only `joined` record in the open
-   space and deletes the invite.
+1. The inviter makes a code (`TWO-XXXX-XXXX`, 8 characters from 32, so 40 bits), a **link
+   token** (128 random bits, base64url), a random handle, and a `crypto_box` key pair. It
+   sends the code, the link token, the handle and a **commitment** to its public key (keyed
+   BLAKE2b), not the key itself. D1 keeps the code, link token and handle only as SHA-256,
+   with no account or space. The link is `https://<origin>/join/<token>`: it only names the
+   invite and carries no key material, so it's no more secret than the code.
+2. The inviter keeps the invite's secret key, the handle, the code, the link token and what
+   is shared (the library, or one album's id) in an owner-only record of its open space
+   (`pending_invites`, `sealPendingInvite`: the secret key followed by those details, sealed
+   with the owner-only subkey, kind `invite`, bound to the record's id). Like every other
+   per-space row it is keyed by the space tag, so an invite made from the private space is
+   kept in the private space and says nothing about whether one exists.
+3. The joiner opens the link (or types the code), reads the commitment, makes its own key
+   pair, keeps it as an owner-only `invite` record in its open space, and only then sends
+   its public key. Only the first key is accepted, so an invite works once.
+4. On the inviter's next visit, its device sees the joiner's key, **pins** it by replacing
+   its sealed record with one that also holds that key, and only then reveals its public
+   key together with its name sealed to the joiner's key (`crypto_box`, `intro`). Every
+   later step, on any of the inviter's devices, uses the pinned key and refuses any other.
+5. On the joiner's next visit, it checks the revealed key against the commitment, opens the
+   inviter's name, and sends its own name sealed to the inviter's key (`hello`). It shows
+   the **safety phrase** (4 BIP-39 words, 44 bits, derived from both public keys; see below)
+   and "Waiting for <name> to confirm".
+6. On the inviter's next visit, every screen of that space shows "<name> wants to join …
+   Check these 4 words with them", with Confirm and Cancel. Only when the inviter confirms
+   the words match does it register the member and send the access (`grant`: share token,
+   records key or album key, its own name, the member id) sealed to the joiner's key, and
+   then delete its record.
+7. On the joiner's next visit, it opens the grant, keeps it as an owner-only `joined` record
+   (taking the pending record's id, so two devices finishing at once keep one copy), and
+   deletes the invite and its record.
 
-Every sealed message starts with a purpose label (`hello` or `grant`), so one can't be
-replayed as the other. Each side's steps need its own secret: the code for the joiner, the
-handle for the inviter, and the server only accepts steps in order. Unknown codes count
-against the account like wrong passwords (10 per 15 minutes, counted before the lookup and
-given back for a real code, so parallel guesses don't get more). Invites expire after 24
-hours, and the inviter's screen cancels its invite when it closes.
+**Why waiting doesn't weaken the safety phrase.** A server in the middle wins only if both
+people see the same words while each holds a key the server chose. It has to fix the fake
+inviter key it shows the joiner (through the commitment it shows) before it learns the
+joiner's real key, and the fake joiner key it shows the inviter before it learns the
+inviter's real key, because the inviter pins the joiner's key before revealing its own and
+never uses another afterwards. So each side's words are a hash of one key the server had to
+commit to blind and one it couldn't predict: one guess at 2^-44 per invite. How long the
+steps take doesn't change that: time only helps a server that can choose a key after
+seeing the other side's, and the commitment (for the joiner) and the pin (for the inviter)
+rule that out. The key pairs never change during an invite (each record is sealed with an
+AEAD bound to its id, so the server can't substitute another invite's), and the joiner's
+side needs nothing pinned: its words depend only on its own key and a key checked against a
+commitment it read before sending that key.
+
+**Why the words are slow to compute.** The words are the first 44 bits of Argon2id
+(`crypto_pwhash`, Argon2id13, 64 MiB and 3 passes, the same cost as a login) over the
+transcript: `T = BLAKE2b-256(inviter key ‖ joiner key)` keyed with the label
+`twofold:safety-phrase:v2`. The input is `T` in base64url and the 16-byte salt is
+`BLAKE2b-128(T)` keyed with `twofold:safety-phrase-salt:v2`, so the salt is fixed and
+domain-separated but needs nothing beyond the two keys. Each side computes it once per
+invite (a fraction of a second, in the same Web Worker that hashes passwords, falling back
+to the page's thread), and the result is kept in memory so checking again is free
+(`packages/crypto/src/sharing.ts`).
+
+This matters for one attack the pin can't stop on its own. The pin lives in the inviter's
+sealed record, on the server. A compromised server that kept an old copy of that record (from
+before the pin) and showed it again, while claiming the inviter's key was never revealed,
+could get a device to reveal a second time, to a joiner key chosen _after_ learning the
+inviter's key from the first reveal. A browser that keeps nothing on the device can't tell an
+old copy from the current one. What the server would then need is a joiner key whose words
+match the joiner's: about 2^44 tries. With a plain hash that is cheap enough to do within
+the 7 days. With the words behind Argon2id it is about 2^44 runs at 64 MiB each: at roughly
+0.2 s per run that is around 10^5 CPU-years, and memory-hard, so far beyond an invite's
+lifetime. So even with a rollback, the server's chance of matching words stays at a guess,
+about 2^-44 per reveal it gets.
+
+Every sealed message starts with a purpose label (`hello`, `intro` or `grant`), so one
+can't be replayed as another. Each side's steps need its own secret: the code or link token
+for the joiner, the handle for the inviter, and the server only accepts steps in order.
+Unknown codes (and link tokens, though 128 bits can't be guessed) count against the account
+like wrong passwords (10 per 15 minutes, counted before the lookup and given back for a
+real one, so parallel guesses don't get more). Invites expire after **7 days**; expired rows
+are deleted whenever an invite is made, and a device that finds its invite gone (expired,
+cancelled, or finished elsewhere) deletes its own record. The inviter can cancel from the
+Share screen, the album's people list or the confirmation; the joiner can give up with
+"Don't join".
+
+**What the server learns.** As before, the hashes of the code, link token and handle, the
+public keys and sealed messages, and nothing linking an invite to an account or space at
+rest. New: each space's `pending_invites` rows, so how many invites a space has in progress
+and when rows come and go (no timestamps are stored), and that an invite took days rather
+than minutes. A live server can still link the sessions on both sides, as it could before.
+
+### Trade-offs we accepted
 
 ### Trade-offs we accepted
 
@@ -301,9 +367,22 @@ hours, and the inviter's screen cancels its invite when it closes.
   trust.
 - **The safety phrase is only as good as the comparison.** If nobody checks the words, a
   compromised server could put itself in the middle of that invite.
+- **A rollback can still get a second reveal.** A server that replays the inviter's record
+  from before the pin can get its key revealed again, to a joiner key it chooses. Matching
+  words would then cost about 2^44 Argon2id evaluations (see above), which is out of reach,
+  so this needs an actively malicious server and still comes down to a guess.
+- **The inviter's name goes to whoever accepts first.** It is sealed to the key that
+  accepted, before the words are checked, so someone else holding the link (or a server in
+  the middle) learns the inviter's display name, which the server stores in plain text
+  anyway. Album titles are never sent before the words match. Likewise the joiner's name
+  goes to the inviter's revealed key, as before.
+- **A grant that's never picked up leaves a member.** The inviter registers the member when
+  confirming. If the joiner never comes back before the invite expires, that member can't
+  be used by anyone, and stays listed until the inviter removes it.
 - **A live server sees who joins what.** Like storage, a compromised server watching
   requests can link the sessions on either side of an invite, and a member's session to
-  the share token it uses. Nothing at rest records it.
+  the share token it uses. Nothing at rest records it, and `pending_invites` rows are keyed
+  by space like everything else.
 
 ## Sessions and the API
 

@@ -298,12 +298,14 @@ export const SHARE_SIZES = {
   commitment: 32,
   /** The inviter's private handle on its invite. */
   handle: 16,
+  /** The token in an invite link. It only names the invite; it holds no key. */
+  link: 16,
   /** Largest sealed message between the two sides of an invite, in bytes. */
   maxMessage: 1024,
 } as const;
 
 /** An invite works once and only for this long. */
-export const INVITE_TTL_MS = 24 * 60 * 60 * 1000;
+export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Most people one space can be shared with, most people one album can be shared with, and
@@ -312,13 +314,17 @@ export const INVITE_TTL_MS = 24 * 60 * 60 * 1000;
 export const MAX_MEMBERS = 20;
 export const MAX_ALBUM_MEMBERS = 20;
 export const MAX_JOINED = 50;
+/** Most invites one space can have in progress at once (either side of them). */
+export const MAX_PENDING_INVITES = 20;
 
 /**
- * Starts an invite. The joiner will use `code`; the inviter keeps `handle` to itself and uses
- * it for its own steps. `commitment` binds the inviter's public key before it is revealed.
+ * Starts an invite. The joiner will use `link` (in a link) or `code` (typed); both only name
+ * the invite. The inviter keeps `handle` to itself and uses it for its own steps.
+ * `commitment` binds the inviter's public key before it is revealed.
  */
 export interface CreateInviteRequest {
   code: string;
+  link: string;
   handle: string;
   commitment: string;
 }
@@ -326,6 +332,8 @@ export interface CreateInviteRequest {
 /** What the inviter sees of its invite as it progresses. */
 export interface InviterView {
   joinerKey: string | null;
+  /** True once the inviter's key (and its sealed name) has been revealed. */
+  revealed: boolean;
   /** The joiner's name, sealed to the inviter's key. */
   hello: string | null;
 }
@@ -334,6 +342,10 @@ export interface InviterView {
 export interface JoinerView {
   commitment: string;
   inviterKey: string | null;
+  /** The inviter's name, sealed to the joiner's key, revealed with the inviter's key. */
+  intro: string | null;
+  /** True once the joiner's name has been sent. */
+  helloSent: boolean;
   /** The access, sealed to the joiner's key, once the inviter confirms. */
   grant: string | null;
 }
@@ -348,6 +360,7 @@ export interface HelloRequest {
 
 export interface RevealRequest {
   inviterKey: string;
+  intro: string;
 }
 
 export interface GrantRequest {
@@ -397,4 +410,16 @@ export type CreateJoinedRequest = StoredJoined;
 
 export interface JoinedList {
   joined: StoredJoined[];
+}
+
+/**
+ * One side of an invite still in progress, kept by the space it was made from or is joining
+ * into: its secret key for the invite and what the invite is for, sealed for the owner.
+ */
+export type StoredPendingInvite = StoredAlbum;
+
+export type CreatePendingInviteRequest = StoredPendingInvite;
+
+export interface PendingInviteList {
+  invites: StoredPendingInvite[];
 }

@@ -3,7 +3,7 @@ import type { SubmitEvent } from 'react';
 
 import { useAccount } from '../app/account';
 import { Link, useRouter } from '../app/router';
-import { paths } from '../app/routes';
+import { parseNext, paths, withNext } from '../app/routes';
 import { useSubmit } from '../app/use-submit';
 import { AuthLayout } from '../components/AuthLayout';
 import { PasswordField, TextField } from '../components/Field';
@@ -11,7 +11,8 @@ import { FormAlert } from '../components/FormAlert';
 import { isValidEmail } from '../lib/password';
 
 export function LogIn() {
-  const { navigate } = useRouter();
+  const { navigate, search } = useRouter();
+  const next = parseNext(search);
   const { logIn } = useAccount();
   const { busy, error, setError, run } = useSubmit();
   const [email, setEmail] = useState('');
@@ -27,7 +28,7 @@ export function LogIn() {
     if (busy || !isValidEmail(email) || !password) return;
     // The same box opens either space; the slot the password fits decides which.
     void run(() => logIn(email.trim(), password)).then((ok) => {
-      if (ok) navigate(paths.gallery);
+      if (ok) navigate(next ?? paths.gallery);
     });
   };
 
@@ -37,7 +38,7 @@ export function LogIn() {
       subtitle="Log in to open your photos."
       footer={
         <>
-          New to Twofold? <Link to={paths.signup}>Create a vault</Link>
+          New to Twofold? <Link to={withNext(paths.signup, next)}>Create a vault</Link>
         </>
       }
     >

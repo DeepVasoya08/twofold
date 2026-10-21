@@ -1,9 +1,17 @@
-import { randomBytes, toBase64Url } from '@twofold/crypto/webcrypto';
+import { fromBase64Url, randomBytes, sha256, toBase64Url } from '@twofold/crypto/webcrypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { INVITE_TTL_MS, MAX_MEMBERS, SPACE_HEADER } from '@twofold/types';
-import type { InviterView, JoinedList, JoinerView, MemberList, PhotoPage } from '@twofold/types';
+import { MAX_PENDING_INVITES } from '@twofold/types';
+import type {
+  InviterView,
+  JoinedList,
+  JoinerView,
+  MemberList,
+  PendingInviteList,
+  PhotoPage,
+} from '@twofold/types';
 
 import type { Env } from './env';
 import { MAX_FAILURES } from './proof';
@@ -193,7 +201,7 @@ describe('joined libraries', () => {
   });
 
   it('have no account column', () => {
-    for (const table of ['members', 'joined', 'invites']) {
+    for (const table of ['members', 'joined', 'invites', 'pending_invites']) {
       const columns = sqlite
         .prepare(`SELECT name FROM pragma_table_info('${table}')`)
         .all()
@@ -209,24 +217,36 @@ describe('invites', () => {
 
   async function create(code = newCode()) {
     const handle = random(16);
-    const res = await owner.request('POST', '/invites', { code, handle, commitment: random(32) });
+    const link = random(16);
+    const res = await owner.request('POST', '/invites', {
+      code,
+      link,
+      handle,
+      commitment: random(32),
+    });
     expect(res.status).toBe(201);
-    return { code, handle };
+    return { code, handle, link };
   }
 
   it('runs every step in order, each side its own, then disappears', async () => {
     const { code, handle } = await create();
     const joinerKey = key();
     const inviterKey = key();
+    const intro = sealed();
     const hello = sealed();
     const grant = sealed();
 
     const first = await guest.request('GET', `/invites/join/${code}`);
-    expect(await first.json<JoinerView>()).toMatchObject({ inviterKey: null, grant: null });
+    expect(await first.json<JoinerView>()).toMatchObject({
+      inviterKey: null,
+      intro: null,
+      helloSent: false,
+      grant: null,
+    });
     // The inviter can't reveal before the joiner has sent a key.
-    expect((await owner.request('POST', `/invites/${handle}/reveal`, { inviterKey })).status).toBe(
-      409,
-    );
+    expect(
+      (await owner.request('POST', `/invites/${handle}/reveal`, { inviterKey, intro })).status,
+    ).toBe(409);
     expect((await guest.request('POST', `/invites/join/${code}/key`, { joinerKey })).status).toBe(
       204,
     );
@@ -235,21 +255,30 @@ describe('invites', () => {
       409,
     );
     const seen = await owner.request('GET', `/invites/${handle}`);
-    expect(await seen.json<InviterView>()).toEqual({ joinerKey, hello: null });
-    expect((await owner.request('POST', `/invites/${handle}/reveal`, { inviterKey })).status).toBe(
-      204,
-    );
+    expect(await seen.json<InviterView>()).toEqual({ joinerKey, revealed: false, hello: null });
+    expect(
+      (await owner.request('POST', `/invites/${handle}/reveal`, { inviterKey, intro })).status,
+    ).toBe(204);
+    expect(
+      (await owner.request('POST', `/invites/${handle}/reveal`, { inviterKey, intro })).status,
+    ).toBe(409);
+    const revealed = await guest.request('GET', `/invites/join/${code}`);
+    expect(await revealed.json<JoinerView>()).toMatchObject({
+      inviterKey,
+      intro,
+      helloSent: false,
+    });
     // The inviter can't grant before hearing from the joiner.
     expect((await owner.request('POST', `/invites/${handle}/grant`, { grant })).status).toBe(409);
     expect((await guest.request('POST', `/invites/join/${code}/hello`, { hello })).status).toBe(
       204,
     );
     const withHello = await owner.request('GET', `/invites/${handle}`);
-    expect(await withHello.json<InviterView>()).toEqual({ joinerKey, hello });
+    expect(await withHello.json<InviterView>()).toEqual({ joinerKey, revealed: true, hello });
     expect((await owner.request('POST', `/invites/${handle}/grant`, { grant })).status).toBe(204);
     expect((await owner.request('POST', `/invites/${handle}/grant`, { grant })).status).toBe(409);
     const done = await guest.request('GET', `/invites/join/${code}`);
-    expect(await done.json<JoinerView>()).toMatchObject({ inviterKey, grant });
+    expect(await done.json<JoinerView>()).toMatchObject({ inviterKey, helloSent: true, grant });
     expect((await guest.request('DELETE', `/invites/join/${code}`, {})).status).toBe(204);
     expect((await owner.request('GET', `/invites/${handle}`)).status).toBe(404);
     expect(sqlite.prepare('SELECT * FROM invites').all()).toEqual([]);
@@ -266,12 +295,75 @@ describe('invites', () => {
     ).toBe(409);
   });
 
-  it('keeps the code and handle hashed, and links no account or space', async () => {
-    const { code, handle } = await create();
-    const dump = JSON.stringify(sqlite.prepare('SELECT * FROM invites').all());
+  it('keeps the code, link and handle hashed, and links no account or space', async () => {
+    const { code, handle, link } = await create();
+    const rows = sqlite.prepare('SELECT * FROM invites').all();
+    const dump = JSON.stringify(rows);
     expect(dump).not.toContain(code);
     expect(dump).not.toContain(handle);
+    expect(dump).not.toContain(link);
     expect(dump).not.toContain(ownerToken);
+    const linkHash = toBase64Url(await sha256(fromBase64Url(link) ?? new Uint8Array()));
+    expect(rows[0]?.link_hash).toBe(linkHash);
+  });
+
+  it('can be driven by the joiner from its link, the same as from its code', async () => {
+    const { code, handle, link } = await create();
+    const joinerKey = key();
+    expect((await guest.request('GET', `/invites/join/${link}`)).status).toBe(200);
+    expect((await guest.request('POST', `/invites/join/${link}/key`, { joinerKey })).status).toBe(
+      204,
+    );
+    // Link and code name the same invite, which works once.
+    expect(
+      (await guest.request('POST', `/invites/join/${code}/key`, { joinerKey: key() })).status,
+    ).toBe(409);
+    const seen = await owner.request('GET', `/invites/${handle}`);
+    expect(await seen.json<InviterView>()).toMatchObject({ joinerKey });
+    expect(
+      (
+        await owner.request('POST', `/invites/${handle}/reveal`, {
+          inviterKey: key(),
+          intro: sealed(),
+        })
+      ).status,
+    ).toBe(204);
+    expect(
+      (await guest.request('POST', `/invites/join/${link}/hello`, { hello: sealed() })).status,
+    ).toBe(204);
+    expect((await guest.request('DELETE', `/invites/join/${link}`, {})).status).toBe(204);
+    expect((await guest.request('GET', `/invites/join/${code}`)).status).toBe(404);
+  });
+
+  it('refuses unknown or malformed link tokens', async () => {
+    await create();
+    expect((await guest.request('GET', `/invites/join/${random(16)}`)).status).toBe(404);
+    expect((await guest.request('GET', `/invites/join/${random(15)}`)).status).toBe(400);
+    expect((await guest.request('GET', `/invites/join/${random(32)}`)).status).toBe(400);
+    expect(
+      (
+        await owner.request('POST', '/invites', {
+          code: newCode(),
+          link: random(8),
+          handle: random(16),
+          commitment: random(32),
+        })
+      ).status,
+    ).toBe(400);
+  });
+
+  it('refuses a taken link', async () => {
+    const { link } = await create();
+    expect(
+      (
+        await owner.request('POST', '/invites', {
+          code: newCode(),
+          link,
+          handle: random(16),
+          commitment: random(32),
+        })
+      ).status,
+    ).toBe(409);
   });
 
   it('can’t be driven from the wrong side', async () => {
@@ -279,9 +371,14 @@ describe('invites', () => {
     // A joiner with the code can't reach the inviter's routes, which need the handle.
     expect((await guest.request('GET', `/invites/${code}`)).status).toBe(400);
     expect((await guest.request('GET', `/invites/${random(16)}`)).status).toBe(404);
+    // The handle is the same size as a link token, but it isn't one.
     expect(
       (await guest.request('POST', `/invites/join/${handle}/key`, { joinerKey: key() })).status,
-    ).toBe(400);
+    ).toBe(404);
+    // A joiner can't reveal through the joiner routes.
+    expect(
+      (await guest.request('POST', `/invites/join/${code}/reveal`, { inviterKey: key() })).status,
+    ).toBe(404);
   });
 
   it('lets the inviter cancel', async () => {
@@ -290,14 +387,20 @@ describe('invites', () => {
     expect((await guest.request('GET', `/invites/join/${code}`)).status).toBe(404);
   });
 
-  it('expire', async () => {
-    const { code } = await create();
+  it('last seven days, then expire', async () => {
+    const before = Date.now();
+    const { code, link, handle } = await create();
+    const row = sqlite.prepare('SELECT expires_at FROM invites').get();
+    expect(INVITE_TTL_MS).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(Number(row?.expires_at)).toBeGreaterThanOrEqual(before + INVITE_TTL_MS);
+    expect(Number(row?.expires_at)).toBeLessThanOrEqual(Date.now() + INVITE_TTL_MS);
     sqlite.prepare('UPDATE invites SET expires_at = ?').run(Date.now() - 1);
     expect((await guest.request('GET', `/invites/join/${code}`)).status).toBe(404);
+    expect((await guest.request('GET', `/invites/join/${link}`)).status).toBe(404);
+    expect((await owner.request('GET', `/invites/${handle}`)).status).toBe(404);
     // Creating another invite cleans up the expired ones.
     await create();
     expect(sqlite.prepare('SELECT * FROM invites').all()).toHaveLength(1);
-    expect(INVITE_TTL_MS).toBe(24 * 60 * 60 * 1000);
   });
 
   it('limits wrong codes per account', async () => {
@@ -332,11 +435,12 @@ describe('invites', () => {
   });
 
   it('refuses malformed codes, keys and messages, and a taken code', async () => {
-    const { code } = await create();
+    const { code, handle } = await create();
     expect(
       (
         await owner.request('POST', '/invites', {
           code,
+          link: random(16),
           handle: random(16),
           commitment: random(32),
         })
@@ -347,6 +451,7 @@ describe('invites', () => {
         (
           await owner.request('POST', '/invites', {
             code: bad,
+            link: random(16),
             handle: random(16),
             commitment: random(32),
           })
@@ -359,11 +464,119 @@ describe('invites', () => {
     expect(
       (await guest.request('POST', `/invites/join/${code}/hello`, { hello: random(2000) })).status,
     ).toBe(400);
+    // Revealing needs the inviter's sealed name as well as its key.
+    expect(
+      (await owner.request('POST', `/invites/${handle}/reveal`, { inviterKey: key() })).status,
+    ).toBe(400);
   });
 
   it('needs a session', async () => {
     const { code } = await create();
     const stranger = new Client(env);
     expect((await stranger.request('GET', `/invites/join/${code}`)).status).toBe(401);
+  });
+});
+
+describe('pending invites', () => {
+  const record = () => ({ id: newId(), meta: newMeta() });
+
+  async function list(c: Client) {
+    const res = await c.request('GET', '/space/pending-invites');
+    expect(res.status).toBe(200);
+    return (await res.json<PendingInviteList>()).invites;
+  }
+
+  it('are stored, listed and removed per space', async () => {
+    const pending = record();
+    expect((await owner.request('POST', '/space/pending-invites', pending)).status).toBe(201);
+    expect((await owner.request('POST', '/space/pending-invites', pending)).status).toBe(409);
+    expect(await list(owner)).toEqual([pending]);
+    // Another space (say, the private one) sees none of them, and can't delete them.
+    useSpace(owner, random(16));
+    expect(await list(owner)).toEqual([]);
+    expect((await owner.request('DELETE', `/space/pending-invites/${pending.id}`, {})).status).toBe(
+      204,
+    );
+    useSpace(owner, ownerToken);
+    expect(await list(owner)).toEqual([pending]);
+    expect((await owner.request('DELETE', `/space/pending-invites/${pending.id}`, {})).status).toBe(
+      204,
+    );
+    expect(await list(owner)).toEqual([]);
+  });
+
+  it('can be replaced in place, only in their own space', async () => {
+    const pending = record();
+    await owner.request('POST', '/space/pending-invites', pending);
+    const meta = newMeta();
+    expect(
+      (await owner.request('PUT', `/space/pending-invites/${pending.id}`, { meta })).status,
+    ).toBe(204);
+    expect(await list(owner)).toEqual([{ id: pending.id, meta }]);
+    expect((await owner.request('PUT', `/space/pending-invites/${newId()}`, { meta })).status).toBe(
+      404,
+    );
+    useSpace(owner, random(16));
+    expect(
+      (await owner.request('PUT', `/space/pending-invites/${pending.id}`, { meta: newMeta() }))
+        .status,
+    ).toBe(404);
+    useSpace(owner, ownerToken);
+    expect(await list(owner)).toEqual([{ id: pending.id, meta }]);
+    const member = await share();
+    useSpace(guest, member.token);
+    expect(
+      (await guest.request('PUT', `/space/pending-invites/${pending.id}`, { meta })).status,
+    ).toBe(403);
+  });
+
+  it('are owner-only: share tokens are refused, for libraries and albums alike', async () => {
+    await owner.request('POST', '/space/pending-invites', record());
+    const member = await share();
+    useSpace(guest, member.token);
+    expect((await guest.request('GET', '/space/pending-invites')).status).toBe(403);
+    expect((await guest.request('POST', '/space/pending-invites', record())).status).toBe(403);
+    expect((await guest.request('DELETE', `/space/pending-invites/${newId()}`, {})).status).toBe(
+      403,
+    );
+    const albumId = await addAlbum(owner);
+    expect(
+      (await owner.request('PUT', `/space/albums/${albumId}/shared`, { meta: newMeta() })).status,
+    ).toBe(204);
+    const albumMember = { id: newId(), token: random(16), meta: newMeta(), album: albumId };
+    expect((await owner.request('POST', '/space/members', albumMember)).status).toBe(201);
+    useSpace(guest, albumMember.token);
+    expect((await guest.request('GET', '/space/pending-invites')).status).toBe(403);
+  });
+
+  it('are refused when malformed, or when too many are waiting', async () => {
+    expect(
+      (await owner.request('POST', '/space/pending-invites', { id: 'x', meta: newMeta() })).status,
+    ).toBe(400);
+    expect(
+      (await owner.request('POST', '/space/pending-invites', { id: newId(), meta: 'short' }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await owner.request('POST', '/space/pending-invites', { ...record(), extra: 1 })).status,
+    ).toBe(400);
+    for (let i = 0; i < MAX_PENDING_INVITES; i++) {
+      expect((await owner.request('POST', '/space/pending-invites', record())).status).toBe(201);
+    }
+    expect((await owner.request('POST', '/space/pending-invites', record())).status).toBe(409);
+  });
+
+  it('keep no account or token, and are forgotten when the space is wiped', async () => {
+    await owner.request('POST', '/space/pending-invites', record());
+    const dump = JSON.stringify(sqlite.prepare('SELECT * FROM pending_invites').all());
+    expect(dump).not.toContain(ownerToken);
+    expect((await owner.request('DELETE', '/space', {})).status).toBe(204);
+    expect(sqlite.prepare('SELECT * FROM pending_invites').all()).toEqual([]);
+  });
+
+  it('need a session', async () => {
+    const stranger = new Client(env);
+    useSpace(stranger, ownerToken);
+    expect((await stranger.request('GET', '/space/pending-invites')).status).toBe(401);
   });
 });

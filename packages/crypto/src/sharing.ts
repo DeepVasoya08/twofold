@@ -1,7 +1,11 @@
-import { STORAGE_SIZES } from '@twofold/types';
+import { KEY_SIZES, SHARE_SIZES, STORAGE_SIZES } from '@twofold/types';
+import type { KdfParams } from '@twofold/types';
 
+import { DEFAULT_KDF } from './keyring';
+import type { SpaceKeys } from './keyring';
+import { hashPassword } from './password-hash';
 import { getSodium } from './sodium';
-import { DecryptionError } from './storage';
+import { DecryptionError, openOwnerRecord, sealOwnerRecord } from './storage';
 import { fromBase64Url, toBase64Url } from './webcrypto';
 import { WORDLIST } from './wordlist';
 
@@ -12,20 +16,35 @@ import { WORDLIST } from './wordlist';
  * Both sides make a crypto_box key pair and exchange public keys through the server. The
  * inviter first publishes only a commitment (BLAKE2b) to its key, and reveals the key after
  * the joiner has sent theirs, so a server in the middle has to pick its fake keys blind.
- * Both sides then show a safety phrase hashed from both public keys; if the phrases match,
- * nobody swapped keys. Only after the inviter confirms that does it send the access, sealed
+ * Both sides then show a safety phrase derived from both public keys (with Argon2id, so it
+ * is slow to search); if the phrases match, nobody swapped keys. Only after the inviter confirms that does it send the access, sealed
  * with crypto_box to the joiner's key.
+ *
+ * Neither side has to stay online: each keeps its secret key for the invite in an owner-only
+ * record of the space it invites from or joins into (`sealPendingInvite`), so the next visit,
+ * on any of its devices, can take the next step.
  */
 
 /** Invite codes look like TWO-7KQ4-M9XD: 8 characters from 32, so 40 random bits. */
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_CHARS = 8;
 const PHRASE_WORDS = 4;
-const PHRASE_CONTEXT = 'twofold:safety-phrase:v1';
+const PHRASE_CONTEXT = 'twofold:safety-phrase:v2';
+const PHRASE_SALT_CONTEXT = 'twofold:safety-phrase-salt:v2';
+
+/**
+ * What one safety phrase costs: Argon2id at the login cost (64 MiB, 3 passes). Each side pays
+ * it once per invite; a server searching for a joiner key whose words match would pay it
+ * about 2^44 times.
+ */
+export const PHRASE_KDF: KdfParams = DEFAULT_KDF;
 const COMMIT_CONTEXT = 'twofold:invite-commit:v1';
 
-/** What a sealed message is for, so one can't be replayed as the other. */
-export type PeerMessage = 'hello' | 'grant';
+/**
+ * What a sealed message is for, so one can't be replayed as another: the joiner's name
+ * (`hello`), the inviter's name (`intro`), and the access (`grant`).
+ */
+export type PeerMessage = 'hello' | 'intro' | 'grant';
 
 /** One side's key pair for a single invite. Thrown away when the invite ends. */
 export interface InviteKeys {
@@ -80,22 +99,16 @@ export async function checkCommitment(commitment: string, publicKey: string): Pr
   return sodium.memcmp(expected, actual);
 }
 
-/**
- * Four words both people see once keys are exchanged. They match only if each side got the
- * other's real public key. 44 bits: with the commitment, a server in the middle gets one
- * blind guess per invite.
- */
-export async function safetyPhrase(inviterKey: string, joinerKey: string): Promise<string[]> {
-  const sodium = await getSodium();
-  const size = sodium.crypto_box_PUBLICKEYBYTES;
-  const input = new Uint8Array(size * 2);
-  input.set(publicKeyBytes(inviterKey, size), 0);
-  input.set(publicKeyBytes(joinerKey, size), size);
-  const hash = sodium.crypto_generichash(32, input, new TextEncoder().encode(PHRASE_CONTEXT));
+/** Phrases already worked out on this device, so checking an invite again is free. */
+const phraseCache = new Map<string, string[]>();
+const PHRASE_CACHE_MAX = 32;
+
+/** Turns the first 44 bits of `bytes` into four BIP-39 words. */
+function wordsFrom(bytes: Uint8Array): string[] {
   const words: string[] = [];
   let bits = 0;
   let value = 0;
-  for (const byte of hash) {
+  for (const byte of bytes) {
     value = (value << 8) | byte;
     bits += 8;
     if (bits >= 11) {
@@ -106,6 +119,50 @@ export async function safetyPhrase(inviterKey: string, joinerKey: string): Promi
     }
   }
   return words;
+}
+
+/**
+ * Four words both people see once keys are exchanged. They match only if each side got the
+ * other's real public key. 44 bits: with the commitment, a server in the middle gets one
+ * blind guess per invite.
+ *
+ * The words come from Argon2id (`crypto_pwhash` at PHRASE_KDF, the login cost) over the
+ * transcript: a keyed BLAKE2b of both public keys, in order. The 16-byte salt is fixed by
+ * the same transcript (a BLAKE2b of it under its own label), so both sides get the same
+ * words and nothing else is needed. This doesn't change what a blind guess wins; it makes
+ * searching expensive: a server that somehow learned the inviter's key before choosing a
+ * joiner key would need about 2^44 Argon2id runs to find one whose words match. It runs
+ * through the configured password hasher, so in the web app it runs in a Web Worker.
+ */
+export async function safetyPhrase(inviterKey: string, joinerKey: string): Promise<string[]> {
+  const sodium = await getSodium();
+  const size = sodium.crypto_box_PUBLICKEYBYTES;
+  const input = new Uint8Array(size * 2);
+  input.set(publicKeyBytes(inviterKey, size), 0);
+  input.set(publicKeyBytes(joinerKey, size), size);
+  const cacheKey = `${inviterKey}.${joinerKey}`;
+  const cached = phraseCache.get(cacheKey);
+  if (cached) return [...cached];
+  const encoder = new TextEncoder();
+  const transcript = sodium.crypto_generichash(32, input, encoder.encode(PHRASE_CONTEXT));
+  const salt = sodium.crypto_generichash(
+    KEY_SIZES.salt,
+    transcript,
+    encoder.encode(PHRASE_SALT_CONTEXT),
+  );
+  const derived = await hashPassword({
+    password: toBase64Url(transcript),
+    salt,
+    kdf: PHRASE_KDF,
+  });
+  const words = wordsFrom(derived);
+  sodium.memzero(derived);
+  if (phraseCache.size >= PHRASE_CACHE_MAX) {
+    const oldest = phraseCache.keys().next().value;
+    if (oldest !== undefined) phraseCache.delete(oldest);
+  }
+  phraseCache.set(cacheKey, words);
+  return [...words];
 }
 
 function labelled(purpose: PeerMessage): Uint8Array {
@@ -175,6 +232,65 @@ export async function openFromPeer(
 export async function dropInviteKeys(keys: InviteKeys): Promise<void> {
   const sodium = await getSodium();
   sodium.memzero(keys.secretKey);
+}
+
+/**
+ * A new invite link token: 128 random bits, so it can't be guessed. It only names the invite
+ * (the server keeps its SHA-256, like the code); it carries no key material.
+ */
+export async function newInviteLink(): Promise<string> {
+  const sodium = await getSodium();
+  return toBase64Url(sodium.randombytes_buf(SHARE_SIZES.link));
+}
+
+/**
+ * Seals one side's state of an invite as an owner-only record of `space`, so the invite can
+ * be finished later, from any device that opens that space: the invite's secret key, then
+ * `details` (what the invite is for, and how to reach it). Members of the space never get
+ * the subkey these records are sealed under.
+ */
+export async function sealPendingInvite(
+  space: SpaceKeys,
+  id: string,
+  keys: InviteKeys,
+  details: Uint8Array,
+): Promise<string> {
+  const sodium = await getSodium();
+  if (keys.secretKey.length !== sodium.crypto_box_SECRETKEYBYTES) {
+    throw new Error('Malformed invite key');
+  }
+  const plain = new Uint8Array(keys.secretKey.length + details.length);
+  plain.set(keys.secretKey, 0);
+  plain.set(details, keys.secretKey.length);
+  try {
+    return await sealOwnerRecord(space, 'invite', id, plain);
+  } finally {
+    sodium.memzero(plain);
+  }
+}
+
+/**
+ * Opens a record `sealPendingInvite` made: the invite's key pair (the public key is derived
+ * again from the secret one) and its details. Throws DecryptionError if the record was
+ * tampered with, belongs to another record or space, or is malformed.
+ */
+export async function openPendingInvite(
+  space: SpaceKeys,
+  id: string,
+  sealed: string,
+): Promise<{ keys: InviteKeys; details: Uint8Array }> {
+  const sodium = await getSodium();
+  const plain = await openOwnerRecord(space, 'invite', id, sealed);
+  const keyBytes = sodium.crypto_box_SECRETKEYBYTES;
+  if (plain.length < keyBytes) {
+    sodium.memzero(plain);
+    throw new DecryptionError();
+  }
+  const secretKey = plain.slice(0, keyBytes);
+  const details = plain.slice(keyBytes);
+  sodium.memzero(plain);
+  const publicKey = toBase64Url(sodium.crypto_scalarmult_base(secretKey));
+  return { keys: { publicKey, secretKey }, details };
 }
 
 /** A new random token a member uses to reach a shared space. The owner can revoke it. */

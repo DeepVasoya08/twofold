@@ -7,6 +7,7 @@ import {
   MAX_ALBUM_MEMBERS,
   MAX_JOINED,
   MAX_MEMBERS,
+  MAX_PENDING_INVITES,
   SPACE_HEADER,
   STORAGE_SIZES,
   THUMB_BATCH_MAX,
@@ -16,6 +17,7 @@ import type {
   AlbumList,
   JoinedList,
   MemberList,
+  PendingInviteList,
   PhotoPage,
   ProfilePhotoResponse,
 } from '@twofold/types';
@@ -43,6 +45,7 @@ import {
   createAlbumSchema,
   createJoinedSchema,
   createMemberSchema,
+  createPendingInviteSchema,
   createPhotoSchema,
   emptySchema,
   photoPartSchema,
@@ -57,14 +60,19 @@ import {
   countAlbumMembers,
   countJoined,
   countMembers,
+  countPendingInvites,
   deleteJoined,
   deleteMember,
+  deletePendingInvite,
   deleteSharing,
   insertJoined,
   insertMember,
+  insertPendingInvite,
+  updatePendingInvite,
   memberByTokenQuery,
   listJoined,
   listMembers,
+  listPendingInvites,
 } from '../share-db';
 import {
   commitPhoto,
@@ -105,7 +113,7 @@ const notFound = 'That photo isn’t here anymore.';
  *
  * The owner's token is the space id. A member's is a share token the owner registered; it
  * reaches the same photos and albums, but not the owner-only routes (sharing, joined
- * libraries, wiping the space), and the owner can revoke it. A token given one album reaches
+ * libraries, invites in progress, wiping the space), and the owner can revoke it. A token given one album reaches
  * only that album's shared photos, and can't change anything.
  */
 export const space = new Hono<AppEnv>();
@@ -644,5 +652,54 @@ space.delete('/joined/:id', requireOwner, async (c) => {
     return c.json({ error: messages.badRequest }, 400);
   }
   await deleteJoined(c.env.DB, c.get('space'), id.data);
+  return c.body(null, 204);
+});
+
+/**
+ * Invites this space has in progress, on either side: sealed records with the invite's
+ * secret key and what it's for, under the owner's own key. They're kept per space like
+ * everything else, so the invite can be finished from any device that opens this space, and
+ * nothing links them to an account or to a row in `invites`.
+ */
+space.get('/pending-invites', requireOwner, async (c) =>
+  c.json<PendingInviteList>({ invites: await listPendingInvites(c.env.DB, c.get('space')) }),
+);
+
+space.post('/pending-invites', requireOwner, async (c) => {
+  const body = await readBody(c, createPendingInviteSchema);
+  if (!body) return c.json({ error: messages.badRequest }, 400);
+  const tag = c.get('space');
+  if ((await countPendingInvites(c.env.DB, tag)) >= MAX_PENDING_INVITES) {
+    return c.json(
+      { error: 'You have as many invites waiting as Twofold allows. Cancel one first.' },
+      409,
+    );
+  }
+  if (!(await insertPendingInvite(c.env.DB, tag, body))) {
+    return c.json({ error: messages.badRequest }, 409);
+  }
+  return c.body(null, 201);
+});
+
+/**
+ * Replaces an invite's record: the inviter pins the joiner's key in it before revealing its
+ * own, so every later step uses the key it revealed to.
+ */
+space.put('/pending-invites/:id', requireOwner, async (c) => {
+  const id = recordIdSchema.safeParse(c.req.param('id'));
+  const body = await readBody(c, updateRecordSchema);
+  if (!id.success || !body) return c.json({ error: messages.badRequest }, 400);
+  if (!(await updatePendingInvite(c.env.DB, c.get('space'), id.data, body.meta))) {
+    return c.json({ error: 'That invite isn’t waiting anymore.' }, 404);
+  }
+  return c.body(null, 204);
+});
+
+space.delete('/pending-invites/:id', requireOwner, async (c) => {
+  const id = recordIdSchema.safeParse(c.req.param('id'));
+  if (!id.success || !(await readBody(c, emptySchema))) {
+    return c.json({ error: messages.badRequest }, 400);
+  }
+  await deletePendingInvite(c.env.DB, c.get('space'), id.data);
   return c.body(null, 204);
 });

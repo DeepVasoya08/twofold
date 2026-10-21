@@ -16,6 +16,7 @@ import {
   helloSchema,
   inviteCodeSchema,
   inviteHandleSchema,
+  inviteLinkSchema,
   joinInviteSchema,
   revealSchema,
 } from '../schemas';
@@ -32,14 +33,15 @@ import {
 } from '../share-db';
 import type { InviteSide, InviteStep } from '../share-db';
 
-const gone = 'That invite code isn’t valid anymore. Ask for a new one.';
+const gone = 'That invite isn’t valid anymore. Ask for a new one.';
 const outOfOrder = 'This invite has already moved on. Start again with a new code.';
 
 /**
  * Invites: a rendezvous where two browsers exchange public keys and sealed messages (see
  * docs/security.md). The server only relays; it never sees which space is being shared. The
- * joiner addresses the invite by its code, the inviter by a private handle, and each side
- * can only fill in its own steps, in order.
+ * joiner addresses the invite by its code or its link token, the inviter by a private
+ * handle, and each side can only fill in its own steps, in order. Neither side has to be
+ * online at the same time as the other: each picks up where it left off on its next visit.
  */
 export const invites = new Hono<AppEnv>();
 
@@ -47,10 +49,12 @@ invites.use(requireSession);
 
 const hashText = async (text: string) => toBase64Url(await sha256(new TextEncoder().encode(text)));
 
-async function hashHandle(handle: string): Promise<string | null> {
-  const bytes = inviteHandleSchema.safeParse(handle).success ? fromBase64Url(handle) : null;
+async function hashToken(schema: typeof inviteHandleSchema, token: string) {
+  const bytes = schema.safeParse(token).success ? fromBase64Url(token) : null;
   return bytes ? toBase64Url(await sha256(bytes)) : null;
 }
+
+const hashHandle = (handle: string) => hashToken(inviteHandleSchema, handle);
 
 /** Codes are short, so wrong ones are limited per account like wrong passwords. */
 function throttleKey(c: Context<AppEnv>): string {
@@ -60,11 +64,13 @@ function throttleKey(c: Context<AppEnv>): string {
 invites.post('/', async (c) => {
   const body = await readBody(c, createInviteSchema);
   const handleHash = body && (await hashHandle(body.handle));
-  if (!body || !handleHash) return c.json({ error: messages.badRequest }, 400);
+  const linkHash = body && (await hashToken(inviteLinkSchema, body.link));
+  if (!body || !handleHash || !linkHash) return c.json({ error: messages.badRequest }, 400);
   const now = Date.now();
   await deleteExpiredInvites(c.env.DB, now);
   const created = await insertInvite(c.env.DB, {
     handleHash,
+    linkHash,
     codeHash: await hashText(body.code),
     commitment: body.commitment,
     expiresAt: now + INVITE_TTL_MS,
@@ -73,25 +79,37 @@ invites.post('/', async (c) => {
   return c.body(null, 201);
 });
 
+/** How the joiner named the invite: the hash to look it up by, and which column holds it. */
+interface JoinerRef {
+  side: InviteSide;
+  hash: string;
+}
+
 /**
- * Resolves the joiner's code, counting unknown codes against the account. The attempt is
- * counted before the code is looked up (so parallel guesses can't get past the limit) and
- * given back if the code is real.
+ * Resolves what the joiner named the invite by: a typed code (`TWO-XXXX-XXXX`) or a link
+ * token (128 random bits). Unknown ones count against the account like wrong passwords.
+ * Codes are short enough to guess, so this matters for them; link tokens go through the same
+ * limit anyway. The attempt is counted before the lookup (so parallel guesses can't get past
+ * the limit) and given back if the invite is real.
  */
-async function joinerSide(c: Context<AppEnv>): Promise<string | Response> {
-  const code = inviteCodeSchema.safeParse(c.req.param('code'));
-  if (!code.success) return c.json({ error: messages.badRequest }, 400);
+async function joinerSide(c: Context<AppEnv>): Promise<JoinerRef | Response> {
+  const ref = c.req.param('ref') ?? '';
+  const code = inviteCodeSchema.safeParse(ref);
+  const linkHash = code.success ? null : await hashToken(inviteLinkSchema, ref);
+  if (!code.success && !linkHash) return c.json({ error: messages.badRequest }, 400);
+  const found: JoinerRef = code.success
+    ? { side: 'code_hash', hash: await hashText(code.data) }
+    : { side: 'link_hash', hash: linkHash ?? '' };
   const now = Date.now();
   const key = throttleKey(c);
   if ((await takeAttempt(c.env.DB, key, now, now - FAILURE_WINDOW_MS)) > MAX_FAILURES) {
     return c.json({ error: messages.throttled }, 429);
   }
-  const hash = await hashText(code.data);
-  if (!(await findInvite(c.env.DB, 'code_hash', hash, now))) {
+  if (!(await findInvite(c.env.DB, found.side, found.hash, now))) {
     return c.json({ error: gone }, 404);
   }
   await returnAttempt(c.env.DB, key);
-  return hash;
+  return found;
 }
 
 async function inviterSide(c: Context<AppEnv>): Promise<string | Response> {
@@ -110,7 +128,7 @@ async function step<S extends z.ZodType>(
   hash: string,
   name: InviteStep,
   schema: S,
-  pick: (body: z.infer<S>) => string,
+  pick: (body: z.infer<S>) => string[],
 ): Promise<Response> {
   const body = await readBody(c, schema);
   if (!body) return c.json({ error: messages.badRequest }, 400);
@@ -120,39 +138,39 @@ async function step<S extends z.ZodType>(
   return c.body(null, 204);
 }
 
-invites.get('/join/:code', async (c) => {
-  const hash = await joinerSide(c);
-  if (hash instanceof Response) return hash;
-  const invite = await findInvite(c.env.DB, 'code_hash', hash, Date.now());
+invites.get('/join/:ref', async (c) => {
+  const ref = await joinerSide(c);
+  if (ref instanceof Response) return ref;
+  const invite = await findInvite(c.env.DB, ref.side, ref.hash, Date.now());
   if (!invite) return c.json({ error: gone }, 404);
   return c.json<JoinerView>(joinerView(invite));
 });
 
 /** The first joiner to send a key gets the invite; it works once. */
-invites.post('/join/:code/key', async (c) => {
-  const hash = await joinerSide(c);
-  if (hash instanceof Response) return hash;
+invites.post('/join/:ref/key', async (c) => {
+  const ref = await joinerSide(c);
+  if (ref instanceof Response) return ref;
   const body = await readBody(c, joinInviteSchema);
   if (!body) return c.json({ error: messages.badRequest }, 400);
   const now = Date.now();
-  if (!(await fillInviteStep(c.env.DB, 'code_hash', hash, 'joiner_key', body.joinerKey, now))) {
-    return c.json({ error: 'Someone already used this code. Ask for a new one.' }, 409);
+  if (!(await fillInviteStep(c.env.DB, ref.side, ref.hash, 'joiner_key', [body.joinerKey], now))) {
+    return c.json({ error: 'Someone already used this invite. Ask for a new one.' }, 409);
   }
   return c.body(null, 204);
 });
 
-invites.post('/join/:code/hello', async (c) => {
-  const hash = await joinerSide(c);
-  if (hash instanceof Response) return hash;
-  return step(c, 'code_hash', hash, 'hello', helloSchema, (body) => body.hello);
+invites.post('/join/:ref/hello', async (c) => {
+  const ref = await joinerSide(c);
+  if (ref instanceof Response) return ref;
+  return step(c, ref.side, ref.hash, 'hello', helloSchema, (body) => [body.hello]);
 });
 
 /** The joiner is done (or gives up): the invite is deleted. */
-invites.delete('/join/:code', async (c) => {
-  const hash = await joinerSide(c);
-  if (hash instanceof Response) return hash;
+invites.delete('/join/:ref', async (c) => {
+  const ref = await joinerSide(c);
+  if (ref instanceof Response) return ref;
   if (!(await readBody(c, emptySchema))) return c.json({ error: messages.badRequest }, 400);
-  await deleteInvite(c.env.DB, 'code_hash', hash);
+  await deleteInvite(c.env.DB, ref.side, ref.hash);
   return c.body(null, 204);
 });
 
@@ -167,13 +185,16 @@ invites.get('/:handle', async (c) => {
 invites.post('/:handle/reveal', async (c) => {
   const hash = await inviterSide(c);
   if (hash instanceof Response) return hash;
-  return step(c, 'handle_hash', hash, 'inviter_key', revealSchema, (body) => body.inviterKey);
+  return step(c, 'handle_hash', hash, 'reveal', revealSchema, (body) => [
+    body.inviterKey,
+    body.intro,
+  ]);
 });
 
 invites.post('/:handle/grant', async (c) => {
   const hash = await inviterSide(c);
   if (hash instanceof Response) return hash;
-  return step(c, 'handle_hash', hash, 'grant_box', grantSchema, (body) => body.grant);
+  return step(c, 'handle_hash', hash, 'grant_box', grantSchema, (body) => [body.grant]);
 });
 
 /** The inviter cancels. */

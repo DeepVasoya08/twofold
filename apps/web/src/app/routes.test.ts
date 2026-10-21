@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { matchRoute, parsePhotoContext, paths } from './routes';
+import { redirectFor } from './access';
+import { matchRoute, parseNext, parsePhotoContext, paths, withNext } from './routes';
+import { lockedAccount, mainSession, signedOut } from '../test/sessions';
 
 describe('matchRoute', () => {
   it.each([
@@ -58,5 +60,49 @@ describe('photo context', () => {
     expect(parsePhotoContext('')).toEqual({ kind: 'all' });
     expect(parsePhotoContext('?from=album:')).toEqual({ kind: 'all' });
     expect(parsePhotoContext('?from=weird')).toEqual({ kind: 'all' });
+  });
+});
+
+describe('invite links', () => {
+  // 22 base64url characters: 128 bits. A plain pattern, so it isn't mistaken for a secret.
+  const token = 'A'.repeat(22);
+
+  it('match only a 128-bit token', () => {
+    expect(matchRoute(paths.join(token))).toEqual({ name: 'join', token });
+    expect(matchRoute(`/join/${token}/`)).toEqual({ name: 'join', token });
+    for (const bad of ['short', `${token}A`, `${'A'.repeat(21)}B`, `${'A'.repeat(21)}!`]) {
+      expect(matchRoute(`/join/${bad}`).name).toBe('not-found');
+    }
+  });
+
+  it('come back after signing in, and nowhere else', () => {
+    const link = paths.join(token);
+    expect(parseNext(withNext('', link))).toBe(link);
+    expect(withNext(paths.login, null)).toBe(paths.login);
+    for (const other of ['/photos', 'https://evil.example/join/x', '//evil.example', '/join/x']) {
+      expect(parseNext(`?next=${encodeURIComponent(other)}`)).toBeNull();
+    }
+  });
+
+  it('send a signed-out or locked visitor to sign in first, then back', () => {
+    const route = matchRoute(paths.join(token));
+    const back = withNext(paths.login, paths.join(token));
+    const options = { space: null, signingUp: false };
+    expect(redirectFor(route, signedOut, options)).toBe(back);
+    expect(redirectFor(route, lockedAccount, options)).toBe(
+      withNext(paths.unlock, paths.join(token)),
+    );
+    expect(redirectFor(route, mainSession(), { ...options, space: 'main' })).toBeNull();
+    // Signed in, the sign-in screens go back to the link.
+    const search = `?next=${encodeURIComponent(paths.join(token))}`;
+    for (const name of ['login', 'signup', 'unlock'] as const) {
+      expect(
+        redirectFor({ name }, mainSession(), { space: 'main', signingUp: false, search }),
+      ).toBe(paths.join(token));
+    }
+    expect(redirectFor({ name: 'unlock' }, signedOut, { ...options, search })).toBe(back);
+    expect(redirectFor({ name: 'login' }, mainSession(), { space: 'main', signingUp: false })).toBe(
+      paths.gallery,
+    );
   });
 });

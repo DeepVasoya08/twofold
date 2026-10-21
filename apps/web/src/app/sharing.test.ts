@@ -6,16 +6,20 @@ import type { SpaceKeys } from '@twofold/crypto';
 import { FakeInvites, FakeServer } from '../test/fake-server';
 import { FormError } from './account-ops';
 import {
+  abandonJoin,
   advanceInvite,
   advanceJoin,
   cancelInvite,
+  checkJoin,
   confirmInvite,
   finishJoin,
+  forgetPending,
   leaveAll,
   leaveJoined,
   leaveLibrary,
   listJoined,
   listMembers,
+  listPending,
   removeMember,
   sessionStore,
   startInvite,
@@ -52,13 +56,20 @@ async function world(): Promise<World> {
 
 const apis = (w: World) => ({ invites: w.invites.api, space: w.server.api });
 
-/** Runs an invite up to the point where Alice is asked to confirm. */
-async function handshake(w: World) {
-  const invite = await startInvite(w.invites.api);
-  const join = await startJoin(invite.code, w.invites.api);
-  expect(await advanceInvite(invite, w.invites.api)).toEqual({ stage: 'waiting' });
+/**
+ * Runs an invite up to the point where Alice is asked to confirm. Bob accepts by the link;
+ * each later step is what that side's next visit does.
+ */
+async function handshake(w: World, album: string | null = null) {
+  const invite = await startInvite(w.alice, album, apis(w));
+  expect(await advanceInvite(invite, 'Alice', w.alice, apis(w))).toEqual({ stage: 'waiting' });
+  const join = await startJoin(invite.link, w.bob, apis(w));
+  expect(await advanceJoin(join, 'Bob', w.invites.api)).toEqual({ stage: 'waiting' });
+  // Alice's next visit reveals her key; her name goes with it, sealed to Bob.
+  expect(await advanceInvite(invite, 'Alice', w.alice, apis(w))).toEqual({ stage: 'accepted' });
+  // Bob's next visit checks it, sends his name, and shows the words.
   const joining = await advanceJoin(join, 'Bob', w.invites.api);
-  const asked = await advanceInvite(invite, w.invites.api);
+  const asked = await advanceInvite(invite, 'Alice', w.alice, apis(w));
   return { invite, join, joining, asked };
 }
 
@@ -75,7 +86,7 @@ async function shareAliceWithBob(w: World): Promise<{ invite: Invite; join: Join
 
 /** Alice shares one album with Bob, all the way through, from her store. */
 async function shareAlbumWithBob(w: World, alices: SpaceStore, albumId: string) {
-  const { invite, join, asked } = await handshake(w);
+  const { invite, join, asked } = await handshake(w, albumId);
   if (asked.stage !== 'confirm') throw new Error('expected a confirmation');
   const albumKey = await alices.shareAlbum(albumId);
   await confirmInvite(invite, asked, w.alice, 'Alice', apis(w), { albumId, albumKey });
@@ -85,13 +96,19 @@ async function shareAlbumWithBob(w: World, alices: SpaceStore, albumId: string) 
   return granted.grant;
 }
 
+/** Flips one character of a base64url string in its middle. */
+function tamper(text: string): string {
+  const at = Math.floor(text.length / 2);
+  return `${text.slice(0, at)}${text[at] === 'A' ? 'B' : 'A'}${text.slice(at + 1)}`;
+}
+
 describe('invites', () => {
-  it('show both sides the same safety phrase, and the joiner’s name', async () => {
+  it('show both sides the same safety phrase, and each the other’s name', async () => {
     const w = await world();
     const { joining, asked } = await handshake(w);
-    expect(joining.stage).toBe('waiting');
-    if (joining.stage !== 'waiting' || asked.stage !== 'confirm') throw new Error('wrong stage');
+    if (joining.stage !== 'check' || asked.stage !== 'confirm') throw new Error('wrong stage');
     expect(asked.name).toBe('Bob');
+    expect(joining.name).toBe('Alice');
     expect(joining.phrase).toHaveLength(4);
     expect(asked.phrase).toEqual(joining.phrase);
   });
@@ -104,8 +121,9 @@ describe('invites', () => {
     ]);
     const [library] = await listJoined(w.bob, w.server.api);
     expect(library).toMatchObject({ name: 'Alice' });
-    // The invite is gone once the joiner has what it needs.
+    // The invite is gone once the joiner has what it needs, and so are both records.
     expect(w.invites.invites.size).toBe(0);
+    expect(w.server.pending.size).toBe(0);
   });
 
   it('hand over the records key and a token of the joiner’s own, never the space id', async () => {
@@ -117,11 +135,21 @@ describe('invites', () => {
     expect(JSON.stringify(library)).not.toContain(Buffer.from(w.alice.spaceKey).toString('base64'));
   });
 
+  it('work with the typed code as well as the link', async () => {
+    const w = await world();
+    const invite = await startInvite(w.alice, null, apis(w));
+    expect(invite.code).toMatch(/^TWO-/);
+    expect(invite.link).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    const join = await startJoin(invite.code, w.bob, apis(w));
+    await advanceInvite(invite, 'Alice', w.alice, apis(w));
+    expect((await advanceJoin(join, 'Bob', w.invites.api)).stage).toBe('check');
+  });
+
   it('can’t be finished by a server that swaps the inviter’s key', async () => {
     const w = await world();
-    const invite = await startInvite(w.invites.api);
-    const join = await startJoin(invite.code, w.invites.api);
-    await advanceInvite(invite, w.invites.api);
+    const invite = await startInvite(w.alice, null, apis(w));
+    const join = await startJoin(invite.link, w.bob, apis(w));
+    await advanceInvite(invite, 'Alice', w.alice, apis(w));
     const stored = w.invites.invites.get(invite.code);
     if (!stored) throw new Error('missing invite');
     stored.inviterKey = (await newInviteKeys()).publicKey;
@@ -129,18 +157,79 @@ describe('invites', () => {
     expect(stored.hello).toBeNull();
   });
 
+  it('refuse a tampered or replaced inviter’s name', async () => {
+    const w = await world();
+    const invite = await startInvite(w.alice, null, apis(w));
+    const join = await startJoin(invite.link, w.bob, apis(w));
+    await advanceInvite(invite, 'Alice', w.alice, apis(w));
+    const stored = w.invites.invites.get(invite.code);
+    if (!stored?.intro) throw new Error('missing intro');
+    stored.intro = tamper(stored.intro);
+    await expect(advanceJoin(join, 'Bob', w.invites.api)).rejects.toThrow(FormError);
+    expect(stored.hello).toBeNull();
+  });
+
+  it('pin the joiner’s key before revealing, and refuse any other afterwards', async () => {
+    const w = await world();
+    const invite = await startInvite(w.alice, null, apis(w));
+    const join = await startJoin(invite.link, w.bob, apis(w));
+    await advanceInvite(invite, 'Alice', w.alice, apis(w));
+    const [kept] = (await listPending(w.alice, apis(w))).invites;
+    expect(kept?.joinerKey).toBe(join.keys.publicKey);
+    await advanceJoin(join, 'Bob', w.invites.api);
+    // A server that knows Alice's key now could search for a joiner key whose words match
+    // Bob's. Showing it to Alice, on this visit or a later one, ends the invite.
+    const stored = w.invites.invites.get(invite.code);
+    if (!stored || !kept) throw new Error('missing invite');
+    const mallory = await newInviteKeys();
+    stored.joinerKey = mallory.publicKey;
+    await expect(advanceInvite(invite, 'Alice', w.alice, apis(w))).rejects.toThrow(FormError);
+    await expect(advanceInvite(kept, 'Alice', w.alice, apis(w))).rejects.toThrow(FormError);
+  });
+
+  it('wait for the pinned key when another device has revealed already', async () => {
+    const w = await world();
+    const invite = await startInvite(w.alice, null, apis(w));
+    const join = await startJoin(invite.link, w.bob, apis(w));
+    // This device loaded the record before the other one pinned the key and revealed.
+    const [stale] = (await listPending(w.alice, apis(w))).invites;
+    await advanceInvite(invite, 'Alice', w.alice, apis(w));
+    await advanceJoin(join, 'Bob', w.invites.api);
+    if (!stale) throw new Error('missing invite');
+    expect(stale.joinerKey).toBeNull();
+    expect(await advanceInvite(stale, 'Alice', w.alice, apis(w))).toEqual({ stage: 'accepted' });
+    const [fresh] = (await listPending(w.alice, apis(w))).invites;
+    if (!fresh) throw new Error('missing invite');
+    expect((await advanceInvite(fresh, 'Alice', w.alice, apis(w))).stage).toBe('confirm');
+  });
+
+  it('don’t reveal anything if the joiner’s key can’t be pinned first', async () => {
+    const w = await world();
+    const invite = await startInvite(w.alice, null, apis(w));
+    await startJoin(invite.link, w.bob, apis(w));
+    const failing = {
+      ...apis(w),
+      space: (token: string) => ({
+        ...w.server.api(token),
+        updatePendingInvite: () => Promise.reject(new Error('offline')),
+      }),
+    };
+    await expect(advanceInvite(invite, 'Alice', w.alice, failing)).rejects.toThrow('offline');
+    expect(w.invites.invites.get(invite.code)?.inviterKey).toBeNull();
+  });
+
   it('can’t be confirmed when a server swaps the joiner’s key', async () => {
     const w = await world();
-    const invite = await startInvite(w.invites.api);
-    const join = await startJoin(invite.code, w.invites.api);
+    const invite = await startInvite(w.alice, null, apis(w));
+    const join = await startJoin(invite.link, w.bob, apis(w));
     const stored = w.invites.invites.get(invite.code);
     if (!stored) throw new Error('missing invite');
     const mallory = await newInviteKeys();
     stored.joinerKey = mallory.publicKey;
-    await advanceInvite(invite, w.invites.api);
-    // Bob's hello was sealed for the real exchange, so it doesn't open as Mallory's.
-    await advanceJoin(join, 'Bob', w.invites.api);
-    await expect(advanceInvite(invite, w.invites.api)).rejects.toThrow(FormError);
+    await advanceInvite(invite, 'Alice', w.alice, apis(w));
+    // Alice's name was sealed to Mallory's key, so Bob can't open it, and never says hello.
+    await expect(advanceJoin(join, 'Bob', w.invites.api)).rejects.toThrow(FormError);
+    expect(stored.hello).toBeNull();
     expect(await listMembers(w.alice, w.server.api)).toEqual([]);
   });
 
@@ -151,22 +240,173 @@ describe('invites', () => {
     await confirmInvite(invite, asked, w.alice, 'Alice', apis(w));
     const stored = w.invites.invites.get(invite.code);
     if (!stored?.grant) throw new Error('missing grant');
-    stored.grant = `${stored.grant.slice(0, 40)}${stored.grant[40] === 'A' ? 'B' : 'A'}${stored.grant.slice(41)}`;
+    stored.grant = tamper(stored.grant);
     await expect(advanceJoin(join, 'Bob', w.invites.api)).rejects.toThrow(FormError);
   });
 
-  it('end when the inviter cancels', async () => {
+  it('end when the inviter cancels, for both sides and their records', async () => {
     const w = await world();
-    const invite = await startInvite(w.invites.api);
-    await cancelInvite(invite, w.invites.api);
-    await expect(startJoin(invite.code, w.invites.api)).rejects.toThrow(/isn’t valid anymore/);
+    const invite = await startInvite(w.alice, null, apis(w));
+    await cancelInvite(invite, w.alice, apis(w));
+    expect(w.server.pending.size).toBe(0);
+    await expect(startJoin(invite.link, w.bob, apis(w))).rejects.toThrow(/link isn’t valid/);
+    await expect(startJoin(invite.code, w.bob, apis(w))).rejects.toThrow(/code isn’t valid/);
+    expect(w.server.pending.size).toBe(0);
   });
 
   it('work once', async () => {
     const w = await world();
-    const invite = await startInvite(w.invites.api);
-    await startJoin(invite.code, w.invites.api);
-    await expect(startJoin(invite.code, w.invites.api)).rejects.toThrow();
+    const carol = await newSpace();
+    const invite = await startInvite(w.alice, null, apis(w));
+    await startJoin(invite.link, w.bob, apis(w));
+    await expect(startJoin(invite.code, carol, apis(w))).rejects.toThrow(/already accepted/);
+    // Carol's failed attempt leaves nothing behind in her space.
+    expect((await listPending(carol, apis(w))).joins).toEqual([]);
+  });
+
+  it('report an expired invite as gone to both sides', async () => {
+    const w = await world();
+    const invite = await startInvite(w.alice, null, apis(w));
+    const join = await startJoin(invite.link, w.bob, apis(w));
+    w.invites.invites.clear();
+    expect(await advanceInvite(invite, 'Alice', w.alice, apis(w))).toEqual({ stage: 'gone' });
+    expect(await advanceJoin(join, 'Bob', w.invites.api)).toEqual({ stage: 'gone' });
+    await expect(checkJoin(invite.link, w.invites.api)).rejects.toThrow(FormError);
+  });
+
+  it('don’t keep a record of an invite the server refused', async () => {
+    const w = await world();
+    const failing = {
+      ...apis(w),
+      invites: { ...w.invites.api, create: () => Promise.reject(new Error('offline')) },
+    };
+    await expect(startInvite(w.alice, null, failing)).rejects.toThrow('offline');
+    expect(w.server.pending.size).toBe(0);
+  });
+
+  it('cancel the server’s invite if the record can’t be kept', async () => {
+    const w = await world();
+    const failing = {
+      ...apis(w),
+      space: (token: string) => ({
+        ...w.server.api(token),
+        addPendingInvite: () => Promise.reject(new Error('full')),
+      }),
+    };
+    await expect(startInvite(w.alice, null, failing)).rejects.toThrow('full');
+    expect(w.invites.invites.size).toBe(0);
+  });
+});
+
+describe('invites across visits', () => {
+  /** What a new device (or the next visit) knows: only the space's sealed records. */
+  async function reopen(space: SpaceKeys, w: World) {
+    return listPending(space, apis(w));
+  }
+
+  it('are finished from the sealed records alone, on each side’s later visits', async () => {
+    const w = await world();
+    const alices = remoteStore(w.alice, w.server.api);
+    const album = await alices.createAlbum('Trip');
+    await alices.list();
+    const started = await startInvite(w.alice, album.id, apis(w));
+    const accepted = await startJoin(started.link, w.bob, apis(w));
+    // Both tabs close; everything below starts from the records.
+
+    const [invite] = (await reopen(w.alice, w)).invites;
+    if (!invite) throw new Error('missing invite');
+    expect(invite).toMatchObject({
+      id: started.id,
+      code: started.code,
+      link: started.link,
+      handle: started.handle,
+      album: album.id,
+    });
+    expect(invite.keys.publicKey).toBe(started.keys.publicKey);
+    expect(await advanceInvite(invite, 'Alice', w.alice, apis(w))).toEqual({ stage: 'accepted' });
+
+    const [join] = (await reopen(w.bob, w)).joins;
+    if (!join) throw new Error('missing join');
+    expect(join).toMatchObject({ id: accepted.id, ref: started.link });
+    const joining = await advanceJoin(join, 'Bob', w.invites.api);
+    if (joining.stage !== 'check') throw new Error('expected the words');
+    // Visiting again doesn't send a second hello.
+    expect(await advanceJoin(join, 'Bob', w.invites.api)).toEqual(joining);
+
+    const [later] = (await reopen(w.alice, w)).invites;
+    if (!later) throw new Error('missing invite');
+    const asked = await advanceInvite(later, 'Alice', w.alice, apis(w));
+    if (asked.stage !== 'confirm') throw new Error('expected a confirmation');
+    expect(asked.phrase).toEqual(joining.phrase);
+    const albumKey = await alices.shareAlbum(album.id);
+    await confirmInvite(later, asked, w.alice, 'Alice', apis(w), { albumId: album.id, albumKey });
+    expect((await reopen(w.alice, w)).invites).toEqual([]);
+
+    const [again] = (await reopen(w.bob, w)).joins;
+    if (!again) throw new Error('missing join');
+    const granted = await advanceJoin(again, 'Bob', w.invites.api);
+    if (granted.stage !== 'granted') throw new Error('expected a grant');
+    expect(granted.name).toBe('Alice');
+    expect(granted.grant.album).toBe(album.id);
+    await finishJoin(again, granted.grant, w.bob, apis(w));
+    // The joined record takes the pending record's id; finishing twice keeps one copy.
+    await finishJoin(again, granted.grant, w.bob, apis(w));
+    const joined = await listJoined(w.bob, w.server.api);
+    expect(joined.map((each) => each.id)).toEqual([accepted.id]);
+    expect(w.server.pending.size).toBe(0);
+  });
+
+  it('are kept sealed: the server sees no key, handle, code or link', async () => {
+    const w = await world();
+    const invite = await startInvite(w.alice, null, apis(w));
+    const join = await startJoin(invite.link, w.bob, apis(w));
+    const stored = JSON.stringify([...w.server.pending.values()]);
+    for (const secret of [invite.handle, invite.code, invite.link, join.commitment]) {
+      expect(stored).not.toContain(secret);
+    }
+    expect(stored).not.toContain(Buffer.from(invite.keys.secretKey).toString('base64url'));
+    expect(stored).not.toContain(Buffer.from(join.keys.secretKey).toString('base64url'));
+  });
+
+  it('are kept in the space they belong to, and members can’t read them', async () => {
+    const w = await world();
+    await startInvite(w.alice, null, apis(w));
+    const other = await newSpace();
+    expect(await reopen(other, w)).toEqual({ invites: [], joins: [] });
+    await shareAliceWithBob(w);
+    const [library] = await listJoined(w.bob, w.server.api);
+    if (!library) throw new Error('missing library');
+    await expect(w.server.api(library.token).listPendingInvites()).rejects.toThrow();
+  });
+
+  it('skip records that were tampered with or don’t open', async () => {
+    const w = await world();
+    const invite = await startInvite(w.alice, null, apis(w));
+    const entry = w.server.pending.get(invite.id);
+    if (!entry) throw new Error('missing record');
+    entry.invite = { ...entry.invite, meta: tamper(entry.invite.meta) };
+    expect((await reopen(w.alice, w)).invites).toEqual([]);
+    // Opening with the wrong space's key doesn't work either.
+    entry.token = (await ownerAccess(w.bob)).token;
+    expect((await reopen(w.bob, w)).invites).toEqual([]);
+  });
+
+  it('are forgotten once the server says the invite is gone', async () => {
+    const w = await world();
+    const invite = await startInvite(w.alice, null, apis(w));
+    w.invites.invites.clear();
+    expect(await advanceInvite(invite, 'Alice', w.alice, apis(w))).toEqual({ stage: 'gone' });
+    await forgetPending(w.alice, invite.id, apis(w));
+    expect((await reopen(w.alice, w)).invites).toEqual([]);
+  });
+
+  it('can be given up by the joiner', async () => {
+    const w = await world();
+    const invite = await startInvite(w.alice, null, apis(w));
+    const join = await startJoin(invite.link, w.bob, apis(w));
+    await abandonJoin(join, w.bob, apis(w));
+    expect((await reopen(w.bob, w)).joins).toEqual([]);
+    expect(await advanceInvite(invite, 'Alice', w.alice, apis(w))).toEqual({ stage: 'gone' });
   });
 });
 

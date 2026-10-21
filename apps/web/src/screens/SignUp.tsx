@@ -3,7 +3,7 @@ import type { SubmitEvent } from 'react';
 
 import { useAccount } from '../app/account';
 import { Link, useRouter } from '../app/router';
-import { paths } from '../app/routes';
+import { parseNext, paths, withNext } from '../app/routes';
 import { useSubmit } from '../app/use-submit';
 import { AuthLayout } from '../components/AuthLayout';
 import { PasswordField, TextField } from '../components/Field';
@@ -37,7 +37,8 @@ export function validateSignUp(values: {
 }
 
 export function SignUp() {
-  const { navigate } = useRouter();
+  const { navigate, search } = useRouter();
+  const next = parseNext(search);
   const { prepareSignUp } = useAccount();
   const { busy, error, run } = useSubmit();
   const [values, setValues] = useState({ name: '', email: '', password: '', confirm: '' });
@@ -55,7 +56,7 @@ export function SignUp() {
     if (busy || Object.keys(validateSignUp(values)).length > 0) return;
     // Keys and the recovery key are made here, on this device; the password goes no further.
     void run(() => prepareSignUp(values)).then((ok) => {
-      if (ok) navigate(paths.recoveryKey);
+      if (ok) navigate(withNext(paths.recoveryKey, next));
     });
   };
 
@@ -66,7 +67,7 @@ export function SignUp() {
       step={{ current: 1, total: 2 }}
       footer={
         <>
-          Already have an account? <Link to={paths.login}>Log in</Link>
+          Already have an account? <Link to={withNext(paths.login, next)}>Log in</Link>
         </>
       }
     >

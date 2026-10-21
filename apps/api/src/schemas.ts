@@ -101,6 +101,9 @@ export const inviteCodeSchema = z.string().regex(/^TWO-[A-HJ-NP-Z2-9]{4}-[A-HJ-N
 
 export const inviteHandleSchema = base64Url(SHARE_SIZES.handle);
 
+/** The token in an invite link: 128 random bits. */
+export const inviteLinkSchema = base64Url(SHARE_SIZES.link);
+
 const publicKey = base64Url(SHARE_SIZES.publicKey);
 
 /** nonce (24) + MAC (16) + at most SHARE_SIZES.maxMessage bytes of sealed message. */
@@ -112,6 +115,7 @@ const peerMessage = z
 
 export const createInviteSchema = z.strictObject({
   code: inviteCodeSchema,
+  link: inviteLinkSchema,
   handle: inviteHandleSchema,
   commitment: base64Url(SHARE_SIZES.commitment),
 });
@@ -120,7 +124,7 @@ export const joinInviteSchema = z.strictObject({ joinerKey: publicKey });
 
 export const helloSchema = z.strictObject({ hello: peerMessage });
 
-export const revealSchema = z.strictObject({ inviterKey: publicKey });
+export const revealSchema = z.strictObject({ inviterKey: publicKey, intro: peerMessage });
 
 export const grantSchema = z.strictObject({ grant: peerMessage });
 
@@ -132,3 +136,5 @@ export const createMemberSchema = z.strictObject({
 });
 
 export const createJoinedSchema = z.strictObject({ id: recordId, meta: sealedRecord });
+
+export const createPendingInviteSchema = z.strictObject({ id: recordId, meta: sealedRecord });

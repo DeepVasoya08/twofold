@@ -212,3 +212,76 @@
   flex: none;
   color: var(--success);
 }
+
+.invite-card__link {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 14px;
+}
+
+.invite-requests {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.invite-request {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.pending-invites {
+  display: grid;
+  gap: 8px;
+}
+
+.pending-invites__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pending-invites__list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pending-invites__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.pending-invites__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pending-invites__code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-weight: 600;
+}
+
+.pending-invites__status {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.pending-invites__actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}

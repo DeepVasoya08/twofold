@@ -13,6 +13,8 @@ export type Route =
   | { name: 'photo'; photoId: string }
   | { name: 'settings' }
   | { name: 'share' }
+  /** Someone's invite link. The token only names the invite; it holds no key. */
+  | { name: 'join'; token: string }
   | { name: 'not-found' };
 
 export const paths = {
@@ -34,7 +36,26 @@ export const paths = {
   share: '/settings/share',
   /** Inviting someone to one album rather than the whole library. */
   shareAlbum: (albumId: string) => `/settings/share?album=${encodeURIComponent(albumId)}`,
+  /** An invite link's path. */
+  join: (token: string) => `/join/${token}`,
 } as const;
+
+/** An invite link token: 128 bits, unpadded base64url. */
+const LINK_TOKEN = /^[A-Za-z0-9_-]{21}[AQgw]$/;
+
+/**
+ * Where to go after signing in, unlocking or signing up, from the `next` query parameter.
+ * Only an invite link is accepted, so the parameter can't send anyone anywhere else.
+ */
+export function parseNext(search: string): string | null {
+  const next = new URLSearchParams(search).get('next');
+  return next !== null && matchRoute(next).name === 'join' ? next : null;
+}
+
+/** `path` with a `next` parameter to come back to afterwards, if there is one. */
+export function withNext(path: string, next: string | null): string {
+  return next === null ? path : `${path}?next=${encodeURIComponent(next)}`;
+}
 
 /** The album a share link names, if it's for one album. */
 export function parseShareAlbum(search: string): string | null {
@@ -73,6 +94,9 @@ export function matchRoute(pathname: string): Route {
   const album = /^\/albums\/([^/]+)$/.exec(path);
   const albumId = album?.[1] === undefined ? null : decodeSegment(album[1]);
   if (albumId) return { name: 'album', albumId };
+
+  const join = /^\/join\/([^/]+)$/.exec(path);
+  if (join?.[1] !== undefined && LINK_TOKEN.test(join[1])) return { name: 'join', token: join[1] };
 
   const photo = /^\/photos\/([^/]+)$/.exec(path);
   const photoId = photo?.[1] === undefined ? null : decodeSegment(photo[1]);

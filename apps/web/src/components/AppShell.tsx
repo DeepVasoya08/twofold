@@ -8,6 +8,7 @@ import { useUploads } from '../app/uploads';
 import { useVault } from '../app/vault';
 import { Avatar, LockBadge, Logo } from './Brand';
 import { Icon } from './Icon';
+import { InviteRequests } from './Invites';
 import type { IconName } from './Icon';
 import { StorageMeter } from './StorageMeter';
 import { UploadDialog } from './UploadDialog';
@@ -137,6 +138,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
       </header>
 
       <main className="shell__content" id="content">
+        <InviteRequests />
         {children}
       </main>
 
