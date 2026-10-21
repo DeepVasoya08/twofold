@@ -4,6 +4,7 @@ import type { SpaceKeys } from '@twofold/crypto';
 
 import { useAccount } from '../app/account';
 import { errorMessage } from '../app/account-ops';
+import { useDownloads } from '../app/downloads';
 import { useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { allSelected, batchMessage } from '../app/selection';
@@ -15,14 +16,13 @@ import type { Settled } from '../lib/settle-each';
 import type { Album } from '../mock/data';
 import { AlbumPicker } from './AlbumPicker';
 import { Dialog } from './Dialog';
-import { DownloadDialog } from './DownloadDialog';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
 import { MoveSpaceDialog, moveLabel } from './MoveSpaceDialog';
 
 import './selection-bar.css';
 
-type Open = 'album' | 'delete' | 'move' | 'share' | 'download' | null;
+type Open = 'album' | 'delete' | 'move' | 'share' | null;
 
 interface Action {
   label: string;
@@ -49,12 +49,13 @@ export function SelectionBar({
   albumId?: string | undefined;
 }) {
   const vault = useVault();
+  const downloads = useDownloads();
   const { otherSpaceOpen } = useAccount();
   const { navigate } = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState<Open>(null);
   const [busy, setBusy] = useState(false);
-  // What the download or share dialog works on, fixed when it opens.
+  // What the share dialog works on, fixed when it opens.
   const [chosen, setChosen] = useState<readonly string[]>([]);
   const { space, state } = vault;
 
@@ -134,8 +135,7 @@ export function SelectionBar({
     label: 'Download',
     icon: 'download',
     onClick: () => {
-      setChosen(ids);
-      setOpen('download');
+      downloads.start(ids);
     },
   };
 
@@ -271,14 +271,6 @@ export function SelectionBar({
           setOpen(null);
         }}
         onUnlocked={move}
-      />
-
-      <DownloadDialog
-        open={open === 'download'}
-        photoIds={chosen}
-        onClose={() => {
-          setOpen(null);
-        }}
       />
 
       <AlbumPicker

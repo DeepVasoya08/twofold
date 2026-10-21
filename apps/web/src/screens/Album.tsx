@@ -1,12 +1,10 @@
+import { useDownloads } from '../app/downloads';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
-import { useState } from 'react';
-
 import { useSelection } from '../app/selection';
 import { albumCover, albumPhotos, useVault } from '../app/vault';
 import { AlbumActions } from '../components/AlbumActions';
 import { PageHeader } from '../components/AppShell';
-import { DownloadDialog } from '../components/DownloadDialog';
 import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
@@ -22,8 +20,7 @@ export function Album({ albumId }: { albumId: string }) {
   const { navigate } = useRouter();
   const selection = useSelection();
   const album = state.albums.find((candidate) => candidate.id === albumId);
-  // What the download dialog decrypts, fixed when it opens.
-  const [downloading, setDownloading] = useState<readonly string[] | null>(null);
+  const downloads = useDownloads();
 
   if (!album) {
     return (
@@ -77,7 +74,7 @@ export function Album({ albumId }: { albumId: string }) {
               className="btn btn--secondary"
               aria-label="Download album"
               onClick={() => {
-                setDownloading(photos.map((photo) => photo.id));
+                downloads.start(photos.map((photo) => photo.id));
               }}
             >
               <Icon name="download" size={18} />
@@ -134,14 +131,6 @@ export function Album({ albumId }: { albumId: string }) {
           selection={selection}
         />
       )}
-
-      <DownloadDialog
-        open={downloading !== null}
-        photoIds={downloading ?? []}
-        onClose={() => {
-          setDownloading(null);
-        }}
-      />
     </div>
   );
 }
