@@ -30,9 +30,12 @@ const loadCrypto = () => import('@twofold/crypto');
 /** How often each side checks whether the other has taken the next step, on a sharing screen. */
 export const POLL_MS = 1500;
 /** How often elsewhere in the app, while someone is partway through an invite with you. */
-export const BACKGROUND_POLL_MS = 5000;
-/** How often while the only invites in progress are ones nobody has accepted yet. */
-export const IDLE_POLL_MS = 60_000;
+export const BACKGROUND_POLL_MS = 3000;
+/**
+ * How often while the only invites in progress are ones nobody has accepted yet. Short
+ * enough that someone typing your code sees the words within seconds, wherever you are.
+ */
+export const IDLE_POLL_MS = 10_000;
 
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
 
@@ -807,13 +810,52 @@ export async function joinedAccess(
   library: Pick<JoinedLibrary, 'token' | 'album'>,
   makeApi: (token: string) => SpaceApi = spaceApi,
 ): Promise<MemberAccess> {
-  if (library.album !== undefined) return 'view';
+  const status = await joinedStatus(library, makeApi);
+  return status === 'gone' ? 'view' : status;
+}
+
+/**
+ * What this space may do in a library or album it joined, or `gone` once its owner stopped
+ * sharing it (or it was left from another device): the server then no longer knows the
+ * token as anyone's membership. Anything else that goes wrong reads as view-only.
+ */
+export async function joinedStatus(
+  library: Pick<JoinedLibrary, 'token' | 'album'>,
+  makeApi: (token: string) => SpaceApi = spaceApi,
+): Promise<MemberAccess | 'gone'> {
   return makeApi(library.token)
     .membership()
     .then(
-      ({ access }) => access,
-      () => 'view' as const,
+      ({ access }) => (library.album === undefined ? access : 'view'),
+      (error: unknown) => (error instanceof ApiError && error.status === 400 ? 'gone' : 'view'),
     );
+}
+
+/**
+ * The libraries and albums this space joined that are still shared with it, each with what
+ * it may do there. Ones whose owner stopped sharing are forgotten here too (best effort).
+ */
+export async function listStillJoined(
+  space: SpaceKeys,
+  makeApi: (token: string) => SpaceApi = spaceApi,
+): Promise<(JoinedLibrary & { access: MemberAccess })[]> {
+  const checked = await Promise.all(
+    (await listJoined(space, makeApi)).map(async (library) => ({
+      library,
+      status: await joinedStatus(library, makeApi),
+    })),
+  );
+  const gone = checked.filter(({ status }) => status === 'gone');
+  if (gone.length > 0) {
+    const crypto = await loadCrypto();
+    const own = makeApi((await crypto.ownerAccess(space)).token);
+    await Promise.all(
+      gone.map(({ library }) => own.removeJoined(library.id).catch(() => undefined)),
+    );
+  }
+  return checked.flatMap(({ library, status }) =>
+    status === 'gone' ? [] : [{ ...library, access: status }],
+  );
 }
 
 /** The stores for every library and album this space joined. */
@@ -823,7 +865,8 @@ async function sharedSources(
   makeApi: (token: string) => SpaceApi,
 ): Promise<SharedSource[]> {
   const crypto = await loadCrypto();
-  return (await listJoined(space, makeApi)).map((library) => {
+  // Asking what each one may do also finds the ones no longer shared, which are dropped.
+  return (await listStillJoined(space, makeApi)).map((library) => {
     const key = crypto.fromBase64Url(library.recordKey) ?? new Uint8Array();
     const source: SharedSource = {
       id: library.id,
@@ -835,8 +878,7 @@ async function sharedSources(
         makeApi,
         { memberId: library.memberId, myName, ownerName: library.name },
       ),
-      // Asked for alongside its photos, not before them.
-      editable: joinedAccess(library, makeApi).then((access) => access === 'edit'),
+      editable: Promise.resolve(library.access === 'edit'),
     };
     if (library.album) source.album = true;
     return source;

@@ -22,6 +22,7 @@ import {
   listJoined,
   listMembers,
   listPending,
+  listStillJoined,
   removeMember,
   sessionStore,
   setInviteAccess,
@@ -563,6 +564,40 @@ describe('a shared library', () => {
     if (!member) throw new Error('missing member');
     await removeMember(w.alice, member.id, w.server.api);
     expect((await sessionStore(w.bob, 'Bob', w.server.api).list()).photos).toEqual([]);
+    // Bob's record of it is forgotten too, so it leaves his Shared with you.
+    expect(await listJoined(w.bob, w.server.api)).toEqual([]);
+  });
+
+  it('drops only libraries the server no longer knows, not ones it couldn’t reach', async () => {
+    const w = await world();
+    await shareAliceWithBob(w, 'view');
+    const offline = (token: string) => ({
+      ...w.server.api(token),
+      membership: () => Promise.reject(new Error('offline')),
+    });
+    expect(await listStillJoined(w.bob, offline)).toMatchObject([
+      { name: 'Alice', access: 'view' },
+    ]);
+    expect(await listStillJoined(w.bob, w.server.api)).toMatchObject([{ access: 'view' }]);
+
+    const [member] = await listMembers(w.alice, w.server.api);
+    if (!member) throw new Error('missing member');
+    await removeMember(w.alice, member.id, w.server.api);
+    expect(await listStillJoined(w.bob, w.server.api)).toEqual([]);
+    expect(await listJoined(w.bob, w.server.api)).toEqual([]);
+  });
+
+  it('drops an album whose owner stopped sharing it', async () => {
+    const w = await world();
+    const alices = remoteStore(w.alice, w.server.api);
+    const album = await alices.createAlbum('Trip');
+    await alices.list();
+    await shareAlbumWithBob(w, alices, album.id);
+    expect(await listStillJoined(w.bob, w.server.api)).toMatchObject([
+      { album: album.id, access: 'view' },
+    ]);
+    await alices.stopSharingAlbum(album.id);
+    expect(await listStillJoined(w.bob, w.server.api)).toEqual([]);
   });
 
   it('can be left by the member', async () => {

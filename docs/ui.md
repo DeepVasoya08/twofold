@@ -63,8 +63,10 @@ exists but is low-key (Settings → Sharing).
   to the other space.
 - Settings → Sharing says how many people the open space is shared with, and lists each
   with what they can do (a **View only** / **Add and edit** picker that applies at once) and
-  **Stop**. Settings → Shared with you lists the libraries it joined, with what you can do
-  there and **Leave**, and **Enter code**.
+  **Stop**; the summary line names everyone with their permission. Settings → Shared with
+  you lists the libraries it joined, with what you can do there and **Leave**, and **Enter
+  code**. A library or album whose owner stopped sharing it drops out of the list (and the
+  vault) by itself the next time either loads.
 - One album can be shared instead of a whole library: **Share** in an album's menu lists
   who has access (with **Remove**, and **Stop sharing with everyone**) and offers **Invite
   someone**, which opens the same invite screen for just that album

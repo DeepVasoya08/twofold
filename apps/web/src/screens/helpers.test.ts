@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { albumsInTab } from './Albums';
 import { filterByOwner } from './Gallery';
+import { sharedWithLine } from './Settings';
 import { isInviteCode, normalizeInviteCode, parseInviteInput } from './JoinCode';
 import { countWords } from './Recover';
 import { validateSignUp } from './SignUp';
@@ -46,6 +47,17 @@ describe('filterByOwner', () => {
     expect(filterByOwner([mine, theirs], 'all')).toEqual([mine, theirs]);
     expect(filterByOwner([mine, theirs], 'mine')).toEqual([mine]);
     expect(filterByOwner([mine, theirs], 'shared')).toEqual([theirs]);
+  });
+});
+
+describe('sharedWithLine', () => {
+  it('names everyone with their permission', () => {
+    expect(
+      sharedWithLine([
+        { name: 'invited', access: 'view' },
+        { name: 'Mira', access: 'edit' },
+      ]),
+    ).toBe('invited (View only), Mira (Add and edit)');
   });
 });
 
