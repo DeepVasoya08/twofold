@@ -132,7 +132,7 @@ export const api = {
   deleteAccount: (body: DeleteAccountRequest) => call<undefined>('DELETE', '/account', body),
   updateName: (body: UpdateNameRequest) => call<AccountResponse>('PUT', '/account/name', body),
   devices: () => call<DeviceList>('GET', '/account/devices'),
-  /** Storage across both spaces; only ever asked for from the private space. */
+  /** Storage across both spaces. */
   storage: () => call<AccountStorage>('GET', '/account/storage'),
   signOutDevice: (id: string) =>
     call<undefined>('DELETE', `/account/devices/${encodeURIComponent(id)}`, {}),

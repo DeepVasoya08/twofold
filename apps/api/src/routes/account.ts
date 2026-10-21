@@ -78,10 +78,7 @@ account.put('/keyring', async (c) => {
   );
 });
 
-/**
- * How much of the account's limit is used, across both spaces. Only the private space asks
- * for it: shown in the main library, it would hint that a private space exists.
- */
+/** How much of the account's limit is used, across both spaces. Both spaces show it. */
 account.get('/storage', async (c) => {
   const used = await storedBytes(c.env.DB, c.get('account').id);
   return c.json<AccountStorage>({ used, limit: STORAGE_SIZES.accountQuota });

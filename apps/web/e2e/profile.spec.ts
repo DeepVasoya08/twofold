@@ -21,52 +21,39 @@ const PNG = Buffer.from(
 const profileImage = (page: Page) => page.locator('.profile img.avatar__image');
 const storage = (page: Page) => page.locator('.settings-storage');
 
-test('the main library shows its own storage, the private space the shared total', async ({
-  page,
-}) => {
-  const totals: string[] = [];
-  page.on('request', (request) => {
-    if (request.url().endsWith('/api/account/storage')) totals.push(page.url());
-  });
+test('both spaces show the same storage total, counting both', async ({ page }) => {
   const meter = () => storage(page).getByRole('meter', { name: 'Storage' });
+  const shown = async () => Number(await meter().getAttribute('aria-valuenow'));
   await signUp(page);
   await goTo(page, 'Settings');
-  await expect(storage(page)).toContainText('0 B of 1 GB used here');
+  await expect(storage(page)).toContainText('0 B of 1 GB used');
 
   await goTo(page, 'Photos');
   await uploadPhotos(page, 2);
   await expect(page.getByText('2 photos added to your vault')).toBeVisible();
   await goTo(page, 'Settings');
-  await expect(storage(page)).toContainText(/[1-9][\d.]* (B|KB) of 1 GB used here/);
+  await expect(storage(page)).toContainText(/[1-9][\d.]* (B|KB) of 1 GB used/);
   await expect(meter()).toHaveAttribute('aria-valuenow', /^[1-9]\d*$/);
-  const mainBytes = Number(await meter().getAttribute('aria-valuenow'));
-  // The main library never asks for the account's total.
-  expect(totals).toEqual([]);
+  const mainBytes = await shown();
 
-  // The private space has no photos yet, but counts the main library's against the limit.
+  // The private space has no photos yet, but shows the main library's against the limit.
   await setUpPrivateSpace(page);
   await lock(page);
   await unlockWith(page, PRIVATE_PASSWORD);
   await goTo(page, 'Settings');
-  await expect(storage(page)).toContainText('used in total');
   await expect(meter()).toHaveAttribute('aria-valuenow', String(mainBytes));
-  expect(totals.length).toBeGreaterThan(0);
 
-  // A photo added here grows the total; the main library still shows only its own.
+  // A photo added here grows the total, in both spaces.
   await goTo(page, 'Photos');
   await uploadPhotos(page, 1);
   await expect(page.getByText('1 photo added to your vault')).toBeVisible();
   await goTo(page, 'Settings');
-  await expect
-    .poll(async () => Number(await meter().getAttribute('aria-valuenow')))
-    .toBeGreaterThan(mainBytes);
+  await expect.poll(shown).toBeGreaterThan(mainBytes);
+  const total = await shown();
   await lock(page);
-  const asked = totals.length;
   await unlockWith(page, MAIN_PASSWORD);
   await goTo(page, 'Settings');
-  await expect(storage(page)).toContainText('used here');
-  await expect(meter()).toHaveAttribute('aria-valuenow', String(mainBytes));
-  expect(totals).toHaveLength(asked);
+  await expect(meter()).toHaveAttribute('aria-valuenow', String(total));
 });
 
 test('name and profile photo can be changed, and stay after unlocking again', async ({ page }) => {
