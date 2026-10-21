@@ -1,5 +1,5 @@
 import { resolveObjectURL } from 'node:buffer';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { newSpace, openRecord, ownerAccess, sealRecord } from '@twofold/crypto';
 import type { SpaceKeys } from '@twofold/crypto';
@@ -9,6 +9,7 @@ import { STORAGE_SIZES, THUMB_BATCH_MAX } from '@twofold/types';
 import { FakeServer } from '../test/fake-server';
 import { combinedStore, memoryStore, remoteStore } from './space-store';
 import type { NewPhoto } from './space-store';
+import type { Album, Photo } from '../mock/data';
 import { PartialThumbs } from './thumb-loader';
 
 function bytes(text: string): Uint8Array<ArrayBuffer> {
@@ -240,9 +241,9 @@ describe('remoteStore', () => {
       const api = server.api(token);
       return {
         ...api,
-        getThumbs: (batch: readonly string[]) => {
+        getThumbs: (...args: Parameters<typeof api.getThumbs>) => {
           requests += 1;
-          return api.getThumbs(batch);
+          return api.getThumbs(...args);
         },
       };
     };
@@ -253,9 +254,42 @@ describe('remoteStore', () => {
     expect([...urls.keys()]).toEqual(ids.slice(1));
     expect(await objectUrlBytes(urls.get(ids[1] ?? '') ?? '')).toEqual(PHOTO.thumb);
 
+    // Each preview was also handed over as it arrived.
+    const early = new Map<string, string>();
+    const again = remoteStore(space, server.api);
+    await again.list();
+    await again.thumbs(ids.slice(0, 3), (id, url) => early.set(id, url));
+    expect([...early.keys()]).toEqual(ids.slice(1, 3));
+    again.dispose();
+
     // Previews already decrypted are reused, not downloaded again.
     expect((await later.thumbs(ids.slice(1, 3))).size).toBe(2);
     expect(requests).toBe(2);
+  });
+
+  it('keeps the previews that arrived when a download breaks off part way', async () => {
+    const { server, space } = await setUp();
+    const uploader = remoteStore(space, server.api);
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) ids.push((await uploader.add(PHOTO, [])).id);
+    const breaking = (token: string) => {
+      const api = server.api(token);
+      return {
+        ...api,
+        getThumbs: async (...[batch, onThumb]: Parameters<typeof api.getThumbs>) => {
+          const parts = await api.getThumbs(batch);
+          onThumb?.(0, parts[0] ?? null);
+          throw new Error('connection lost');
+        },
+      };
+    };
+    const store = remoteStore(space, breaking);
+    await store.list();
+    const error = await store.thumbs(ids).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(PartialThumbs);
+    const partial = error as PartialThumbs;
+    expect([...partial.found.keys()]).toEqual([ids[0]]);
+    expect(partial.failed).toEqual(ids.slice(1));
   });
 
   it('revokes its object URLs when disposed', async () => {
@@ -288,6 +322,46 @@ describe('combinedStore', () => {
     await store.list();
     const urls = await store.thumbs(['mine', 'theirs']);
     expect(Object.fromEntries(urls)).toEqual({ mine: 'blob:mine', theirs: 'blob:theirs' });
+  });
+
+  it('loads every library at the same time', async () => {
+    let releaseOwn: () => void = () => undefined;
+    const own = {
+      ...memoryStore({ photos: [photo('mine')], albums: [] }),
+      list: () =>
+        new Promise<{ photos: Photo[]; albums: Album[] }>((resolve) => {
+          releaseOwn = () => {
+            resolve({ photos: [photo('mine')], albums: [] });
+          };
+        }),
+    };
+    const theirs = memoryStore({ photos: [photo('theirs')], albums: [] });
+    const theirList = vi.spyOn(theirs, 'list');
+    const store = combinedStore(own, () =>
+      Promise.resolve([{ id: 's', name: 'Ana', store: theirs }]),
+    );
+    const listing = store.list();
+    await vi.waitFor(() => {
+      expect(theirList).toHaveBeenCalled();
+    });
+    releaseOwn();
+    const loaded = await listing;
+    expect(loaded.photos.map((each) => each.id)).toEqual(['mine', 'theirs']);
+  });
+
+  it('passes on what a library got before its download broke off', async () => {
+    const own = memoryStore({ photos: [photo('a'), photo('b')], albums: [] });
+    const broken = {
+      ...own,
+      thumbs: () => Promise.reject(new PartialThumbs(new Map([['a', 'blob:a']]), ['b'])),
+    };
+    const store = combinedStore(broken, () => Promise.resolve([]));
+    await store.list();
+    const error = await store.thumbs(['a', 'b']).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(PartialThumbs);
+    const partial = error as PartialThumbs;
+    expect(Object.fromEntries(partial.found)).toEqual({ a: 'blob:a' });
+    expect(partial.failed).toEqual(['b']);
   });
 
   it('reports previews that failed, with the ones that came back', async () => {

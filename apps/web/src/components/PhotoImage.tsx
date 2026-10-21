@@ -38,8 +38,8 @@ export function PhotoImage({
 
   useEffect(() => {
     if (!element || !needed) return;
-    return whenNearScreen(element, () => {
-      requestThumbs(needed.split(','));
+    return whenNearScreen(element, (onScreen) => {
+      requestThumbs(needed.split(','), onScreen);
     });
   }, [element, needed, requestThumbs]);
 
