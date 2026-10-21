@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 
 import type { SpaceKeys } from '@twofold/crypto';
 
+import { onVisibleAgain } from '../lib/when-visible';
 import { useAccount } from './account';
 import { FormError, errorMessage } from './account-ops';
 import { useRouter } from './router';
@@ -288,16 +289,10 @@ function LivePendingInvites({
     pass();
   }, []);
 
-  // On load, and whenever the app comes back into view.
+  // On load, and when the app comes back into view (not on every quick tab switch).
   useEffect(() => {
     check();
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') check();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      document.removeEventListener('visibilitychange', onVisible);
-    };
+    return onVisibleAgain(check);
   }, [check]);
 
   // While in view and something is waiting on the other side (or a sharing screen is open).

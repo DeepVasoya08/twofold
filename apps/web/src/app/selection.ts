@@ -49,6 +49,11 @@ export function useSelection(): Selection {
     setStarted(false);
   }, []);
 
+  // Stable, so a photo grid's tiles only re-render when their own selection changes.
+  const toggle = useCallback((photoId: string) => {
+    setSelected((current) => withMany(current, [photoId], !current.has(photoId)));
+  }, []);
+
   useEffect(() => {
     if (!selecting) return;
     const onKey = (event: KeyboardEvent) => {
@@ -71,9 +76,7 @@ export function useSelection(): Selection {
     () => ({
       selected,
       selecting,
-      toggle: (photoId) => {
-        setSelected((current) => withMany(current, [photoId], !current.has(photoId)));
-      },
+      toggle,
       setMany: (photoIds, on) => {
         setSelected((current) => withMany(current, photoIds, on));
       },
@@ -86,7 +89,7 @@ export function useSelection(): Selection {
       },
       clear,
     }),
-    [selected, selecting, clear],
+    [selected, selecting, clear, toggle],
   );
 }
 
