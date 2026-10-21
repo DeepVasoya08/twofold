@@ -168,6 +168,10 @@ many couldn't upload, until the list has been opened.
 The grid shows a quiet placeholder until a photo's preview has been downloaded and
 decrypted. Previews are only asked for once their photo is near the screen (within about
 two phone screens, `lib/near-screen.ts`), and are downloaded up to 48 per request.
+Photos already on the screen go first, 12 per request, so they don't wait behind the ones
+below the fold. Each preview is decrypted as soon as its bytes arrive, without waiting for
+the rest of its request. When the vault opens, your own library, every library or album
+shared with you, and who your albums are shared with are all fetched at the same time.
 Decrypted previews reach the grid in batches, at most every 100 ms, so a large library
 redraws a few times a second rather than once per photo. A request that fails is tried
 again after 1, 2 and 4 seconds (`app/thumb-loader.ts`), so a dropped connection doesn't

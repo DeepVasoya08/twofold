@@ -1,4 +1,4 @@
-import { SPACE_HEADER, readThumbBatch } from '@twofold/types';
+import { SPACE_HEADER, ThumbBatchParser } from '@twofold/types';
 import type {
   AccountResponse,
   AlbumItemList,
@@ -182,12 +182,46 @@ export function spaceApi(token: string) {
     },
     commitPhoto: (id: string) => call<undefined>('POST', `${photo(id)}/commit`, {}, headers),
     getFile: (id: string, part: PhotoPart) => download(`${photo(id)}/${part}`, headers),
-    /** Encrypted thumbnails in the order asked, null for any the space doesn't have. */
-    getThumbs: async (ids: readonly string[]) => {
-      const query = ids.map(encodeURIComponent).join(',');
-      const bytes = await download(`/space/thumbs?ids=${query}`, headers);
-      const parts = readThumbBatch(bytes, ids.length);
-      if (!parts) throw new ApiError(0, OFFLINE);
+    /**
+     * Encrypted thumbnails in the order asked, null for any the space doesn't have. Each one
+     * reaches `onThumb` (with its index in `ids`) as soon as its bytes are in, so it can be
+     * shown before the rest of the batch arrives.
+     */
+    getThumbs: async (
+      ids: readonly string[],
+      onThumb?: (index: number, sealed: Uint8Array<ArrayBuffer> | null) => void,
+    ) => {
+      const res = await send(
+        'GET',
+        `/space/thumbs?ids=${ids.map(encodeURIComponent).join(',')}`,
+        {},
+        headers,
+      );
+      const parser = new ThumbBatchParser(ids.length);
+      const parts: (Uint8Array<ArrayBuffer> | null)[] = [];
+      const take = (chunk: Uint8Array) => {
+        const done = parser.push(chunk);
+        if (!done) throw new ApiError(0, OFFLINE);
+        for (const part of done) {
+          onThumb?.(parts.length, part);
+          parts.push(part);
+        }
+      };
+      try {
+        if (res.body) {
+          const reader = res.body.getReader();
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            take(value);
+          }
+        } else {
+          take(new Uint8Array(await res.arrayBuffer()));
+        }
+      } catch {
+        throw new ApiError(0, OFFLINE);
+      }
+      if (!parser.finished) throw new ApiError(0, OFFLINE);
       return parts;
     },
     updatePhoto: (id: string, meta: string) => call<undefined>('PUT', photo(id), { meta }, headers),

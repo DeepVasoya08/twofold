@@ -98,14 +98,15 @@ export class FakeServer {
         const file = this.files.get(`${id}/${part}`);
         return file ? Promise.resolve(file) : Promise.reject(new ApiError(404, 'Not here'));
       },
-      getThumbs: (ids) =>
-        Promise.resolve(
-          ids.map((id) => {
-            const entry = this.photos.get(id);
-            const visible = entry?.token === space && entry.committed && listed(id);
-            return visible ? (this.files.get(`${id}/thumb`) ?? null) : null;
-          }),
-        ),
+      getThumbs: (ids, onThumb) => {
+        const parts = ids.map((id) => {
+          const entry = this.photos.get(id);
+          const visible = entry?.token === space && entry.committed && listed(id);
+          return visible ? (this.files.get(`${id}/thumb`) ?? null) : null;
+        });
+        for (const [index, part] of parts.entries()) onThumb?.(index, part);
+        return Promise.resolve(parts);
+      },
       updatePhoto: (id, meta) => {
         writable();
         mine(id).photo.meta = meta;

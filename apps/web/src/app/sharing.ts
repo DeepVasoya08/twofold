@@ -444,9 +444,11 @@ export function withAlbumMembers(store: SpaceStore, members: () => Promise<Membe
   return {
     ...store,
     list: async () => {
+      // Who albums are shared with is asked for alongside the library, not after it.
+      const listed = members().catch(() => []);
       const loaded = await store.list();
       const names = new Map<string, string[]>();
-      for (const member of await members().catch(() => [])) {
+      for (const member of await listed) {
         if (member.album)
           names.set(member.album, [...(names.get(member.album) ?? []), member.name]);
       }

@@ -44,9 +44,14 @@ export interface SpaceStore {
   /**
    * Downloads and decrypts many previews, in as few requests as it can. Returns an object
    * URL for each one it got; photos it doesn't know, or whose preview didn't decrypt, are
-   * left out.
+   * left out. Each preview also reaches `onThumb` as soon as it is decrypted, before the
+   * rest have arrived. If a download fails part way, it throws PartialThumbs with the ones
+   * it got.
    */
-  thumbs: (photoIds: readonly string[]) => Promise<Map<string, string>>;
+  thumbs: (
+    photoIds: readonly string[],
+    onThumb?: (photoId: string, url: string) => void,
+  ) => Promise<Map<string, string>>;
   add: (
     photo: NewPhoto,
     albumIds: string[],
@@ -328,6 +333,9 @@ export function remoteStore(
       const api = await remote();
       const crypto = await loadCrypto();
       const keys = await access();
+      // Albums are asked for alongside the photos, not after them.
+      const storedAlbums = api.listAlbums();
+      storedAlbums.catch(() => undefined);
       const photos: Photo[] = [];
       let after: string | undefined;
       do {
@@ -346,7 +354,7 @@ export function remoteStore(
         after = page.next ?? undefined;
       } while (after);
       const albums: Album[] = [];
-      for (const stored of (await api.listAlbums()).albums) {
+      for (const stored of (await storedAlbums).albums) {
         const opened = await crypto
           .openRecord(keys, 'album', stored.id, stored.meta)
           .catch(() => null);
@@ -374,7 +382,7 @@ export function remoteStore(
       return track(photoId, part, plain, part === 'thumb' ? THUMB_TYPE : entry.meta.type);
     },
 
-    thumbs: async (photoIds) => {
+    thumbs: async (photoIds, onThumb) => {
       const found = new Map<string, string>();
       const missing: string[] = [];
       for (const photoId of photoIds) {
@@ -385,17 +393,34 @@ export function remoteStore(
       if (missing.length === 0) return found;
       const api = await remote();
       const crypto = await loadCrypto();
-      for (let start = 0; start < missing.length; start += THUMB_BATCH_MAX) {
-        const ids = missing.slice(start, start + THUMB_BATCH_MAX);
-        const files = await api.getThumbs(ids);
-        for (const [index, photoId] of ids.entries()) {
-          const sealed = files[index];
-          const entry = known.get(photoId);
-          if (!sealed || !entry) continue;
-          // A preview that doesn't decrypt was tampered with: it stays a placeholder.
-          const plain = await crypto.decryptFile(entry.key, sealed).catch(() => null);
-          if (plain) found.set(photoId, track(photoId, 'thumb', new Uint8Array(plain), THUMB_TYPE));
+      // Photos the server answered for, with a preview or without one: not worth asking again.
+      const answered = new Set<string>();
+      const show = async (photoId: string | undefined, sealed: Uint8Array | null) => {
+        if (photoId === undefined) return;
+        answered.add(photoId);
+        const entry = known.get(photoId);
+        if (!sealed || !entry) return;
+        // A preview that doesn't decrypt was tampered with: it stays a placeholder.
+        const plain = await crypto.decryptFile(entry.key, sealed).catch(() => null);
+        if (!plain) return;
+        const url = track(photoId, 'thumb', new Uint8Array(plain), THUMB_TYPE);
+        found.set(photoId, url);
+        onThumb?.(photoId, url);
+      };
+      try {
+        for (let start = 0; start < missing.length; start += THUMB_BATCH_MAX) {
+          const ids = missing.slice(start, start + THUMB_BATCH_MAX);
+          // Previews decrypt one after another, in the order they arrive.
+          let decrypting = Promise.resolve();
+          const downloading = api.getThumbs(ids, (index, sealed) => {
+            decrypting = decrypting.then(() => show(ids[index], sealed));
+          });
+          await downloading.finally(() => decrypting);
         }
+      } catch (error) {
+        const failed = missing.filter((photoId) => !answered.has(photoId));
+        if (answered.size === 0) throw error;
+        throw new PartialThumbs(found, failed);
       }
       return found;
     },
@@ -583,13 +608,24 @@ export function combinedStore(
 
   return {
     list: async () => {
+      // Your own library and every shared one load at the same time.
+      const sharedLists = loadShared()
+        .catch(() => [])
+        .then((sources) =>
+          Promise.all(
+            sources.map(async (source) => ({
+              source,
+              loaded: await source.store.list().catch(() => null),
+            })),
+          ),
+        );
       const mine = await own.list();
-      shared = await loadShared().catch(() => []);
+      const loadedShared = await sharedLists;
+      shared = loadedShared.map(({ source }) => source);
       const photos = [...mine.photos];
       const albums = [...mine.albums];
       const seen = new Map(photos.map((photo, index) => [photo.id, index]));
-      for (const source of shared) {
-        const loaded = await source.store.list().catch(() => null);
+      for (const { source, loaded } of loadedShared) {
         if (!loaded) continue;
         const marks = source.album
           ? { library: source.name, sharedAlbum: true }
@@ -617,7 +653,7 @@ export function combinedStore(
       return { photos, albums };
     },
     image: (photoId, part) => storeOf(photoId).image(photoId, part),
-    thumbs: async (photoIds) => {
+    thumbs: async (photoIds, onThumb) => {
       const byStore = new Map<SpaceStore, string[]>();
       for (const photoId of photoIds) {
         const store = storeOf(photoId);
@@ -627,12 +663,17 @@ export function combinedStore(
       const failed: string[] = [];
       await Promise.all(
         [...byStore].map(([store, ids]) =>
-          store.thumbs(ids).then(
+          store.thumbs(ids, onThumb).then(
             (urls) => {
               for (const [id, url] of urls) found.set(id, url);
             },
-            () => {
-              failed.push(...ids);
+            (error: unknown) => {
+              if (!(error instanceof PartialThumbs)) {
+                failed.push(...ids);
+                return;
+              }
+              for (const [id, url] of error.found) found.set(id, url);
+              failed.push(...error.failed);
             },
           ),
         ),

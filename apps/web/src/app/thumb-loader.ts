@@ -8,6 +8,11 @@ import { THUMB_BATCH_MAX } from '@twofold/types';
 export const THUMB_GATHER_MS = 30;
 export const THUMB_REQUESTS = 2;
 /**
+ * Photos actually on the screen go first, in batches this small, so the tiles someone is
+ * looking at don't wait behind a full batch of ones just below the fold.
+ */
+export const THUMB_ON_SCREEN_BATCH = 12;
+/**
  * Decrypted thumbnails reach the screen together, at most this often. One update per
  * thumbnail would redraw the whole grid once per photo, which a large library can't afford.
  */
@@ -34,15 +39,24 @@ export class PartialThumbs extends Error {
 }
 
 export interface ThumbLoaderDeps {
-  /** Downloads and decrypts previews, as blob URLs by photo id. */
-  fetch: (photoIds: readonly string[]) => Promise<ReadonlyMap<string, string>>;
+  /**
+   * Downloads and decrypts previews, as blob URLs by photo id. Each one can also be handed to
+   * `onThumb` as it arrives, so it shows before the rest of its batch.
+   */
+  fetch: (
+    photoIds: readonly string[],
+    onThumb: (photoId: string, url: string) => void,
+  ) => Promise<ReadonlyMap<string, string>>;
   /** Previews ready to show, a few at a time. */
   onReady: (urls: ReadonlyMap<string, string>) => void;
 }
 
 export interface ThumbLoader {
-  /** Asks for photos' previews. Asking twice is free. */
-  request: (photoIds: readonly string[]) => void;
+  /**
+   * Asks for photos' previews. Asking twice is free. Photos `onScreen` now go before those
+   * only near it.
+   */
+  request: (photoIds: readonly string[], onScreen?: boolean) => void;
   /** Stops everything; nothing more reaches `onReady`. */
   stop: () => void;
 }
@@ -68,17 +82,28 @@ export function createThumbLoader({ fetch, onReady }: ThumbLoaderDeps): ThumbLoa
     ready = new Map();
   };
 
-  // Each photo's preview is asked for once; `wanted` holds those not yet downloading.
+  // Each photo's preview is asked for once; `urgent` (on the screen) and `wanted` (near it)
+  // hold those not yet downloading.
   const asked = new Set<string>();
+  const urgent = new Set<string>();
   const wanted = new Set<string>();
   /** Failed tries so far, for photos whose batch failed. */
   const failures = new Map<string, number>();
   let downloading = 0;
   let gatherTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const want = (photoIds: Iterable<string>) => {
-    for (const photoId of photoIds) wanted.add(photoId);
-    if (wanted.size > 0) gatherTimer ??= later(pump, THUMB_GATHER_MS);
+  const want = (photoIds: Iterable<string>, onScreen = false) => {
+    for (const photoId of photoIds) (onScreen ? urgent : wanted).add(photoId);
+    if (urgent.size + wanted.size > 0) gatherTimer ??= later(pump, THUMB_GATHER_MS);
+  };
+
+  /** The next batch to download: on-screen photos first, in smaller batches. */
+  const nextBatch = (): string[] => {
+    const [queue, size] =
+      urgent.size > 0 ? [urgent, THUMB_ON_SCREEN_BATCH] : [wanted, THUMB_BATCH_MAX];
+    const batch = [...queue].slice(0, size);
+    for (const photoId of batch) queue.delete(photoId);
+    return batch;
   };
 
   const failed = (batch: readonly string[]) => {
@@ -108,18 +133,24 @@ export function createThumbLoader({ fetch, onReady }: ThumbLoaderDeps): ThumbLoa
 
   function pump() {
     gatherTimer = undefined;
-    while (!stopped && downloading < THUMB_REQUESTS && wanted.size > 0) {
-      const batch = [...wanted].slice(0, THUMB_BATCH_MAX);
-      for (const photoId of batch) wanted.delete(photoId);
+    while (!stopped && downloading < THUMB_REQUESTS && urgent.size + wanted.size > 0) {
+      const batch = nextBatch();
       downloading += 1;
+      // Previews handed over as they arrived come back again with the whole batch.
+      const delivered = new Set<string>();
+      const arrived = (photoId: string, url: string) => {
+        if (stopped || delivered.has(photoId)) return;
+        delivered.add(photoId);
+        ready.set(photoId, url);
+        flushTimer ??= later(flush, THUMB_FLUSH_MS);
+      };
       const show = (urls: ReadonlyMap<string, string>, retry: readonly string[]) => {
         if (stopped) return;
         for (const photoId of batch) if (!retry.includes(photoId)) failures.delete(photoId);
-        for (const [photoId, url] of urls) ready.set(photoId, url);
-        if (urls.size > 0) flushTimer ??= later(flush, THUMB_FLUSH_MS);
+        for (const [photoId, url] of urls) arrived(photoId, url);
         if (retry.length > 0) failed(retry);
       };
-      fetch(batch)
+      fetch(batch, arrived)
         .then(
           (urls) => {
             show(urls, []);
@@ -137,10 +168,10 @@ export function createThumbLoader({ fetch, onReady }: ThumbLoaderDeps): ThumbLoa
   }
 
   return {
-    request: (photoIds) => {
+    request: (photoIds, onScreen = false) => {
       const fresh = photoIds.filter((photoId) => !asked.has(photoId));
       for (const photoId of fresh) asked.add(photoId);
-      want(fresh);
+      want(fresh, onScreen);
     },
     stop: () => {
       stopped = true;
