@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { Photo } from '../mock/data';
 import type { NewPhoto } from './space-store';
 import { Uploader } from './uploader';
 import type { UploaderDeps } from './uploader';
@@ -7,13 +8,25 @@ import type { UploaderDeps } from './uploader';
 const photo = (name: string, type = 'image/png'): File =>
   new File([new Uint8Array(4)], name, { type });
 
+/** The stored photo the vault hands back, named after the file it came from. */
+const stored = (name: string): Photo => ({
+  id: name,
+  src: '',
+  width: 1,
+  height: 1,
+  takenAt: name,
+  addedBy: 'me',
+  favorite: false,
+  albumIds: [],
+});
+
 /** Lets every pending promise callback run. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function setup(overrides: Partial<UploaderDeps> = {}) {
   /** Uploads waiting to be let through, in the order they started. */
   const pending: { name: string; finish: () => void; fail: () => void }[] = [];
-  const onStored = vi.fn<(count: number) => void>();
+  const onStored = vi.fn<(photos: Photo[]) => void>();
   const revoke = vi.fn<(url: string) => void>();
   let previews = 0;
   const uploader = new Uploader({
@@ -32,7 +45,7 @@ function setup(overrides: Partial<UploaderDeps> = {}) {
         pending.push({
           name: newPhoto.takenAt,
           finish: () => {
-            resolve();
+            resolve(stored(newPhoto.takenAt));
           },
           fail: () => {
             reject(new Error('offline'));
@@ -72,8 +85,9 @@ describe('Uploader', () => {
     await settle();
 
     expect(statuses()).toEqual(['done', 'done', 'done', 'done']);
+    // Nothing is shown photo by photo: all four arrive together, in the order they finished.
     expect(onStored).toHaveBeenCalledOnce();
-    expect(onStored).toHaveBeenCalledWith(4);
+    expect(onStored).toHaveBeenCalledWith(['a', 'b', 'c', 'd'].map(stored));
   });
 
   it('keeps uploading after the dialog closes, then starts the list over', async () => {
@@ -88,7 +102,7 @@ describe('Uploader', () => {
     for (const job of pending) job.finish();
     await settle();
 
-    expect(onStored).toHaveBeenCalledWith(2);
+    expect(onStored).toHaveBeenCalledWith([stored('a'), stored('b')]);
     expect(statuses()).toEqual([]);
     expect(revoke).toHaveBeenCalledTimes(2);
   });
@@ -155,13 +169,37 @@ describe('Uploader', () => {
     const { uploader } = setup({
       upload: (_photo, albumId) => {
         albums.push(albumId);
-        return Promise.resolve();
+        return Promise.resolve(stored(albumId ?? 'none'));
       },
     });
     uploader.add([photo('a')], 'trip');
     uploader.add([photo('b')], undefined);
     await settle();
     expect(albums).toEqual(['trip', undefined]);
+  });
+
+  it('holds finished photos back while others are still uploading', async () => {
+    const { uploader, pending, onStored } = setup();
+    uploader.add([photo('a'), photo('b')], undefined);
+    await settle();
+    pending[0]?.finish();
+    await settle();
+    expect(onStored).not.toHaveBeenCalled();
+    pending[1]?.fail();
+    await settle();
+    expect(onStored).toHaveBeenCalledWith([stored('a')]);
+  });
+
+  it('forgets held photos when disposed, so they show on the next unlock instead', async () => {
+    const { uploader, pending, onStored } = setup();
+    uploader.add([photo('a'), photo('b')], undefined);
+    await settle();
+    pending[0]?.finish();
+    await settle();
+    uploader.dispose();
+    pending[1]?.finish();
+    await settle();
+    expect(onStored).not.toHaveBeenCalled();
   });
 
   it('drops the list and sends nothing more once disposed', async () => {
