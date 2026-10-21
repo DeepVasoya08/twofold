@@ -277,6 +277,13 @@ export interface ProfilePhotoResponse {
   photo: StoredProfilePhoto | null;
 }
 
+/** The account's storage across both spaces. Only the private space shows it. */
+export interface AccountStorage {
+  /** Encrypted bytes stored, uploads in progress included. */
+  used: number;
+  limit: number;
+}
+
 /**
  * Starts a photo upload. The two files follow with PUT (in either order, or together); the
  * one that lands second makes the photo visible, so a separate commit is only a fallback.

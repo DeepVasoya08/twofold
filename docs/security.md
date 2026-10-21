@@ -173,10 +173,13 @@ other accounts; see [Sharing](#sharing).
   most 128 KiB of ciphertext), and wiping the space removes it. The account's **name** is
   not secret: sign-up sends it in plaintext, and `PUT /api/account/name` changes it with the
   session alone.
-- **Storage used** shown in the app is the encrypted size of the open space's own photos,
-  added up in the browser from the sizes the photo list already carries. The account's
-  total (`stored_bytes`) is never sent to the browser: in the main library it would include
-  a private space's photos and so show that one exists. The settings say the 1 GB limit
+- **Storage used.** The main library shows the encrypted size of its own photos ("used
+  here"), added up in the browser from the sizes the photo list already carries, and never
+  asks for the account's total: it would include a private space's photos and so show that
+  one exists. Only the private space asks for the total (`GET /api/account/storage`,
+  `stored_bytes`) and shows it ("used in total"), since whoever has it open already knows
+  both spaces exist. It asks once it has loaded and again after its photos change, never
+  from the main library. The settings say the 1 GB limit
   covers everything the account stores, which is also true without a private space (photos
   added to libraries shared with you count too), so a "storage full" message before the main
   library reaches 1 GB has an innocent explanation.
