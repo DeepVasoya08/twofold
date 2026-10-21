@@ -5,14 +5,11 @@ import { usageLabel, usedFraction } from '../lib/storage-usage';
 
 import './storage-meter.css';
 
-/**
- * How much of the shared 1 GB is used, as a bar and a label: the main library's own photos,
- * or in the private space the account's total (see app/storage.tsx).
- */
+/** How much of the account's 1 GB is used, across both spaces, as a bar and a label. */
 export function StorageMeter({ compact = false }: { compact?: boolean }) {
-  const { bytes, scope } = useStorageUsage();
+  const bytes = useStorageUsage();
   const fraction = usedFraction(bytes);
-  const label = usageLabel(bytes, scope);
+  const label = usageLabel(bytes);
   return (
     <div className={`storage-meter${compact ? ' storage-meter--compact' : ''}`}>
       <div

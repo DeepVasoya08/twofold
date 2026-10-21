@@ -277,7 +277,7 @@ export interface ProfilePhotoResponse {
   photo: StoredProfilePhoto | null;
 }
 
-/** The account's storage across both spaces. Only the private space shows it. */
+/** The account's storage across both spaces, shown in either one. */
 export interface AccountStorage {
   /** Encrypted bytes stored, uploads in progress included. */
   used: number;

@@ -392,9 +392,8 @@ export function Settings() {
         <div className="settings-storage">
           <StorageMeter />
           <p className="settings-storage__note">
-            {space === 'private'
-              ? 'The 1 GB limit covers everything your account stores, in both spaces, including photos you add to libraries shared with you. This total is only shown here.'
-              : 'The 1 GB limit covers everything your account stores, including photos you add to libraries shared with you.'}
+            The 1 GB limit covers everything your account stores, including photos you add to
+            libraries shared with you.
           </p>
         </div>
       </Section>
