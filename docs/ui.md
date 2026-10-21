@@ -245,7 +245,7 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
   private space, 1 GB per account.
 - The Privacy Policy and Terms of Use (`screens/Privacy.tsx`, `screens/Terms.tsx`) describe
   the real design. Details only the operator can give (legal name, contact email,
-  jurisdiction, minimum age, effective date) live in `legal/details.ts`; while any is
+  jurisdiction, effective date) live in `legal/details.ts`; while any is
   missing the pages show highlighted placeholders and a draft notice. They still need a
   legal review before launch.
 - The three public pages share a header and footer (`components/SiteChrome.tsx`) and are

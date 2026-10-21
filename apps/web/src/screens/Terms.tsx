@@ -34,8 +34,8 @@ export function Terms() {
       <h2>Your account</h2>
       <ul>
         <li>
-          You must be at least <Fill field="minimumAge" label="minimum age" /> years old, or the
-          minimum age where you live if that’s higher, to use Twofold.
+          Twofold has no minimum age. If you are under the age at which you can agree to these terms
+          where you live, a parent or guardian must agree to them for you.
         </li>
         <li>Give a real email address you control, and keep your passwords to yourself.</li>
         <li>You’re responsible for what happens in your account.</li>

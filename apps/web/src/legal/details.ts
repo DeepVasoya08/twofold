@@ -10,18 +10,15 @@ export interface LegalDetails {
   contactEmail: string | null;
   /** The country (and state, if relevant) whose law governs the terms. */
   jurisdiction: string | null;
-  /** The minimum age to use Twofold where you operate, e.g. 13 or 16. */
-  minimumAge: number | null;
   /** When this version takes effect, e.g. "1 November 2026". */
   effectiveDate: string | null;
 }
 
 export const legalDetails: LegalDetails = {
-  operator: null,
-  contactEmail: null,
+  operator: 'Deep Vasoya',
+  contactEmail: 'deepvasoya08@gmail.com',
   jurisdiction: null,
-  minimumAge: null,
-  effectiveDate: null,
+  effectiveDate: '1 October 2026',
 };
 
 /** Facts about the service itself, kept here so both pages say the same thing. */
