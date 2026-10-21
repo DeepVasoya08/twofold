@@ -53,6 +53,30 @@
   backdrop-filter: blur(6px);
 }
 
+.photo-tile__shared {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 50px);
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 40%);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  backdrop-filter: blur(6px);
+}
+
+.photo-tile__shared-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 860px) {
   .photo-grid {
     grid-template-columns: repeat(3, 1fr);
@@ -61,6 +85,19 @@
 
   .photo-tile {
     border-radius: 6px;
+  }
+
+  /* Small tiles: the icon alone; the name is in the tile's label and the viewer. */
+  .photo-tile__shared {
+    bottom: 6px;
+    left: 6px;
+    width: 22px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .photo-tile__shared-name {
+    display: none;
   }
 }
 

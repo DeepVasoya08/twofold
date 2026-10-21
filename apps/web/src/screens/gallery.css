@@ -181,3 +181,46 @@
     pointer-events: none;
   }
 }
+
+.owner-filter {
+  display: inline-flex;
+  gap: 4px;
+  max-width: 100%;
+  margin-bottom: 20px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.owner-filter__option {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+
+.owner-filter__option[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 560px) {
+  .owner-filter {
+    display: flex;
+  }
+
+  .owner-filter__option {
+    flex: 1;
+    padding: 0 8px;
+    font-size: 13px;
+  }
+}

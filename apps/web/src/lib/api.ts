@@ -17,7 +17,9 @@ import type {
   JoinedList,
   JoinerView,
   LoginRequest,
+  MemberAccess,
   MemberList,
+  MembershipResponse,
   PendingInviteList,
   PhotoPage,
   PhotoPart,
@@ -275,6 +277,11 @@ export function spaceApi(token: string) {
       call<undefined>('POST', '/space/members', body, headers),
     removeMember: (id: string) =>
       call<undefined>('DELETE', `/space/members/${encodeURIComponent(id)}`, {}, headers),
+    /** Changes what someone the whole library is shared with may do. */
+    updateMember: (id: string, access: MemberAccess) =>
+      call<undefined>('PUT', `/space/members/${encodeURIComponent(id)}`, { access }, headers),
+    /** With a member's token: what it may do there. */
+    membership: () => call<MembershipResponse>('GET', '/space/membership', undefined, headers),
     /** With a member's token: gives up that membership. */
     leave: () => call<undefined>('DELETE', '/space/membership', {}, headers),
     listJoined: () => call<JoinedList>('GET', '/space/joined', undefined, headers),

@@ -194,9 +194,25 @@ under). It never gets the space key or the space id.
 
 - **Access.** The owner registers the member's share token with `POST /api/space/members`;
   D1 keeps only its SHA-256, in a `members` row next to the space's tag. A request whose
-  `x-twofold-space` header is a share token reaches the owner's photos and albums: the
-  member can view, add, favorite and delete photos, and add, rename and delete albums. The owner-only routes
-  (who it's shared with, joined libraries, invites in progress, wiping the space) refuse share tokens.
+  `x-twofold-space` header is a share token reaches the owner's photos and albums. The
+  owner-only routes (who it's shared with, joined libraries, invites in progress, wiping the
+  space) refuse share tokens.
+- **What a member may do.** Each library member row has an `access` of `view` or `edit`,
+  chosen by the owner when inviting (kept in the invite's sealed record until it's
+  confirmed) and changeable at any time with `PUT /api/space/members/:id`. The server
+  enforces it on every request: a `view` token may only make `GET` requests (and leave), so
+  it can view and download but not add, change, favorite or delete anything; an `edit`
+  token can also add, favorite and delete photos, and add, rename and delete albums. A
+  member asks what it may do with `GET /api/space/membership`, so the app only offers what
+  the server will allow; if that can't be read, the app treats the library as view-only.
+  Album members are always `view`. Members from before this existed kept `edit`, which is
+  what they had; new members default to `view`. The server learns only which of the two a
+  token has, which says nothing about the space or the account behind it.
+- **The private space is never part of it.** Sharing a library hands over that space's
+  records key and a token for that space only. The private space is a different space with
+  its own keys and tag, so nothing shared from the main library can reach it; private
+  photos can only be shared from inside the private space (`member-access.test.ts` checks
+  this at the API).
 - **Deleting an album** removes its row; the server can't read which photos name it, so the
   browser takes the album out of each photo's sealed metadata afterwards (best effort: a
   photo that still names a deleted album just shows nothing for it).

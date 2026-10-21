@@ -1,5 +1,6 @@
 import type {
   CreateInviteRequest,
+  MemberAccess,
   PhotoPart,
   StoredAlbum,
   StoredJoined,
@@ -22,8 +23,14 @@ export class FakeServer {
   albums = new Map<string, { token: string; album: StoredAlbum; shared: string | null }>();
   /** By `album/photo`: a shared album's sealed copy of a photo's details. */
   items = new Map<string, { album: string; photo: string; meta: string }>();
-  /** By share token: whose space it opens, the member record, and its album, if limited. */
-  members = new Map<string, { space: string; id: string; meta: string; album: string | null }>();
+  /**
+   * By share token: whose space it opens, the member record, its album if limited, and what
+   * it may do.
+   */
+  members = new Map<
+    string,
+    { space: string; id: string; meta: string; album: string | null; access: MemberAccess }
+  >();
   joined = new Map<string, { token: string; joined: StoredJoined }>();
   /** By space token. */
   profilePhotos = new Map<string, StoredProfilePhoto>();
@@ -39,6 +46,7 @@ export class FakeServer {
     };
     const writable = () => {
       if (scope !== null) throw new ApiError(403, 'Album only');
+      if (member?.access === 'view') throw new ApiError(403, 'View only');
     };
     const listed = (id: string) => scope === null || this.items.has(`${scope}/${id}`);
     const mine = (id: string) => {
@@ -189,16 +197,36 @@ export class FakeServer {
         return {
           members: [...this.members.values()]
             .filter((entry) => entry.space === space)
-            .map(({ id, meta, album }) => ({ id, meta, album })),
+            .map(({ id, meta, album, access }) => ({ id, meta, album, access })),
         };
       },
-      addMember: async ({ id, token: shareToken, meta, album }) => {
+      addMember: async ({ id, token: shareToken, meta, album, access }) => {
         ownerOnly();
         await Promise.resolve();
         if (album !== undefined && !this.albums.get(album)?.shared) {
           throw new ApiError(404, 'Not shared');
         }
-        this.members.set(shareToken, { space, id, meta, album: album ?? null });
+        this.members.set(shareToken, {
+          space,
+          id,
+          meta,
+          album: album ?? null,
+          access: album === undefined ? (access ?? 'view') : 'view',
+        });
+      },
+      updateMember: async (id, access) => {
+        ownerOnly();
+        await Promise.resolve();
+        const entry = [...this.members.values()].find(
+          (each) => each.space === space && each.id === id && each.album === null,
+        );
+        if (!entry) throw new ApiError(404, 'Not a member');
+        entry.access = access;
+      },
+      membership: async () => {
+        await Promise.resolve();
+        if (!member) throw new ApiError(400, 'Not a member');
+        return { access: member.access };
       },
       removeMember: async (id) => {
         ownerOnly();

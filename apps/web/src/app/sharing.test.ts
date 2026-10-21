@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { albumAccess, newInviteKeys, newSpace, openRecord, ownerAccess } from '@twofold/crypto';
 import type { SpaceKeys } from '@twofold/crypto';
+import type { MemberAccess } from '@twofold/types';
 
 import { FakeInvites, FakeServer } from '../test/fake-server';
 import { FormError } from './account-ops';
@@ -14,6 +15,7 @@ import {
   confirmInvite,
   finishJoin,
   forgetPending,
+  joinedAccess,
   leaveAll,
   leaveJoined,
   leaveLibrary,
@@ -22,11 +24,13 @@ import {
   listPending,
   removeMember,
   sessionStore,
+  setInviteAccess,
   startInvite,
   startJoin,
+  updateMemberAccess,
 } from './sharing';
 import type { Invite, Join } from './sharing';
-import { remoteStore } from './space-store';
+import { VIEW_ONLY_LIBRARY, remoteStore } from './space-store';
 import type { NewPhoto, SpaceStore } from './space-store';
 
 const PHOTO: NewPhoto = {
@@ -73,10 +77,14 @@ async function handshake(w: World, album: string | null = null) {
   return { invite, join, joining, asked };
 }
 
-/** Alice shares her space with Bob, all the way through. */
-async function shareAliceWithBob(w: World): Promise<{ invite: Invite; join: Join }> {
+/** Alice shares her space with Bob, all the way through, letting him do `access`. */
+async function shareAliceWithBob(
+  w: World,
+  access: MemberAccess = 'edit',
+): Promise<{ invite: Invite; join: Join }> {
   const { invite, join, asked } = await handshake(w);
   if (asked.stage !== 'confirm') throw new Error('expected a confirmation');
+  if (access !== invite.access) await setInviteAccess(invite, access, w.alice, apis(w));
   await confirmInvite(invite, asked, w.alice, 'Alice', apis(w));
   const granted = await advanceJoin(join, 'Bob', w.invites.api);
   if (granted.stage !== 'granted') throw new Error('expected a grant');
@@ -117,7 +125,7 @@ describe('invites', () => {
     const w = await world();
     await shareAliceWithBob(w);
     expect(await listMembers(w.alice, w.server.api)).toEqual([
-      { id: expect.any(String) as string, name: 'Bob', album: null },
+      { id: expect.any(String) as string, name: 'Bob', album: null, access: 'edit' },
     ]);
     const [library] = await listJoined(w.bob, w.server.api);
     expect(library).toMatchObject({ name: 'Alice' });
@@ -427,6 +435,7 @@ describe('a shared library', () => {
     const bobs = sessionStore(w.bob, 'Bob', w.server.api);
     const { albums } = await bobs.list();
     expect(albums).toEqual([{ ...album, library: 'Alice' }]);
+    expect(albums[0]?.viewOnly).toBeUndefined();
     const added = await bobs.add(PHOTO, [album.id]);
     expect(added).toMatchObject({ addedBy: 'me', library: 'Alice' });
     // A new photo outside a shared album stays in Bob's own space.
@@ -463,6 +472,87 @@ describe('a shared library', () => {
     expect(seen).toMatchObject({ id: added.id, favorite: true });
     await bobs.remove(photo.id);
     expect((await remoteStore(w.alice, w.server.api).list()).photos).toEqual([]);
+  });
+
+  it('can be shared view-only: photos and albums marked, and every change refused', async () => {
+    const w = await world();
+    const alices = remoteStore(w.alice, w.server.api);
+    const album = await alices.createAlbum('Trip');
+    await alices.add(PHOTO, [album.id]);
+    await shareAliceWithBob(w, 'view');
+    expect(await listMembers(w.alice, w.server.api)).toMatchObject([{ access: 'view' }]);
+    const bobs = sessionStore(w.bob, 'Bob', w.server.api);
+    const { photos, albums } = await bobs.list();
+    expect(photos[0]).toMatchObject({ library: 'Alice', viewOnly: true });
+    expect(photos[0]?.sharedAlbum).toBeUndefined();
+    expect(albums[0]).toMatchObject({ library: 'Alice', viewOnly: true });
+    const photo = photos[0];
+    if (!photo) throw new Error('missing photo');
+    await expect(bobs.update({ ...photo, favorite: true })).rejects.toThrow(VIEW_ONLY_LIBRARY);
+    await expect(bobs.remove(photo.id)).rejects.toThrow(VIEW_ONLY_LIBRARY);
+    await expect(bobs.renameAlbum(album.id, 'Mine now')).rejects.toThrow(VIEW_ONLY_LIBRARY);
+    await expect(bobs.removeAlbum(album.id)).rejects.toThrow(VIEW_ONLY_LIBRARY);
+    await expect(bobs.add(PHOTO, [album.id])).rejects.toThrow(VIEW_ONLY_LIBRARY);
+    // Bob can still download, and still upload to his own space.
+    expect((await bobs.original(photo.id)).type).toBe('image/png');
+    expect((await bobs.add(PHOTO, [])).library).toBeUndefined();
+    // The server refuses too, whatever the app does.
+    const [library] = await listJoined(w.bob, w.server.api);
+    if (!library) throw new Error('missing library');
+    const asBob = w.server.api(library.token);
+    await expect(Promise.resolve().then(() => asBob.deletePhoto(photo.id))).rejects.toThrow();
+    expect((await alices.list()).photos).toHaveLength(1);
+  });
+
+  it('lets the owner change what a member can do, which the member sees next time', async () => {
+    const w = await world();
+    const alices = remoteStore(w.alice, w.server.api);
+    await alices.add(PHOTO, []);
+    await shareAliceWithBob(w, 'view');
+    const [library] = await listJoined(w.bob, w.server.api);
+    const [member] = await listMembers(w.alice, w.server.api);
+    if (!library || !member) throw new Error('missing share');
+    expect(await joinedAccess(library, w.server.api)).toBe('view');
+
+    await updateMemberAccess(w.alice, member.id, 'edit', w.server.api);
+    expect(await joinedAccess(library, w.server.api)).toBe('edit');
+    const bobs = sessionStore(w.bob, 'Bob', w.server.api);
+    const [photo] = (await bobs.list()).photos;
+    if (!photo) throw new Error('missing photo');
+    expect(photo.viewOnly).toBeUndefined();
+    await bobs.update({ ...photo, favorite: true });
+    expect((await alices.list()).photos[0]?.favorite).toBe(true);
+
+    await updateMemberAccess(w.alice, member.id, 'view', w.server.api);
+    const again = sessionStore(w.bob, 'Bob', w.server.api);
+    expect((await again.list()).photos[0]?.viewOnly).toBe(true);
+  });
+
+  it('starts invites view-only, keeps the choice in the invite’s record, and refuses it for albums', async () => {
+    const w = await world();
+    const invite = await startInvite(w.alice, null, apis(w));
+    expect(invite.access).toBe('view');
+    await setInviteAccess(invite, 'edit', w.alice, apis(w));
+    // Another device, or a later visit, reads the choice back.
+    const { invites } = await listPending(w.alice, apis(w));
+    expect(invites[0]?.access).toBe('edit');
+
+    const album = await remoteStore(w.alice, w.server.api).createAlbum('Trip');
+    const albumInvite = await startInvite(w.alice, album.id, apis(w));
+    await expect(setInviteAccess(albumInvite, 'edit', w.alice, apis(w))).rejects.toThrow(FormError);
+  });
+
+  it('treats a library whose access can’t be read as view-only', async () => {
+    const w = await world();
+    await remoteStore(w.alice, w.server.api).add(PHOTO, []);
+    await shareAliceWithBob(w, 'edit');
+    const [library] = await listJoined(w.bob, w.server.api);
+    if (!library) throw new Error('missing library');
+    const failing = (token: string) => ({
+      ...w.server.api(token),
+      membership: () => Promise.reject(new Error('offline')),
+    });
+    expect(await joinedAccess(library, failing)).toBe('view');
   });
 
   it('stops reaching the member once the owner stops sharing', async () => {
@@ -529,6 +619,7 @@ describe('a shared album', () => {
         title: 'Trip',
         library: 'Alice',
         sharedAlbum: true,
+        viewOnly: true,
         joinedId: expect.any(String) as string,
       },
     ]);
@@ -594,7 +685,7 @@ describe('a shared album', () => {
     const { albums } = await sessionStore(w.alice, 'Alice', w.server.api).list();
     expect(albums.find((each) => each.id === album.id)?.sharedWith).toEqual(['Bob']);
     expect(await listMembers(w.alice, w.server.api)).toEqual([
-      { id: expect.any(String) as string, name: 'Bob', album: album.id },
+      { id: expect.any(String) as string, name: 'Bob', album: album.id, access: 'view' },
     ]);
   });
 

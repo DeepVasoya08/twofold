@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode, SubmitEvent } from 'react';
 
 import type { SpaceKeys } from '@twofold/crypto';
-import type { Device } from '@twofold/types';
+import type { Device, MemberAccess } from '@twofold/types';
 
 import { useAccount, useMe } from '../app/account';
 import { useAutoLock } from '../app/auto-lock';
@@ -10,7 +10,14 @@ import { useProfile } from '../app/profile';
 import { errorInput, errorMessage } from '../app/account-ops';
 import { useRouter } from '../app/router';
 import { paths } from '../app/routes';
-import { leaveLibrary, listJoined, listMembers, removeMember } from '../app/sharing';
+import {
+  joinedAccess,
+  leaveLibrary,
+  listJoined,
+  listMembers,
+  removeMember,
+  updateMemberAccess,
+} from '../app/sharing';
 import type { JoinedLibrary, Member } from '../app/sharing';
 import { useTheme } from '../app/theme';
 import type { ThemePreference } from '../app/theme';
@@ -26,7 +33,7 @@ import { ProfileDialog } from '../components/ProfileDialog';
 import { StorageMeter } from '../components/StorageMeter';
 import { api } from '../lib/api';
 import { AUTO_LOCK_CHOICES, parseAutoLock } from '../lib/auto-lock';
-import { formatLastActive, formatShortDay } from '../lib/format';
+import { formatLastActive, formatShortDay, pluralize } from '../lib/format';
 import { MIN_PASSWORD_LENGTH } from '../lib/password';
 
 import './settings.css';
@@ -79,10 +86,31 @@ type DialogName = 'profile' | 'main-password' | 'private-password' | 'delete' | 
 /** A sharing change waiting for confirmation: stop sharing with someone, or leave a library. */
 type SharingChange = { kind: 'stop'; member: Member } | { kind: 'leave'; library: JoinedLibrary };
 
+/** A library this space joined, with what its owner lets you do there. */
+interface JoinedWithAccess extends JoinedLibrary {
+  access: MemberAccess;
+}
+
 interface SharingLists {
   members: Member[];
-  joined: JoinedLibrary[];
+  joined: JoinedWithAccess[];
 }
+
+/** What someone can do in a library, for a settings row. */
+const ACCESS_DESCRIPTION: Record<MemberAccess, string> = {
+  view: 'View only: they can see and download photos.',
+  edit: 'Add and edit: they can also add, change and delete photos.',
+};
+
+function parseAccess(value: string): MemberAccess {
+  return value === 'edit' ? 'edit' : 'view';
+}
+
+/** What you can do in a library someone shared with you. */
+const JOINED_DESCRIPTION: Record<MemberAccess, string> = {
+  view: 'You can view and download its photos.',
+  edit: 'You can view, add and change its photos.',
+};
 
 /** Who the whole open space is shared with, and the libraries it joined. Null until loaded. */
 function useSharingLists(keys: SpaceKeys | null) {
@@ -91,14 +119,17 @@ function useSharingLists(keys: SpaceKeys | null) {
   useEffect(() => {
     if (!keys) return;
     let cancelled = false;
-    Promise.all([listMembers(keys), listJoined(keys)]).then(
+    const withAccess = (libraries: JoinedLibrary[]) =>
+      Promise.all(
+        libraries
+          // Albums shared one at a time are managed from the album, not here.
+          .filter((library) => library.album === undefined)
+          .map(async (library) => ({ ...library, access: await joinedAccess(library) })),
+      );
+    Promise.all([listMembers(keys), listJoined(keys).then(withAccess)]).then(
       ([members, joined]) => {
-        // Albums shared one at a time are managed from the album, not here.
         if (!cancelled) {
-          setLists({
-            members: members.filter((member) => member.album === null),
-            joined: joined.filter((library) => library.album === undefined),
-          });
+          setLists({ members: members.filter((member) => member.album === null), joined });
         }
       },
       () => undefined,
@@ -233,6 +264,7 @@ export function Settings() {
   const keys = account.state.status === 'unlocked' ? account.state.session.opened.space : null;
   const sharing = useSharingLists(keys);
   const [change, setChange] = useState<SharingChange | null>(null);
+  const [accessBusy, setAccessBusy] = useState<string | null>(null);
   const where = isPrivate ? 'private space' : 'library';
 
   const closeDialog = () => {
@@ -327,6 +359,28 @@ export function Settings() {
       },
       'current',
     );
+  };
+
+  const onAccessChange = (member: Member, access: MemberAccess) => {
+    if (!keys || accessBusy !== null || access === member.access) return;
+    setAccessBusy(member.id);
+    updateMemberAccess(keys, member.id, access)
+      .then(
+        () => {
+          toast.show(
+            access === 'edit'
+              ? `${member.name} can add and edit now`
+              : `${member.name} can only view now`,
+          );
+          sharing.reload();
+        },
+        (error: unknown) => {
+          toast.show(errorMessage(error));
+        },
+      )
+      .finally(() => {
+        setAccessBusy(null);
+      });
   };
 
   const onSharingChange = () => {
@@ -438,41 +492,84 @@ export function Settings() {
       </Section>
 
       <Section title="Sharing">
-        {sharing.lists?.members.map((member) => (
+        {sharing.lists && (
           <Row
-            key={member.id}
             icon="users"
-            title={`Shared with ${member.name}`}
-            description={`They can see and add photos in this ${where}, and nothing else.`}
-            action={
-              <button
-                type="button"
-                className="btn btn--danger-ghost btn--sm"
-                aria-label={`Stop sharing with ${member.name}`}
-                onClick={() => {
-                  setChange({ kind: 'stop', member });
-                }}
-              >
-                Stop
-              </button>
+            title={
+              sharing.lists.members.length === 0
+                ? 'Not shared'
+                : `Shared with ${pluralize(sharing.lists.members.length, 'person', 'people')}`
             }
-          />
-        ))}
-        {sharing.lists?.members.length === 0 && (
-          <Row
-            icon="users"
-            title="Not shared"
             description={
-              isPrivate ? 'Only you can see this private space.' : 'Only you can see this library.'
+              sharing.lists.members.length === 0
+                ? `Only you can see this ${where}.`
+                : `They see this ${where} and nothing else. You decide what each person can do.`
             }
           />
         )}
+        {sharing.lists?.members.map((member) => (
+          <Row
+            key={member.id}
+            icon={member.access === 'edit' ? 'pencil' : 'eye'}
+            title={member.name}
+            description={ACCESS_DESCRIPTION[member.access]}
+            action={
+              <div className="settings-row__actions">
+                <select
+                  className="select"
+                  aria-label={`What ${member.name} can do`}
+                  value={member.access}
+                  disabled={accessBusy === member.id}
+                  onChange={(event) => {
+                    onAccessChange(member, parseAccess(event.currentTarget.value));
+                  }}
+                >
+                  <option value="view">View only</option>
+                  <option value="edit">Add and edit</option>
+                </select>
+                <button
+                  type="button"
+                  className="btn btn--danger-ghost btn--sm"
+                  aria-label={`Stop sharing with ${member.name}`}
+                  onClick={() => {
+                    setChange({ kind: 'stop', member });
+                  }}
+                >
+                  Stop
+                </button>
+              </div>
+            }
+          />
+        ))}
+        <Row
+          icon="link"
+          title="Invite someone"
+          description={
+            isPrivate
+              ? 'Share this private space with someone you trust.'
+              : 'Share your library with someone you trust. Your private space is never included.'
+          }
+          action={
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              onClick={() => {
+                navigate(paths.share);
+              }}
+            >
+              Invite
+            </button>
+          }
+        />
+      </Section>
+
+      <Section title="Shared with you">
         {sharing.lists?.joined.map((library) => (
           <Row
             key={library.id}
             icon="albums"
             title={`${library.name}’s library`}
-            description={`Shared with you. Its photos appear in your ${where}.`}
+            description={`${JOINED_DESCRIPTION[library.access]} Its photos appear in your ${where}, marked as shared.`}
             action={
               <button
                 type="button"
@@ -488,22 +585,18 @@ export function Settings() {
           />
         ))}
         <Row
-          icon="link"
-          title="Invite someone"
-          description={
-            isPrivate
-              ? 'Share this private space with someone you trust.'
-              : 'Share your library with someone you trust.'
-          }
+          icon="key"
+          title="Enter an invite code"
+          description="Someone sent you a code like TWO-XXXX-XXXX? Enter it to join."
           action={
             <button
               type="button"
               className="btn btn--secondary btn--sm"
               onClick={() => {
-                navigate(paths.share);
+                navigate(paths.joinCode);
               }}
             >
-              Invite
+              Enter code
             </button>
           }
         />

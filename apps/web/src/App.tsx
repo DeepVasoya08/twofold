@@ -10,6 +10,7 @@ import { Album } from './screens/Album';
 import { Albums } from './screens/Albums';
 import { Favorites } from './screens/Favorites';
 import { Gallery } from './screens/Gallery';
+import { JoinCode } from './screens/JoinCode';
 import { JoinInvite } from './screens/JoinInvite';
 import { LogIn } from './screens/LogIn';
 import { NotFound } from './screens/NotFound';
@@ -37,6 +38,7 @@ const titles: Record<Route['name'], string> = {
   settings: 'Settings · Twofold',
   share: 'Share · Twofold',
   join: 'Invite · Twofold',
+  'join-code': 'Enter an invite code · Twofold',
   'not-found': 'Not found · Twofold',
 };
 
@@ -98,6 +100,12 @@ function Screen({ route }: { route: Route }) {
       return (
         <AppShell>
           <JoinInvite token={route.token} />
+        </AppShell>
+      );
+    case 'join-code':
+      return (
+        <AppShell>
+          <JoinCode />
         </AppShell>
       );
   }

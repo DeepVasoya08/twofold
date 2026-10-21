@@ -177,10 +177,15 @@ export function albumPhotos(state: VaultState, albumId: string): Photo[] {
 
 /**
  * Whether a photo can go in an album: both must be in the same library, and neither can be
- * from an album someone shared with you, which can't be changed.
+ * something you can only view (from an album shared with you, or a view-only library).
  */
 export function fitsAlbum(photo: Photo, album: Album): boolean {
-  return !photo.sharedAlbum && !album.sharedAlbum && photo.library === album.library;
+  return !isViewOnly(photo) && !isViewOnly(album) && photo.library === album.library;
+}
+
+/** Whether a photo or album is someone else's that you can only view and download. */
+export function isViewOnly(item: Pick<Photo, 'sharedAlbum' | 'viewOnly'>): boolean {
+  return item.sharedAlbum === true || item.viewOnly === true;
 }
 
 /** The album's chosen cover, or else its newest photo. */
@@ -212,6 +217,7 @@ export const mockVaults: VaultsState = {
 };
 
 const VIEW_ONLY = 'Photos in an album shared with you can be viewed, not changed.';
+const VIEW_ONLY_PHOTO = 'This photo was shared with you to view. You can’t change it.';
 
 /** How many photos a change to many saves at once. */
 const SAVES_AT_ONCE = 4;
@@ -364,10 +370,11 @@ export function VaultProvider({
       if (!photo) throw new FormError('That photo isn’t in your vault anymore.');
       return photo;
     };
-    /** A photo that may be changed: not one from an album someone shared with you. */
+    /** A photo that may be changed: not one someone shared with you to view only. */
     const findChangeable = (photoId: string): Photo => {
       const photo = find(photoId);
       if (photo.sharedAlbum) throw new FormError(VIEW_ONLY);
+      if (photo.viewOnly) throw new FormError(VIEW_ONLY_PHOTO);
       return photo;
     };
     const otherStoreFor = (keys: SpaceKeys | undefined) => {

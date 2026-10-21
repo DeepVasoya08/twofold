@@ -3,6 +3,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createMiddleware } from 'hono/factory';
 
 import { newSessionToken, sessionTokenHash } from '@twofold/crypto/webcrypto';
+import type { MemberAccess } from '@twofold/types';
 
 import { ACTIVE_STEP_MS, deleteSession, findSession, insertSession, touchSession } from './db';
 import type { AccountRecord } from './db';
@@ -26,6 +27,8 @@ export interface AppEnv {
     space: string;
     member: string | null;
     album: string | null;
+    /** What the token may do: always 'edit' for the space's own token. */
+    access: MemberAccess;
   };
 }
 

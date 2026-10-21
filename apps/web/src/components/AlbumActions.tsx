@@ -124,49 +124,53 @@ export function AlbumActions({
       downloads.start(albumPhotos(state, album.id).map((photo) => photo.id));
     },
   };
-  const items: MenuItem[] = album.sharedAlbum
-    ? [
-        download,
-        {
-          label: 'Leave album',
-          icon: 'logout',
-          danger: true,
-          onSelect: () => {
-            setOpen('leave');
-          },
-        },
-      ]
-    : [
-        // Only a space's owner says who it's shared with, so only your own albums are shared.
-        ...(inShared
-          ? []
-          : [
-              {
-                label: 'Share',
-                icon: 'share',
-                onSelect: () => {
-                  setOpen('share');
-                },
-              } satisfies MenuItem,
-            ]),
-        download,
-        {
-          label: 'Rename',
-          icon: 'pencil',
-          onSelect: () => {
-            setTitle(album.title);
-            setOpen('rename');
-          },
-        },
-        {
-          label: 'Delete album',
-          icon: 'trash',
-          danger: true,
-          onSelect: () => {
-            setOpen('delete');
-          },
-        },
-      ];
+  const items: MenuItem[] =
+    album.viewOnly && !album.sharedAlbum
+      ? // An album in a library you can only view: leaving is for the whole library, in Settings.
+        [download]
+      : album.sharedAlbum
+        ? [
+            download,
+            {
+              label: 'Leave album',
+              icon: 'logout',
+              danger: true,
+              onSelect: () => {
+                setOpen('leave');
+              },
+            },
+          ]
+        : [
+            // Only a space's owner says who it's shared with, so only your own albums are shared.
+            ...(inShared
+              ? []
+              : [
+                  {
+                    label: 'Share',
+                    icon: 'share',
+                    onSelect: () => {
+                      setOpen('share');
+                    },
+                  } satisfies MenuItem,
+                ]),
+            download,
+            {
+              label: 'Rename',
+              icon: 'pencil',
+              onSelect: () => {
+                setTitle(album.title);
+                setOpen('rename');
+              },
+            },
+            {
+              label: 'Delete album',
+              icon: 'trash',
+              danger: true,
+              onSelect: () => {
+                setOpen('delete');
+              },
+            },
+          ];
 
   return (
     <>

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { albumsInTab } from './Albums';
-import { isInviteCode, normalizeInviteCode } from './Share';
+import { filterByOwner } from './Gallery';
+import { isInviteCode, normalizeInviteCode, parseInviteInput } from './JoinCode';
 import { countWords } from './Recover';
 import { validateSignUp } from './SignUp';
 
@@ -14,6 +15,37 @@ describe('invite codes', () => {
   it('only accepts the full format', () => {
     expect(isInviteCode('TWO-7KQ4-M9XD')).toBe(true);
     expect(isInviteCode(normalizeInviteCode('7KQ4'))).toBe(false);
+  });
+
+  it('takes a typed code or a pasted invite link', () => {
+    expect(parseInviteInput(' two-7kq4-m9xd ')).toBe('TWO-7KQ4-M9XD');
+    // A plain pattern, so it isn't mistaken for a secret.
+    const token = 'A'.repeat(22);
+    expect(parseInviteInput(`https://twofold.example/join/${token}`)).toBe(token);
+    expect(parseInviteInput(`twofold.example/join/${token}?x=1`)).toBe(token);
+    expect(parseInviteInput('https://twofold.example/join/short')).toBeNull();
+    expect(parseInviteInput('TWO-7KQ4')).toBeNull();
+    expect(parseInviteInput('')).toBeNull();
+  });
+});
+
+describe('filterByOwner', () => {
+  const base = {
+    src: '',
+    width: 1,
+    height: 1,
+    takenAt: '2026-10-01T00:00:00Z',
+    addedBy: 'me' as const,
+    favorite: false,
+    albumIds: [],
+  };
+  const mine = { ...base, id: 'mine' };
+  const theirs = { ...base, id: 'theirs', library: 'Deep', addedBy: 'contact' as const };
+
+  it('splits the timeline into yours and what was shared with you', () => {
+    expect(filterByOwner([mine, theirs], 'all')).toEqual([mine, theirs]);
+    expect(filterByOwner([mine, theirs], 'mine')).toEqual([mine]);
+    expect(filterByOwner([mine, theirs], 'shared')).toEqual([theirs]);
   });
 });
 

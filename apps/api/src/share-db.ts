@@ -1,5 +1,6 @@
 import type {
   InviterView,
+  MemberAccess,
   JoinerView,
   StoredJoined,
   StoredMember,
@@ -13,16 +14,18 @@ import type {
  */
 
 /**
- * The space a member's share token opens, which member it is, and the album it is limited
- * to, if it was given one album rather than the whole library.
+ * The space a member's share token opens, which member it is, what it may do there, and the
+ * album it is limited to, if it was given one album rather than the whole library.
  */
 export function memberByTokenQuery(db: D1Database, tokenHash: string): D1PreparedStatement {
-  return db.prepare('SELECT id, space, album FROM members WHERE token_hash = ?').bind(tokenHash);
+  return db
+    .prepare('SELECT id, space, album, access FROM members WHERE token_hash = ?')
+    .bind(tokenHash);
 }
 
 export async function listMembers(db: D1Database, space: string): Promise<StoredMember[]> {
   const { results } = await db
-    .prepare('SELECT id, meta, album FROM members WHERE space = ? ORDER BY id')
+    .prepare('SELECT id, meta, album, access FROM members WHERE space = ? ORDER BY id')
     .bind(space)
     .all<StoredMember>();
   return results;
@@ -51,14 +54,37 @@ export const countPendingInvites = (db: D1Database, space: string) =>
 export async function insertMember(
   db: D1Database,
   space: string,
-  member: { id: string; tokenHash: string; meta: string; album: string | null },
+  member: {
+    id: string;
+    tokenHash: string;
+    meta: string;
+    album: string | null;
+    access: MemberAccess;
+  },
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      `INSERT INTO members (id, token_hash, space, meta, album) VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO members (id, token_hash, space, meta, album, access) VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT DO NOTHING`,
     )
-    .bind(member.id, member.tokenHash, space, member.meta, member.album)
+    .bind(member.id, member.tokenHash, space, member.meta, member.album, member.access)
+    .run();
+  return result.meta.changes === 1;
+}
+
+/**
+ * Changes what someone the whole library is shared with may do. Returns false if this space
+ * shares its library with no such member (album members can only ever view).
+ */
+export async function updateMemberAccess(
+  db: D1Database,
+  space: string,
+  id: string,
+  access: MemberAccess,
+): Promise<boolean> {
+  const result = await db
+    .prepare('UPDATE members SET access = ? WHERE space = ? AND id = ? AND album IS NULL')
+    .bind(access, space, id)
     .run();
   return result.meta.changes === 1;
 }

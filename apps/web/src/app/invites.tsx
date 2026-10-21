@@ -10,6 +10,7 @@ import {
 import type { ReactNode } from 'react';
 
 import type { SpaceKeys } from '@twofold/crypto';
+import type { MemberAccess } from '@twofold/types';
 
 import { onVisibleAgain } from '../lib/when-visible';
 import { useAccount } from './account';
@@ -29,6 +30,7 @@ import {
   finishJoin,
   forgetPending,
   listPending,
+  setInviteAccess,
   startInvite,
   startJoin,
 } from './sharing';
@@ -74,6 +76,8 @@ interface PendingInvitesValue {
   /** An invite for it that nobody has accepted yet, or else a new one. */
   open: (album: string | null) => Promise<Invite>;
   cancel: (inviteId: string) => Promise<void>;
+  /** Changes what a library invite will let them do, until it's confirmed. */
+  setAccess: (inviteId: string, access: MemberAccess) => Promise<void>;
   /** The safety words match: share. */
   confirm: (inviteId: string) => Promise<Member>;
   /** Accepts an invite by its code or link token. */
@@ -95,6 +99,7 @@ const inert: PendingInvitesValue = {
   start: () => Promise.reject(new FormError(NO_SESSION)),
   open: () => Promise.reject(new FormError(NO_SESSION)),
   cancel: () => Promise.reject(new FormError(NO_SESSION)),
+  setAccess: () => Promise.reject(new FormError(NO_SESSION)),
   confirm: () => Promise.reject(new FormError(NO_SESSION)),
   accept: () => Promise.reject(new FormError(NO_SESSION)),
   leave: () => Promise.reject(new FormError(NO_SESSION)),
@@ -111,7 +116,7 @@ function isFinal(error: unknown): boolean {
 /** True when the screen open is one where invites are made or accepted. */
 function onSharingScreen(pathname: string): boolean {
   const name = matchRoute(pathname).name;
-  return name === 'share' || name === 'join';
+  return name === 'share' || name === 'join' || name === 'join-code';
 }
 
 /** Moves the open space's invites along. Pass no keys for a fixed (preview or test) vault. */
@@ -354,6 +359,17 @@ function LivePendingInvites({
         const { invite } = find(inviteId);
         await cancelInvite(invite, keys, sharing);
         endInvites([inviteId]);
+      },
+      setAccess: async (inviteId, access) => {
+        const { invite } = find(inviteId);
+        await setInviteAccess(invite, access, keys, sharing);
+        setInvites((current) =>
+          current.map((entry) =>
+            entry.invite.id === inviteId
+              ? { ...entry, invite: { ...entry.invite, access } }
+              : entry,
+          ),
+        );
       },
       confirm: async (inviteId) => {
         const { invite, progress } = find(inviteId);

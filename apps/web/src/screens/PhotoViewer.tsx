@@ -9,7 +9,7 @@ import { Link, useRouter } from '../app/router';
 import { parsePhotoContext, paths } from '../app/routes';
 import type { PhotoContext } from '../app/routes';
 import { useToast } from '../app/toast';
-import { albumPhotos, timelinePhotos, useVault } from '../app/vault';
+import { albumPhotos, isViewOnly, timelinePhotos, useVault } from '../app/vault';
 import type { VaultState } from '../app/vault';
 import { Avatar } from '../components/Brand';
 import { Dialog } from '../components/Dialog';
@@ -118,8 +118,9 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
     photo.addedBy === 'me'
       ? me
       : { id: 'contact', name: photo.addedByName ?? 'Someone', email: '' };
-  // Photos from an album someone shared with you can be viewed and downloaded, nothing more.
-  const viewOnly = photo.sharedAlbum === true;
+  // Photos shared with you to view (in an album, or a view-only library) can be viewed and
+  // downloaded, nothing more.
+  const viewOnly = isViewOnly(photo);
   // Photos in a library someone shared with you stay in it.
   const canMove = photo.library === undefined;
   const albums = state.albums.filter((album) => photo.albumIds.includes(album.id));
@@ -359,13 +360,15 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
               <dd>
                 End-to-end encrypted
                 <span>
-                  {viewOnly
+                  {photo.sharedAlbum
                     ? `${photo.library ?? 'Someone'} shared it with you in an album. You can view and download it.`
-                    : photo.library !== undefined
-                      ? `Only people in ${photo.library}’s library can see it.`
-                      : isPrivate
-                        ? 'Only you, and anyone you share this private space with, can see it.'
-                        : 'Only you and people you share this library with can see it.'}
+                    : viewOnly
+                      ? `It’s in ${photo.library ?? 'someone'}’s library, shared with you to view. You can view and download it.`
+                      : photo.library !== undefined
+                        ? `Only people in ${photo.library}’s library can see it.`
+                        : isPrivate
+                          ? 'Only you, and anyone you share this private space with, can see it.'
+                          : 'Only you and people you share this library with can see it.'}
                 </span>
               </dd>
             </div>

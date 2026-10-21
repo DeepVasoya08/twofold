@@ -29,6 +29,9 @@ export function redirectFor(
     case 'join':
       if (status === 'unlocked') return null;
       return withNext(status === 'locked' ? paths.unlock : paths.login, paths.join(route.token));
+    case 'join-code':
+      if (status === 'unlocked') return null;
+      return withNext(status === 'locked' ? paths.unlock : paths.login, paths.joinCode);
     case 'recovery-key':
       // Step 2 of sign-up, or a new key from Settings (main library only).
       if (options.signingUp) return null;

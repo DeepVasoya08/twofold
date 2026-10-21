@@ -626,10 +626,16 @@ export interface SharedSource {
   name: string;
   /** Set when only one album was shared, which can be viewed but not changed. */
   album?: boolean;
+  /**
+   * Whether its owner lets you add and change things there. Left out, you can. The server
+   * enforces it either way; this only keeps the app from offering what would be refused.
+   */
+  editable?: Promise<boolean>;
   store: SpaceStore;
 }
 
 const NOT_YOURS = 'Only the person whose album this is can share it.';
+export const VIEW_ONLY_LIBRARY = 'You can view this library, but not change it.';
 
 /**
  * Your own space plus every library it has joined, as one store. Photos and albums from a
@@ -642,6 +648,12 @@ export function combinedStore(
   loadShared: () => Promise<SharedSource[]>,
 ): SpaceStore {
   let shared: SharedSource[] = [];
+  /** The stores of libraries and albums you can only view. */
+  const readOnly = new Set<SpaceStore>();
+  const changeable = (store: SpaceStore) => {
+    if (readOnly.has(store)) throw new FormError(VIEW_ONLY_LIBRARY);
+    return store;
+  };
   const photoStores = new Map<string, SpaceStore>();
   const albumStores = new Map<string, SpaceStore>();
   const storeOf = (photoId: string) => photoStores.get(photoId) ?? own;
@@ -654,23 +666,28 @@ export function combinedStore(
         .catch(() => [])
         .then((sources) =>
           Promise.all(
-            sources.map(async (source) => ({
-              source,
-              loaded: await source.store.list().catch(() => null),
-            })),
+            sources.map(async (source) => {
+              const editable = (source.editable ?? Promise.resolve(true)).catch(() => false);
+              const loaded = await source.store.list().catch(() => null);
+              return { source, loaded, viewOnly: source.album === true || !(await editable) };
+            }),
           ),
         );
       const mine = await own.list();
       const loadedShared = await sharedLists;
       shared = loadedShared.map(({ source }) => source);
+      readOnly.clear();
+      for (const { source, viewOnly } of loadedShared) if (viewOnly) readOnly.add(source.store);
       const photos = [...mine.photos];
       const albums = [...mine.albums];
       const seen = new Map(photos.map((photo, index) => [photo.id, index]));
-      for (const { source, loaded } of loadedShared) {
+      for (const { source, loaded, viewOnly } of loadedShared) {
         if (!loaded) continue;
-        const marks = source.album
-          ? { library: source.name, sharedAlbum: true }
-          : { library: source.name };
+        const marks = {
+          library: source.name,
+          ...(source.album && { sharedAlbum: true }),
+          ...(viewOnly && { viewOnly: true }),
+        };
         const albumMarks = source.album ? { ...marks, joinedId: source.id } : marks;
         for (const photo of loaded.photos) {
           const index = seen.get(photo.id);
@@ -725,22 +742,23 @@ export function combinedStore(
     },
     add: async (photo, albumIds, onStage) => {
       const albumStore = albumIds[0] === undefined ? undefined : albumStores.get(albumIds[0]);
-      const target = albumStore ?? own;
+      const target = changeable(albumStore ?? own);
       const added = await target.add(photo, albumIds, onStage);
       if (target === own) return added;
       photoStores.set(added.id, target);
       const source = shared.find((candidate) => candidate.store === target);
       return source ? { ...added, library: source.name } : added;
     },
-    update: (photo) => storeOf(photo.id).update(photo),
+    update: async (photo) => changeable(storeOf(photo.id)).update(photo),
     remove: async (photoId) => {
-      await storeOf(photoId).remove(photoId);
+      await changeable(storeOf(photoId)).remove(photoId);
       photoStores.delete(photoId);
     },
     createAlbum: (title) => own.createAlbum(title),
-    renameAlbum: (albumId, title) => albumStoreOf(albumId).renameAlbum(albumId, title),
+    renameAlbum: async (albumId, title) =>
+      changeable(albumStoreOf(albumId)).renameAlbum(albumId, title),
     removeAlbum: async (albumId) => {
-      await albumStoreOf(albumId).removeAlbum(albumId);
+      await changeable(albumStoreOf(albumId)).removeAlbum(albumId);
       albumStores.delete(albumId);
     },
     // Only a space's owner can say who it's shared with, so only your own albums are shared.

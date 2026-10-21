@@ -15,6 +15,8 @@ export type Route =
   | { name: 'share' }
   /** Someone's invite link. The token only names the invite; it holds no key. */
   | { name: 'join'; token: string }
+  /** Typing in an invite code someone sent. */
+  | { name: 'join-code' }
   | { name: 'not-found' };
 
 export const paths = {
@@ -38,6 +40,8 @@ export const paths = {
   shareAlbum: (albumId: string) => `/settings/share?album=${encodeURIComponent(albumId)}`,
   /** An invite link's path. */
   join: (token: string) => `/join/${token}`,
+  /** Where an invite code is typed in. */
+  joinCode: '/join',
 } as const;
 
 /** An invite link token: 128 bits, unpadded base64url. */
@@ -45,11 +49,14 @@ const LINK_TOKEN = /^[A-Za-z0-9_-]{21}[AQgw]$/;
 
 /**
  * Where to go after signing in, unlocking or signing up, from the `next` query parameter.
- * Only an invite link is accepted, so the parameter can't send anyone anywhere else.
+ * Only an invite link or the code screen is accepted, so the parameter can't send anyone
+ * anywhere else.
  */
 export function parseNext(search: string): string | null {
   const next = new URLSearchParams(search).get('next');
-  return next !== null && matchRoute(next).name === 'join' ? next : null;
+  if (next === null) return null;
+  const route = matchRoute(next).name;
+  return route === 'join' || route === 'join-code' ? next : null;
 }
 
 /** `path` with a `next` parameter to come back to afterwards, if there is one. */
@@ -75,6 +82,7 @@ const staticRoutes: Record<string, Route> = {
   '/favorites': { name: 'favorites' },
   '/settings': { name: 'settings' },
   '/settings/share': { name: 'share' },
+  '/join': { name: 'join-code' },
 };
 
 function decodeSegment(segment: string): string | null {

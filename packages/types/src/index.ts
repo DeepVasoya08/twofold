@@ -383,6 +383,14 @@ export interface GrantRequest {
 }
 
 /**
+ * What someone a library is shared with may do: `view` sees and downloads, `edit` also adds,
+ * changes and deletes photos and albums. Someone given one album can only ever view.
+ */
+export const MEMBER_ACCESS = ['view', 'edit'] as const;
+
+export type MemberAccess = (typeof MEMBER_ACCESS)[number];
+
+/**
  * Someone a space is shared with: a random id and who they are, sealed for the owner.
  * `album` is set when they were given one album rather than the whole library.
  */
@@ -390,6 +398,7 @@ export interface StoredMember {
   id: string;
   meta: string;
   album: string | null;
+  access: MemberAccess;
 }
 
 /**
@@ -401,6 +410,18 @@ export interface CreateMemberRequest {
   token: string;
   meta: string;
   album?: string;
+  /** What they may do. Left out, they can only view. */
+  access?: MemberAccess;
+}
+
+/** Changes what someone the library is shared with may do. */
+export interface UpdateMemberRequest {
+  access: MemberAccess;
+}
+
+/** What a member's token may do, as the member asks for it. */
+export interface MembershipResponse {
+  access: MemberAccess;
 }
 
 export interface MemberList {
