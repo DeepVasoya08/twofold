@@ -5,6 +5,7 @@ import { loadAutoLock, saveAutoLock } from '../lib/auto-lock';
 import type { AutoLockMinutes } from '../lib/auto-lock';
 import { IdleTimer } from '../lib/idle-timer';
 import { useAccount } from './account';
+import { useDownloads } from './downloads';
 import { useUploads } from './uploads';
 
 interface AutoLockValue {
@@ -48,13 +49,16 @@ export function useAutoLock(): AutoLockValue {
 const ACTIVITY = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll'];
 
 /**
- * Locks the unlocked vault after the chosen minutes without use. Uploads count as use, so a
- * long upload isn't dropped halfway; the countdown starts again when they finish.
+ * Locks the unlocked vault after the chosen minutes without use. Uploads and downloads in
+ * progress count as use, so a long one isn't dropped halfway; the countdown starts again
+ * when they finish.
  */
 export function IdleLock() {
   const { state, lock } = useAccount();
   const { minutes } = useAutoLock();
-  const { running } = useUploads();
+  const uploads = useUploads();
+  const downloads = useDownloads();
+  const running = uploads.running || downloads.running;
   const unlocked = state.status === 'unlocked';
   // The latest lock, without restarting the countdown each time the account value changes.
   const lockRef = useRef(lock);

@@ -204,6 +204,9 @@ under). It never gets the space key or the space id.
   encrypted, and the dialog says so before anything is saved. File names come from when
   each photo was taken and the zip is called `Twofold <date>.zip`, so neither names the
   space or album. Download links are temporary object URLs, revoked after a few seconds.
+  Closing the download dialog keeps the download (and its decrypted copies) in memory so
+  it can finish in the background; they're dropped once saved, when the download is
+  cancelled, or when the vault locks.
 - **Decrypting off the main thread.** Originals are decrypted with `decryptFile` inside a
   Web Worker bundled from `@twofold/crypto/decrypt-worker`, so large files don't freeze the
   page. The worker is a thread of the same page: the file key and ciphertext go to it and

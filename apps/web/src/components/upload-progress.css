@@ -1,8 +1,18 @@
-.upload-progress {
+/* Upload and download cards stack in one corner. */
+.status-cards {
   position: fixed;
   right: 24px;
   bottom: calc(24px + env(safe-area-inset-bottom));
   z-index: 30;
+  display: grid;
+  gap: 8px;
+}
+
+.status-cards:empty {
+  display: none;
+}
+
+.upload-progress {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -28,6 +38,11 @@
   min-width: 0;
 }
 
+.upload-progress__hint {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
 .upload-progress__label {
   color: var(--text);
   font-size: 14px;
@@ -36,7 +51,7 @@
 
 /* On phones it sits under the top bar, clear of the bottom tabs and toasts. */
 @media (max-width: 860px) {
-  .upload-progress {
+  .status-cards {
     top: 72px;
     right: 12px;
     bottom: auto;

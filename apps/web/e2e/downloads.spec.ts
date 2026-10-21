@@ -67,3 +67,53 @@ test('downloading several photos saves one zip of the original files', async ({ 
   // The originals were decrypted off the main thread.
   expect(workers.some((url) => url.includes('decrypt-worker'))).toBe(true);
 });
+
+test('a download keeps going with the dialog closed, and isn’t decrypted twice', async ({
+  page,
+}) => {
+  await signUp(page);
+  await uploadPhotos(page, 3, distinctPhotos(3));
+  await expect(page.getByText('3 photos added to your vault')).toBeVisible();
+
+  // Each original is slow to arrive, and every one asked for is counted.
+  const fetched: string[] = [];
+  await page.route('**/api/space/photos/*/full', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    fetched.push(route.request().url());
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    return route.continue();
+  });
+
+  await page
+    .getByRole('button', { name: /^Select all of / })
+    .first()
+    .click();
+  const bar = page.getByRole('toolbar', { name: 'Selected photos' });
+  await bar.getByRole('button', { name: 'Download' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Download 3 photos' });
+  await expect(dialog.getByRole('progressbar', { name: 'Download progress' })).toBeVisible();
+
+  // A click outside closes the dialog; a card shows the download still going.
+  await page.mouse.click(5, 5);
+  await expect(dialog).toBeHidden();
+  const card = page.getByRole('button', { name: /^Downloading \d of 3\. Show download$/ });
+  await expect(card).toBeVisible();
+
+  // Asking again for the same photos shows the same download, not a new one.
+  await bar.getByRole('button', { name: 'Download' }).click();
+  await expect(dialog).toBeVisible();
+  await page.mouse.click(5, 5);
+  await expect(dialog).toBeHidden();
+
+  const ready = page.getByRole('button', { name: '3 photos ready to save. Show download' });
+  await expect(ready).toBeVisible();
+  expect(fetched).toHaveLength(3);
+
+  await ready.click();
+  const download = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download zip' }).click();
+  expect((await download).suggestedFilename()).toMatch(/\.zip$/);
+  await expect(dialog).toBeHidden();
+  await expect(ready).toBeHidden();
+  expect(fetched).toHaveLength(3);
+});

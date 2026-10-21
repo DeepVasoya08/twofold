@@ -88,7 +88,13 @@ exists but is low-key (Settings → Sharing).
   can share files, where **Save to device** opens the share sheet so they can go straight
   to the photo gallery. Copies are named by when they were taken (`2026-10-19 14.32.05.jpg`,
   with ` (2)` for photos from the same second), never after the space or album. The
-  dialog says downloaded copies aren't encrypted.
+  dialog says downloaded copies aren't encrypted. The download doesn't belong to the
+  dialog (`app/downloader.ts`, provided by `app/downloads.tsx`): closing it leaves the
+  download going, with a card next to the upload one ("Downloading 3 of 17", then "17
+  photos ready to save"), and the card or downloading the same photos again opens it where
+  it is, without decrypting anything twice. Downloading other photos while one is still
+  going asks first. The browser asks before leaving mid-download, auto-lock waits for it,
+  and locking drops it.
 - Every album has a vertical "more" menu, always visible on its card in Albums and next to
   **Select** inside it. Your albums: **Share**, **Download**, **Rename** and **Delete
   album** (deleting keeps the photos). Albums of a library shared with you: **Download**,
