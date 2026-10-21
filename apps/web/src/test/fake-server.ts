@@ -3,6 +3,7 @@ import type {
   PhotoPart,
   StoredAlbum,
   StoredJoined,
+  StoredPendingInvite,
   StoredPhoto,
   StoredProfilePhoto,
 } from '@twofold/types';
@@ -26,6 +27,8 @@ export class FakeServer {
   joined = new Map<string, { token: string; joined: StoredJoined }>();
   /** By space token. */
   profilePhotos = new Map<string, StoredProfilePhoto>();
+  /** By record id: each space's invites in progress. */
+  pending = new Map<string, { token: string; invite: StoredPendingInvite }>();
 
   api = (token: string): SpaceApi => {
     const member = this.members.get(token);
@@ -223,6 +226,33 @@ export class FakeServer {
         await Promise.resolve();
         if (this.joined.get(id)?.token === space) this.joined.delete(id);
       },
+      listPendingInvites: async () => {
+        ownerOnly();
+        await Promise.resolve();
+        return {
+          invites: [...this.pending.values()]
+            .filter((entry) => entry.token === space)
+            .map((entry) => entry.invite),
+        };
+      },
+      addPendingInvite: async (invite) => {
+        ownerOnly();
+        await Promise.resolve();
+        if (this.pending.has(invite.id)) throw new ApiError(409, 'Taken');
+        this.pending.set(invite.id, { token: space, invite });
+      },
+      updatePendingInvite: async (id, meta) => {
+        ownerOnly();
+        await Promise.resolve();
+        const entry = this.pending.get(id);
+        if (entry?.token !== space) throw new ApiError(404, 'Not here');
+        entry.invite = { id, meta };
+      },
+      removePendingInvite: async (id) => {
+        ownerOnly();
+        await Promise.resolve();
+        if (this.pending.get(id)?.token === space) this.pending.delete(id);
+      },
       getProfilePhoto: async () => {
         ownerOnly();
         await Promise.resolve();
@@ -244,16 +274,19 @@ export class FakeServer {
 
 interface FakeInvite {
   handle: string;
+  link: string;
   commitment: string;
   joinerKey: string | null;
   inviterKey: string | null;
+  intro: string | null;
   hello: string | null;
   grant: string | null;
 }
 
 /**
- * An in-memory invite rendezvous with the server's rules: each step once, in order. Tests
- * can edit `invites` directly to play a server in the middle.
+ * An in-memory invite rendezvous with the server's rules: each step once, in order. Invites
+ * are kept by code, and the joiner can name one by its code or its link. Tests can edit
+ * `invites` directly to play a server in the middle.
  */
 export class FakeInvites {
   invites = new Map<string, FakeInvite>();
@@ -263,8 +296,9 @@ export class FakeInvites {
     throw new ApiError(404, 'Gone');
   }
 
-  private byCode(code: string): FakeInvite {
-    const invite = this.invites.get(code);
+  private byCode(ref: string): FakeInvite {
+    const invite =
+      this.invites.get(ref) ?? [...this.invites.values()].find((each) => each.link === ref);
     if (!invite) throw new ApiError(404, 'Gone');
     return invite;
   }
@@ -276,13 +310,15 @@ export class FakeInvites {
   }
 
   api: InviteApi = {
-    create: ({ code, handle, commitment }: CreateInviteRequest) => {
+    create: ({ code, link, handle, commitment }: CreateInviteRequest) => {
       if (this.invites.has(code)) return Promise.reject(new ApiError(409, 'Taken'));
       this.invites.set(code, {
         handle,
+        link,
         commitment,
         joinerKey: null,
         inviterKey: null,
+        intro: null,
         hello: null,
         grant: null,
       });
@@ -290,13 +326,14 @@ export class FakeInvites {
     },
     inviterView: async (handle) => {
       await Promise.resolve();
-      const { joinerKey, hello } = this.byHandle(handle);
-      return { joinerKey, hello };
+      const { joinerKey, inviterKey, hello } = this.byHandle(handle);
+      return { joinerKey, revealed: inviterKey !== null, hello };
     },
-    reveal: async (handle, inviterKey) => {
+    reveal: async (handle, inviterKey, intro) => {
       const invite = this.byHandle(handle);
       return FakeInvites.fill(invite.joinerKey !== null, invite.inviterKey !== null, () => {
         invite.inviterKey = inviterKey;
+        invite.intro = intro;
       });
     },
     grant: async (handle, grant) => {
@@ -313,8 +350,8 @@ export class FakeInvites {
     },
     joinerView: async (code) => {
       await Promise.resolve();
-      const { commitment, inviterKey, grant } = this.byCode(code);
-      return { commitment, inviterKey, grant };
+      const { commitment, inviterKey, intro, hello, grant } = this.byCode(code);
+      return { commitment, inviterKey, intro, helloSent: hello !== null, grant };
     },
     join: async (code, joinerKey) => {
       const invite = this.byCode(code);
@@ -328,9 +365,11 @@ export class FakeInvites {
         invite.hello = hello;
       });
     },
-    finish: async (code) => {
+    finish: async (ref) => {
       await Promise.resolve();
-      this.invites.delete(code);
+      for (const [code, invite] of this.invites) {
+        if (code === ref || invite.link === ref) this.invites.delete(code);
+      }
     },
   };
 }

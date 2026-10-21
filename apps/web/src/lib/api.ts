@@ -7,6 +7,7 @@ import type {
   CreateInviteRequest,
   CreateJoinedRequest,
   CreateMemberRequest,
+  CreatePendingInviteRequest,
   CreatePhotoRequest,
   DeleteAccountRequest,
   DeviceList,
@@ -16,6 +17,7 @@ import type {
   JoinerView,
   LoginRequest,
   MemberList,
+  PendingInviteList,
   PhotoPage,
   PhotoPart,
   PreLoginRequest,
@@ -134,26 +136,29 @@ export const api = {
 
 /**
  * The invite rendezvous. Everything sent is a public key, a commitment or a sealed message.
- * The joiner addresses an invite by its code, the inviter by its private handle.
+ * The joiner addresses an invite by its code or link token (`ref`), the inviter by its
+ * private handle.
  */
 export const inviteApi = {
   create: (body: CreateInviteRequest) => call<undefined>('POST', '/invites', body),
   inviterView: (handle: string) =>
     call<InviterView>('GET', `/invites/${encodeURIComponent(handle)}`),
-  reveal: (handle: string, inviterKey: string) =>
-    call<undefined>('POST', `/invites/${encodeURIComponent(handle)}/reveal`, { inviterKey }),
+  reveal: (handle: string, inviterKey: string, intro: string) =>
+    call<undefined>('POST', `/invites/${encodeURIComponent(handle)}/reveal`, {
+      inviterKey,
+      intro,
+    }),
   grant: (handle: string, grant: string) =>
     call<undefined>('POST', `/invites/${encodeURIComponent(handle)}/grant`, { grant }),
   cancel: (handle: string) =>
     call<undefined>('DELETE', `/invites/${encodeURIComponent(handle)}`, {}),
-  joinerView: (code: string) =>
-    call<JoinerView>('GET', `/invites/join/${encodeURIComponent(code)}`),
-  join: (code: string, joinerKey: string) =>
-    call<undefined>('POST', `/invites/join/${encodeURIComponent(code)}/key`, { joinerKey }),
-  hello: (code: string, hello: string) =>
-    call<undefined>('POST', `/invites/join/${encodeURIComponent(code)}/hello`, { hello }),
-  finish: (code: string) =>
-    call<undefined>('DELETE', `/invites/join/${encodeURIComponent(code)}`, {}),
+  joinerView: (ref: string) => call<JoinerView>('GET', `/invites/join/${encodeURIComponent(ref)}`),
+  join: (ref: string, joinerKey: string) =>
+    call<undefined>('POST', `/invites/join/${encodeURIComponent(ref)}/key`, { joinerKey }),
+  hello: (ref: string, hello: string) =>
+    call<undefined>('POST', `/invites/join/${encodeURIComponent(ref)}/hello`, { hello }),
+  finish: (ref: string) =>
+    call<undefined>('DELETE', `/invites/join/${encodeURIComponent(ref)}`, {}),
 };
 
 export type InviteApi = typeof inviteApi;
@@ -263,6 +268,16 @@ export function spaceApi(token: string) {
       call<undefined>('POST', '/space/joined', body, headers),
     removeJoined: (id: string) =>
       call<undefined>('DELETE', `/space/joined/${encodeURIComponent(id)}`, {}, headers),
+    /** Invites this space has in progress, on either side, sealed for its owner. */
+    listPendingInvites: () =>
+      call<PendingInviteList>('GET', '/space/pending-invites', undefined, headers),
+    addPendingInvite: (body: CreatePendingInviteRequest) =>
+      call<undefined>('POST', '/space/pending-invites', body, headers),
+    /** Replaces one, keeping its id. */
+    updatePendingInvite: (id: string, meta: string) =>
+      call<undefined>('PUT', `/space/pending-invites/${encodeURIComponent(id)}`, { meta }, headers),
+    removePendingInvite: (id: string) =>
+      call<undefined>('DELETE', `/space/pending-invites/${encodeURIComponent(id)}`, {}, headers),
     getProfilePhoto: () =>
       call<ProfilePhotoResponse>('GET', '/space/profile-photo', undefined, headers),
     putProfilePhoto: (body: StoredProfilePhoto) =>

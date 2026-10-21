@@ -30,9 +30,10 @@ export type RecordKind = 'photo' | 'album';
 
 /**
  * Records only the space's owner can open: who it is shared with, the libraries it has
- * joined, and the key of its profile photo. They use a subkey that members never receive.
+ * joined, the key of its profile photo, and invites still in progress (either side's secret
+ * key for one invite). They use a subkey that members never receive.
  */
-export type OwnerRecordKind = 'member' | 'joined' | 'profile';
+export type OwnerRecordKind = 'member' | 'joined' | 'profile' | 'invite';
 
 export class DecryptionError extends Error {
   constructor(message = 'This data could not be decrypted') {

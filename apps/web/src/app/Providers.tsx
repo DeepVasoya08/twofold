@@ -7,6 +7,7 @@ import type { AccountState } from './account';
 import { ThemeProvider } from './theme';
 import { ToastProvider } from './toast';
 import type { Session, Space } from './account-ops';
+import { PendingInvitesProvider } from './invites';
 import { ProfileProvider } from './profile';
 import { memoryProfilePhoto, remoteProfilePhoto } from './profile-photo';
 import { sessionStore } from './sharing';
@@ -43,12 +44,17 @@ function OpenVault({
       storeFor={remoteStore}
       initialState={initialVault?.spaces[space]}
     >
-      <ProfileProvider store={profileStore}>
-        <UploadsProvider>
-          <IdleLock />
-          {children}
-        </UploadsProvider>
-      </ProfileProvider>
+      <PendingInvitesProvider
+        keys={session && !initialVault ? session.opened.space : null}
+        myName={session?.account.name ?? ''}
+      >
+        <ProfileProvider store={profileStore}>
+          <UploadsProvider>
+            <IdleLock />
+            {children}
+          </UploadsProvider>
+        </ProfileProvider>
+      </PendingInvitesProvider>
     </VaultProvider>
   );
 }

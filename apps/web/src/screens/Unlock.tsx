@@ -3,7 +3,7 @@ import type { SubmitEvent } from 'react';
 
 import { useAccount, useMe } from '../app/account';
 import { Link, useRouter } from '../app/router';
-import { paths } from '../app/routes';
+import { parseNext, paths, withNext } from '../app/routes';
 import { useSubmit } from '../app/use-submit';
 import { AuthLayout } from '../components/AuthLayout';
 import { Avatar } from '../components/Brand';
@@ -13,7 +13,8 @@ import './unlock.css';
 
 /** Shown to a returning user whose session is still valid but whose keys are not in memory. */
 export function Unlock() {
-  const { navigate } = useRouter();
+  const { navigate, search } = useRouter();
+  const next = parseNext(search);
   const { unlock, logOut } = useAccount();
   const me = useMe();
   const { busy, error, setError, run } = useSubmit();
@@ -29,13 +30,13 @@ export function Unlock() {
     // The same box opens either space; the slot the password fits decides which. This
     // happens on this device: the password and keys are not sent anywhere.
     void run(() => unlock(password)).then((ok) => {
-      if (ok) navigate(paths.gallery);
+      if (ok) navigate(next ?? paths.gallery);
     });
   };
 
   const switchAccount = () => {
     void logOut().then(() => {
-      navigate(paths.login);
+      navigate(withNext(paths.login, next));
     });
   };
 

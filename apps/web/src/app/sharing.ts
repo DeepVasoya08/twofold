@@ -1,4 +1,6 @@
 import type { InviteKeys, SpaceKeys } from '@twofold/crypto';
+import { INVITE_TTL_MS } from '@twofold/types';
+import type { InviterView, JoinerView } from '@twofold/types';
 
 import { ApiError, inviteApi, spaceApi } from '../lib/api';
 import type { InviteApi, SpaceApi } from '../lib/api';
@@ -17,12 +19,20 @@ import type { SharedSource, SpaceStore } from './space-store';
  * and the joiner keeps what it joined, as records only the owner of each space can open. A
  * library or album joined from the private space is kept in the private space, so the main
  * library never learns of it.
+ *
+ * Neither person has to wait for the other: each side keeps its half of an invite in progress
+ * (its secret key and what the invite is for) as an owner-only record of its open space, and
+ * takes its next step whenever it's next opened, on any device.
  */
 
 const loadCrypto = () => import('@twofold/crypto');
 
-/** How often each side checks whether the other has taken the next step. */
+/** How often each side checks whether the other has taken the next step, on a sharing screen. */
 export const POLL_MS = 1500;
+/** How often elsewhere in the app, while someone is partway through an invite with you. */
+export const BACKGROUND_POLL_MS = 5000;
+/** How often while the only invites in progress are ones nobody has accepted yet. */
+export const IDLE_POLL_MS = 60_000;
 
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
 
@@ -51,6 +61,9 @@ interface Hello {
   v: 1;
   name: string;
 }
+
+/** The inviter's sealed name, revealed with its key: who is inviting. */
+type Intro = Hello;
 
 /**
  * What the inviter hands over: a token of the joiner's own, and the key its records open
@@ -105,63 +118,260 @@ function parseGrant(value: unknown): Grant | null {
 }
 
 const BROKEN =
-  'This invite couldn’t be verified, so nothing was shared. Start again with a new code.';
+  'This invite couldn’t be verified, so nothing was shared. Start again with a new invite.';
 const CODE_GONE = 'That invite code isn’t valid anymore. Ask for a new one.';
+const LINK_GONE = 'That invite link isn’t valid anymore. Ask for a new one.';
+const USED = 'Someone already accepted this invite. Ask for a new one.';
+
+// ---------------------------------------------------------------------------------------
+// Invites in progress, kept between visits
+
+/** What sharing needs to reach the server: the invite rendezvous and a space's storage. */
+export interface SharingApis {
+  invites: InviteApi;
+  space: (token: string) => SpaceApi;
+}
+
+/** The real server. Tests pass in-memory stand-ins instead. */
+export const defaultApis: SharingApis = { invites: inviteApi, space: spaceApi };
+
+/**
+ * What the inviter keeps about an invite, besides its secret key: how to reach it (the
+ * handle), how to show it again (code and link) and what it's for.
+ */
+interface InviterDetails {
+  v: 1;
+  role: 'inviter';
+  handle: string;
+  code: string;
+  link: string;
+  /** The album shared, or null for the whole library. */
+  album: string | null;
+  expiresAt: number;
+  /**
+   * The joiner's key, pinned here before this side's key is revealed. Every later step uses
+   * this key and no other, whatever the server shows afterwards.
+   */
+  joinerKey: string | null;
+}
+
+/** What the joiner keeps about an invite it accepted, besides its secret key. */
+interface JoinerDetails {
+  v: 1;
+  role: 'joiner';
+  /** The code or link token it was accepted with. */
+  ref: string;
+  commitment: string;
+}
+
+function parseDetails(value: unknown): InviterDetails | JoinerDetails | null {
+  if (!isRecord(value) || value.v !== 1) return null;
+  if (value.role === 'inviter') {
+    const { handle, code, link, album, expiresAt, joinerKey } = value;
+    const ok =
+      typeof handle === 'string' &&
+      typeof code === 'string' &&
+      typeof link === 'string' &&
+      (album === null || typeof album === 'string') &&
+      typeof expiresAt === 'number' &&
+      (joinerKey === null || typeof joinerKey === 'string');
+    return ok ? { v: 1, role: 'inviter', handle, code, link, album, expiresAt, joinerKey } : null;
+  }
+  if (value.role === 'joiner') {
+    const { ref, commitment } = value;
+    return typeof ref === 'string' && typeof commitment === 'string'
+      ? { v: 1, role: 'joiner', ref, commitment }
+      : null;
+  }
+  return null;
+}
+
+async function keepPending(
+  space: SpaceKeys,
+  keys: InviteKeys,
+  details: InviterDetails | JoinerDetails,
+  apis: SharingApis,
+): Promise<string> {
+  const crypto = await loadCrypto();
+  const id = await crypto.newRecordId();
+  const meta = await crypto.sealPendingInvite(space, id, keys, encode(details));
+  await apis.space((await crypto.ownerAccess(space)).token).addPendingInvite({ id, meta });
+  return id;
+}
+
+/** Forgets one invite this space had in progress. Best effort: it may already be gone. */
+export async function forgetPending(
+  space: SpaceKeys,
+  id: string,
+  apis: SharingApis = defaultApis,
+): Promise<void> {
+  const crypto = await loadCrypto();
+  await apis
+    .space((await crypto.ownerAccess(space)).token)
+    .removePendingInvite(id)
+    .catch(() => undefined);
+}
 
 // ---------------------------------------------------------------------------------------
 // Inviting
 
-/** An invite this device started. The secret key and handle never leave it. */
+/**
+ * An invite this space made. The secret key and handle are only ever in this device's memory
+ * and in the space's owner-only record, so any device that opens the space can finish it.
+ */
 export interface Invite {
+  /** The pending record's id. */
+  id: string;
   code: string;
+  /** The link token: the link is /join/<link>. */
+  link: string;
   handle: string;
   keys: InviteKeys;
-  revealed: boolean;
+  /** The album shared, or null for the whole library. */
+  album: string | null;
+  expiresAt: number;
+  /** The joiner's key, once pinned (just before this side's key is revealed). */
+  joinerKey: string | null;
 }
 
 export type InviteProgress =
+  /** Nobody has accepted it yet. */
   | { stage: 'waiting' }
-  /** Someone entered the code. Show their name and the phrase, and ask to confirm. */
-  | { stage: 'confirm'; name: string; phrase: string[]; joinerKey: string };
+  /** Someone accepted; their name hasn't arrived yet. */
+  | { stage: 'accepted' }
+  /** They're waiting: show their name and the phrase, and ask to confirm. */
+  | { stage: 'confirm'; name: string; phrase: string[]; joinerKey: string }
+  /** The server doesn't have it anymore: it expired, was cancelled, or was finished. */
+  | { stage: 'gone' };
 
-export async function startInvite(apis: InviteApi = inviteApi): Promise<Invite> {
+/** Starts an invite for the library (`album` null) or one album, and keeps it in `space`. */
+export async function startInvite(
+  space: SpaceKeys,
+  album: string | null,
+  apis: SharingApis = defaultApis,
+): Promise<Invite> {
   const crypto = await loadCrypto();
   const keys = await crypto.newInviteKeys();
   const commitment = await crypto.inviteCommitment(keys.publicKey);
-  // The handle is as random as a share token, and stays on this device.
+  // The handle is as random as a share token, and never leaves this space's records.
   const handle = await crypto.newShareToken();
+  const link = await crypto.newInviteLink();
   // A code that happens to be taken gets one more try.
   for (let attempt = 0; ; attempt++) {
     const code = await crypto.newInviteCode();
+    const expiresAt = Date.now() + INVITE_TTL_MS;
     try {
-      await apis.create({ code, handle, commitment });
-      return { code, handle, keys, revealed: false };
+      await apis.invites.create({ code, link, handle, commitment });
     } catch (error) {
       if (!(error instanceof ApiError && error.status === 409) || attempt > 0) throw error;
+      continue;
+    }
+    const details: InviterDetails = {
+      v: 1,
+      role: 'inviter',
+      handle,
+      code,
+      link,
+      album,
+      expiresAt,
+      joinerKey: null,
+    };
+    try {
+      const id = await keepPending(space, keys, details, apis);
+      return { id, code, link, handle, keys, album, expiresAt, joinerKey: null };
+    } catch (error) {
+      // Without the record, nobody could ever finish it.
+      await apis.invites.cancel(handle).catch(() => undefined);
+      throw error;
     }
   }
 }
 
-/** Takes the inviter's next step, if the joiner has taken theirs. */
+function isGone(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
+/** Ignores a 409: another device of the same space already took this step. */
+function tookAlready(error: unknown): undefined {
+  if (error instanceof ApiError && error.status === 409) return undefined;
+  throw error;
+}
+
+/** Records the joiner's key in the invite's sealed record, before anything is revealed. */
+async function pinJoiner(
+  invite: Invite,
+  joinerKey: string,
+  space: SpaceKeys,
+  apis: SharingApis,
+): Promise<void> {
+  const crypto = await loadCrypto();
+  const { id, handle, code, link, album, expiresAt, keys } = invite;
+  const details: InviterDetails = {
+    v: 1,
+    role: 'inviter',
+    handle,
+    code,
+    link,
+    album,
+    expiresAt,
+    joinerKey,
+  };
+  const meta = await crypto.sealPendingInvite(space, id, keys, encode(details));
+  await apis.space((await crypto.ownerAccess(space)).token).updatePendingInvite(id, meta);
+  invite.joinerKey = joinerKey;
+}
+
+/**
+ * Takes the inviter's next step, if the joiner has taken theirs. Once someone has sent a
+ * key, it is pinned in the invite's sealed record first, and only then is this side's key
+ * revealed (with `myName` sealed to theirs). From then on only the pinned key is used: a
+ * server that showed a different one later, chosen after seeing this side's key, could
+ * otherwise search for one that gives the same safety words.
+ */
 export async function advanceInvite(
   invite: Invite,
-  apis: InviteApi = inviteApi,
+  myName: string,
+  space: SpaceKeys,
+  apis: SharingApis = defaultApis,
 ): Promise<InviteProgress> {
   const crypto = await loadCrypto();
-  const view = await apis.inviterView(invite.handle);
-  if (!view.joinerKey) return { stage: 'waiting' };
-  if (!invite.revealed) {
-    await apis.reveal(invite.handle, invite.keys.publicKey);
-    invite.revealed = true;
+  let view: InviterView;
+  try {
+    view = await apis.invites.inviterView(invite.handle);
+  } catch (error) {
+    if (isGone(error)) return { stage: 'gone' };
+    throw error;
   }
-  if (!view.hello) return { stage: 'waiting' };
+  if (!view.joinerKey) {
+    // A key once pinned can't disappear again, short of a server playing games.
+    if (invite.joinerKey !== null) throw new FormError(BROKEN);
+    return { stage: 'waiting' };
+  }
+  if (invite.joinerKey === null) {
+    // Another device revealed already; wait for the key it pinned to show up here.
+    if (view.revealed) return { stage: 'accepted' };
+    await pinJoiner(invite, view.joinerKey, space, apis);
+  }
+  const joinerKey = invite.joinerKey ?? '';
+  if (view.joinerKey !== joinerKey) throw new FormError(BROKEN);
+  if (!view.revealed) {
+    const intro: Intro = { v: 1, name: myName };
+    await apis.invites
+      .reveal(
+        invite.handle,
+        invite.keys.publicKey,
+        await crypto.sealForPeer('intro', encode(intro), joinerKey, invite.keys),
+      )
+      .catch(tookAlready);
+  }
+  if (!view.hello) return { stage: 'accepted' };
   const opened = await crypto
-    .openFromPeer('hello', view.hello, view.joinerKey, invite.keys)
+    .openFromPeer('hello', view.hello, joinerKey, invite.keys)
     .catch(() => null);
   const hello = opened && parseHello(decode(opened));
   if (!hello) throw new FormError(BROKEN);
-  const phrase = await crypto.safetyPhrase(invite.keys.publicKey, view.joinerKey);
-  return { stage: 'confirm', name: hello.name, phrase, joinerKey: view.joinerKey };
+  const phrase = await crypto.safetyPhrase(invite.keys.publicKey, joinerKey);
+  return { stage: 'confirm', name: hello.name, phrase, joinerKey };
 }
 
 /** One album to share instead of the whole library: its id, and the key `shareAlbum` gave. */
@@ -173,17 +383,14 @@ export interface AlbumTarget {
 /**
  * Shares the space (or one album of it) with the person who joined: registers a token of
  * their own, records who they are for this space's owner, and sends them the access sealed
- * to their key.
+ * to their key. Then the invite's record is forgotten.
  */
 export async function confirmInvite(
   invite: Invite,
   joiner: { name: string; joinerKey: string },
   space: SpaceKeys,
   myName: string,
-  apis: { invites: InviteApi; space: (token: string) => SpaceApi } = {
-    invites: inviteApi,
-    space: spaceApi,
-  },
+  apis: SharingApis = defaultApis,
   album: AlbumTarget | null = null,
 ): Promise<Member> {
   const crypto = await loadCrypto();
@@ -221,71 +428,131 @@ export async function confirmInvite(
     throw error;
   }
   await crypto.dropInviteKeys(invite.keys);
+  await forgetPending(space, invite.id, apis);
   return { id: memberId, name: joiner.name, album: album?.albumId ?? null };
 }
 
-export async function cancelInvite(invite: Invite, apis: InviteApi = inviteApi): Promise<void> {
+/** Cancels an invite: the server forgets it, and so does the space. */
+export async function cancelInvite(
+  invite: Invite,
+  space: SpaceKeys,
+  apis: SharingApis = defaultApis,
+): Promise<void> {
   const crypto = await loadCrypto();
+  await apis.invites.cancel(invite.handle).catch(() => undefined);
+  await forgetPending(space, invite.id, apis);
   await crypto.dropInviteKeys(invite.keys);
-  await apis.cancel(invite.handle).catch(() => undefined);
 }
 
 // ---------------------------------------------------------------------------------------
 // Joining
 
-/** An invite this device is joining. */
+/** An invite this space accepted. Kept in the space until the access arrives. */
 export interface Join {
-  code: string;
+  /** The pending record's id, which becomes the joined record's id. */
+  id: string;
+  /** The code or link token it was accepted with. */
+  ref: string;
   keys: InviteKeys;
   commitment: string;
-  /** Known once the inviter has revealed its key. */
-  phrase: string[] | null;
 }
 
 export type JoinProgress =
-  { stage: 'waiting'; phrase: string[] | null } | { stage: 'granted'; grant: Grant };
+  /** The inviter hasn't been back since: no key, no name, no phrase yet. */
+  | { stage: 'waiting' }
+  /** Both keys are in: show the phrase and wait for `name` to confirm it. */
+  | { stage: 'check'; name: string; phrase: string[] }
+  | { stage: 'granted'; grant: Grant; name: string }
+  | { stage: 'gone' };
 
-function joinError(error: unknown): unknown {
-  if (error instanceof ApiError && error.status === 404) return new FormError(CODE_GONE);
+/** True for a typed code, as opposed to a link token. */
+function isCode(ref: string): boolean {
+  return ref.startsWith('TWO-');
+}
+
+function goneMessage(ref: string): string {
+  return isCode(ref) ? CODE_GONE : LINK_GONE;
+}
+
+function joinError(ref: string, error: unknown): unknown {
+  if (isGone(error)) return new FormError(goneMessage(ref));
   return error;
 }
 
-/** Claims the invite with this device's public key. Only the first device to do so gets it. */
-export async function startJoin(code: string, apis: InviteApi = inviteApi): Promise<Join> {
-  const crypto = await loadCrypto();
+/** Checks an invite can still be accepted, without taking it. */
+export async function checkJoin(ref: string, apis: InviteApi = inviteApi): Promise<void> {
   try {
-    const { commitment } = await apis.joinerView(code);
-    const keys = await crypto.newInviteKeys();
-    await apis.join(code, keys.publicKey);
-    return { code, keys, commitment, phrase: null };
+    const view = await apis.joinerView(ref);
+    if (view.inviterKey !== null) throw new FormError(USED);
   } catch (error) {
-    throw joinError(error);
+    throw joinError(ref, error);
   }
 }
 
-/** Takes the joiner's next step, if the inviter has taken theirs. */
+/**
+ * Accepts the invite with a new key pair, kept in `space` first so the invite can be
+ * finished on a later visit. Only the first to send a key gets the invite.
+ */
+export async function startJoin(
+  ref: string,
+  space: SpaceKeys,
+  apis: SharingApis = defaultApis,
+): Promise<Join> {
+  const crypto = await loadCrypto();
+  let commitment: string;
+  try {
+    ({ commitment } = await apis.invites.joinerView(ref));
+  } catch (error) {
+    throw joinError(ref, error);
+  }
+  const keys = await crypto.newInviteKeys();
+  const details: JoinerDetails = { v: 1, role: 'joiner', ref, commitment };
+  const id = await keepPending(space, keys, details, apis);
+  try {
+    await apis.invites.join(ref, keys.publicKey);
+  } catch (error) {
+    await forgetPending(space, id, apis);
+    await crypto.dropInviteKeys(keys);
+    if (error instanceof ApiError && error.status === 409) throw new FormError(USED);
+    throw joinError(ref, error);
+  }
+  return { id, ref, keys, commitment };
+}
+
+/**
+ * Takes the joiner's next step, if the inviter has taken theirs: once the inviter's key is
+ * revealed (and matches its commitment), sends `myName` sealed to it.
+ */
 export async function advanceJoin(
   join: Join,
   myName: string,
   apis: InviteApi = inviteApi,
 ): Promise<JoinProgress> {
   const crypto = await loadCrypto();
-  const view = await apis.joinerView(join.code).catch((error: unknown) => {
-    throw joinError(error);
-  });
-  if (!view.inviterKey) return { stage: 'waiting', phrase: null };
-  if (!join.phrase) {
-    if (!(await crypto.checkCommitment(join.commitment, view.inviterKey))) {
-      throw new FormError(BROKEN);
-    }
-    const hello: Hello = { v: 1, name: myName };
-    await apis.hello(
-      join.code,
-      await crypto.sealForPeer('hello', encode(hello), view.inviterKey, join.keys),
-    );
-    join.phrase = await crypto.safetyPhrase(view.inviterKey, join.keys.publicKey);
+  let view: JoinerView;
+  try {
+    view = await apis.joinerView(join.ref);
+  } catch (error) {
+    if (isGone(error)) return { stage: 'gone' };
+    throw error;
   }
-  if (!view.grant) return { stage: 'waiting', phrase: join.phrase };
+  if (!view.inviterKey || !view.intro) return { stage: 'waiting' };
+  if (!(await crypto.checkCommitment(join.commitment, view.inviterKey))) {
+    throw new FormError(BROKEN);
+  }
+  const openedIntro = await crypto
+    .openFromPeer('intro', view.intro, view.inviterKey, join.keys)
+    .catch(() => null);
+  const intro = openedIntro && parseHello(decode(openedIntro));
+  if (!intro) throw new FormError(BROKEN);
+  if (!view.helloSent) {
+    const hello: Hello = { v: 1, name: myName };
+    await apis
+      .hello(join.ref, await crypto.sealForPeer('hello', encode(hello), view.inviterKey, join.keys))
+      .catch(tookAlready);
+  }
+  const phrase = await crypto.safetyPhrase(view.inviterKey, join.keys.publicKey);
+  if (!view.grant) return { stage: 'check', name: intro.name, phrase };
   const opened = await crypto
     .openFromPeer('grant', view.grant, view.inviterKey, join.keys)
     .catch(() => null);
@@ -296,35 +563,88 @@ export async function advanceJoin(
   } catch {
     throw new FormError(BROKEN);
   }
-  return { stage: 'granted', grant };
+  return { stage: 'granted', grant, name: intro.name };
 }
 
-/** Keeps what was granted in this space, then lets the invite go. */
+/**
+ * Keeps what was granted in this space, then lets the invite go. The joined record takes the
+ * pending record's id, so finishing twice (two devices at once) keeps one copy.
+ */
 export async function finishJoin(
   join: Join,
   grant: Grant,
   space: SpaceKeys,
-  apis: { invites: InviteApi; space: (token: string) => SpaceApi } = {
-    invites: inviteApi,
-    space: spaceApi,
-  },
+  apis: SharingApis = defaultApis,
 ): Promise<void> {
   const crypto = await loadCrypto();
-  const access = await crypto.ownerAccess(space);
-  const id = await crypto.newRecordId();
-  await apis.space(access.token).addJoined({
-    id,
-    meta: await crypto.sealOwnerRecord(space, 'joined', id, encode(grant)),
-  });
+  const own = apis.space((await crypto.ownerAccess(space)).token);
+  try {
+    await own.addJoined({
+      id: join.id,
+      meta: await crypto.sealOwnerRecord(space, 'joined', join.id, encode(grant)),
+    });
+  } catch (error) {
+    const kept =
+      error instanceof ApiError &&
+      error.status === 409 &&
+      (await own.listJoined()).joined.some((each) => each.id === join.id);
+    if (!kept) throw error;
+  }
   await crypto.dropInviteKeys(join.keys);
-  await apis.invites.finish(join.code).catch(() => undefined);
+  await apis.invites.finish(join.ref).catch(() => undefined);
+  await forgetPending(space, join.id, apis);
 }
 
-/** Gives up on joining. The code can't be used again either way. */
-export async function abandonJoin(join: Join, apis: InviteApi = inviteApi): Promise<void> {
+/** Gives up on joining. The invite can't be used again either way. */
+export async function abandonJoin(
+  join: Join,
+  space: SpaceKeys,
+  apis: SharingApis = defaultApis,
+): Promise<void> {
   const crypto = await loadCrypto();
+  await apis.invites.finish(join.ref).catch(() => undefined);
+  await forgetPending(space, join.id, apis);
   await crypto.dropInviteKeys(join.keys);
-  await apis.finish(join.code).catch(() => undefined);
+}
+
+/**
+ * Every invite this space has in progress, on either side. Records that don't open are left
+ * out (and left alone).
+ */
+export async function listPending(
+  space: SpaceKeys,
+  apis: SharingApis = defaultApis,
+): Promise<{ invites: Invite[]; joins: Join[] }> {
+  const crypto = await loadCrypto();
+  const access = await crypto.ownerAccess(space);
+  const invites: Invite[] = [];
+  const joins: Join[] = [];
+  for (const stored of (await apis.space(access.token).listPendingInvites()).invites) {
+    const opened = await crypto.openPendingInvite(space, stored.id, stored.meta).catch(() => null);
+    const details = opened && parseDetails(decode(opened.details));
+    if (!opened || !details) continue;
+    if (details.role === 'inviter') {
+      const { handle, code, link, album, expiresAt, joinerKey } = details;
+      invites.push({
+        id: stored.id,
+        keys: opened.keys,
+        handle,
+        code,
+        link,
+        album,
+        expiresAt,
+        joinerKey,
+      });
+    } else {
+      joins.push({
+        id: stored.id,
+        keys: opened.keys,
+        ref: details.ref,
+        commitment: details.commitment,
+      });
+    }
+  }
+  return { invites, joins };
 }
 
 // ---------------------------------------------------------------------------------------

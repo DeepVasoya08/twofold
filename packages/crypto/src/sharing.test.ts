@@ -1,17 +1,31 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
+import { newSpace } from './keyring';
+import { argon2id, setPasswordHasher } from './password-hash';
+import type { PasswordHashRequest } from './password-hash';
+import { getSodium } from './sodium';
 import {
+  PHRASE_KDF,
   checkCommitment,
   dropInviteKeys,
   inviteCommitment,
   newInviteCode,
   newInviteKeys,
+  newInviteLink,
   newShareToken,
   openFromPeer,
+  openPendingInvite,
   safetyPhrase,
   sealForPeer,
+  sealPendingInvite,
 } from './sharing';
-import { DecryptionError } from './storage';
+import {
+  DecryptionError,
+  openOwnerRecord,
+  openRecord,
+  ownerAccess,
+  sealOwnerRecord,
+} from './storage';
 import { fromBase64Url, toBase64Url } from './webcrypto';
 import { WORDLIST } from './wordlist';
 
@@ -69,6 +83,50 @@ describe('safetyPhrase', () => {
   it('refuses malformed keys', async () => {
     const joiner = await newInviteKeys();
     await expect(safetyPhrase('short', joiner.publicKey)).rejects.toThrow(DecryptionError);
+  });
+
+  afterEach(() => {
+    setPasswordHasher(null);
+  });
+
+  it('costs one Argon2id run at the login cost: 64 MiB and 3 passes', async () => {
+    expect(PHRASE_KDF).toEqual({ opsLimit: 3, memLimit: 64 * 1024 * 1024 });
+    const seen: PasswordHashRequest[] = [];
+    setPasswordHasher((request) => {
+      seen.push(request);
+      return argon2id(request);
+    });
+    const inviter = await newInviteKeys();
+    const joiner = await newInviteKeys();
+    const phrase = await safetyPhrase(inviter.publicKey, joiner.publicKey);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.kdf).toEqual(PHRASE_KDF);
+    expect(seen[0]?.salt).toHaveLength(16);
+    // Asking again on this device doesn't pay for it twice.
+    expect(await safetyPhrase(inviter.publicKey, joiner.publicKey)).toEqual(phrase);
+    expect(seen).toHaveLength(1);
+  });
+
+  it('is Argon2id over the transcript, with a salt fixed by the transcript', async () => {
+    const sodium = await getSodium();
+    const inviter = await newInviteKeys();
+    const joiner = await newInviteKeys();
+    const keys = new Uint8Array(64);
+    keys.set(fromBase64Url(inviter.publicKey) ?? new Uint8Array(), 0);
+    keys.set(fromBase64Url(joiner.publicKey) ?? new Uint8Array(), 32);
+    const transcript = sodium.crypto_generichash(32, keys, text('twofold:safety-phrase:v2'));
+    const salt = sodium.crypto_generichash(16, transcript, text('twofold:safety-phrase-salt:v2'));
+    const derived = sodium.crypto_pwhash(
+      32,
+      toBase64Url(transcript),
+      salt,
+      3,
+      64 * 1024 * 1024,
+      sodium.crypto_pwhash_ALG_ARGON2ID13,
+    );
+    const first = ((derived[0] ?? 0) << 3) | ((derived[1] ?? 0) >> 5);
+    const phrase = await safetyPhrase(inviter.publicKey, joiner.publicKey);
+    expect(phrase[0]).toBe(WORDLIST[first]);
   });
 });
 
@@ -132,6 +190,20 @@ describe('sealForPeer / openFromPeer', () => {
     );
   });
 
+  it('keeps the inviter’s name apart from the other purposes', async () => {
+    const inviter = await newInviteKeys();
+    const joiner = await newInviteKeys();
+    const intro = await sealForPeer('intro', text('{"name":"Sam"}'), joiner.publicKey, inviter);
+    expect(
+      new TextDecoder().decode(await openFromPeer('intro', intro, inviter.publicKey, joiner)),
+    ).toBe('{"name":"Sam"}');
+    for (const other of ['grant', 'hello'] as const) {
+      await expect(openFromPeer(other, intro, inviter.publicKey, joiner)).rejects.toThrow(
+        DecryptionError,
+      );
+    }
+  });
+
   it('cannot open anything once the keys are dropped', async () => {
     const inviter = await newInviteKeys();
     const joiner = await newInviteKeys();
@@ -140,6 +212,86 @@ describe('sealForPeer / openFromPeer', () => {
     await expect(openFromPeer('grant', sealed, inviter.publicKey, joiner)).rejects.toThrow(
       DecryptionError,
     );
+  });
+});
+
+describe('newInviteLink', () => {
+  it('is 128 random bits, base64url', async () => {
+    const link = await newInviteLink();
+    expect(link).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(fromBase64Url(link)).toHaveLength(16);
+    expect(await newInviteLink()).not.toBe(link);
+  });
+});
+
+describe('sealPendingInvite / openPendingInvite', () => {
+  const details = text('{"v":1,"role":"inviter"}');
+
+  it('keeps an invite’s key pair and details for a later visit', async () => {
+    const space = await newSpace();
+    const keys = await newInviteKeys();
+    const sealed = await sealPendingInvite(space, 'r1', keys, details);
+    const opened = await openPendingInvite(space, 'r1', sealed);
+    expect(opened.details).toEqual(details);
+    expect(opened.keys.publicKey).toBe(keys.publicKey);
+    expect(opened.keys.secretKey).toEqual(keys.secretKey);
+    // The keys it gives back still work for the invite.
+    const peer = await newInviteKeys();
+    const message = await sealForPeer('grant', text('access'), peer.publicKey, opened.keys);
+    expect(await openFromPeer('grant', message, keys.publicKey, peer)).toEqual(text('access'));
+  });
+
+  it('doesn’t hold the secret key in the clear', async () => {
+    const space = await newSpace();
+    const keys = await newInviteKeys();
+    const sealed = fromBase64Url(await sealPendingInvite(space, 'r1', keys, details));
+    if (!sealed) throw new Error('bad base64url');
+    const hex = Buffer.from(sealed).toString('hex');
+    expect(hex).not.toContain(Buffer.from(keys.secretKey).toString('hex'));
+  });
+
+  it('refuses another space’s key, and the records key members get', async () => {
+    const space = await newSpace();
+    const sealed = await sealPendingInvite(space, 'r1', await newInviteKeys(), details);
+    await expect(openPendingInvite(await newSpace(), 'r1', sealed)).rejects.toThrow(
+      DecryptionError,
+    );
+    // Members have the records key, which doesn't open owner-only records of any kind.
+    const access = await ownerAccess(space);
+    await expect(openRecord(access, 'photo', 'r1', sealed)).rejects.toThrow(DecryptionError);
+  });
+
+  it('refuses a tampered, moved or relabelled record', async () => {
+    const space = await newSpace();
+    const sealed = await sealPendingInvite(space, 'r1', await newInviteKeys(), details);
+    const bytes = fromBase64Url(sealed);
+    if (!bytes) throw new Error('bad base64url');
+    for (const index of [0, 30, bytes.length - 1]) {
+      const copy = bytes.slice();
+      copy[index] = (copy[index] ?? 0) ^ 1;
+      await expect(openPendingInvite(space, 'r1', toBase64Url(copy))).rejects.toThrow(
+        DecryptionError,
+      );
+    }
+    await expect(openPendingInvite(space, 'r2', sealed)).rejects.toThrow(DecryptionError);
+    // Bound to its kind: it isn't a joined library, and a joined library isn't an invite.
+    await expect(openOwnerRecord(space, 'joined', 'r1', sealed)).rejects.toThrow(DecryptionError);
+    const joined = await sealOwnerRecord(space, 'joined', 'r1', details);
+    await expect(openPendingInvite(space, 'r1', joined)).rejects.toThrow(DecryptionError);
+  });
+
+  it('refuses a record too short to hold a key', async () => {
+    const space = await newSpace();
+    const short = await sealOwnerRecord(space, 'invite', 'r1', text('tiny'));
+    await expect(openPendingInvite(space, 'r1', short)).rejects.toThrow(DecryptionError);
+  });
+
+  it('refuses a malformed key', async () => {
+    const space = await newSpace();
+    const keys = await newInviteKeys();
+    await expect(
+      sealPendingInvite(space, 'r1', { ...keys, secretKey: new Uint8Array(5) }, details),
+    ).rejects.toThrow();
   });
 });
 

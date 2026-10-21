@@ -77,6 +77,22 @@ describe('App', () => {
     expect(heading(render(path, account))).toBeUndefined();
   });
 
+  it('shows an invite link to an unlocked account, and sends anyone else to sign in', () => {
+    const path = `/join/${'A'.repeat(22)}`;
+    const html = render(path);
+    expect(heading(html)).toBe('You’re invited');
+    expect(html).toContain('Checking the invite');
+    expect(heading(render(path, signedOut))).toBeUndefined();
+    expect(heading(render(path, lockedAccount))).toBeUndefined();
+  });
+
+  it('offers a link as well as a code on the Share screen', () => {
+    const html = render('/settings/share');
+    expect(html).toContain('Copy link');
+    expect(html).toContain('They can accept any time in the next 7 days.');
+    expect(html).not.toContain('Keep this screen open');
+  });
+
   it('renders nothing while it checks for a session', () => {
     expect(heading(render('/photos', { status: 'loading' }))).toBeUndefined();
   });

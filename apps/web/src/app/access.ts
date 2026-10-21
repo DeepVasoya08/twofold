@@ -1,6 +1,6 @@
 import type { AccountState } from './account';
 import type { Space } from './account-ops';
-import { paths } from './routes';
+import { parseNext, paths, withNext } from './routes';
 import type { Route } from './routes';
 
 /**
@@ -10,9 +10,11 @@ import type { Route } from './routes';
 export function redirectFor(
   route: Route,
   state: AccountState,
-  options: { space: Space | null; signingUp: boolean },
+  options: { space: Space | null; signingUp: boolean; search?: string },
 ): string | null {
   const { status } = state;
+  // An invite link someone followed before signing in, to come back to afterwards.
+  const next = parseNext(options.search ?? '');
   switch (route.name) {
     case 'not-found':
       return null;
@@ -20,10 +22,13 @@ export function redirectFor(
     case 'signup':
     case 'login':
     case 'recover':
-      return status === 'unlocked' ? paths.gallery : null;
+      return status === 'unlocked' ? (next ?? paths.gallery) : null;
     case 'unlock':
-      if (status === 'signed-out') return paths.login;
-      return status === 'unlocked' ? paths.gallery : null;
+      if (status === 'signed-out') return withNext(paths.login, next);
+      return status === 'unlocked' ? (next ?? paths.gallery) : null;
+    case 'join':
+      if (status === 'unlocked') return null;
+      return withNext(status === 'locked' ? paths.unlock : paths.login, paths.join(route.token));
     case 'recovery-key':
       // Step 2 of sign-up, or a new key from Settings (main library only).
       if (options.signingUp) return null;

@@ -11,6 +11,7 @@ import { useVault } from '../app/vault';
 import type { Album } from '../mock/data';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
+import { PendingInviteList } from './Invites';
 
 import './album-share-dialog.css';
 
@@ -151,6 +152,8 @@ function AlbumPeople({ album }: { album: Album }) {
           </ul>
         )}
       </section>
+
+      <PendingInviteList album={album.id} />
 
       <Link to={paths.shareAlbum(album.id)} className="btn btn--primary btn--block">
         <Icon name="plus" size={18} />

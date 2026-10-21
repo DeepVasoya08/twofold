@@ -10,6 +10,7 @@ import { Album } from './screens/Album';
 import { Albums } from './screens/Albums';
 import { Favorites } from './screens/Favorites';
 import { Gallery } from './screens/Gallery';
+import { JoinInvite } from './screens/JoinInvite';
 import { LogIn } from './screens/LogIn';
 import { NotFound } from './screens/NotFound';
 import { PhotoViewer } from './screens/PhotoViewer';
@@ -35,6 +36,7 @@ const titles: Record<Route['name'], string> = {
   photo: 'Photo · Twofold',
   settings: 'Settings · Twofold',
   share: 'Share · Twofold',
+  join: 'Invite · Twofold',
   'not-found': 'Not found · Twofold',
 };
 
@@ -92,6 +94,12 @@ function Screen({ route }: { route: Route }) {
           <Share />
         </AppShell>
       );
+    case 'join':
+      return (
+        <AppShell>
+          <JoinInvite token={route.token} />
+        </AppShell>
+      );
   }
 }
 
@@ -106,7 +114,7 @@ function Redirect({ to }: { to: string }) {
 
 /** Picks the screen for the current URL. Providers live in main.tsx (and in tests). */
 export function App() {
-  const { pathname } = useRouter();
+  const { pathname, search } = useRouter();
   const route = matchRoute(pathname);
   const { state, space, pendingSignUp } = useAccount();
 
@@ -121,7 +129,11 @@ export function App() {
 
   // Until the API says who is signed in, show nothing rather than the wrong screen.
   if (state.status === 'loading') return null;
-  const redirect = redirectFor(route, state, { space, signingUp: pendingSignUp !== null });
+  const redirect = redirectFor(route, state, {
+    space,
+    signingUp: pendingSignUp !== null,
+    search,
+  });
   if (redirect) return <Redirect to={redirect} />;
   return <Screen route={route} />;
 }

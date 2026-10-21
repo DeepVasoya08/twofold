@@ -31,10 +31,21 @@ exists but is low-key (Settings → Sharing).
   belong to one space, so a moved photo arrives unfiled. A move re-encrypts the photo
   under a new key and id in the other space, then deletes the original.
 - Each space is shared separately (Settings → Sharing → Invite). Sharing the library never
-  shares the private space. The inviter keeps the Share screen open with a code; the other
-  person enters it under "I have a code". Both then see the same four words (the safety
-  phrase), and nothing is shared until the inviter confirms they match. Leaving the screen
-  cancels the invite.
+  shares the private space. The Share screen gives a link (**Copy link**, and **Share link**
+  where the browser can share) and a code to type under "I have a code" instead. They can
+  accept any time in the next 7 days; leaving the screen doesn't cancel anything. Invites
+  still waiting are listed on the Share screen and in the album's people list, with
+  **Cancel**.
+- Opening a link (`/join/<token>`) asks to sign in, sign up or unlock first, then comes back
+  to it. It doesn't say who sent it until they reveal it: **Accept** sends this side's key,
+  and the page says what's happening next, with **Don't join**. Either person can leave at
+  any point; each step is taken the next time their side opens Twofold (on load, when the
+  app comes back into view, and every few seconds while someone is partway through).
+- When someone has accepted, the inviter sees "<name> wants to join <your library or the
+  album>. Check these 4 words with them" at the top of every screen of that space, on any of
+  their devices, with **They match, share** and **Cancel**. The person joining sees the same
+  four words and "Waiting for <name> to confirm". Nothing is shared until the inviter
+  confirms; what was shared turns up on the joiner's next visit.
 - A library you join appears inside the space you joined it from, mixed in with your own
   photos. Its albums appear too, and photos uploaded into one of them go to that library
   under your name. Photos from a joined library can be favorited or deleted for everyone,
@@ -43,7 +54,7 @@ exists but is low-key (Settings → Sharing).
 - One album can be shared instead of a whole library: **Share** in an album's menu lists
   who has access (with **Remove**, and **Stop sharing with everyone**) and offers **Invite
   someone**, which opens the same invite screen for just that album
-  (`/settings/share?album=<id>`). The other person joins with the code as usual. They can
+  (`/settings/share?album=<id>`). The other person joins with the link or code as usual. They can
   view and download the album's photos, including ones added later, and leave it from its
   menu; they can't change anything, and its photos stay out of their timeline and
   favorites.
@@ -149,6 +160,7 @@ Routes are the same in both spaces; the content depends on which space is open.
 | `/favorites`           | Favorites                                                          |
 | `/settings`            | Profile, passwords, sharing, security, devices, appearance         |
 | `/settings/share`      | Invite someone to the open space (or `?album=` one album), or join |
+| `/join/:token`         | Someone's invite link: accept it                                   |
 | anything else          | Not found                                                          |
 
 Upload is a dialog opened from the sidebar (desktop) or the top bar (phones); inside an

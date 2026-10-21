@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAccount } from '../app/account';
 import { newRecoveryWords } from '../app/account-ops';
 import { useRouter } from '../app/router';
-import { paths } from '../app/routes';
+import { parseNext, paths } from '../app/routes';
 import { useToast } from '../app/toast';
 import { useSubmit } from '../app/use-submit';
 import { AuthLayout } from '../components/AuthLayout';
@@ -17,7 +17,7 @@ import './recovery-key.css';
  * and are never sent anywhere; only a slot sealed with them is.
  */
 export function RecoveryKey() {
-  const { navigate } = useRouter();
+  const { navigate, search } = useRouter();
   const toast = useToast();
   const { pendingSignUp, completeSignUp, saveRecoveryKey } = useAccount();
   const { busy, error, run } = useSubmit();
@@ -52,7 +52,8 @@ export function RecoveryKey() {
   const onContinue = () => {
     if (signingUp) {
       void run(completeSignUp).then((ok) => {
-        if (ok) navigate(paths.gallery);
+        // Back to the invite link they followed, if they came from one.
+        if (ok) navigate(parseNext(search) ?? paths.gallery);
       });
       return;
     }

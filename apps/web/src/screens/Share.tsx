@@ -1,32 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SubmitEvent } from 'react';
 
-import type { SpaceKeys } from '@twofold/crypto';
-
-import { useAccount, useMe } from '../app/account';
-import { FormError, errorMessage } from '../app/account-ops';
+import { useMe } from '../app/account';
+import { errorMessage } from '../app/account-ops';
+import { usePendingInvites } from '../app/invites';
 import { useRouter } from '../app/router';
 import { parseShareAlbum, paths } from '../app/routes';
-import {
-  POLL_MS,
-  abandonJoin,
-  advanceInvite,
-  advanceJoin,
-  cancelInvite,
-  confirmInvite,
-  finishJoin,
-  startInvite,
-  startJoin,
-} from '../app/sharing';
-import type { Invite, Join } from '../app/sharing';
-import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { Avatar } from '../components/Brand';
 import { TextField } from '../components/Field';
 import { FormAlert } from '../components/FormAlert';
 import { Icon } from '../components/Icon';
-import { ApiError } from '../lib/api';
+import { JoinProgressView, PendingInviteList, inviteLink, useCopy } from '../components/Invites';
 
 import './share.css';
 
@@ -44,256 +30,169 @@ export function isInviteCode(code: string): boolean {
 
 type Mode = 'invite' | 'join';
 
-/** True for errors that end an invite, as opposed to a dropped connection worth retrying. */
-function isFinal(error: unknown): boolean {
-  return error instanceof FormError || (error instanceof ApiError && error.status !== 0);
-}
-
-/**
- * Calls `step` every POLL_MS while `active`, one call at a time, until it returns true.
- * Errors go to `onError`; the polling stops if that returns true.
- */
-function usePoll(
-  active: boolean,
-  step: () => Promise<boolean>,
-  onError: (error: unknown) => boolean,
-) {
-  const latest = useRef({ step, onError });
-  useEffect(() => {
-    latest.current = { step, onError };
-  });
-  useEffect(() => {
-    if (!active) return;
-    let stopped = false;
-    let running = false;
-    const tick = () => {
-      if (running || stopped) return;
-      running = true;
-      latest.current.step().then(
-        (done) => {
-          running = false;
-          if (done) stopped = true;
-        },
-        (error: unknown) => {
-          running = false;
-          if (latest.current.onError(error)) stopped = true;
-        },
-      );
-    };
-    tick();
-    const timer = setInterval(tick, POLL_MS);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-    };
-  }, [active]);
-}
-
-function Phrase({ words }: { words: string[] }) {
-  return (
-    <ol className="phrase" aria-label="Safety phrase">
-      {words.map((word, index) => (
-        <li key={`${String(index)}-${word}`}>{word}</li>
-      ))}
-    </ol>
-  );
-}
-
-type InviteState =
-  | { status: 'starting' }
-  | { status: 'waiting'; invite: Invite }
-  | { status: 'confirm'; invite: Invite; name: string; phrase: string[]; joinerKey: string }
-  | { status: 'done'; name: string }
-  | { status: 'failed'; message: string };
-
 /** One album being shared instead of the whole library. */
 interface SharedAlbum {
   id: string;
   title: string;
-  sharedWith: string[];
+}
+
+/** Keeps a sharing screen checking often for the other side's steps while it's open. */
+function useWatchInvites() {
+  const { watch } = usePendingInvites();
+  useEffect(() => watch(), [watch]);
 }
 
 /**
- * Makes a code, waits for someone to use it, and shares once the safety phrases match: the
- * whole library, or only `album`.
+ * The invite for the whole library, or only `album`: a link and a code to send. It stays
+ * valid for a week whether or not this screen is open; when they accept, the request to check
+ * the words shows up at the top of every screen, on any of your devices.
  */
-function InvitePanel({
-  keys,
-  where,
-  album,
-}: {
-  keys: SpaceKeys | null;
-  where: string;
-  album: SharedAlbum | null;
-}) {
-  const toast = useToast();
+function InvitePanel({ where, album }: { where: string; album: SharedAlbum | null }) {
   const me = useMe();
-  const { shareAlbum, setSharedWith } = useVault();
-  const [state, setState] = useState<InviteState>({ status: 'starting' });
-  const [attempt, setAttempt] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const shared = useRef(false);
+  const copy = useCopy();
+  const pending = usePendingInvites();
+  const albumId = album?.id ?? null;
+  const [current, setCurrent] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const starting = useRef(false);
+  useWatchInvites();
 
+  // Shows an invite for this library or album that nobody has accepted yet, or makes one.
+  const { ready, invites, open } = pending;
   useEffect(() => {
-    if (!keys) return;
-    let cancelled = false;
-    let started: Invite | null = null;
-    startInvite().then(
+    if (!ready || current !== null || failed !== null || starting.current) return;
+    starting.current = true;
+    open(albumId).then(
       (invite) => {
-        started = invite;
-        if (cancelled) void cancelInvite(invite);
-        else setState({ status: 'waiting', invite });
+        setCurrent(invite.id);
       },
       (error: unknown) => {
-        if (!cancelled) setState({ status: 'failed', message: errorMessage(error) });
+        setFailed(errorMessage(error));
       },
     );
-    return () => {
-      cancelled = true;
-      // Leaving the screen (or asking for a new code) ends the invite.
-      if (started && !shared.current) void cancelInvite(started);
-    };
-  }, [keys, attempt]);
+  }, [ready, current, failed, open, albumId]);
 
-  usePoll(
-    state.status === 'waiting',
-    async () => {
-      if (state.status !== 'waiting') return true;
-      const progress = await advanceInvite(state.invite);
-      if (progress.stage === 'waiting') return false;
-      setState({ status: 'confirm', invite: state.invite, ...progress });
-      return true;
-    },
-    (error) => {
-      if (!isFinal(error)) return false;
-      setState({ status: 'failed', message: errorMessage(error) });
-      return true;
-    },
-  );
-
-  const copy = (text: string) => {
-    void navigator.clipboard.writeText(text).then(
-      () => {
-        toast.show('Invite code copied');
-      },
-      () => {
-        toast.show('Copy failed');
-      },
-    );
+  const again = () => {
+    starting.current = false;
+    setFailed(null);
+    setCurrent(null);
   };
 
-  const newCode = () => {
-    setState({ status: 'starting' });
-    setAttempt((current) => current + 1);
-  };
+  const entry = invites.find((each) => each.invite.id === current);
+  const finished = pending.finished.find((each) => each.inviteId === current);
+  const ended = current !== null && pending.ended.invites.includes(current);
 
-  const onShare = () => {
-    if (state.status !== 'confirm' || !keys || busy) return;
-    setBusy(true);
-    const joiner = { name: state.name, joinerKey: state.joinerKey };
-    const share = async () => {
-      if (!album) return confirmInvite(state.invite, joiner, keys, me.name);
-      // The album gets its own key now, and only that key goes to them.
-      const albumKey = await shareAlbum(album.id);
-      const member = await confirmInvite(state.invite, joiner, keys, me.name, undefined, {
-        albumId: album.id,
-        albumKey,
-      });
-      setSharedWith(album.id, [...album.sharedWith, member.name]);
-      return member;
-    };
-    share()
-      .then(
-        () => {
-          shared.current = true;
-          setState({ status: 'done', name: state.name });
-          toast.show(`Shared with ${state.name}`);
-        },
-        (error: unknown) => {
-          setState({ status: 'failed', message: errorMessage(error) });
-        },
-      )
-      .finally(() => {
-        setBusy(false);
-      });
-  };
-
-  if (state.status === 'done') {
-    return (
-      <div className="share-done" role="status">
-        <Icon name="check" size={20} />
-        <p>
-          {album
-            ? `“${album.title}” is shared with ${state.name}. You can remove them any time from the album’s Share menu.`
-            : `Your ${where} is shared with ${state.name}. You can stop sharing any time in Settings.`}
-        </p>
-      </div>
-    );
-  }
-
-  if (state.status === 'failed') {
+  if (finished) {
     return (
       <div className="share">
-        <FormAlert message={state.message} />
-        <button type="button" className="btn btn--secondary" onClick={newCode}>
-          Get a new code
-        </button>
-      </div>
-    );
-  }
-
-  if (state.status === 'confirm') {
-    return (
-      <div className="share">
-        <p className="share__lead">
-          <strong>{state.name}</strong> wants to join. Check they see these same four words:
-        </p>
-        <Phrase words={state.phrase} />
-        <p className="share__note">
-          <Icon name="shield" size={16} />
-          If the words don&apos;t match, cancel. Someone else may have your code.
-        </p>
-        <div className="share__actions">
-          <button type="button" className="btn btn--ghost" onClick={newCode} disabled={busy}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={onShare}
-            disabled={busy}
-            aria-busy={busy}
-          >
-            {busy ? 'Sharing…' : 'They match, share'}
-          </button>
+        <div className="share-done" role="status">
+          <Icon name="check" size={20} />
+          <p>
+            {album
+              ? `“${album.title}” is shared with ${finished.name}. You can remove them any time from the album’s Share menu.`
+              : `Your ${where} is shared with ${finished.name}. You can stop sharing any time in Settings.`}
+          </p>
         </div>
+        <button type="button" className="btn btn--secondary" onClick={again}>
+          Invite someone else
+        </button>
+        <PendingInviteList album={album ? album.id : undefined} />
       </div>
     );
   }
 
-  const code = state.status === 'waiting' ? state.invite.code : null;
+  if (failed !== null || ended) {
+    return (
+      <div className="share">
+        <FormAlert message={failed ?? 'That invite ended. Nothing was shared.'} />
+        <button type="button" className="btn btn--secondary" onClick={again}>
+          Get a new link
+        </button>
+        <PendingInviteList album={album ? album.id : undefined} />
+      </div>
+    );
+  }
+
+  const invite = entry?.invite ?? null;
+  const stage = entry?.progress.stage ?? 'waiting';
+  const link = invite ? inviteLink(invite.link) : null;
+  const canShare = typeof navigator.share === 'function';
+  const onCancel = () => {
+    if (!invite || cancelling) return;
+    setCancelling(true);
+    pending
+      .cancel(invite.id)
+      .catch((error: unknown) => {
+        setFailed(errorMessage(error));
+      })
+      .finally(() => {
+        setCancelling(false);
+      });
+  };
+  const onShareLink = () => {
+    if (!link) return;
+    navigator
+      .share({ title: 'Twofold invite', text: `${me.name} invited you to Twofold`, url: link })
+      .catch(() => undefined);
+  };
+
   return (
     <div className="share">
       <div className="invite-card">
-        <span className="invite-card__label">Invite code</span>
-        <span className="invite-card__code" data-testid="invite-code">
-          {code ?? 'TWO-····-····'}
+        <span className="invite-card__label">Invite link</span>
+        <span className="invite-card__link" data-testid="invite-link">
+          {link ?? 'Making a link…'}
         </span>
         <div className="invite-card__actions">
           <button
             type="button"
-            className="btn btn--secondary btn--sm"
-            disabled={!code}
+            className="btn btn--primary btn--sm"
+            disabled={!link}
             onClick={() => {
-              if (code) copy(code);
+              if (link) copy(link, 'Invite link');
+            }}
+          >
+            <Icon name="link" size={16} /> Copy link
+          </button>
+          {canShare && (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              disabled={!link}
+              onClick={onShareLink}
+            >
+              <Icon name="share" size={16} /> Share link
+            </button>
+          )}
+        </div>
+        <span className="invite-card__label">Or they can type this code</span>
+        <span className="invite-card__code" data-testid="invite-code">
+          {invite?.code ?? 'TWO-····-····'}
+        </span>
+        <div className="invite-card__actions">
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            disabled={!invite}
+            onClick={() => {
+              if (invite) copy(invite.code, 'Invite code');
             }}
           >
             <Icon name="copy" size={16} /> Copy code
           </button>
         </div>
         <span className="invite-card__expiry">
-          Works once. Keep this screen open until they join.
+          Send this link. They can accept any time in the next 7 days. It works once.
         </span>
+        <button
+          type="button"
+          className="btn btn--danger-ghost btn--sm"
+          disabled={!invite || cancelling}
+          onClick={onCancel}
+        >
+          Cancel this invite
+        </button>
       </div>
 
       <div className="waiting">
@@ -308,77 +207,41 @@ function InvitePanel({
             <Icon name="plus" size={18} />
           </span>
         </span>
-        <p className="waiting__text">Waiting for them to enter the code…</p>
+        <p className="waiting__text">
+          {stage === 'waiting'
+            ? 'You can leave this screen. The invite stays open.'
+            : stage === 'accepted'
+              ? 'They accepted. Waiting for them to come back to Twofold…'
+              : 'They’re waiting for you to check the words above.'}
+        </p>
       </div>
 
       <p className="share__note">
         <Icon name="shield" size={16} />
-        When they do, you&apos;ll both see four words. Check they match before you share, so you
+        When they accept, you&apos;ll both see four words. Check they match before you share, so you
         know it&apos;s really them.
       </p>
+
+      <PendingInviteList album={album ? album.id : undefined} exclude={current} />
     </div>
   );
 }
 
-type JoinState =
-  | { status: 'form' }
-  | { status: 'joining'; join: Join; phrase: string[] | null }
-  | { status: 'failed'; message: string };
-
-/** Enters someone's code, shows the safety phrase, and adds their library once they share. */
-function JoinPanel({ keys, where }: { keys: SpaceKeys | null; where: string }) {
-  const toast = useToast();
-  const me = useMe();
-  const { navigate } = useRouter();
-  const { reloadVault } = useAccount();
+/** Enters someone's code, then shows how the invite is going. */
+function JoinPanel({ where }: { where: string }) {
+  const pending = usePendingInvites();
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [state, setState] = useState<JoinState>({ status: 'form' });
-  const pending = useRef<Join | null>(null);
+  const [joined, setJoined] = useState<string | null>(null);
+  useWatchInvites();
 
-  // Leaving before it finishes gives the invite up.
-  useEffect(
-    () => () => {
-      if (pending.current) void abandonJoin(pending.current);
-    },
-    [],
-  );
-
-  usePoll(
-    state.status === 'joining',
-    async () => {
-      if (state.status !== 'joining' || !keys) return true;
-      const progress = await advanceJoin(state.join, me.name);
-      if (progress.stage === 'waiting') {
-        if (progress.phrase && !state.phrase) setState({ ...state, phrase: progress.phrase });
-        return false;
-      }
-      await finishJoin(state.join, progress.grant, keys);
-      pending.current = null;
-      // Load the open space again, now with their photos.
-      reloadVault();
-      if (progress.grant.album) {
-        toast.show(`${progress.grant.name} shared an album with you`);
-        navigate(paths.albums);
-      } else {
-        toast.show(`You joined ${progress.grant.name}’s library`);
-        navigate(paths.gallery);
-      }
-      return true;
-    },
-    (caught) => {
-      if (!isFinal(caught)) return false;
-      if (pending.current) void abandonJoin(pending.current);
-      pending.current = null;
-      setState({ status: 'failed', message: errorMessage(caught) });
-      return true;
-    },
-  );
+  const entry = pending.joins.find((each) => each.join.ref === joined);
+  const ended = joined !== null && pending.ended.joins.includes(joined);
 
   const onJoin = (event: SubmitEvent) => {
     event.preventDefault();
-    if (busy || !keys) return;
+    if (busy) return;
     const normalized = normalizeInviteCode(code);
     if (!isInviteCode(normalized)) {
       setError(
@@ -387,11 +250,11 @@ function JoinPanel({ keys, where }: { keys: SpaceKeys | null; where: string }) {
       return;
     }
     setBusy(true);
-    startJoin(normalized)
+    pending
+      .accept(normalized)
       .then(
-        (join) => {
-          pending.current = join;
-          setState({ status: 'joining', join, phrase: null });
+        () => {
+          setJoined(normalized);
         },
         (caught: unknown) => {
           setError(errorMessage(caught));
@@ -402,25 +265,7 @@ function JoinPanel({ keys, where }: { keys: SpaceKeys | null; where: string }) {
       });
   };
 
-  if (state.status === 'joining') {
-    return (
-      <div className="share" role="status">
-        {state.phrase ? (
-          <>
-            <p className="share__lead">Check they see these same four words:</p>
-            <Phrase words={state.phrase} />
-            <p className="waiting__text">Waiting for them to confirm…</p>
-          </>
-        ) : (
-          <p className="waiting__text">Connecting…</p>
-        )}
-        <p className="share__note">
-          <Icon name="shield" size={16} />
-          What they share will appear in your {where}, and only there.
-        </p>
-      </div>
-    );
-  }
+  if (entry) return <JoinProgressView entry={entry} where={where} />;
 
   return (
     <form
@@ -431,7 +276,7 @@ function JoinPanel({ keys, where }: { keys: SpaceKeys | null; where: string }) {
       onSubmit={onJoin}
       noValidate
     >
-      <FormAlert message={state.status === 'failed' ? state.message : null} />
+      <FormAlert message={ended ? 'That invite ended, so nothing was shared.' : null} />
       <TextField
         label="Invite code"
         className="field--code"
@@ -464,18 +309,14 @@ function JoinPanel({ keys, where }: { keys: SpaceKeys | null; where: string }) {
  */
 export function Share() {
   const { space, state: vault, status } = useVault();
-  const { state } = useAccount();
   const { search } = useRouter();
   const [mode, setMode] = useState<Mode>('invite');
-  const keys = state.status === 'unlocked' ? state.session.opened.space : null;
 
   const where = space === 'private' ? 'private space' : 'library';
   const albumId = parseShareAlbum(search);
   if (albumId !== null) {
     const found = vault.albums.find((each) => each.id === albumId && each.library === undefined);
-    const album: SharedAlbum | null = found
-      ? { id: found.id, title: found.title, sharedWith: found.sharedWith ?? [] }
-      : null;
+    const album: SharedAlbum | null = found ? { id: found.id, title: found.title } : null;
     return (
       <div className="page page--narrow">
         <PageHeader
@@ -497,7 +338,7 @@ export function Share() {
         />
         {album && (
           <div className="share-card">
-            <InvitePanel keys={keys} where={where} album={album} />
+            <InvitePanel where={where} album={album} />
           </div>
         )}
       </div>
@@ -544,10 +385,10 @@ export function Share() {
 
         {mode === 'invite' ? (
           <div role="tabpanel" id="panel-invite" aria-labelledby="tab-invite">
-            <InvitePanel keys={keys} where={where} album={null} />
+            <InvitePanel where={where} album={null} />
           </div>
         ) : (
-          <JoinPanel keys={keys} where={where} />
+          <JoinPanel where={where} />
         )}
       </div>
     </div>
