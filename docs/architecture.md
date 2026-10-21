@@ -15,15 +15,21 @@ everything from one origin, so there is no CORS and the CSP can stay at
 `connect-src 'self'`.
 
 - **apps/web** — static SPA, served by the Worker through Workers Static Assets from
-  `apps/web/dist`. Unknown paths fall back to `index.html` (SPA routing). Response headers
-  for assets come from `apps/web/public/_headers`. All encryption and decryption happens
+  `apps/web/dist`. The public pages (`/`, `/privacy`, `/terms`) are prerendered at build
+  time into `index.html`, `privacy.html` and `terms.html`, with their own titles, link
+  previews and structured data, plus `sitemap.xml` and `robots.txt` (see
+  [ui.md](ui.md#landing-page-legal-pages-and-seo)). Any other path that isn't a file reaches
+  the Worker, which answers with the plain app shell, `app.html` (marked `noindex`); a
+  missing file (a path with an extension) gets a 404. Response headers for assets, the
+  shell included, come from `apps/web/public/_headers`. All encryption and decryption happens
   here, through `packages/crypto`; password hashing (Argon2id) runs in a Web Worker
   bundled from `@twofold/crypto/password-worker`, encrypting and decrypting originals in one
   bundled from `@twofold/crypto/file-crypto-worker`, and upload previews are drawn in
   `lib/thumbnail-worker.ts` (an OffscreenCanvas).
-- **apps/api** — the Worker code, a Hono app mounted at `/api`. Only `/api/*` requests run
-  Worker code (`run_worker_first`); everything else is answered from assets, and unknown
-  `/api/*` routes return 404 rather than the app shell. Stores and serves
+- **apps/api** — the Worker code: a Hono app mounted at `/api`, and the app shell
+  fallback (`src/app-shell.ts`). `/api/*` requests always run Worker code
+  (`run_worker_first`); other paths are answered from assets when a file matches, and
+  unknown `/api/*` routes return 404 rather than the app shell. Stores and serves
   ciphertext; never receives plaintext photos, passwords, or keys. R2 object keys are
   random IDs. D1 holds metadata. Schema changes are SQL files in `apps/api/migrations`,
   applied on deploy.

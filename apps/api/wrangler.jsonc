@@ -16,8 +16,10 @@
   // and the API under /api. Build apps/web first (pnpm build does this).
   "assets": {
     "directory": "../web/dist",
-    "not_found_handling": "single-page-application",
-    // Only /api/* reaches the Worker code; everything else is served from assets.
+    "binding": "ASSETS",
+    // /api/* always reaches the Worker code. Other paths are served from assets when a file
+    // matches (the prerendered landing and legal pages among them), and otherwise reach the
+    // Worker, which answers app paths with the app shell (src/index.ts).
     "run_worker_first": ["/api/*"],
   },
   "r2_buckets": [

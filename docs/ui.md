@@ -167,7 +167,9 @@ Routes are the same in both spaces; the content depends on which space is open.
 
 | Route                  | Screen                                                             |
 | ---------------------- | ------------------------------------------------------------------ |
-| `/`                    | Welcome                                                            |
+| `/`                    | Landing page (prerendered)                                         |
+| `/privacy`             | Privacy Policy (prerendered)                                       |
+| `/terms`               | Terms of Use (prerendered)                                         |
 | `/signup`              | Create your account (step 1 of 2)                                  |
 | `/signup/recovery-key` | Save your 12-word recovery key (step 2)                            |
 | `/login`               | Log in                                                             |
@@ -181,6 +183,7 @@ Routes are the same in both spaces; the content depends on which space is open.
 | `/settings`            | Profile, passwords, sharing, security, devices, appearance         |
 | `/settings/share`      | Invite someone to the open space (or `?album=` one album), or join |
 | `/join/:token`         | Someone's invite link: accept it                                   |
+| `/join`                | Enter an invite code                                               |
 | anything else          | Not found                                                          |
 
 Upload is a dialog opened from the sidebar (desktop) or the top bar (phones); inside an
@@ -229,6 +232,35 @@ a two-finger pinch on touch screens, a double-click (toggles 2.5×), and the `+`
 `0` keys. A zoomed photo pans by dragging; a fitted one swipes to the next photo. After
 each zoom change the level (as a percentage of the fitted size) shows at the top of the
 photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `screens/use-zoom.ts`.
+
+## Landing page, legal pages and SEO
+
+- The landing page (`screens/Welcome.tsx`) leads with privacy without overselling, and
+  never presents Twofold as a couples app. Its illustrations are small static copies of
+  real screens drawn with the mock landscape art: the unlock box opening either the library
+  or the private space, and an album shared with "Estrella" with the four-word check. Its
+  FAQ (`site/faq.ts`) is honest about the trade-offs: no password reset, no recovery for the
+  private space, 1 GB per account.
+- The Privacy Policy and Terms of Use (`screens/Privacy.tsx`, `screens/Terms.tsx`) describe
+  the real design. Details only the operator can give (legal name, contact email,
+  jurisdiction, minimum age, effective date) live in `legal/details.ts`; while any is
+  missing the pages show highlighted placeholders and a draft notice. They still need a
+  legal review before launch.
+- The three public pages share a header and footer (`components/SiteChrome.tsx`) and are
+  prerendered after `vite build` by `scripts/prerender.mjs`, using a server build of
+  `src/prerender.tsx`. Each gets its title, description, canonical link, Open Graph and
+  Twitter card tags, and JSON-LD (WebSite, WebApplication and FAQPage on the landing page),
+  from `site/pages.ts` and `site/head.ts`. The build also writes `sitemap.xml` and
+  `robots.txt`. `SITE_URL` sets the origin they use (see deployment.md).
+- When the app loads, public pages render straight away instead of waiting for the
+  account check, so the prerendered page doesn't flash blank; the landing page then sends
+  an unlocked account on to its photos. App screens are served from `app.html`, marked
+  `noindex`.
+- Icons: `public/favicon.svg` (the logo mark, lighter in dark mode), `favicon.ico`,
+  `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png` (listed
+  in `site.webmanifest`) and the 1200×630 link preview `og-image.png`. The PNGs and the
+  .ico are rendered by `node scripts/render-images.mjs` (Playwright's Chromium and
+  ImageMagick); rerun it after changing the logo.
 
 ## Structure (`apps/web/src`)
 

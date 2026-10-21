@@ -4,3 +4,4 @@ coverage/
 .wrangler/
 playwright-report/
 test-results/
+.prerender/

@@ -52,8 +52,26 @@ describe('App', () => {
     ['/signup', 'Create your vault'],
     ['/login', 'Welcome back'],
     ['/recover', 'Recover your vault'],
+    ['/privacy', 'Privacy Policy'],
+    ['/terms', 'Terms of Use'],
   ])('renders %s when signed out', (path, title) => {
     expect(heading(render(path, signedOut))).toBe(title);
+  });
+
+  it.each([
+    ['/', 'Your photos.Truly private.'],
+    ['/privacy', 'Privacy Policy'],
+    ['/terms', 'Terms of Use'],
+  ])('shows the public page %s while the account is still loading', (path, title) => {
+    expect(heading(render(path, { status: 'loading' }))).toBe(title);
+  });
+
+  it('shows nothing for app screens while the account is still loading', () => {
+    expect(heading(render('/photos', { status: 'loading' }))).toBeUndefined();
+  });
+
+  it('shows the legal pages to an unlocked account too', () => {
+    expect(heading(render('/privacy'))).toBe('Privacy Policy');
   });
 
   it('greets a locked account by name on the unlock screen', () => {
