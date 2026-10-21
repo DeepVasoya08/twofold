@@ -156,7 +156,9 @@ other accounts; see [Sharing](#sharing).
   Rows carry no timestamps; `pending_since` is set only while an upload hasn't been
   committed, so abandoned uploads in a space are cleaned up after a day.
 - **Uploads** are created, then both files are sent with their declared sizes (checked
-  again after R2 stores them), then committed. Nothing is listed or served until commit,
+  again after R2 stores them). The second file to land commits the photo, and the commit
+  itself checks both sizes against what was declared; a separate commit call is a
+  fallback. Nothing is listed or served until commit,
   and a committed photo's files can't be overwritten. Records are at most 2 KiB, previews
   1 MiB and originals 64 MiB of ciphertext.
 - **Moving** a photo to the other space downloads and decrypts it, adds it to the other
@@ -207,12 +209,15 @@ under). It never gets the space key or the space id.
   Closing the download dialog keeps the download (and its decrypted copies) in memory so
   it can finish in the background; they're dropped once saved, when the download is
   cancelled, or when the vault locks.
-- **Decrypting off the main thread.** Originals are decrypted with `decryptFile` inside a
-  Web Worker bundled from `@twofold/crypto/decrypt-worker`, so large files don't freeze the
-  page. The worker is a thread of the same page: the file key and ciphertext go to it and
-  the plaintext comes back. One worker serves a batch and shuts down after a few idle
-  seconds. If it can't start or fails, the page decrypts on its own thread; a wrong key or
-  tampered file fails the same way in both.
+- **Encrypting and decrypting off the main thread.** Originals are encrypted for upload with
+  `encryptFile` and decrypted with `decryptFile` inside a Web Worker bundled from
+  `@twofold/crypto/file-crypto-worker`, so large files don't freeze the page. The worker is
+  a thread of the same page: the file key and bytes go to it and the result comes back.
+  One worker serves a batch and shuts down after a few idle seconds. If it can't start or
+  fails, the page does the work on its own thread; a wrong key or tampered file fails the
+  same way in both. Upload previews are drawn in another same-page worker
+  (`apps/web/src/lib/thumbnail-worker.ts`, no crypto), which gets the photo as a Blob and
+  returns the small JPEG; the page draws it itself when the browser has no OffscreenCanvas.
 - **Owner-only records.** Who a space is shared with (`members`), which libraries it
   joined (`joined`) and the invites it has in progress (`pending_invites`) are sealed under
   a second `crypto_kdf` subkey of the space key (id 2), which members never receive. So even a server that showed a member those rows couldn't

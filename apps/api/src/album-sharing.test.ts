@@ -48,8 +48,8 @@ async function upload(c = owner): Promise<string> {
   const full = randomBytes(1000);
   const photo = { id: newId(), meta: newMeta(), thumbSize: thumb.length, fullSize: full.length };
   expect((await c.request('POST', '/space/photos', photo)).status).toBe(201);
-  expect((await putFile(c, photo.id, 'thumb', thumb)).status).toBe(204);
-  expect((await putFile(c, photo.id, 'full', full)).status).toBe(204);
+  expect((await putFile(c, photo.id, 'thumb', thumb)).status).toBe(200);
+  expect((await putFile(c, photo.id, 'full', full)).status).toBe(200);
   expect((await c.request('POST', `/space/photos/${photo.id}/commit`, {})).status).toBe(204);
   return photo.id;
 }

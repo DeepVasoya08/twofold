@@ -102,6 +102,59 @@ describe('remoteStore', () => {
     expect((await remoteStore(space, server.api).list()).photos).toEqual([]);
   });
 
+  it('sends both files together and skips the commit when the second one made it', async () => {
+    const { server, space } = await setUp();
+    const commits = vi.fn();
+    const api = (token: string) => {
+      const real = server.api(token);
+      return { ...real, commitPhoto: (id: string) => (commits(id), real.commitPhoto(id)) };
+    };
+    const added = await remoteStore(space, api).add(PHOTO, []);
+    expect(commits).not.toHaveBeenCalled();
+    expect(server.photos.get(added.id)?.committed).toBe(true);
+  });
+
+  it('commits on its own when neither file’s upload did', async () => {
+    const { server, space } = await setUp();
+    const api = (token: string) => {
+      const real = server.api(token);
+      return {
+        ...real,
+        putFile: async (...args: Parameters<typeof real.putFile>) => {
+          const entry = server.photos.get(args[0]);
+          await real.putFile(...args);
+          if (entry) entry.committed = false;
+          return { committed: false };
+        },
+      };
+    };
+    const added = await remoteStore(space, api).add(PHOTO, []);
+    expect(server.photos.get(added.id)?.committed).toBe(true);
+  });
+
+  it('waits for the other file before letting a failed upload go', async () => {
+    const { server, space } = await setUp();
+    let landed = false;
+    const api = (token: string) => {
+      const real = server.api(token);
+      return {
+        ...real,
+        putFile: async (...args: Parameters<typeof real.putFile>) => {
+          if (args[1] === 'thumb') throw new Error('offline');
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          landed = true;
+          return real.putFile(...args);
+        },
+        deletePhoto: (id: string) => {
+          expect(landed).toBe(true);
+          return real.deletePhoto(id);
+        },
+      };
+    };
+    await expect(remoteStore(space, api).add(PHOTO, [])).rejects.toThrow('offline');
+    expect(server.photos.size).toBe(0);
+  });
+
   it('lets a half-finished upload go when sending it fails', async () => {
     const { server, space } = await setUp();
     const failing = (token: string) => ({

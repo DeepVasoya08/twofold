@@ -90,7 +90,12 @@ export class FakeServer {
       putFile: (id: string, part: PhotoPart, bytes: Uint8Array<ArrayBuffer>) => {
         mine(id);
         this.files.set(`${id}/${part}`, bytes);
-        return Promise.resolve();
+        // Like the server: the second file commits the photo.
+        const entry = this.photos.get(id);
+        const both = this.files.has(`${id}/thumb`) && this.files.has(`${id}/full`);
+        const committed = Boolean(entry && both && !entry.committed);
+        if (entry && committed) entry.committed = true;
+        return Promise.resolve({ committed });
       },
       commitPhoto: (id) => {
         mine(id).committed = true;

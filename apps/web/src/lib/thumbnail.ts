@@ -1,6 +1,8 @@
 /**
  * Makes the small JPEG preview stored next to each photo, entirely in memory. The preview is
- * encrypted before upload like the original.
+ * encrypted before upload like the original. Decoding a camera photo and scaling it down is
+ * the heaviest step of an upload, so it runs in a Web Worker when the browser can draw there
+ * (lib/thumbnailer.ts), and on the page otherwise.
  */
 
 export const THUMB_MAX_SIDE = 640;
@@ -12,6 +14,14 @@ export interface Thumbnail {
   width: number;
   height: number;
 }
+
+/** A canvas to draw a preview on: one on the page, or an OffscreenCanvas in a worker. */
+export interface ThumbCanvas {
+  draw: (image: ImageBitmap, width: number, height: number) => boolean;
+  toJpeg: (quality: number) => Promise<Blob | null>;
+}
+
+export type CanvasMaker = (width: number, height: number) => ThumbCanvas;
 
 /** Fits `width`×`height` inside a square of `max`, never scaling up. */
 export function fitWithin(
@@ -26,8 +36,11 @@ export function fitWithin(
   };
 }
 
-/** Returns null if the browser can't decode the image. */
-export async function makeThumbnail(file: Blob): Promise<Thumbnail | null> {
+/** Draws the preview on a canvas from `makeCanvas`. Returns null if it can't be read. */
+export async function drawThumbnail(
+  file: Blob,
+  makeCanvas: CanvasMaker,
+): Promise<Thumbnail | null> {
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(file);
@@ -36,15 +49,9 @@ export async function makeThumbnail(file: Blob): Promise<Thumbnail | null> {
   }
   try {
     const size = fitWithin(bitmap.width, bitmap.height, THUMB_MAX_SIDE);
-    const canvas = document.createElement('canvas');
-    canvas.width = size.width;
-    canvas.height = size.height;
-    const context = canvas.getContext('2d');
-    if (!context) return null;
-    context.drawImage(bitmap, 0, 0, size.width, size.height);
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, 'image/jpeg', THUMB_QUALITY);
-    });
+    const canvas = makeCanvas(size.width, size.height);
+    if (!canvas.draw(bitmap, size.width, size.height)) return null;
+    const blob = await canvas.toJpeg(THUMB_QUALITY);
     if (!blob) return null;
     return {
       bytes: new Uint8Array(await blob.arrayBuffer()),
@@ -55,3 +62,36 @@ export async function makeThumbnail(file: Blob): Promise<Thumbnail | null> {
     bitmap.close();
   }
 }
+
+/** A canvas element on the page. */
+export const pageCanvas: CanvasMaker = (width, height) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  return {
+    draw: (image, w, h) => {
+      const context = canvas.getContext('2d');
+      if (!context) return false;
+      context.drawImage(image, 0, 0, w, h);
+      return true;
+    },
+    toJpeg: (quality) =>
+      new Promise((resolve) => {
+        canvas.toBlob(resolve, 'image/jpeg', quality);
+      }),
+  };
+};
+
+/** An OffscreenCanvas, for drawing inside a worker. */
+export const offscreenCanvas: CanvasMaker = (width, height) => {
+  const canvas = new OffscreenCanvas(width, height);
+  return {
+    draw: (image, w, h) => {
+      const context = canvas.getContext('2d');
+      if (!context) return false;
+      context.drawImage(image, 0, 0, w, h);
+      return true;
+    },
+    toJpeg: (quality) => canvas.convertToBlob({ type: 'image/jpeg', quality }).catch(() => null),
+  };
+};
