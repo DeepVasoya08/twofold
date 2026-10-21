@@ -12,6 +12,8 @@ import {
   uploadPhotos,
 } from './helpers';
 
+/** A copy is named by when it was taken, like a camera roll. */
+const PHOTO_NAME = /^\d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.\d{2}\.png$/;
 const tiles = (page: Page) => page.locator('.photo-tile');
 const bar = (page: Page) => page.getByRole('toolbar', { name: 'Selected photos' });
 const monthSelect = (page: Page) => page.getByRole('button', { name: /^Select all of / }).first();
@@ -135,7 +137,7 @@ test('download saves decrypted copies of a selection or a whole album', async ({
   await expect(dialog.getByText('Downloaded copies aren’t encrypted')).toBeVisible();
   let download = page.waitForEvent('download');
   await dialog.getByRole('button', { name: 'Download' }).click();
-  expect((await download).suggestedFilename()).toBe('twofold-1.png');
+  expect((await download).suggestedFilename()).toMatch(PHOTO_NAME);
 
   // Albums have a Download button, and the same action in their menu. The photo is still
   // selected after downloading it.
@@ -154,5 +156,5 @@ test('download saves decrypted copies of a selection or a whole album', async ({
     .getByRole('dialog', { name: 'Download this photo' })
     .getByRole('button', { name: 'Download' })
     .click();
-  expect((await download).suggestedFilename()).toBe('twofold-1.png');
+  expect((await download).suggestedFilename()).toMatch(PHOTO_NAME);
 });

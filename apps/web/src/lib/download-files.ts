@@ -3,9 +3,6 @@
  * links are revoked as soon as the browser has them.
  */
 
-/** Most photos downloaded at once. Each is decrypted in full into memory first. */
-export const DOWNLOAD_MAX = 50;
-
 /** How long a download link lives: long enough for the browser to start saving. */
 const REVOKE_MS = 10_000;
 

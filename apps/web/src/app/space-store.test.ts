@@ -207,6 +207,51 @@ describe('remoteStore', () => {
     await expect(store.read(added.id)).rejects.toThrow(/isn’t in your vault/);
   });
 
+  it('downloads only the original to save a copy', async () => {
+    const { server, space } = await setUp();
+    const added = await remoteStore(space, server.api).add(PHOTO, []);
+    const fetched: string[] = [];
+    const counting = (token: string) => {
+      const api = server.api(token);
+      return {
+        ...api,
+        getFile: (photoId: string, part: 'thumb' | 'full') => {
+          fetched.push(part);
+          return api.getFile(photoId, part);
+        },
+        getThumbs: (ids: readonly string[]) => {
+          fetched.push('thumbs');
+          return api.getThumbs(ids);
+        },
+      };
+    };
+    const later = remoteStore(space, counting);
+    await later.list();
+    expect(await later.original(added.id)).toEqual({
+      full: PHOTO.full,
+      type: PHOTO.type,
+      takenAt: PHOTO.takenAt,
+    });
+    expect(fetched).toEqual(['full']);
+    await expect(later.original('missing')).rejects.toThrow(/isn’t in your vault/);
+  });
+
+  it('refuses a tampered original, or one under the wrong key', async () => {
+    const { server, space } = await setUp();
+    const a = await remoteStore(space, server.api).add(PHOTO, []);
+    const b = await remoteStore(space, server.api).add(PHOTO, []);
+    const fullA = server.files.get(`${a.id}/full`);
+    if (!fullA) throw new Error('missing');
+    fullA[40] = (fullA[40] ?? 0) ^ 1;
+    // B's original swapped for another photo's: it is under another key.
+    const thumbA = server.files.get(`${a.id}/thumb`);
+    if (thumbA) server.files.set(`${b.id}/full`, thumbA);
+    const later = remoteStore(space, server.api);
+    await later.list();
+    await expect(later.original(a.id)).rejects.toThrow();
+    await expect(later.original(b.id)).rejects.toThrow();
+  });
+
   it('refuses a photo too large to store', async () => {
     const { server, space } = await setUp();
     const huge = { ...PHOTO, full: new Uint8Array(STORAGE_SIZES.maxFull) };
@@ -288,6 +333,28 @@ describe('combinedStore', () => {
     await store.list();
     const urls = await store.thumbs(['mine', 'theirs']);
     expect(Object.fromEntries(urls)).toEqual({ mine: 'blob:mine', theirs: 'blob:theirs' });
+  });
+
+  it('downloads each original from the library it came from', async () => {
+    const original = (from: string) => () =>
+      Promise.resolve({ full: bytes(from), type: 'image/png', takenAt: '2026-10-16T09:30:00Z' });
+    const own = {
+      ...memoryStore({ photos: [photo('mine')], albums: [] }),
+      original: original('own'),
+    };
+    const theirs = {
+      ...memoryStore({ photos: [photo('theirs')], albums: [] }),
+      original: original('theirs'),
+    };
+    const store = combinedStore(own, () =>
+      Promise.resolve([{ id: 's', name: 'Ana', store: theirs }]),
+    );
+    await store.list();
+    expect((await store.original('mine')).full).toEqual(bytes('own'));
+    expect((await store.original('theirs')).full).toEqual(bytes('theirs'));
+    await expect(memoryStore({ photos: [], albums: [] }).original('x')).rejects.toThrow(
+      /can’t download/,
+    );
   });
 
   it('reports previews that failed, with the ones that came back', async () => {

@@ -70,8 +70,14 @@ exists but is low-key (Settings → Sharing).
   put the photos in (albums already shared come first, or make a new one), then opens that
   album's invite. Everyone invited to an album sees the same album, so sharing with more
   people never makes copies.
-- **Download** saves copies to the device: it decrypts the originals (up to 50 at a time)
-  and downloads them. The dialog says downloaded copies aren't encrypted.
+- **Download** saves copies to the device. It downloads and decrypts the originals four at
+  a time (up to 1 GB in all) and shows "Downloading 12 of 19" with a progress bar; then the
+  button saves them. One photo is saved as it is. Several download as one zip
+  (`Twofold <yyyy-mm-dd>.zip`, stored without compression), except on a touch device that
+  can share files, where **Save to device** opens the share sheet so they can go straight
+  to the photo gallery. Copies are named by when they were taken (`2026-10-19 14.32.05.jpg`,
+  with ` (2)` for photos from the same second), never after the space or album. The
+  dialog says downloaded copies aren't encrypted.
 - Every album has a vertical "more" menu, always visible on its card in Albums and next to
   **Select** inside it. Your albums: **Share**, **Download**, **Rename** and **Delete
   album** (deleting keeps the photos). Albums of a library shared with you: **Download**,

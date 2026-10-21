@@ -15,3 +15,25 @@
   color: var(--danger);
   font-size: 14px;
 }
+
+.download__status {
+  display: grid;
+  gap: 8px;
+}
+
+.download__progress-label {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.download__bytes {
+  color: var(--text-2);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}

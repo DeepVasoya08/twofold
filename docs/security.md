@@ -196,9 +196,20 @@ under). It never gets the space key or the space id.
 - **Deleting an album** removes its row; the server can't read which photos name it, so the
   browser takes the album out of each photo's sealed metadata afterwards (best effort: a
   photo that still names a deleted album just shows nothing for it).
-- **Downloading copies.** Download on a selection or an album decrypts the originals into
-  memory and saves them to the device. Those copies are not encrypted, and the dialog says
-  so before anything is saved.
+- **Downloading copies.** Download on a selection or an album downloads only the originals
+  (not the previews), decrypts them into memory (in a Web Worker, see below) and saves them
+  to the device: one photo as a file, several as one zip built in memory (a Blob of the
+  decrypted files, never written to localStorage, IndexedDB or caches), or, on a touch
+  device that can share files, through the system share sheet. Those copies are not
+  encrypted, and the dialog says so before anything is saved. File names come from when
+  each photo was taken and the zip is called `Twofold <date>.zip`, so neither names the
+  space or album. Download links are temporary object URLs, revoked after a few seconds.
+- **Decrypting off the main thread.** Originals are decrypted with `decryptFile` inside a
+  Web Worker bundled from `@twofold/crypto/decrypt-worker`, so large files don't freeze the
+  page. The worker is a thread of the same page: the file key and ciphertext go to it and
+  the plaintext comes back. One worker serves a batch and shuts down after a few idle
+  seconds. If it can't start or fails, the page decrypts on its own thread; a wrong key or
+  tampered file fails the same way in both.
 - **Owner-only records.** Who a space is shared with (`members`) and which libraries it
   joined (`joined`) are sealed under a second `crypto_kdf` subkey of the space key (id 2),
   which members never receive. So even a server that showed a member those rows couldn't

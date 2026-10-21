@@ -40,8 +40,22 @@ const PNG = Buffer.from(
   'base64',
 );
 
+/**
+ * `count` different photos: the same PNG with a few bytes after its end, which decoders
+ * ignore, so each file's bytes can be told apart after a round trip.
+ */
+export function distinctPhotos(count: number): Buffer[] {
+  return Array.from({ length: count }, (_, index) =>
+    Buffer.concat([PNG, Buffer.from(`twofold-e2e-${String(index)}`)]),
+  );
+}
+
 /** Opens the upload dialog and picks `count` photos; they start uploading at once. */
-export async function choosePhotos(page: Page, count: number): Promise<Locator> {
+export async function choosePhotos(
+  page: Page,
+  count: number,
+  buffers: readonly Buffer[] = [],
+): Promise<Locator> {
   await page
     .getByRole('button', { name: /^Upload/ })
     .filter({ visible: true })
@@ -52,15 +66,19 @@ export async function choosePhotos(page: Page, count: number): Promise<Locator> 
     Array.from({ length: count }, (_, index) => ({
       name: `photo-${String(index)}.png`,
       mimeType: 'image/png',
-      buffer: PNG,
+      buffer: buffers[index] ?? PNG,
     })),
   );
   return dialog;
 }
 
 /** Uploads `count` photos through the upload dialog and waits until they're all stored. */
-export async function uploadPhotos(page: Page, count: number): Promise<void> {
-  const dialog = await choosePhotos(page, count);
+export async function uploadPhotos(
+  page: Page,
+  count: number,
+  buffers: readonly Buffer[] = [],
+): Promise<void> {
+  const dialog = await choosePhotos(page, count, buffers);
   await dialog.getByRole('button', { name: 'Done' }).click();
 }
 
