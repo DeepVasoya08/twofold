@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -139,8 +139,12 @@ describe('buildZip', () => {
 
     const out = join(dir, 'out');
     execFileSync('unzip', ['-q', path, '-d', out]);
+    // Whether unzip keeps the UTF-8 names depends on its build and locale (the names are
+    // checked by parsing above), so files are matched by their contents here.
+    const extracted = readdirSync(out).map((name) => new Uint8Array(readFileSync(join(out, name))));
+    expect(extracted).toHaveLength(files.length);
     for (const file of files) {
-      expect(new Uint8Array(readFileSync(join(out, file.name)))).toEqual(file.data);
+      expect(extracted).toContainEqual(file.data);
     }
     const listing = execFileSync('unzip', ['-l', path], { encoding: 'utf8' });
     expect(listing).toMatch(/(2026-10-19|10-19-2026) 14:32/);
