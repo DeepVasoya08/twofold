@@ -448,6 +448,16 @@ describe('storage quota', () => {
     expect(QUOTA).toBe(1024 * 1024 * 1024);
   });
 
+  it('reports the account total across every space, only to the signed-in account', async () => {
+    await upload();
+    useSpace(client, toBase64Url(randomBytes(16)));
+    await upload();
+    const res = await client.request('GET', '/account/storage');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ used: 2 * 1100, limit: QUOTA });
+    expect((await new Client(env).request('GET', '/account/storage')).status).toBe(401);
+  });
+
   it('refuses an upload that would go over, and stores nothing for it', async () => {
     setStored(QUOTA - 1099);
     const res = await start();

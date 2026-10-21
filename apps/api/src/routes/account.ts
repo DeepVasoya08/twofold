@@ -1,12 +1,14 @@
 import { Hono } from 'hono';
 
-import type { DeviceList } from '@twofold/types';
+import { STORAGE_SIZES } from '@twofold/types';
+import type { AccountStorage, DeviceList } from '@twofold/types';
 
 import {
   deleteAccount,
   deleteOtherSession,
   deleteOtherSessions,
   listDevices,
+  storedBytes,
   updateKeyring,
   updateName,
 } from '../db';
@@ -74,6 +76,15 @@ account.put('/keyring', async (c) => {
   return c.json(
     toAccountResponse({ ...current, keyring: body.keyring, version: body.version + 1 }),
   );
+});
+
+/**
+ * How much of the account's limit is used, across both spaces. Only the private space asks
+ * for it: shown in the main library, it would hint that a private space exists.
+ */
+account.get('/storage', async (c) => {
+  const used = await storedBytes(c.env.DB, c.get('account').id);
+  return c.json<AccountStorage>({ used, limit: STORAGE_SIZES.accountQuota });
 });
 
 /** Every device signed in to this account, this one first. */
