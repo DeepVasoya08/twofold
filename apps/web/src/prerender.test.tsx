@@ -31,9 +31,9 @@ describe('prerender', () => {
     expect(head).toContain('<title>Twofold · End-to-end encrypted photo library</title>');
   });
 
-  it('renders the legal pages with placeholders for missing details', () => {
+  it('renders the legal pages, with a placeholder for the missing jurisdiction', () => {
     expect(file('privacy.html').content).toContain('<h1 class="legal__title">Privacy Policy</h1>');
     expect(file('terms.html').content).toContain('<h1 class="legal__title">Terms of Use</h1>');
-    expect(file('privacy.html').content).toContain('[contact email]');
+    expect(file('terms.html').content).toContain('[jurisdiction]');
   });
 });

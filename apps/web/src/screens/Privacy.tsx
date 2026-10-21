@@ -168,8 +168,8 @@ export function Privacy() {
 
       <h2>Children</h2>
       <p>
-        Twofold isn’t meant for children under <Fill field="minimumAge" label="minimum age" />, and
-        we don’t knowingly create accounts for them.
+        Twofold has no minimum age. If you are under the age at which you can agree to this policy
+        where you live, a parent or guardian must agree to it for you.
       </p>
 
       <h2>Changes to this policy</h2>

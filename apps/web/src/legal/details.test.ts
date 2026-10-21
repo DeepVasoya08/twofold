@@ -6,7 +6,6 @@ const complete = {
   operator: 'Example Ltd',
   contactEmail: 'privacy@example.com',
   jurisdiction: 'England and Wales',
-  minimumAge: 16,
   effectiveDate: '1 November 2026',
 };
 
