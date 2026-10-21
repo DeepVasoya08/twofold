@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { AccountProvider, useAccount } from './account';
 import { AutoLockProvider, IdleLock } from './auto-lock';
 import type { AccountState } from './account';
+import { DownloadsProvider } from './downloads';
 import { ThemeProvider } from './theme';
 import { ToastProvider } from './toast';
 import type { Session, Space } from './account-ops';
@@ -50,8 +51,10 @@ function OpenVault({
       >
         <ProfileProvider store={profileStore}>
           <UploadsProvider>
-            <IdleLock />
-            {children}
+            <DownloadsProvider>
+              <IdleLock />
+              {children}
+            </DownloadsProvider>
           </UploadsProvider>
         </ProfileProvider>
       </PendingInvitesProvider>

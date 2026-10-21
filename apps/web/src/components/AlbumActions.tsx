@@ -3,6 +3,7 @@ import type { SubmitEvent } from 'react';
 
 import { useAccount } from '../app/account';
 import { errorMessage } from '../app/account-ops';
+import { useDownloads } from '../app/downloads';
 import { leaveJoined } from '../app/sharing';
 import { useToast } from '../app/toast';
 import { albumPhotos, useVault } from '../app/vault';
@@ -10,12 +11,11 @@ import { pluralize } from '../lib/format';
 import type { Album } from '../mock/data';
 import { AlbumShareDialog } from './AlbumShareDialog';
 import { Dialog } from './Dialog';
-import { DownloadDialog } from './DownloadDialog';
 import { TextField } from './Field';
 import { Menu } from './Menu';
 import type { MenuItem } from './Menu';
 
-type Open = 'rename' | 'share' | 'download' | 'delete' | 'leave' | null;
+type Open = 'rename' | 'share' | 'delete' | 'leave' | null;
 
 /**
  * An album's actions, from a "more" menu. Your own albums can be shared with people,
@@ -40,8 +40,7 @@ export function AlbumActions({
   const [title, setTitle] = useState(album.title);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // What the download dialog decrypts, fixed when it opens.
-  const [downloading, setDownloading] = useState<readonly string[]>([]);
+  const downloads = useDownloads();
   const count = albumPhotos(state, album.id).length;
   const inShared = album.library !== undefined;
   const keys = account.state.status === 'unlocked' ? account.state.session.opened.space : null;
@@ -122,8 +121,7 @@ export function AlbumActions({
     label: 'Download',
     icon: 'download',
     onSelect: () => {
-      setDownloading(albumPhotos(state, album.id).map((photo) => photo.id));
-      setOpen('download');
+      downloads.start(albumPhotos(state, album.id).map((photo) => photo.id));
     },
   };
   const items: MenuItem[] = album.sharedAlbum
@@ -204,8 +202,6 @@ export function AlbumActions({
       </Dialog>
 
       {!inShared && <AlbumShareDialog open={open === 'share'} album={album} onClose={close} />}
-
-      <DownloadDialog open={open === 'download'} photoIds={downloading} onClose={close} />
 
       <Dialog
         open={open === 'delete'}
