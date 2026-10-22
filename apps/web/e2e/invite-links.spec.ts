@@ -1,7 +1,15 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
-import { MAIN_PASSWORD, freshEmail, goTo, signUp, unlockWith, uploadPhotos } from './helpers';
+import {
+  MAIN_PASSWORD,
+  answerSmartFeatures,
+  freshEmail,
+  goTo,
+  signUp,
+  unlockWith,
+  uploadPhotos,
+} from './helpers';
 
 const phrase = (page: Page) =>
   page.getByRole('list', { name: 'Safety phrase' }).getByRole('listitem').allTextContents();
@@ -63,6 +71,7 @@ test('an invite link works without both people online at once', async ({ browser
   await bob.getByRole('button', { name: 'Continue' }).click();
   await expect(bob.getByRole('heading', { level: 1, name: 'You’re invited' })).toBeVisible();
   await expect(bob).toHaveURL(new URL(link).pathname);
+  await answerSmartFeatures(bob);
 
   // He accepts while Alice is away; there's nothing more to do until she's back.
   await bob.getByRole('button', { name: 'Accept' }).click();

@@ -35,10 +35,18 @@ export async function signUp(
   await page.getByRole('button', { name: 'Continue' }).click();
 
   await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
-  const question = page.getByRole('dialog', { name: 'Smart features, on your device' });
-  await question.getByRole('button', { name: smartFeatures }).click();
-  await expect(question).toBeHidden();
+  await answerSmartFeatures(page, smartFeatures);
   return { email, words };
+}
+
+/** Answers the smart features question shown after sign-up. */
+export async function answerSmartFeatures(
+  page: Page,
+  answer: 'Turn on' | 'Not now' = 'Not now',
+): Promise<void> {
+  const question = page.getByRole('dialog', { name: 'Smart features, on your device' });
+  await question.getByRole('button', { name: answer }).click();
+  await expect(question).toBeHidden();
 }
 
 /** A 1×1 PNG stands in for a real photo. */
