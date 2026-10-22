@@ -50,7 +50,7 @@ export function PeopleSettings() {
           <span className="settings-row__description">
             {people.enabled
               ? 'On for this device. Faces are found and grouped here, never on our servers.'
-              : `Group photos by the people in them, found on this device only. Downloads about ${String(MODEL_DOWNLOAD_MB)} MB the first time.`}
+              : `Group photos by the people in them, found on this device only. Downloads some resources (about ${String(MODEL_DOWNLOAD_MB)} MB) the first time.`}
           </span>
         </div>
         <div className="settings-row__action">

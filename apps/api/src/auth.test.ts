@@ -38,7 +38,7 @@ describe('POST /api/auth/signup', () => {
     const res = await signUp();
     expect(res.status).toBe(201);
     const body = await res.json<AccountResponse>();
-    expect(body).toEqual({ email: EMAIL, name: 'Sam', version: 1, keyring });
+    expect(body).toEqual({ email: EMAIL, name: 'Sam', smartFeatures: null, version: 1, keyring });
     expect(res.headers.get('set-cookie')).toMatch(
       /^__Host-twofold_session=[\w-]{43}; Max-Age=2592000; Path=\/; HttpOnly; Secure; SameSite=Strict$/,
     );
@@ -144,7 +144,13 @@ describe('POST /api/auth/login', () => {
   it.each([0, 1, 2])('accepts the login key of slot %i with the same response', async (slot) => {
     const res = await login(keys[slot] ?? new Uint8Array());
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ email: EMAIL, name: 'Sam', version: 1, keyring });
+    expect(await res.json()).toEqual({
+      email: EMAIL,
+      name: 'Sam',
+      smartFeatures: null,
+      version: 1,
+      keyring,
+    });
     expect(client.cookie).toMatch(/^__Host-twofold_session=/);
   });
 

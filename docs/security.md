@@ -415,9 +415,15 @@ than minutes. A live server can still link the sessions on both sides, as it cou
 Face grouping finds faces and groups photos of the same person entirely on the device. The
 server stores only what it stores for photos: ciphertext it can't read.
 
-- **Off by default, per device.** Turning it on is saved in this browser's `localStorage`
-  (`twofold.faceGrouping`), not on the account, and applies to whichever space is open, so
-  the setting says nothing about whether a private space exists.
+- **On only after a yes.** After sign-up, and once for accounts made earlier, the smart
+  features question asks for consent with two equal choices ("Turn on" / "Not now"),
+  nothing pre-selected and not tied to creating the account. The answer, the version of the
+  question and the day it was given are kept on the account (`PUT
+/api/account/smart-features`, columns `smart_choice`, `smart_version`, `smart_at`) as a
+  record of consent. It's the same whichever space is open, so it says nothing about a
+  private space. A device that never chose follows the account; turning it on or off on a
+  device is saved in that browser's `localStorage` (`twofold.faceGrouping`) and wins there.
+  Either way it applies to whichever space is open.
 - **On the device.** The models are YuNet (face detection, MIT) and SFace (face
   fingerprints, Apache 2.0), run by ONNX Runtime Web (WebAssembly) in a Web Worker
   (`apps/web/src/lib/people`). They are served from Twofold's own origin, and each file is
@@ -488,7 +494,8 @@ server stores only what it stores for photos: ciphertext it can't read.
   reloading drops them and remounts the vault, which drops every decrypted photo and
   revokes its object URLs.
 - Nothing secret is written to `localStorage`, IndexedDB or caches. `localStorage` holds
-  only this device's settings: the auto-lock time and whether face grouping is on.
+  only this device's settings: the auto-lock time and whether face grouping was turned on or
+  off here.
 - Only raster photo formats are stored or shown (JPEG, PNG, GIF, WebP, HEIC, AVIF;
   `apps/web/src/lib/photo-types.ts`). An SVG is a document that can carry script, so it is
   refused on upload and left out if a record names it.

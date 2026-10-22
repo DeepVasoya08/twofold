@@ -1,3 +1,4 @@
+import { SMART_FEATURES_VERSION } from '@twofold/types';
 import type { AccountResponse } from '@twofold/types';
 
 import type { AccountState } from '../app/account';
@@ -19,6 +20,8 @@ export function testAccount(privateSlot = filler('C', 118)): AccountResponse {
       slots: [filler('A', 118), filler('B', 118), privateSlot],
       verifiers: [filler('a', 43), filler('b', 43), privateSlot.slice(0, 43)],
     },
+    // Answered, and off, so screens render as they did before the question existed.
+    smartFeatures: { choice: 'off', version: SMART_FEATURES_VERSION },
   };
 }
 

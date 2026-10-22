@@ -11,11 +11,12 @@ import type { ReactNode } from 'react';
 
 import type { FaceFinder } from '../lib/people/face-finder';
 import { runScan } from '../lib/people/face-scan';
-import { loadFaceSetting, saveFaceSetting } from '../lib/people/face-setting';
+import { faceGroupingOn, loadFaceSetting, saveFaceSetting } from '../lib/people/face-setting';
 import { confirmedFaces, groupFaces, withRejected } from '../lib/people/grouping';
 import type { Group, Person } from '../lib/people/grouping';
 import type { FaceResults } from '../lib/people/segment';
 import type { Settled } from '../lib/settle-each';
+import { useAccount } from './account';
 import type { PeopleStore } from './people-store';
 import { useUploads } from './uploads';
 import { useVault } from './vault';
@@ -23,8 +24,8 @@ import type { VaultState } from './vault';
 
 /**
  * People in the open space: faces found on this device, grouped on this device, with the
- * results and the user's choices sealed under the space's own key. Off until turned on in
- * Settings, per device. While on, photos without results are looked at in the background,
+ * results and the user's choices sealed under the space's own key. On when the account said
+ * yes to smart features, unless this device turned it off (or on) in Settings. While on, photos without results are looked at in the background,
  * paused while uploads run or the tab is hidden; locking stops it with everything else.
  */
 
@@ -82,7 +83,9 @@ export function PeopleProvider({
 }) {
   const vault = useVault();
   const { running: uploading } = useUploads();
-  const [enabled, setEnabledState] = useState(() => loadFaceSetting(browserStorage()));
+  const { smartFeatures } = useAccount();
+  const [preference, setPreference] = useState(() => loadFaceSetting(browserStorage()));
+  const enabled = faceGroupingOn(preference, smartFeatures);
   /** What the background scan is doing, once results have loaded. */
   const [phase, setPhase] = useState<'scanning' | 'waiting' | 'ready'>('scanning');
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +117,7 @@ export function PeopleProvider({
 
   const setEnabled = useCallback((on: boolean) => {
     saveFaceSetting(browserStorage(), on);
-    setEnabledState(on);
+    setPreference(on ? 'on' : 'off');
     setLoaded(false);
     setError(null);
   }, []);

@@ -11,6 +11,7 @@ import {
   storedBytes,
   updateKeyring,
   updateName,
+  updateSmartFeatures,
 } from '../db';
 import { checkProof, clientAddress } from '../proof';
 import { messages, readBody, toAccountResponse } from '../respond';
@@ -18,6 +19,7 @@ import {
   deleteAccountSchema,
   deviceIdSchema,
   emptySchema,
+  smartFeaturesSchema,
   updateKeyringSchema,
   updateNameSchema,
 } from '../schemas';
@@ -38,6 +40,18 @@ account.put('/name', async (c) => {
   if (!body) return c.json({ error: messages.badRequest }, 400);
   await updateName(c.env.DB, current.id, body.name);
   return c.json(toAccountResponse({ ...current, name: body.name }));
+});
+
+/**
+ * Answers the smart features question. The answer isn't secret and is the same whichever
+ * space asks, so the session is enough.
+ */
+account.put('/smart-features', async (c) => {
+  const current = c.get('account');
+  const body = await readBody(c, smartFeaturesSchema);
+  if (!body) return c.json({ error: messages.badRequest }, 400);
+  await updateSmartFeatures(c.env.DB, current.id, body, Date.now());
+  return c.json(toAccountResponse({ ...current, smartFeatures: body }));
 });
 
 /**

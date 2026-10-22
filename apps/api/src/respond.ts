@@ -11,6 +11,7 @@ export function toAccountResponse(account: AccountRecord): AccountResponse {
     name: account.name,
     version: account.version,
     keyring: account.keyring,
+    smartFeatures: account.smartFeatures,
   };
 }
 

@@ -30,6 +30,7 @@ import type {
   ProfilePhotoResponse,
   PutFileResponse,
   SignUpRequest,
+  SmartFeaturesRequest,
   StoredProfilePhoto,
   UpdateKeyringRequest,
   UpdateNameRequest,
@@ -135,6 +136,8 @@ export const api = {
     call<AccountResponse>('PUT', '/account/keyring', body),
   deleteAccount: (body: DeleteAccountRequest) => call<undefined>('DELETE', '/account', body),
   updateName: (body: UpdateNameRequest) => call<AccountResponse>('PUT', '/account/name', body),
+  chooseSmartFeatures: (body: SmartFeaturesRequest) =>
+    call<AccountResponse>('PUT', '/account/smart-features', body),
   devices: () => call<DeviceList>('GET', '/account/devices'),
   /** Storage across both spaces. */
   storage: () => call<AccountStorage>('GET', '/account/storage'),

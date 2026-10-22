@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { FACE_SETTING_KEY, loadFaceSetting, saveFaceSetting } from './face-setting';
+import { SMART_FEATURES_VERSION } from '@twofold/types';
+
+import { FACE_SETTING_KEY, faceGroupingOn, loadFaceSetting, saveFaceSetting } from './face-setting';
 
 function memory(): Storage {
   const values = new Map<string, string>();
@@ -12,18 +14,20 @@ function memory(): Storage {
   } as unknown as Storage;
 }
 
+const said = (choice: 'on' | 'off') => ({ choice, version: SMART_FEATURES_VERSION });
+
 describe('face setting', () => {
-  it('is off until turned on, and remembers the choice', () => {
+  it('has no choice until one is made here, and remembers it', () => {
     const storage = memory();
-    expect(loadFaceSetting(storage)).toBe(false);
+    expect(loadFaceSetting(storage)).toBeNull();
     saveFaceSetting(storage, true);
     expect(storage.getItem(FACE_SETTING_KEY)).toBe('on');
-    expect(loadFaceSetting(storage)).toBe(true);
+    expect(loadFaceSetting(storage)).toBe('on');
     saveFaceSetting(storage, false);
-    expect(loadFaceSetting(storage)).toBe(false);
+    expect(loadFaceSetting(storage)).toBe('off');
   });
 
-  it('counts blocked or missing storage as off', () => {
+  it('counts blocked, missing or unknown storage as no choice', () => {
     const blocked = {
       getItem: () => {
         throw new Error('blocked');
@@ -32,10 +36,30 @@ describe('face setting', () => {
         throw new Error('blocked');
       },
     } as unknown as Storage;
-    expect(loadFaceSetting(blocked)).toBe(false);
+    expect(loadFaceSetting(blocked)).toBeNull();
     expect(() => {
       saveFaceSetting(blocked, true);
     }).not.toThrow();
-    expect(loadFaceSetting(undefined)).toBe(false);
+    expect(loadFaceSetting(undefined)).toBeNull();
+    const odd = memory();
+    odd.setItem(FACE_SETTING_KEY, 'yes');
+    expect(loadFaceSetting(odd)).toBeNull();
+  });
+});
+
+describe('faceGroupingOn', () => {
+  it('follows the account when this device never chose', () => {
+    expect(faceGroupingOn(null, said('on'))).toBe(true);
+    expect(faceGroupingOn(null, said('off'))).toBe(false);
+  });
+
+  it('is off while the question is unanswered', () => {
+    expect(faceGroupingOn(null, null)).toBe(false);
+  });
+
+  it('lets this device’s choice win over the account', () => {
+    expect(faceGroupingOn('off', said('on'))).toBe(false);
+    expect(faceGroupingOn('on', said('off'))).toBe(true);
+    expect(faceGroupingOn('on', null)).toBe(true);
   });
 });

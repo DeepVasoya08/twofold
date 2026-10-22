@@ -53,7 +53,27 @@ export interface AccountResponse {
   /** Bumped on every keyring change; updates must name the version they started from. */
   version: number;
   keyring: Keyring;
+  /** The answer to the smart features question, or null if it hasn't been asked yet. */
+  smartFeatures: SmartFeaturesChoice | null;
 }
+
+/**
+ * The smart features question shown once after sign-up (and once to accounts made before it
+ * existed). Bumped if what it asks changes, so everyone is asked again.
+ */
+export const SMART_FEATURES_VERSION = 1;
+
+/**
+ * What someone answered: whether face grouping starts on for their devices, and which
+ * version of the question they saw. It's the same in both spaces, so it says nothing about
+ * a private space.
+ */
+export interface SmartFeaturesChoice {
+  choice: 'on' | 'off';
+  version: number;
+}
+
+export type SmartFeaturesRequest = SmartFeaturesChoice;
 
 export interface SignUpRequest {
   email: string;

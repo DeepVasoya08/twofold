@@ -6,6 +6,7 @@ import {
   KEY_SIZES,
   MEMBER_ACCESS,
   SHARE_SIZES,
+  SMART_FEATURES_VERSION,
   STORAGE_SIZES,
 } from '@twofold/types';
 
@@ -60,6 +61,12 @@ export const updateKeyringSchema = z.strictObject({
 export const deleteAccountSchema = z.strictObject({ loginKey });
 
 export const updateNameSchema = z.strictObject({ name });
+
+/** Only the current version of the smart features question can be answered. */
+export const smartFeaturesSchema = z.strictObject({
+  choice: z.enum(['on', 'off']),
+  version: z.literal(SMART_FEATURES_VERSION),
+});
 
 /** A session's public id: 16 random bytes in lowercase hex, made by SQLite. */
 export const deviceIdSchema = z.string().regex(/^[0-9a-f]{32}$/);

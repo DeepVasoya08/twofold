@@ -131,8 +131,13 @@ private space that already exists, since the main library can't know whether the
 
 ## People
 
-Face grouping is off until it's turned on, from the People page or Settings → People, and
-the choice is per device. Once on, the device downloads the face models (about 14 MB, once)
+After sign-up (and once at the next unlock for accounts made earlier) a "Smart features, on
+your device" dialog asks whether to turn face grouping on, with two buttons, "Turn on" and
+"Not now" (`components/SmartFeaturesPrompt.tsx`). Closing it without choosing asks again
+later. The answer is saved on the account, so the account's other devices start the same
+way; each device can still turn it on or off from the People page or Settings → People, and
+that choice wins on that device (`lib/people/face-setting.ts`). Download text says
+"resources", never models. Once on, the device downloads what it needs (about 14 MB, once)
 and looks at every photo's preview in the background, 12 at a time
 (`app/people.tsx`, `lib/people/face-scan.ts`). It pauses while photos upload or the tab is
 hidden, saves what it found every 48 photos, and picks up new photos as they arrive. The

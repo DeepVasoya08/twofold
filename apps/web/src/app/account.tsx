@@ -10,7 +10,7 @@ import {
 import type { ReactNode } from 'react';
 
 import type { SpaceKeys } from '@twofold/crypto';
-import type { AccountResponse } from '@twofold/types';
+import type { AccountResponse, SmartFeaturesChoice } from '@twofold/types';
 
 import { ApiError, api, onSessionEnded } from '../lib/api';
 import { onVisibleAgain } from '../lib/when-visible';
@@ -57,6 +57,10 @@ interface AccountValue {
    */
   openOtherSpace: (password: string) => Promise<SpaceKeys>;
   saveRecoveryKey: (recoveryKey: Uint8Array) => Promise<void>;
+  /** The answer to the smart features question; null if unanswered or signed out. */
+  smartFeatures: SmartFeaturesChoice | null;
+  /** Answers the smart features question for this account. */
+  chooseSmartFeatures: (answer: SmartFeaturesChoice) => Promise<void>;
   /** Changes the name shown on the account (it isn't secret; sign-up sent it too). */
   changeName: (name: string) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
@@ -72,14 +76,30 @@ function accountOf(state: AccountState): AccountResponse | null {
   return null;
 }
 
-/** The same state with the account's name changed. */
-export function withName(state: AccountState, name: string): AccountState {
-  if (state.status === 'locked') return { ...state, account: { ...state.account, name } };
+/** The same state with some of the account's plain fields changed. */
+function withAccount(
+  state: AccountState,
+  changes: Partial<Pick<AccountResponse, 'name' | 'smartFeatures'>>,
+): AccountState {
+  if (state.status === 'locked') return { ...state, account: { ...state.account, ...changes } };
   if (state.status === 'unlocked') {
     const { session } = state;
-    return { ...state, session: { ...session, account: { ...session.account, name } } };
+    return { ...state, session: { ...session, account: { ...session.account, ...changes } } };
   }
   return state;
+}
+
+/** The same state with the account's name changed. */
+export function withName(state: AccountState, name: string): AccountState {
+  return withAccount(state, { name });
+}
+
+/** The same state with the smart features answer changed. */
+export function withSmartFeatures(
+  state: AccountState,
+  smartFeatures: SmartFeaturesChoice,
+): AccountState {
+  return withAccount(state, { smartFeatures });
 }
 
 export function AccountProvider({
@@ -242,6 +262,14 @@ export function AccountProvider({
       saveRecoveryKey: (recoveryKey) =>
         guard(async () => {
           await update(() => ops.saveRecoveryKey(requireSession(), recoveryKey));
+        }),
+      smartFeatures: account?.smartFeatures ?? null,
+      chooseSmartFeatures: (answer) =>
+        guard(async () => {
+          const changed = await api.chooseSmartFeatures(answer);
+          setState((current) =>
+            changed.smartFeatures ? withSmartFeatures(current, changed.smartFeatures) : current,
+          );
         }),
       changeName: (name) =>
         guard(async () => {
