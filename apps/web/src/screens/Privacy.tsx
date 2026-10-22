@@ -82,6 +82,14 @@ export function Privacy() {
         We store the encrypted photos and previews you upload, under random names, along with their
         sizes and when they were uploaded.
       </p>
+      <h3>Face grouping</h3>
+      <p>
+        If you turn on face grouping, your device finds the faces in your photos and groups photos
+        of the same person. This happens only on your device. What it finds, including the face
+        data, is encrypted there before it’s stored, so we can’t read it. We keep only your answer
+        to whether face grouping should start on, and the day you gave it. You can turn it off on
+        any device in Settings, and delete all face data for a space there.
+      </p>
       <h3>Security</h3>
       <p>
         To stop people guessing passwords, we count failed sign-in attempts for each email address
@@ -98,7 +106,10 @@ export function Privacy() {
       <ul>
         <li>We don’t show ads, and we don’t sell or rent your information.</li>
         <li>We don’t use analytics or tracking services, or third-party cookies.</li>
-        <li>We don’t scan, analyze or train anything on your photos.</li>
+        <li>
+          We don’t scan, analyze or train anything on your photos. Face grouping, if you turn it on,
+          runs only on your device.
+        </li>
         <li>
           We don’t keep per-request access logs of your use of the app. Our hosting provider still
           processes your IP address to deliver the service, as described below.

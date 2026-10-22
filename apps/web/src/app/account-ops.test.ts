@@ -45,7 +45,7 @@ vi.mock('../lib/api', async (importOriginal) => {
           ? Promise.resolve({ salt: server.account.keyring.salt, kdf: server.account.keyring.kdf })
           : Promise.reject(new actual.ApiError(404, 'No account')),
       signUp: (body: SignUpRequest) => {
-        server.account = { ...body, version: 1 };
+        server.account = { ...body, version: 1, smartFeatures: null };
         return Promise.resolve(server.account);
       },
       logIn: async ({ email, loginKey }: LoginRequest) => {

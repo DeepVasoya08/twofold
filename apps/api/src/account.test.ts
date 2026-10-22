@@ -1,7 +1,7 @@
 import { randomBytes, toBase64Url } from '@twofold/crypto/webcrypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { KEY_SIZES } from '@twofold/types';
+import { KEY_SIZES, SMART_FEATURES_VERSION } from '@twofold/types';
 import type { AccountResponse, Keyring } from '@twofold/types';
 
 import type { Env } from './env';
@@ -37,8 +37,66 @@ describe('GET /api/account', () => {
       name: 'Sam',
       version: 1,
       keyring,
+      smartFeatures: null,
     });
     expect(res.headers.get('cache-control')).toBe('no-store');
+  });
+});
+
+describe('PUT /api/account/smart-features', () => {
+  it('keeps the answer, and a later answer replaces it', async () => {
+    const res = await client.request('PUT', '/account/smart-features', {
+      choice: 'on',
+      version: SMART_FEATURES_VERSION,
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json<AccountResponse>()).smartFeatures).toEqual({
+      choice: 'on',
+      version: SMART_FEATURES_VERSION,
+    });
+    await client.request('PUT', '/account/smart-features', {
+      choice: 'off',
+      version: SMART_FEATURES_VERSION,
+    });
+    const reread = await client.request('GET', '/account');
+    expect((await reread.json<AccountResponse>()).smartFeatures).toEqual({
+      choice: 'off',
+      version: SMART_FEATURES_VERSION,
+    });
+  });
+
+  it('keeps only the day it was answered', async () => {
+    await client.request('PUT', '/account/smart-features', {
+      choice: 'on',
+      version: SMART_FEATURES_VERSION,
+    });
+    const row = await env.DB.prepare('SELECT smart_at FROM accounts WHERE email = ?')
+      .bind('sam@example.com')
+      .first<{ smart_at: number }>();
+    expect(row?.smart_at).toBeTypeOf('number');
+    expect((row?.smart_at ?? 1) % (24 * 60 * 60 * 1000)).toBe(0);
+  });
+
+  it('refuses an unknown choice or another version, and changes nothing', async () => {
+    for (const body of [
+      { choice: 'maybe', version: SMART_FEATURES_VERSION },
+      { choice: 'on', version: SMART_FEATURES_VERSION + 1 },
+      { choice: 'on', version: 0 },
+      { choice: 'on' },
+      { choice: 'on', version: SMART_FEATURES_VERSION, extra: true },
+    ]) {
+      expect((await client.request('PUT', '/account/smart-features', body)).status).toBe(400);
+    }
+    const reread = await client.request('GET', '/account');
+    expect((await reread.json<AccountResponse>()).smartFeatures).toBeNull();
+  });
+
+  it('needs a session', async () => {
+    const res = await new Client(env).request('PUT', '/account/smart-features', {
+      choice: 'on',
+      version: SMART_FEATURES_VERSION,
+    });
+    expect(res.status).toBe(401);
   });
 });
 

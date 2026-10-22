@@ -144,7 +144,13 @@ describe('POST /api/auth/login', () => {
   it.each([0, 1, 2])('accepts the login key of slot %i with the same response', async (slot) => {
     const res = await login(keys[slot] ?? new Uint8Array());
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ email: EMAIL, name: 'Sam', version: 1, keyring });
+    expect(await res.json()).toEqual({
+      email: EMAIL,
+      name: 'Sam',
+      smartFeatures: null,
+      version: 1,
+      keyring,
+    });
     expect(client.cookie).toMatch(/^__Host-twofold_session=/);
   });
 

@@ -23,7 +23,7 @@ auth.post('/signup', async (c) => {
   );
   if (!created) return c.json({ error: messages.emailTaken }, 409);
   await startSession(c, id);
-  return c.json(toAccountResponse({ id, ...body, version: 1 }), 201);
+  return c.json(toAccountResponse({ id, ...body, version: 1, smartFeatures: null }), 201);
 });
 
 /** The salt and KDF settings the browser needs before it can derive a login key. */

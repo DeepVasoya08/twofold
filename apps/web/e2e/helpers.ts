@@ -9,12 +9,16 @@ export function freshEmail(): string {
   return `e2e-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 }
 
-/** Signs up through the UI and lands in the library. Returns the recovery words shown. */
+/**
+ * Signs up through the UI and lands in the library, answering the smart features question
+ * ("Not now" unless asked otherwise). Returns the recovery words shown.
+ */
 export async function signUp(
   page: Page,
   email = freshEmail(),
   password = MAIN_PASSWORD,
   name = 'Sam',
+  smartFeatures: 'Turn on' | 'Not now' = 'Not now',
 ): Promise<{ email: string; words: string }> {
   await page.goto('/signup');
   await page.getByLabel('Your name').fill(name);
@@ -31,6 +35,9 @@ export async function signUp(
   await page.getByRole('button', { name: 'Continue' }).click();
 
   await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
+  const question = page.getByRole('dialog', { name: 'Smart features, on your device' });
+  await question.getByRole('button', { name: smartFeatures }).click();
+  await expect(question).toBeHidden();
   return { email, words };
 }
 

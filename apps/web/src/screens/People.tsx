@@ -54,7 +54,7 @@ export function TurnOnPeople({ onTurnOn }: { onTurnOn: () => void }) {
     >
       Twofold can find faces and group photos of the same person. It all happens on this device:
       your photos and the faces in them never leave it unencrypted. The first time, this device
-      downloads the face models (about {MODEL_DOWNLOAD_MB} MB).
+      downloads some resources (about {MODEL_DOWNLOAD_MB} MB).
     </EmptyState>
   );
 }

@@ -1,4 +1,4 @@
-import type { Device, DeviceKind, Keyring } from '@twofold/types';
+import type { Device, DeviceKind, Keyring, SmartFeaturesChoice } from '@twofold/types';
 
 import type { DeviceLabel } from './device';
 import { keyringSchema } from './schemas';
@@ -10,6 +10,7 @@ export interface AccountRecord {
   name: string;
   keyring: Keyring;
   version: number;
+  smartFeatures: SmartFeaturesChoice | null;
 }
 
 interface AccountRow {
@@ -18,6 +19,19 @@ interface AccountRow {
   name: string;
   keyring: string;
   version: number;
+  smart_choice: string | null;
+  smart_version: number | null;
+}
+
+/** The columns every account read selects, for a query that names accounts `a`. */
+const ACCOUNT_COLUMNS =
+  'a.id, a.email, a.name, a.keyring, a.version, a.smart_choice, a.smart_version';
+
+function smartFeaturesOf(row: AccountRow): SmartFeaturesChoice | null {
+  if ((row.smart_choice !== 'on' && row.smart_choice !== 'off') || row.smart_version === null) {
+    return null;
+  }
+  return { choice: row.smart_choice, version: row.smart_version };
 }
 
 function toRecord(row: AccountRow): AccountRecord {
@@ -27,6 +41,7 @@ function toRecord(row: AccountRow): AccountRecord {
     name: row.name,
     keyring: keyringSchema.parse(JSON.parse(row.keyring)),
     version: row.version,
+    smartFeatures: smartFeaturesOf(row),
   };
 }
 
@@ -35,7 +50,7 @@ export async function findAccountByEmail(
   email: string,
 ): Promise<AccountRecord | null> {
   const row = await db
-    .prepare('SELECT id, email, name, keyring, version FROM accounts WHERE email = ?')
+    .prepare(`SELECT ${ACCOUNT_COLUMNS} FROM accounts a WHERE a.email = ?`)
     .bind(email)
     .first<AccountRow>();
   return row ? toRecord(row) : null;
@@ -44,7 +59,7 @@ export async function findAccountByEmail(
 /** Inserts an account. Returns false if the email is taken. */
 export async function insertAccount(
   db: D1Database,
-  account: Omit<AccountRecord, 'version'>,
+  account: Omit<AccountRecord, 'version' | 'smartFeatures'>,
   now: number,
 ): Promise<boolean> {
   const result = await db
@@ -73,6 +88,25 @@ export async function updateKeyring(
 /** Changes the account's name. */
 export async function updateName(db: D1Database, accountId: string, name: string): Promise<void> {
   await db.prepare('UPDATE accounts SET name = ? WHERE id = ?').bind(name, accountId).run();
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Keeps the answer to the smart features question, with the day it was given (to the day,
+ * like other times we keep, so it can't be lined up with other records).
+ */
+export async function updateSmartFeatures(
+  db: D1Database,
+  accountId: string,
+  answer: SmartFeaturesChoice,
+  now: number,
+): Promise<void> {
+  const day = now - (now % DAY_MS);
+  await db
+    .prepare('UPDATE accounts SET smart_choice = ?, smart_version = ?, smart_at = ? WHERE id = ?')
+    .bind(answer.choice, answer.version, day, accountId)
+    .run();
 }
 
 /**
@@ -131,7 +165,7 @@ export function sessionAccountQuery(
 ): D1PreparedStatement {
   return db
     .prepare(
-      `SELECT a.id, a.email, a.name, a.keyring, a.version
+      `SELECT ${ACCOUNT_COLUMNS}
          FROM sessions s JOIN accounts a ON a.id = s.account_id
         WHERE s.token_hash = ? AND s.expires_at > ?`,
     )
@@ -221,7 +255,7 @@ export async function findSession(
 ): Promise<SessionRecord | null> {
   const row = await db
     .prepare(
-      `SELECT a.id, a.email, a.name, a.keyring, a.version, s.last_active
+      `SELECT ${ACCOUNT_COLUMNS}, s.last_active
          FROM sessions s JOIN accounts a ON a.id = s.account_id
         WHERE s.token_hash = ? AND s.expires_at > ?`,
     )

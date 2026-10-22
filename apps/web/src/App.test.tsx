@@ -34,6 +34,22 @@ function heading(html: string): string | undefined {
 }
 
 describe('App', () => {
+  it('asks the smart features question once, in either space, until it is answered', () => {
+    const unanswered = { ...testAccount(), smartFeatures: null };
+    const asked = 'downloads some resources';
+    expect(render('/photos', mainSession(unanswered))).toContain(asked);
+    expect(render('/photos', privateSession(unanswered))).toContain(asked);
+    expect(render('/photos', mainSession())).not.toContain(asked);
+    const older = { ...testAccount(), smartFeatures: { choice: 'on' as const, version: 0 } };
+    expect(render('/photos', mainSession(older))).toContain(asked);
+  });
+
+  it('never asks the smart features question while locked or signed out', () => {
+    const unanswered = { ...testAccount(), smartFeatures: null };
+    const locked: AccountState = { status: 'locked', account: unanswered };
+    expect(render('/unlock', locked)).not.toContain('downloads some resources');
+  });
+
   it.each([
     ['/photos', 'Photos'],
     ['/albums', 'Albums'],

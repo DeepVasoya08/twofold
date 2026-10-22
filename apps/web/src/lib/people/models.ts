@@ -34,7 +34,7 @@ export const MODEL_FILES: ModelFiles = {
 export const MODEL_DOWNLOAD_MB = 14;
 
 export class ModelError extends Error {
-  constructor(message = 'The face models couldn’t be loaded.') {
+  constructor(message = 'Some resources face grouping needs couldn’t be downloaded.') {
     super(message);
     this.name = 'ModelError';
   }
@@ -45,7 +45,7 @@ async function fetchChecked(file: ModelFile, load: typeof fetch): Promise<Uint8A
   if (!response?.ok) throw new ModelError();
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (toBase64Url(await sha256(bytes)) !== file.sha256) {
-    throw new ModelError('A face model file didn’t match the one Twofold was built with.');
+    throw new ModelError('A downloaded resource didn’t match the one Twofold was built with.');
   }
   return bytes;
 }

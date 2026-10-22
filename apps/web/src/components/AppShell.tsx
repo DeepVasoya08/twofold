@@ -12,6 +12,7 @@ import { DownloadProgress } from './DownloadProgress';
 import { Icon } from './Icon';
 import { InviteRequests } from './Invites';
 import type { IconName } from './Icon';
+import { SmartFeaturesPrompt } from './SmartFeaturesPrompt';
 import { StorageMeter } from './StorageMeter';
 import { UploadDialog } from './UploadDialog';
 import { UploadProgress } from './UploadProgress';
@@ -168,6 +169,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
 
       <UploadDialog albumId={uploadTarget} />
       <DownloadDialog />
+      <SmartFeaturesPrompt />
       <div className="status-cards">
         <UploadProgress />
         <DownloadProgress />
