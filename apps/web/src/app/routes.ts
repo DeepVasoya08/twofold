@@ -22,6 +22,8 @@ export type Route =
   | { name: 'join'; token: string }
   /** Typing in an invite code someone sent. */
   | { name: 'join-code' }
+  /** A hidden page that measures how fast this device runs Smart search. */
+  | { name: 'speed-test' }
   | { name: 'not-found' };
 
 export const paths = {
@@ -51,6 +53,7 @@ export const paths = {
   join: (token: string) => `/join/${token}`,
   /** Where an invite code is typed in. */
   joinCode: '/join',
+  speedTest: '/lab/speed',
 } as const;
 
 /** An invite link token: 128 bits, unpadded base64url. */
@@ -95,6 +98,7 @@ const staticRoutes: Record<string, Route> = {
   '/settings': { name: 'settings' },
   '/settings/share': { name: 'share' },
   '/join': { name: 'join-code' },
+  '/lab/speed': { name: 'speed-test' },
 };
 
 function decodeSegment(segment: string): string | null {

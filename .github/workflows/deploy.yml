@@ -57,6 +57,16 @@ jobs:
         working-directory: apps/api
         run: pnpm exec wrangler d1 migrations apply DB --remote
 
+      # Smart search's resources are too big to commit. build.py downloads a pinned export,
+      # converts it and checks the result against the hashes the app pins
+      # (apps/web/scripts/search-resources/README.md).
+      - name: Build Smart search resources
+        working-directory: apps/web
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -r scripts/search-resources/requirements.txt
+          .venv/bin/python scripts/search-resources/build.py public/resources/search "$RUNNER_TEMP/search-resources"
+
       - name: Build web app
         run: pnpm --filter @twofold/web run build
 

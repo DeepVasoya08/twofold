@@ -1,0 +1,53 @@
+.speed-test {
+  display: grid;
+  gap: 16px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 32px 16px;
+}
+
+.speed-test__title {
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: 600;
+}
+
+.speed-test__text,
+.speed-test__status {
+  color: var(--text-2);
+}
+
+.speed-test__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.speed-test__modes legend {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.speed-test__mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.speed-test__results {
+  display: grid;
+  gap: 12px;
+}
+
+.speed-test__report {
+  overflow-x: auto;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

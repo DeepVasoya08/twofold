@@ -17,6 +17,7 @@ export function redirectFor(
   const next = parseNext(options.search ?? '');
   switch (route.name) {
     case 'not-found':
+    case 'speed-test':
     case 'privacy':
     case 'terms':
       return null;

@@ -9,8 +9,13 @@ It deploys the exact commit CI tested, in this order:
 1. Writes the `D1_DATABASE_ID` variable into `apps/api/wrangler.jsonc` (the committed
    file holds a placeholder).
 2. Applies D1 migrations (`wrangler d1 migrations apply DB --remote`).
-3. Builds the web app into `apps/web/dist`.
-4. Deploys the `twofold` Worker (`wrangler deploy` in `apps/api`), which uploads the web
+3. Builds Smart search's resources: downloads a pinned ONNX export from Hugging Face
+   (about 600 MB), converts it with Python and checks the result against the SHA-256 the
+   app pins, then writes 24 MiB chunks into `apps/web/public/resources/search`
+   ([README](../apps/web/scripts/search-resources/README.md)).
+4. Builds the web app into `apps/web/dist`. The build fails if any file is over the
+   25 MiB static asset limit.
+5. Deploys the `twofold` Worker (`wrangler deploy` in `apps/api`), which uploads the web
    app's assets and the API code together. One deploy updates both, so the web app and
    the API can never be out of step.
 
@@ -120,6 +125,7 @@ The Deploy run's "Deploy Worker" step prints the Worker URL
 | `Repository variable D1_DATABASE_ID is not set`                            | Add it on the **Variables** tab (step 3), not as a secret.                                      |
 | `The directory specified by the "assets.directory" field … does not exist` | The web build step did not run or failed; check the "Build web app" step.                       |
 | `Authentication error [code: 10000]`                                       | The token lacks a permission from step 2, or the account ID does not match the token's account. |
+| `SHA-256 does not match the pinned source` (Build Smart search resources)  | The download changed or was cut short. Re-run; if it repeats, the pinned export moved.          |
 
 After fixing any of these, re-run the failed Deploy run; no new commit is needed.
 

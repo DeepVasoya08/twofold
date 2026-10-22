@@ -13,3 +13,6 @@ test-results/
 blob-report/
 .DS_Store
 .prerender/
+apps/web/public/resources/search/
+.venv/
+__pycache__/
