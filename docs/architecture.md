@@ -28,6 +28,10 @@ everything from one origin, so there is no CORS and the CSP can stay at
   `lib/thumbnail-worker.ts` (an OffscreenCanvas), and face grouping runs its two ONNX
   models (YuNet, SFace) with ONNX Runtime Web's WebAssembly backend in
   `lib/people/face-worker.ts`. The model files are bundled assets, pinned by SHA-256.
+  Smart search's two resources (OpenCLIP ViT-B/32, about 89 MB and 65 MB) are built at
+  deploy time and served as 24 MiB chunks from `/resources/search/`; `lib/search/resources.ts`
+  joins them and checks the pinned SHA-256. A hidden page, `/lab/speed`, times them on the
+  device it's opened on, with made-up inputs, so they can be tuned on real phones.
 - **apps/api** — the Worker code: a Hono app mounted at `/api`, and the app shell
   fallback (`src/app-shell.ts`). `/api/*` requests always run Worker code
   (`run_worker_first`); other paths are answered from assets when a file matches, and

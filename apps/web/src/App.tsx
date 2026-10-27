@@ -23,6 +23,7 @@ import { RecoveryKey } from './screens/RecoveryKey';
 import { Settings } from './screens/Settings';
 import { Share } from './screens/Share';
 import { SignUp } from './screens/SignUp';
+import { SpeedTest } from './screens/SpeedTest';
 import { Terms } from './screens/Terms';
 import { Unlock } from './screens/Unlock';
 import { Welcome } from './screens/Welcome';
@@ -48,6 +49,7 @@ const titles: Record<Route['name'], string> = {
   share: 'Share · Twofold',
   join: 'Invite · Twofold',
   'join-code': 'Enter an invite code · Twofold',
+  'speed-test': 'Speed test · Twofold',
   'not-found': 'Not found · Twofold',
 };
 
@@ -71,6 +73,8 @@ function Screen({ route }: { route: Route }) {
       return <Recover />;
     case 'photo':
       return <PhotoViewer photoId={route.photoId} />;
+    case 'speed-test':
+      return <SpeedTest />;
     case 'not-found':
       return <NotFound />;
     case 'gallery':

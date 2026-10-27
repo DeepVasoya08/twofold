@@ -1,0 +1,6 @@
+# Build-time only: turns the pinned ONNX export into Smart search's resources (build.py).
+onnx==1.23.2
+numpy==2.5.4
+protobuf==7.36.2
+ml_dtypes==0.6.0
+typing_extensions==4.16.0

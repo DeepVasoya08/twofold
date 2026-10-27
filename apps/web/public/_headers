@@ -8,3 +8,7 @@
   X-Frame-Options: DENY
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Cross-Origin-Opener-Policy: same-origin
+
+# Smart search's resources: names carry the file's hash, so they never change.
+/resources/*
+  Cache-Control: public, max-age=31536000, immutable
