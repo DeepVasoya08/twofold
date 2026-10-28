@@ -1,12 +1,15 @@
 """Usage: python build.py OUT_DIR [CACHE_DIR]
 
-Builds Smart search's two resources (the photo and text halves of OpenCLIP ViT-B/32,
-LAION-2B weights, MIT licence) and writes them to OUT_DIR as chunks the Worker can serve.
+Builds Smart search's resources (the photo and text halves of OpenCLIP ViT-B/32,
+LAION-2B weights, MIT licence, and the text half's word list) and writes them to OUT_DIR as
+chunks the Worker can serve.
 
 1. Downloads the ONNX export at a pinned revision and checks its SHA-256.
 2. Stores the weights as 8-bit numbers (see weight_only_int8.py in ../face-models).
 3. Checks the result's SHA-256 against the value the app pins (src/lib/search/resources.ts).
 4. Splits each file into chunks below the 25 MiB static asset limit.
+
+The word list (the tokenizer's merges.txt) is used as it is: steps 2 and 4 don't change it.
 """
 import hashlib
 import os
@@ -28,6 +31,12 @@ FILES = {
         'source': 'textual/model.onnx',
         'source_sha256': '48c25be37b352398f2533c9426dab6f9340535e14e46f884cc894236a5060722',
         'sha256': 'a5136c3569a8f2ea25bcc88c010bafb1ab390f00c4d1cf502b52288698e2ec1a',
+    },
+    'words': {
+        'source': 'textual/merges.txt',
+        'source_sha256': '9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a',
+        'sha256': '9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a',
+        'quantize': False,
     },
 }
 
@@ -54,11 +63,14 @@ def main():
     os.makedirs(out, exist_ok=True)
     os.makedirs(cache, exist_ok=True)
     for name, spec in FILES.items():
-        source = os.path.join(cache, f'{name}-source.onnx')
+        source = os.path.join(cache, f"{name}-source{os.path.splitext(spec['source'])[1]}")
         fetch(f"{REPO}/{spec['source']}", source, spec['source_sha256'])
-        built = os.path.join(cache, f'{name}-w8.onnx')
-        if not (os.path.exists(built) and sha256(built) == spec['sha256']):
-            quantize(source, built)
+        if spec.get('quantize', True):
+            built = os.path.join(cache, f'{name}-w8.onnx')
+            if not (os.path.exists(built) and sha256(built) == spec['sha256']):
+                quantize(source, built)
+        else:
+            built = source
         if sha256(built) != spec['sha256']:
             sys.exit(f'{name}: the built file does not match the SHA-256 the app pins')
         with open(built, 'rb') as f:

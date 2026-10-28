@@ -21,6 +21,9 @@ import { workerFaceFinder } from '../lib/people/face-finder';
 import type { FaceFinder, FaceWorker } from '../lib/people/face-finder';
 import { workerPhotoEncoder } from '../lib/search/photo-encoder';
 import type { EncoderWorker, PhotoEncoder } from '../lib/search/photo-encoder';
+import { workerQueryEncoder } from '../lib/search/query-encoder';
+import type { QueryEncoder } from '../lib/search/query-encoder';
+import { FindProvider } from './find';
 import { SearchProvider } from './search';
 import { memorySearchStore, remoteSearchStore } from './search-store';
 import { VaultProvider, emptyVaults } from './vault';
@@ -67,6 +70,19 @@ function startEncoder(onProgress: (received: number, total: number) => void): Ph
       lazyWorker(() =>
         import('../lib/search/spawn-encoder-worker').then(({ spawnEncoderWorker }) =>
           spawnEncoderWorker(),
+        ),
+      ),
+    onProgress,
+  );
+}
+
+/** Turns typed queries into search vectors in a Web Worker, loaded on the first search. */
+function startQueryEncoder(onProgress: (received: number, total: number) => void): QueryEncoder {
+  return workerQueryEncoder(
+    () =>
+      lazyWorker(() =>
+        import('../lib/search/spawn-query-worker').then(({ spawnQueryWorker }) =>
+          spawnQueryWorker(),
         ),
       ),
     onProgress,
@@ -122,10 +138,14 @@ function OpenVault({
                   store={searchStore}
                   makeEncoder={session && !initialVault ? startEncoder : null}
                 >
-                  <DownloadsProvider>
-                    <IdleLock />
-                    {children}
-                  </DownloadsProvider>
+                  <FindProvider
+                    makeQueryEncoder={session && !initialVault ? startQueryEncoder : null}
+                  >
+                    <DownloadsProvider>
+                      <IdleLock />
+                      {children}
+                    </DownloadsProvider>
+                  </FindProvider>
                 </SearchProvider>
               </PeopleProvider>
             </UploadsProvider>

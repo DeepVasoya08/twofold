@@ -479,6 +479,13 @@ so photos can later be found by describing them. The server stores only cipherte
   Each member works out vectors on their own device, into their own space.
 - **Deleting.** Settings → Search → "Delete search data" removes every segment for the open
   space (`DELETE /api/space/search-data`), and wiping a space removes them too.
+- **Searching.** Queries are read and turned into vectors on the device: the text half
+  (and its word list, `merges.txt`) is served and pinned like the photo half, downloaded on
+  the first search with words, and runs in its own worker. A query is never sent anywhere,
+  never put in the URL (so it can't land in browser history; the viewer's link only says
+  `from=search`) and never saved; it lives in memory until lock. The search box asks the
+  browser not to autocomplete. A search only ever sees the open space's photos, people and
+  vectors.
 - **Trade-off.** A vector says roughly what a photo shows (a beach, a dog, two people). It
   never leaves the device unencrypted, but anyone with the space key can read it, the same
   as the photos.

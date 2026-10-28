@@ -94,8 +94,9 @@ export function Privacy() {
       <p>
         Smart search lets you find photos by describing them. Your device works out what each photo
         shows, and that is encrypted there before it’s stored, so we can’t read it. It uses no face
-        data. It’s on unless you turn it off on a device in Settings, where you can also delete all
-        search data for a space.
+        data. What you search for is read on your device too: it’s never sent to us or saved. It’s
+        on unless you turn it off on a device in Settings, where you can also delete all search data
+        for a space.
       </p>
       <h3>Security</h3>
       <p>

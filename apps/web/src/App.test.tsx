@@ -56,6 +56,7 @@ describe('App', () => {
     ['/albums/kyoto', 'Kyoto in autumn'],
     ['/albums/missing', 'Album not found'],
     ['/favorites', 'Favorites'],
+    ['/search', 'Search'],
     ['/settings', 'Settings'],
     ['/settings/share', 'Share your library'],
     ['/nowhere', 'This page wandered off'],

@@ -1,0 +1,80 @@
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 720px;
+  padding: 6px 6px 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+}
+
+.search-box:focus-within {
+  border-color: var(--accent);
+}
+
+.search-box__input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+}
+
+.search-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.search-chip:hover {
+  border-color: var(--border-strong);
+}
+
+.search-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.search-note progress {
+  flex: 1 1 160px;
+  accent-color: var(--accent);
+}
+
+.search-count {
+  margin: 24px 0 12px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.search-more {
+  display: block;
+  margin: 24px auto 0;
+}

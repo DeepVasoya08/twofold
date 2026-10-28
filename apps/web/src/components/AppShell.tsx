@@ -20,12 +20,26 @@ import { UploadProgress } from './UploadProgress';
 
 import './app-shell.css';
 
-const nav: { to: string; label: string; icon: IconName; match: (path: string) => boolean }[] = [
+const nav: {
+  to: string;
+  label: string;
+  icon: IconName;
+  match: (path: string) => boolean;
+  /** Left out of the phone tab bar, which has a button in the top bar instead. */
+  noTab?: boolean;
+}[] = [
   {
     to: paths.gallery,
     label: 'Photos',
     icon: 'photos',
     match: (path) => path === paths.gallery || path.startsWith(`${paths.gallery}/`),
+  },
+  {
+    to: paths.search,
+    label: 'Search',
+    icon: 'search',
+    match: (path) => path === paths.search,
+    noTab: true,
   },
   {
     to: paths.albums,
@@ -132,6 +146,9 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
           {isPrivate && <PrivatePill />}
         </div>
         <div className="shell__topbar-actions">
+          <Link to={paths.search} className="icon-btn" aria-label="Search">
+            <Icon name="search" />
+          </Link>
           <button type="button" className="icon-btn" onClick={lock} aria-label="Lock Twofold">
             <Icon name="lock" />
           </button>
@@ -152,20 +169,22 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
       </main>
 
       <nav className="shell__tabs" aria-label="Main">
-        {nav.map((item) => {
-          const active = item.match(pathname);
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={`shell__tab${active ? ' is-active' : ''}`}
-              aria-current={active ? 'page' : undefined}
-            >
-              <Icon name={item.icon} size={22} filled={active && item.icon === 'heart'} />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+        {nav
+          .filter((item) => !item.noTab)
+          .map((item) => {
+            const active = item.match(pathname);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`shell__tab${active ? ' is-active' : ''}`}
+                aria-current={active ? 'page' : undefined}
+              >
+                <Icon name={item.icon} size={22} filled={active && item.icon === 'heart'} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
       </nav>
 
       <UploadDialog albumId={uploadTarget} />

@@ -20,6 +20,7 @@ import { PhotoViewer } from './screens/PhotoViewer';
 import { Privacy } from './screens/Privacy';
 import { Recover } from './screens/Recover';
 import { RecoveryKey } from './screens/RecoveryKey';
+import { Search } from './screens/Search';
 import { Settings } from './screens/Settings';
 import { Share } from './screens/Share';
 import { SignUp } from './screens/SignUp';
@@ -42,6 +43,7 @@ const titles: Record<Route['name'], string> = {
   albums: 'Albums · Twofold',
   album: 'Album · Twofold',
   favorites: 'Favorites · Twofold',
+  search: 'Search · Twofold',
   people: 'People · Twofold',
   person: 'People · Twofold',
   photo: 'Photo · Twofold',
@@ -99,6 +101,12 @@ function Screen({ route }: { route: Route }) {
       return (
         <AppShell>
           <Favorites />
+        </AppShell>
+      );
+    case 'search':
+      return (
+        <AppShell>
+          <Search />
         </AppShell>
       );
     case 'people':
