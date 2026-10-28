@@ -103,6 +103,34 @@ describe('downloadResource', () => {
       downloadResource(resource, undefined, { load: offline, chunkBytes: SMALL }),
     ).rejects.toThrow(ResourceError);
   });
+
+  it('lets go of a response it refuses, so the request doesn’t stay open', async () => {
+    const { resource, whole } = await fake(1000);
+    let cancelled = 0;
+    const answer =
+      (status: number, body: Uint8Array): typeof fetch =>
+      () => {
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(body);
+          },
+          cancel() {
+            cancelled++;
+          },
+        });
+        return Promise.resolve(new Response(stream, { status }));
+      };
+    const once = { chunkBytes: 4096 };
+    await expect(
+      downloadResource(resource, undefined, { ...once, load: answer(404, whole) }),
+    ).rejects.toThrow(ResourceError);
+    const longer = new Uint8Array(1001);
+    longer.set(whole);
+    await expect(
+      downloadResource(resource, undefined, { ...once, load: answer(200, longer) }),
+    ).rejects.toThrow('didn’t match');
+    expect(cancelled).toBe(2);
+  });
 });
 
 describe('resourceCached', () => {

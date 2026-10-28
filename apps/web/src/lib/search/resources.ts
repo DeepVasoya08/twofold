@@ -72,14 +72,21 @@ export async function downloadResource(
   let received = 0;
   for (const url of chunkUrls(resource, chunkBytes)) {
     const response = await load(url).catch(() => null);
-    if (!response?.ok || !response.body) throw new ResourceError();
+    if (!response?.ok || !response.body) {
+      // An unread body keeps the request open, so let it go.
+      await response?.body?.cancel().catch(() => undefined);
+      throw new ResourceError();
+    }
     const reader = response.body.getReader();
     for (;;) {
       const { done, value } = await reader.read().catch(() => {
         throw new ResourceError();
       });
       if (done) break;
-      if (received + value.length > resource.size) throw new ResourceError(MISMATCH);
+      if (received + value.length > resource.size) {
+        await reader.cancel().catch(() => undefined);
+        throw new ResourceError(MISMATCH);
+      }
       bytes.set(value, received);
       received += value.length;
       onProgress(received);
