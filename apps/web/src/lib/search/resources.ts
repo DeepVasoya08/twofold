@@ -1,6 +1,6 @@
 /**
- * Smart search's two resources: the photo and text halves of OpenCLIP ViT-B/32 (LAION-2B
- * weights, MIT licence), stored as 8-bit weights. They're too big for one static asset
+ * Smart search's resources: the photo and text halves of OpenCLIP ViT-B/32 (LAION-2B
+ * weights, MIT licence), stored as 8-bit weights, and the text half's word list. They're too big for one static asset
  * (the limit is 25 MiB), so scripts/search-resources/build.py splits each into chunks that
  * are served from Twofold's own origin like the rest of the app. The whole file is checked
  * against the SHA-256 pinned here before it's used, so a changed chunk is never run.
@@ -34,6 +34,12 @@ export const SEARCH_RESOURCES = {
     name: 'text-a5136c3569a8',
     size: 64_807_819,
     sha256: 'pRNsNWmo8uolvMiMAQuvsas5DwDE0c9QK1Iohpji7Bo',
+  },
+  /** How typed words are split into the pieces the text half knows (tokenizer.ts). */
+  words: {
+    name: 'words-9fd691f7c803',
+    size: 524_619,
+    sha256: 'n9aR98gDkhDg_O0VhlRmxlgg0JtjmIsBdL_iXeKZBRo',
   },
 } as const satisfies Record<string, SearchResource>;
 

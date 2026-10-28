@@ -18,6 +18,7 @@ describe('matchRoute', () => {
     ['/photos/', 'gallery'],
     ['/albums', 'albums'],
     ['/favorites', 'favorites'],
+    ['/search', 'search'],
     ['/people', 'people'],
     ['/settings', 'settings'],
     ['/settings/share', 'share'],
@@ -51,6 +52,12 @@ describe('photo context', () => {
   it('omits the query for the full timeline', () => {
     expect(paths.photo('p1')).toBe('/photos/p1');
     expect(paths.photo('p1', { kind: 'all' })).toBe('/photos/p1');
+  });
+
+  it('round-trips the search context, which names no query', () => {
+    const found = paths.photo('p1', { kind: 'search' });
+    expect(found).toBe('/photos/p1?from=search');
+    expect(parsePhotoContext(found.slice(found.indexOf('?')))).toEqual({ kind: 'search' });
   });
 
   it('round-trips favorites and album contexts', () => {

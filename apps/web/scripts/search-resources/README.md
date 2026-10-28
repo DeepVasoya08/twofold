@@ -20,6 +20,10 @@ commit, so `build.py` makes them at deploy time:
 | -------- | ---------- | ------------------------------------------------------------------ |
 | Photo    | 88,985,490 | `eea088f1c6f18bd3e8dfffa1471a0713e972760341e048cfcec1b4f81f713c71` |
 | Text     | 64,807,819 | `a5136c3569a8f2ea25bcc88c010bafb1ab390f00c4d1cf502b52288698e2ec1a` |
+| Words    | 524,619    | `9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a` |
+
+Words is the text half's `merges.txt`, used as it is: `src/lib/search/tokenizer.ts` builds
+CLIP's tokenizer from it.
 
 To build them locally (needs Python 3 and about 1 GB of disk for the download):
 

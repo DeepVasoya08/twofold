@@ -5,6 +5,7 @@ import type { SpaceKeys } from '@twofold/crypto';
 
 import { useAccount, useMe } from '../app/account';
 import { errorMessage } from '../app/account-ops';
+import { useFind } from '../app/find';
 import { useGroupPhotoIds } from '../app/people';
 import { Link, useRouter } from '../app/router';
 import { parsePhotoContext, paths } from '../app/routes';
@@ -24,18 +25,22 @@ import { useZoom } from './use-zoom';
 
 import './photo-viewer.css';
 
-/** The photos the viewer steps through. A person's come from `groupPhotoIds`, in order. */
+/**
+ * The photos the viewer steps through. A person's come from `listedIds`, in order, and so
+ * do a search's.
+ */
 export function photosInContext(
   state: VaultState,
   context: PhotoContext,
-  groupPhotoIds: readonly string[] | null = null,
+  listedIds: readonly string[] | null = null,
 ): Photo[] {
   switch (context.kind) {
     case 'album':
       return albumPhotos(state, context.albumId);
-    case 'person': {
+    case 'person':
+    case 'search': {
       const byId = new Map(state.photos.map((photo) => [photo.id, photo]));
-      return (groupPhotoIds ?? []).flatMap((id) => {
+      return (listedIds ?? []).flatMap((id) => {
         const photo = byId.get(id);
         return photo ? [photo] : [];
       });
@@ -55,6 +60,8 @@ function closeTarget(context: PhotoContext): string {
       return paths.favorites;
     case 'person':
       return paths.person(context.groupId);
+    case 'search':
+      return paths.search;
     case 'all':
       return paths.gallery;
   }
@@ -75,7 +82,12 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
 
   const context = parsePhotoContext(search);
   const groupPhotoIds = useGroupPhotoIds(context.kind === 'person' ? context.groupId : null);
-  const list = photosInContext(state, context, groupPhotoIds);
+  const { shownIds } = useFind();
+  const list = photosInContext(
+    state,
+    context,
+    context.kind === 'search' ? shownIds : groupPhotoIds,
+  );
   // A photo un-favorited from the favorites view is no longer in that list; keep showing it.
   const photo = state.photos.find((candidate) => candidate.id === photoId);
   const index = list.findIndex((candidate) => candidate.id === photoId);

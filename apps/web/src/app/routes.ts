@@ -12,6 +12,8 @@ export type Route =
   | { name: 'albums' }
   | { name: 'album'; albumId: string }
   | { name: 'favorites' }
+  /** The query is never in the URL, so it can't end up in the browser's history. */
+  | { name: 'search' }
   | { name: 'people' }
   /** One person, or a group of faces nobody has named yet. */
   | { name: 'person'; groupId: string }
@@ -39,6 +41,7 @@ export const paths = {
   albums: '/albums',
   album: (albumId: string) => `/albums/${encodeURIComponent(albumId)}`,
   favorites: '/favorites',
+  search: '/search',
   people: '/people',
   person: (groupId: string) => `/people/${encodeURIComponent(groupId)}`,
   photo: (photoId: string, from?: PhotoContext) => {
@@ -94,6 +97,7 @@ const staticRoutes: Record<string, Route> = {
   '/photos': { name: 'gallery' },
   '/albums': { name: 'albums' },
   '/favorites': { name: 'favorites' },
+  '/search': { name: 'search' },
   '/people': { name: 'people' },
   '/settings': { name: 'settings' },
   '/settings/share': { name: 'share' },
@@ -137,6 +141,8 @@ export function matchRoute(pathname: string): Route {
 export type PhotoContext =
   | { kind: 'all' }
   | { kind: 'favorites' }
+  /** The last search's results, held in memory: the URL only says "search". */
+  | { kind: 'search' }
   | { kind: 'album'; albumId: string }
   | { kind: 'person'; groupId: string };
 
@@ -154,6 +160,7 @@ function formatContext(context: PhotoContext): string {
 export function parsePhotoContext(search: string): PhotoContext {
   const from = new URLSearchParams(search).get('from');
   if (from === 'favorites') return { kind: 'favorites' };
+  if (from === 'search') return { kind: 'search' };
   if (from?.startsWith('album:')) {
     const albumId = decodeSegment(from.slice('album:'.length));
     if (albumId) return { kind: 'album', albumId };

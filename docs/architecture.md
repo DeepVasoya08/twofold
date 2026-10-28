@@ -28,11 +28,13 @@ everything from one origin, so there is no CORS and the CSP can stay at
   `lib/thumbnail-worker.ts` (an OffscreenCanvas), and face grouping runs its two ONNX
   models (YuNet, SFace) with ONNX Runtime Web's WebAssembly backend in
   `lib/people/face-worker.ts`. The model files are bundled assets, pinned by SHA-256.
-  Smart search's two resources (OpenCLIP ViT-B/32, about 89 MB and 65 MB) are built at
+  Smart search's two halves (OpenCLIP ViT-B/32, about 89 MB and 65 MB) are built at
   deploy time and served as 24 MiB chunks from `/resources/search/`; `lib/search/resources.ts`
   joins them and checks the pinned SHA-256. The photo half runs in
   `lib/search/encoder-worker.ts`, on the same WebAssembly backend; it loads the fast way
   and starts again the low-memory way if that runs out of memory (`photo-encoder.ts`).
+  The text half runs in `lib/search/query-worker.ts`, with CLIP's tokenizer written out in
+  `tokenizer.ts` and built from a third resource, the word list (`merges.txt`, 0.5 MB).
   Face grouping and Smart search share the background scan in `lib/background-scan.ts`.
   A hidden page, `/lab/speed`, times them on the device it's opened on, with made-up
   inputs, so they can be tuned on real phones.

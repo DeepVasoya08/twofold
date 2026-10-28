@@ -167,8 +167,29 @@ the download with a Pause button, the Wi-Fi wait, or what went wrong with "Try a
 nothing shows while photos are looked at. Text says "resources", never models.
 
 Settings → Search shows how far it has got ("120 of 900 photos ready to search"), turns it
-off on this device, or deletes all search data for the open space. Searching itself comes
-next.
+off on this device, or deletes all search data for the open space.
+
+## Search
+
+`/search` (Search in the sidebar; the magnifier in the phone's top bar) has one box. A
+search is read by a small parser (`lib/search/query.ts`) into who, when and what:
+
+- **Who**: names from People, "me"/"my" (whoever is marked "This is me"), "us"/"we" (me and
+  at least one other person) and "friends", "family" or "work" when someone has that label.
+  Typing "me" with nobody marked shows a note pointing to People.
+- **When**: a year, a month ("in December", any year), a month and year, today, yesterday,
+  and this or last week, month or year.
+- **What**: everything else, minus words like "photos", ranked by Smart search.
+
+Who and when filter the open space's photos; what ranks them (`lib/search/find.ts`). Each
+part shows as a chip; tapping one off searches again without it, and its words go back to
+being words. Results come as best matches, with "Show N more" for weaker ones. Opening a
+result steps through the results; closing comes back to the same search.
+
+The first search with words downloads the text half (about 65 MB, once), with a progress
+line that says "resources". Once it's loaded on a quick device, results follow the typing;
+otherwise they come on Enter. With Smart search off, people and dates still work and words
+explain how to turn it on. The query is never put in the URL or saved; locking forgets it.
 
 ## Accounts and locking
 
