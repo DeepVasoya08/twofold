@@ -1,8 +1,9 @@
 /**
  * Reads a typed search the way people write them: "us on the beach", "my photos with
  * Estrella", "Estrella's birthday last year". It splits the words into who (people from
- * People, "me", "us", labels), when (dates) and what (everything else, which CLIP ranks).
- * Who and when become filters; what becomes the CLIP query. It's a few rules, not a model,
+ * People, "me", "us", labels), when (dates), words taught to search ("Biscuit") and what
+ * (everything else, which CLIP ranks). Who, when and taught words become filters; what
+ * becomes the CLIP query. It's a few rules, not a model,
  * so it's quick and predictable, and each thing it understood is shown as a chip that can
  * be tapped off: the words then go back to being ordinary words.
  */
@@ -16,6 +17,12 @@ export interface NamedPerson {
   labels: readonly PersonLabel[];
 }
 
+/** A word taught to search, as the parser needs it. */
+export interface NamedWord {
+  id: string;
+  name: string;
+}
+
 /** A stretch of time: from (inclusive) to (exclusive), in the device's time zone. */
 export type When =
   | { kind: 'range'; from: Date; to: Date; label: string }
@@ -27,6 +34,8 @@ export type Chip =
   | { key: 'me'; kind: 'me'; label: string }
   | { key: 'us'; kind: 'us'; label: string }
   | { key: string; kind: 'label'; group: PersonLabel; label: string }
+  | { key: string; kind: 'word'; wordId: string; label: string }
+  | { key: 'like'; kind: 'like'; label: string }
   | { key: 'when'; kind: 'when'; label: string }
   | { key: 'what'; kind: 'what'; label: string };
 
@@ -39,6 +48,10 @@ export interface ParsedQuery {
   us: boolean;
   /** For each label, someone with it must be in the photo. */
   labels: PersonLabel[];
+  /** Taught words whose look the photo must have. */
+  taught: string[];
+  /** A photo the results must look like ("More like this"), or null. */
+  like: string | null;
   when: When | null;
   /** What's left for CLIP to rank by, or empty to rank by date only. */
   what: string;
@@ -197,37 +210,61 @@ function readDate(
   return null;
 }
 
-/** Each person's name as words, longest names first, so "Ana Maria" beats "Ana". */
-function nameMatchers(people: readonly NamedPerson[]): { words: string[]; person: NamedPerson }[] {
-  return people
-    .flatMap((person) => {
-      const words = queryWords(person.name).map(withoutPossessive);
-      return words.length > 0 ? [{ words, person }] : [];
+type Named = { kind: 'person'; person: NamedPerson } | { kind: 'word'; word: NamedWord };
+
+/**
+ * Each person's and taught word's name as words, longest names first, so "Ana Maria" beats
+ * "Ana".
+ */
+function nameMatchers(
+  people: readonly NamedPerson[],
+  taught: readonly NamedWord[],
+): { words: string[]; key: string; named: Named }[] {
+  const named: Named[] = [
+    ...people.map((person) => ({ kind: 'person' as const, person })),
+    ...taught.map((word) => ({ kind: 'word' as const, word })),
+  ];
+  return named
+    .flatMap((each) => {
+      const name = each.kind === 'person' ? each.person.name : each.word.name;
+      const key = each.kind === 'person' ? `person:${each.person.id}` : `word:${each.word.id}`;
+      const words = queryWords(name).map(withoutPossessive);
+      return words.length > 0 ? [{ words, key, named: each }] : [];
     })
     .sort((a, b) => b.words.length - a.words.length);
 }
 
 /**
  * Reads `text`. `ignore` holds the keys of chips tapped off: those parts aren't read as
- * filters, and their words are left for CLIP.
+ * filters, and their words are left for CLIP. `like` is a photo the results must look like.
  */
 export function parseQuery(
   text: string,
   {
     people,
+    words: taught = [],
+    like = null,
     now,
     ignore = new Set(),
-  }: { people: readonly NamedPerson[]; now: Date; ignore?: ReadonlySet<string> },
+  }: {
+    people: readonly NamedPerson[];
+    words?: readonly NamedWord[];
+    like?: string | null;
+    now: Date;
+    ignore?: ReadonlySet<string>;
+  },
 ): ParsedQuery {
   const words = queryWords(text);
   const me = people.find((person) => person.me);
-  const names = nameMatchers(people);
+  const names = nameMatchers(people, taught);
   const labelled = new Set(people.flatMap((person) => person.labels));
   const parsed: ParsedQuery = {
     people: [],
     me: false,
     us: false,
     labels: [],
+    taught: [],
+    like: null,
     when: null,
     what: '',
     chips: [],
@@ -237,6 +274,10 @@ export function parseQuery(
   const addChip = (chip: Chip) => {
     if (!parsed.chips.some((each) => each.key === chip.key)) parsed.chips.push(chip);
   };
+  if (like !== null && !ignore.has('like')) {
+    parsed.like = like;
+    addChip({ key: 'like', kind: 'like', label: 'Like this photo' });
+  }
 
   for (let at = 0; at < words.length;) {
     const word = words[at] ?? '';
@@ -255,11 +296,18 @@ export function parseQuery(
 
     const name = names.find(
       (each) =>
-        !ignore.has(`person:${each.person.id}`) &&
+        !ignore.has(each.key) &&
         each.words.every((part, offset) => withoutPossessive(words[at + offset] ?? '') === part),
     );
+    if (name?.named.kind === 'word') {
+      const { word } = name.named;
+      if (!parsed.taught.includes(word.id)) parsed.taught.push(word.id);
+      addChip({ key: name.key, kind: 'word', wordId: word.id, label: word.name });
+      at += name.words.length;
+      continue;
+    }
     if (name) {
-      const { person } = name;
+      const { person } = name.named;
       if (person.me && !ignore.has('me')) {
         parsed.me = true;
         addChip({ key: 'me', kind: 'me', label: 'You' });

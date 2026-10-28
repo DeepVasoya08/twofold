@@ -6,6 +6,7 @@ import { aboutPerson } from './People';
 import { sharedWithLine } from './Settings';
 import { isInviteCode, normalizeInviteCode, parseInviteInput } from './JoinCode';
 import { countWords } from './Recover';
+import { notLookedAtLine, notReadyLine } from './Search';
 import { validateSignUp } from './SignUp';
 
 describe('invite codes', () => {
@@ -125,6 +126,21 @@ describe('aboutPerson', () => {
     expect(aboutPerson(group(false, []), '3 photos')).toBe('3 photos');
     expect(aboutPerson({ id: 'g', person: null, faces: [], photoIds: [] }, '1 photo')).toBe(
       '1 photo',
+    );
+  });
+});
+
+describe('search notes', () => {
+  it('say which photos haven’t been looked at yet', () => {
+    expect(notReadyLine(1)).toBe('1 photo isn’t ready to search by what’s in it yet.');
+    expect(notLookedAtLine({ photo: true, words: ['Biscuit'] })).toMatch(
+      /^This photo hasn’t been looked at yet\./,
+    );
+    expect(notLookedAtLine({ photo: false, words: ['Biscuit'] })).toMatch(
+      /^The photos you taught “Biscuit” with haven’t/,
+    );
+    expect(notLookedAtLine({ photo: false, words: ['Biscuit', 'Kite', 'the cabin'] })).toMatch(
+      /taught “Biscuit”, “Kite” and “the cabin” with/,
     );
   });
 });

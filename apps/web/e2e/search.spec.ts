@@ -89,3 +89,87 @@ test('asks for "This is me" when searching for yourself', async ({ page }) => {
   await searchFor(page, 'me');
   await expect(page.getByText('choose “This is me”')).toBeVisible();
 });
+
+const bar = (page: Page) => page.getByRole('toolbar', { name: 'Selected photos' });
+
+test('teaching search a word from photos, searching for it, and forgetting it', async ({
+  page,
+}) => {
+  await page.route('**/resources/search/**', (route) => route.fulfill({ status: 404 }));
+  await signUp(page);
+  await uploadPhotos(page, 4, distinctPhotos(4));
+  await expect(page.getByText('4 photos added to your vault')).toBeVisible();
+
+  // Too few photos: the dialog says how many it needs.
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
+  await tiles(page).nth(0).click();
+  await tiles(page).nth(1).click();
+  await bar(page).getByRole('button', { name: 'Teach a word' }).click();
+  const teach = page.getByRole('dialog', { name: 'Teach search a word' });
+  await expect(teach.getByText('Choose 3 to 5 photos that show the same thing')).toBeVisible();
+  await teach.getByRole('button', { name: 'OK' }).click();
+
+  await tiles(page).nth(2).click();
+  await expect(bar(page).getByText('3 photos selected')).toBeVisible();
+  await bar(page).getByRole('button', { name: 'Teach a word' }).click();
+  await teach.getByLabel('Word').fill('Biscuit');
+  await teach.getByRole('button', { name: 'Teach' }).click();
+  await expect(page.getByText('Search learned “Biscuit”')).toBeVisible();
+  await expect(bar(page)).toBeHidden();
+
+  // The word is kept, sealed, through a lock.
+  await lock(page);
+  await unlockWith(page, 'Correct-Horse-Battery-9');
+  await goTo(page, 'Search');
+  await searchFor(page, 'Biscuit last year');
+  await expect(chips(page).getByRole('button')).toHaveText(['Biscuit', 'Last year']);
+  // The photos haven't been looked at here (the resources aren't served in tests).
+  await expect(
+    page.getByText('The photos you taught “Biscuit” with haven’t been looked at yet.'),
+  ).toBeVisible();
+
+  // A second word with the same name is refused.
+  await goTo(page, 'Photos');
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
+  for (const n of [0, 1, 3]) await tiles(page).nth(n).click();
+  await bar(page).getByRole('button', { name: 'Teach a word' }).click();
+  await teach.getByLabel('Word').fill('biscuit');
+  await teach.getByRole('button', { name: 'Teach' }).click();
+  await expect(teach.getByText('You’ve already taught search that word.')).toBeVisible();
+  await teach.getByRole('button', { name: 'Cancel' }).click();
+  await bar(page).getByRole('button', { name: 'Cancel selection' }).click();
+
+  await goTo(page, 'Settings');
+  await page.getByRole('button', { name: 'Forget “Biscuit”' }).click();
+  await expect(page.getByText('Search forgot “Biscuit”')).toBeVisible();
+  await goTo(page, 'Search');
+  await searchFor(page, 'Biscuit');
+  await expect(chips(page).getByRole('button')).toHaveText(['biscuit']);
+  await expect(page.getByText(/model/i)).toHaveCount(0);
+});
+
+test('"More like this" starts a search from a photo', async ({ page }) => {
+  await page.route('**/resources/search/**', (route) => route.fulfill({ status: 404 }));
+  await signUp(page);
+  await uploadPhotos(page, 2, distinctPhotos(2));
+  await expect(page.getByText('2 photos added to your vault')).toBeVisible();
+
+  await tiles(page).first().click();
+  await expect(page).toHaveURL(/\/photos\/[^/?]+$/);
+  const photoId = new URL(page.url()).pathname.split('/').at(-1) ?? '';
+  await page.getByRole('button', { name: 'More like this' }).click();
+  await expect(page).toHaveURL('/search');
+  await expect(chips(page).getByRole('button')).toHaveText(['Like this photo']);
+  await expect(page.getByText('This photo hasn’t been looked at yet.')).toBeVisible();
+  // Nothing about the photo is in the URL or the browser's storage.
+  const stored = await page.evaluate(() =>
+    JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)]),
+  );
+  expect(photoId).not.toBe('');
+  expect(stored).not.toContain(photoId);
+
+  // Tapping the photo off leaves an empty search.
+  await chips(page).getByRole('button', { name: 'Stop looking for Like this photo' }).click();
+  await expect(chips(page)).toHaveCount(0);
+  await expect(page.getByText('This photo hasn’t been looked at yet.')).toHaveCount(0);
+});

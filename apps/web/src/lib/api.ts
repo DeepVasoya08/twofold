@@ -30,6 +30,7 @@ import type {
   ProfilePhotoResponse,
   SearchSegmentPage,
   PutFileResponse,
+  WordList,
   SignUpRequest,
   SmartFeaturesRequest,
   StoredProfilePhoto,
@@ -341,8 +342,13 @@ export function spaceApi(token: string) {
       call<undefined>('PUT', `/space/search/${encodeURIComponent(id)}`, { data }, headers),
     deleteSearchSegments: (ids: string[]) =>
       call<undefined>('DELETE', '/space/search', { ids }, headers),
-    /** Forgets every search vector in the space. */
+    /** Forgets every search vector and taught word in the space. */
     deleteSearchData: () => call<undefined>('DELETE', '/space/search-data', {}, headers),
+    listWords: () => call<WordList>('GET', '/space/words', undefined, headers),
+    putWord: (id: string, meta: string) =>
+      call<undefined>('PUT', `/space/words/${encodeURIComponent(id)}`, { meta }, headers),
+    deleteWord: (id: string) =>
+      call<undefined>('DELETE', `/space/words/${encodeURIComponent(id)}`, {}, headers),
   };
 }
 

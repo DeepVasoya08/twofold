@@ -204,6 +204,30 @@ describe('sealOwnerRecord / openOwnerRecord', () => {
   });
 });
 
+describe('taught word records', () => {
+  it('open only as a word, in their own space', async () => {
+    const space = await newSpace();
+    const sealed = await sealOwnerRecord(space, 'word', 'w1', text('Biscuit'));
+    expect(new TextDecoder().decode(await openOwnerRecord(space, 'word', 'w1', sealed))).toBe(
+      'Biscuit',
+    );
+    // A word can't stand in for a person, or the other way round.
+    await expect(openOwnerRecord(space, 'person', 'w1', sealed)).rejects.toThrow(DecryptionError);
+    const person = await sealOwnerRecord(space, 'person', 'w1', text('Biscuit'));
+    await expect(openOwnerRecord(space, 'word', 'w1', person)).rejects.toThrow(DecryptionError);
+    // The other password's space, another id, and tampering are all refused.
+    await expect(openOwnerRecord(await newSpace(), 'word', 'w1', sealed)).rejects.toThrow(
+      DecryptionError,
+    );
+    await expect(openOwnerRecord(space, 'word', 'w2', sealed)).rejects.toThrow(DecryptionError);
+    const raw = fromBase64Url(sealed);
+    if (!raw) throw new Error('bad base64url');
+    await expect(openOwnerRecord(space, 'word', 'w1', toBase64Url(flip(raw, 30)))).rejects.toThrow(
+      DecryptionError,
+    );
+  });
+});
+
 describe('profile photo records', () => {
   it('open only as a profile, in their own space', async () => {
     const space = await newSpace();

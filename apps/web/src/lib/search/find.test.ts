@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BEST_FLOOR,
+  LOOKS_TUNING,
   clipPrompt,
   FEW_PHOTOS,
   SHOW_FLOOR,
@@ -171,5 +172,65 @@ describe('findPhotos', () => {
       vectors,
     });
     expect(found.best).toEqual(['beach-es']);
+  });
+});
+
+describe('findPhotos: looking like other photos', () => {
+  /** A length-1 vector at `score` to axis 2 (the look), the rest along axis `rest`. */
+  const looking = (score: number, rest = 3) => {
+    const vector = new Float32Array(VECTOR_LENGTH);
+    vector[2] = score;
+    vector[rest] = Math.sqrt(1 - score * score);
+    return vector;
+  };
+  const look = looking(1);
+  const vectors: SearchResults = new Map([
+    ['twin', looking(0.95)],
+    ['close', looking(0.7)],
+    ['far', looking(0.2)],
+    ['start', looking(1)],
+    ['unreadable', null],
+  ]);
+  const photos = ['twin', 'close', 'far', 'start', 'unreadable', 'new'].map((id) => photo(id));
+  const run = (text: string, extra: Partial<Parameters<typeof findPhotos>[0]> = {}) =>
+    findPhotos({
+      query: parse(text),
+      vector: null,
+      looksLike: [look],
+      photos,
+      people: index({}),
+      vectors,
+      ...extra,
+    });
+
+  it('ranks by how alike photos look, leaving out the photo it started from', () => {
+    expect(run('', { exclude: new Set(['start']) })).toEqual({
+      best: ['twin'],
+      more: ['close'],
+      notReady: 1,
+    });
+  });
+
+  it('uses its own floors, far above the ones for words', () => {
+    expect(LOOKS_TUNING.showFloor).toBeGreaterThan(BEST_FLOOR);
+    expect(thresholds([0.1], LOOKS_TUNING)).toEqual({
+      bestAt: LOOKS_TUNING.bestFloor,
+      moreAt: LOOKS_TUNING.showFloor,
+    });
+  });
+
+  it('filters by looks, then ranks by words', () => {
+    // The words prefer "far", but it doesn't look like the photos taught.
+    const words = new Float32Array(VECTOR_LENGTH);
+    words[3] = 1;
+    const found = run('beach', { vector: words });
+    expect(found.best).toEqual(['close']);
+    expect(found.best).not.toContain('far');
+  });
+
+  it('needs every look at once', () => {
+    const other = new Float32Array(VECTOR_LENGTH);
+    other[7] = 1;
+    expect(run('', { looksLike: [look, other] }).best).toEqual([]);
   });
 });

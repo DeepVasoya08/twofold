@@ -6,6 +6,7 @@ import { useAccount } from '../app/account';
 import { errorMessage } from '../app/account-ops';
 import { useDownloads } from '../app/downloads';
 import { useRouter } from '../app/router';
+import { useSearch } from '../app/search';
 import { paths } from '../app/routes';
 import { allSelected, batchMessage } from '../app/selection';
 import type { Selection } from '../app/selection';
@@ -19,10 +20,11 @@ import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
 import { MoveSpaceDialog, moveLabel } from './MoveSpaceDialog';
+import { TeachWordDialog } from './TeachWordDialog';
 
 import './selection-bar.css';
 
-type Open = 'album' | 'delete' | 'move' | 'share' | null;
+type Open = 'album' | 'delete' | 'move' | 'share' | 'teach' | null;
 
 interface Action {
   label: string;
@@ -41,9 +43,9 @@ export interface ExtraAction {
 
 /**
  * Actions for the selected photos, in a bar over the top of the page: add to an album (or
- * take out of the one being viewed), share with someone, download, favorite, move to the
- * other space, and delete. Photos from an album someone shared with you can only be
- * downloaded. After a change, only the photos it couldn't change stay selected.
+ * take out of the one being viewed), share with someone, download, teach search a word,
+ * favorite, move to the other space, and delete. Photos from an album someone shared with
+ * you can only be downloaded, or taught. After a change, only the photos it couldn't change stay selected.
  */
 export function SelectionBar({
   selection,
@@ -65,6 +67,7 @@ export function SelectionBar({
   const vault = useVault();
   const downloads = useDownloads();
   const { otherSpaceOpen } = useAccount();
+  const smartSearch = useSearch();
   const { navigate } = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState<Open>(null);
@@ -153,6 +156,20 @@ export function SelectionBar({
     },
   };
 
+  // Teaching changes nothing in the photos, so it's offered for any of them.
+  const teach: Action[] = smartSearch.enabled
+    ? [
+        {
+          label: 'Teach a word',
+          icon: 'sparkle',
+          onClick: () => {
+            setChosen(ids);
+            setOpen('teach');
+          },
+        },
+      ]
+    : [];
+
   const actions: Action[] = [
     {
       label: 'Add to album',
@@ -190,7 +207,7 @@ export function SelectionBar({
       },
     });
   }
-  actions.push(download, {
+  actions.push(download, ...teach, {
     label: allFavorite ? 'Remove from favorites' : 'Add to favorites',
     icon: 'heart',
     onClick: () => {
@@ -231,7 +248,7 @@ export function SelectionBar({
         },
       ]
     : [];
-  const shown = viewOnly ? [...pageActions, download] : [...pageActions, ...actions];
+  const shown = viewOnly ? [...pageActions, download, ...teach] : [...pageActions, ...actions];
   const shared = photos.some((photo) => photo.library !== undefined);
   const everything = allSelected(selection.selected, allIds);
   return (
@@ -307,6 +324,18 @@ export function SelectionBar({
           setOpen(null);
         }}
         onPick={shareThrough}
+      />
+
+      <TeachWordDialog
+        open={open === 'teach'}
+        photoIds={chosen}
+        onClose={() => {
+          setOpen(null);
+        }}
+        onTaught={() => {
+          setOpen(null);
+          selection.clear();
+        }}
       />
 
       <Dialog

@@ -11,7 +11,7 @@ import { SEARCH_DOWNLOAD_MB } from './SmartSearchCard';
 
 /**
  * Smart search in Settings: on or off for this device, how far looking at photos has got,
- * and forgetting every search result in the open space.
+ * the words taught to search, and forgetting every search result in the open space.
  */
 export function SearchSettings() {
   const search = useSearch();
@@ -19,6 +19,7 @@ export function SearchSettings() {
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [forgetting, setForgetting] = useState<string | null>(null);
   const where = space === 'private' ? 'private space' : 'library';
   const { done, total } = search.progress;
 
@@ -47,6 +48,24 @@ export function SearchSettings() {
       });
   };
 
+  const forgetWord = (id: string, name: string) => {
+    if (forgetting) return;
+    setForgetting(id);
+    search
+      .forgetWord(id)
+      .then(
+        () => {
+          toast.show(`Search forgot “${name}”`);
+        },
+        (caught: unknown) => {
+          toast.show(errorMessage(caught));
+        },
+      )
+      .finally(() => {
+        setForgetting(null);
+      });
+  };
+
   return (
     <>
       <div className="settings-row">
@@ -70,6 +89,34 @@ export function SearchSettings() {
           </button>
         </div>
       </div>
+      {search.enabled &&
+        search.words.map((word) => (
+          <div className="settings-row" key={word.id}>
+            <span className="settings-row__icon">
+              <Icon name="search" size={20} />
+            </span>
+            <div className="settings-row__text">
+              <span className="settings-row__title">{word.name}</span>
+              <span className="settings-row__description">
+                A word you taught search, with {pluralize(word.photos.length, 'photo')}.
+              </span>
+            </div>
+            <div className="settings-row__action">
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                aria-label={`Forget “${word.name}”`}
+                disabled={forgetting !== null}
+                aria-busy={forgetting === word.id}
+                onClick={() => {
+                  forgetWord(word.id, word.name);
+                }}
+              >
+                Forget
+              </button>
+            </div>
+          </div>
+        ))}
       <div className="settings-row">
         <span className="settings-row__icon">
           <Icon name="trash" size={20} />
@@ -77,7 +124,8 @@ export function SearchSettings() {
         <div className="settings-row__text">
           <span className="settings-row__title">Delete search data</span>
           <span className="settings-row__description">
-            Forget what Smart search worked out about the photos in this {where}.
+            Forget what Smart search worked out about the photos in this {where}, and the words you
+            taught it.
           </span>
         </div>
         <div className="settings-row__action">
@@ -98,7 +146,7 @@ export function SearchSettings() {
           setConfirming(false);
         }}
         title="Delete search data?"
-        description={`What Smart search worked out about the photos in this ${where} is deleted, and Smart search turns off on this device. Your photos stay as they are.`}
+        description={`What Smart search worked out about the photos in this ${where}, and the words you taught it, are deleted, and Smart search turns off on this device. Your photos stay as they are.`}
       >
         <div className="dialog__actions">
           <button

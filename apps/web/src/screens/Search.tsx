@@ -1,4 +1,5 @@
 import { useFind } from '../app/find';
+import type { NotLookedAt } from '../app/find';
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
 import { useSearch } from '../app/search';
@@ -22,6 +23,18 @@ export function notReadyLine(count: number): string {
   return `${pluralize(count, 'photo')} ${count === 1 ? 'isn’t' : 'aren’t'} ready to search by what’s in ${count === 1 ? 'it' : 'them'} yet.`;
 }
 
+/** Why a search for photos that look like others can't run yet. */
+export function notLookedAtLine({ photo, words }: NotLookedAt): string {
+  const later = 'Smart search looks at photos in the background, so try again soon.';
+  if (photo || words.length === 0) return `This photo hasn’t been looked at yet. ${later}`;
+  const quoted = words.map((name) => `“${name}”`);
+  const named =
+    quoted.length === 1
+      ? quoted.join('')
+      : `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1) ?? ''}`;
+  return `The photos you taught ${named} with haven’t been looked at yet. ${later}`;
+}
+
 export function Search() {
   const find = useFind();
   const search = useSearch();
@@ -36,6 +49,7 @@ export function Search() {
   const best = photosFor(found?.best ?? []);
   const more = photosFor(found?.more ?? []);
   const hasWords = (query?.what ?? '') !== '';
+  const looksAlike = query !== null && (query.like !== null || query.taught.length > 0);
   const notIndexed = search.progress.total - search.progress.done;
 
   return (
@@ -96,7 +110,7 @@ export function Search() {
           choose “This is me”.
         </p>
       )}
-      {hasWords && find.wordsOff === 'off' && (
+      {(hasWords || looksAlike) && find.wordsOff === 'off' && (
         <p className="search-note">
           Smart search is off on this device, so photos can’t be found by what’s in them. You can
           turn it on in <Link to={paths.settings}>Settings</Link>.
@@ -105,6 +119,11 @@ export function Search() {
       {hasWords && find.wordsOff === 'unavailable' && (
         <p className="search-note">Photos can’t be found by what’s in them here.</p>
       )}
+      {search.enabled &&
+        search.status !== 'loading' &&
+        (find.notLookedAt.photo || find.notLookedAt.words.length > 0) && (
+          <p className="search-note">{notLookedAtLine(find.notLookedAt)}</p>
+        )}
       {words.state === 'downloading' && (
         <div className="search-note" role="status">
           <span>
@@ -155,7 +174,7 @@ export function Search() {
               )}
             </>
           )}
-          {hasWords && Math.max(found.notReady, notIndexed) > 0 && (
+          {(hasWords || looksAlike) && Math.max(found.notReady, notIndexed) > 0 && (
             <p className="search-note">{notReadyLine(Math.max(found.notReady, notIndexed))}</p>
           )}
         </>

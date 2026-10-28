@@ -17,6 +17,8 @@ import type { PhotoEncoder } from '../lib/search/photo-encoder';
 import { SEARCH_RESOURCES, resourceCached } from '../lib/search/resources';
 import { loadSearchSetting, saveSearchSetting } from '../lib/search/search-setting';
 import type { SearchResults } from '../lib/search/segment';
+import { centroid, vectorsOf } from '../lib/search/taught';
+import type { TaughtWord } from '../lib/search/taught';
 import { photoOrder, usePeople } from './people';
 import type { SearchStore } from './search-store';
 import { useUploads } from './uploads';
@@ -29,7 +31,7 @@ import { useVault } from './vault';
  * after face grouping has had its turn and paused while uploads run or the tab is hidden.
  * Phones look at their own new uploads only, and download the resource on Wi-Fi unless the
  * person taps "Download now". Locking unmounts this with the vault, and the vectors held in
- * memory are wiped.
+ * memory are wiped. It also keeps the words taught to search.
  */
 
 export type SearchStatus = 'off' | 'loading' | 'scanning' | 'waiting' | 'ready' | 'failed';
@@ -63,7 +65,12 @@ interface SearchValue {
   phone: boolean;
   /** Every vector so far. Read it when searching; it changes as photos are looked at. */
   results: () => SearchResults;
-  /** Forgets every search vector in the open space. */
+  /** Words taught to search in the open space. */
+  words: readonly TaughtWord[];
+  /** Teaches search a word: a name, and photos that show it. */
+  teach: (name: string, photoIds: readonly string[]) => Promise<TaughtWord>;
+  forgetWord: (id: string) => Promise<void>;
+  /** Forgets every search vector and taught word in the open space. */
   forget: () => Promise<void>;
 }
 
@@ -108,6 +115,7 @@ export function SearchProvider({
   const [paused, setPaused] = useState(false);
   const [allowed, setAllowed] = useState(false);
   const [done, setDone] = useState(0);
+  const [words, setWords] = useState<TaughtWord[]>([]);
   /** Bumped to start the scan again: new photos, Wi-Fi, a retry. */
   const [round, setRound] = useState(0);
   /** Bumped to load again after a failed load. */
@@ -171,7 +179,10 @@ export function SearchProvider({
     setLoaded(false);
     setError(null);
     setPaused(false);
-    if (!on) wipeResults(live.current);
+    if (!on) {
+      wipeResults(live.current);
+      setWords([]);
+    }
   }, []);
 
   const vaultReady = vault.status === 'ready';
@@ -183,6 +194,7 @@ export function SearchProvider({
         if (cancelled) return;
         live.current = saved.results;
         segments.current = saved.segments;
+        setWords(saved.words);
         setDone(order.current.filter((id) => saved.results.has(id)).length);
         setLoaded(true);
       },
@@ -343,10 +355,27 @@ export function SearchProvider({
       progress: { done, total: vault.state.photos.length },
       phone,
       results: () => live.current,
+      words,
+      teach: async (name, photoIds) => {
+        const word: TaughtWord = {
+          id: await store.newId(),
+          name: name.trim(),
+          photos: [...photoIds],
+          vector: centroid(vectorsOf(photoIds, live.current)),
+        };
+        await store.saveWord(word);
+        setWords((current) => [...current, word]);
+        return word;
+      },
+      forgetWord: async (id) => {
+        await store.deleteWord(id);
+        setWords((current) => current.filter((word) => word.id !== id));
+      },
       forget: async () => {
         await store.forget();
         wipeResults(live.current);
         segments.current = [];
+        setWords([]);
         setDone(0);
         setEnabled(false);
       },
@@ -362,6 +391,7 @@ export function SearchProvider({
       phone,
       loaded,
       store,
+      words,
     ],
   );
 

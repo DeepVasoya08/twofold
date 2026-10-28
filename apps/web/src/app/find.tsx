@@ -14,7 +14,8 @@ import type { Found, PeopleIndex } from '../lib/search/find';
 import { EncoderStopped } from '../lib/search/photo-encoder';
 import type { QueryEncoder } from '../lib/search/query-encoder';
 import { parseQuery } from '../lib/search/query';
-import type { NamedPerson, ParsedQuery } from '../lib/search/query';
+import type { NamedPerson, NamedWord, ParsedQuery } from '../lib/search/query';
+import { wordVector } from '../lib/search/taught';
 import { photoOrder, useGroups, usePeople } from './people';
 import { useSearch } from './search';
 import { useVault } from './vault';
@@ -25,7 +26,7 @@ import { useVault } from './vault';
  * so a search can't be found later; locking unmounts it with the vault. The text half (for
  * the words in a query) is downloaded on the first search that has words, and kept until
  * lock. Once it's loaded on a quick device, results follow the typing; otherwise they come
- * when the search is sent.
+ * when the search is sent. "More like this" starts a search from a photo instead.
  */
 
 /** Where turning words into a search vector has got. */
@@ -48,6 +49,8 @@ interface FindValue {
   setText: (text: string) => void;
   /** Searches for what's in the box now. */
   submit: () => void;
+  /** Starts a new search for photos that look like this one. */
+  searchLike: (photoId: string) => void;
   /** What the last search was read as; null before the first. */
   query: ParsedQuery | null;
   /** Taps a chip off (or back on), searching again without that part. */
@@ -63,6 +66,16 @@ interface FindValue {
   shownIds: readonly string[];
   /** Why words can't be searched here, if they can't. */
   wordsOff: 'off' | 'unavailable' | null;
+  /**
+   * What the search needs to look like but can't yet, because its photos haven't been looked
+   * at: the photo "More like this" started from, and taught words (by name).
+   */
+  notLookedAt: NotLookedAt;
+}
+
+export interface NotLookedAt {
+  photo: boolean;
+  words: string[];
 }
 
 const FindContext = createContext<FindValue | null>(null);
@@ -90,6 +103,7 @@ export function FindProvider({
   const [attempt, setAttempt] = useState(0);
   const [showMore, setShowMore] = useState(false);
   const [quick, setQuick] = useState(false);
+  const [like, setLike] = useState<string | null>(null);
   const encoder = useRef<QueryEncoder | null>(null);
 
   // Nothing typed outlives the vault.
@@ -108,12 +122,18 @@ export function FindProvider({
         .map(({ id, name, me, labels }) => ({ id, name, me, labels })),
     [people.people],
   );
+  const taught = useMemo<NamedWord[]>(
+    () => search.words.map(({ id, name }) => ({ id, name })),
+    [search.words],
+  );
   const query = useMemo(
     () =>
-      submitted === null ? null : parseQuery(submitted, { people: named, now: now(), ignore }),
+      submitted === null
+        ? null
+        : parseQuery(submitted, { people: named, words: taught, like, now: now(), ignore }),
     // `now` is read when the query changes, not every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [submitted, named, ignore],
+    [submitted, named, taught, like, ignore],
   );
 
   const wordsOff = !search.enabled ? 'off' : makeQueryEncoder ? null : 'unavailable';
@@ -184,20 +204,49 @@ export function FindProvider({
   }, [groups, hidden, people.people]);
 
   const ready = search.progress.done;
-  const { results } = search;
+  const { results, words: taughtWords } = search;
+  /** What the photos must look like, and what can't be looked for yet. */
+  const looks = useMemo(() => {
+    const vectors = results();
+    const looksLike: Float32Array[] = [];
+    const missing: NotLookedAt = { photo: false, words: [] };
+    if (query?.like) {
+      const vector = vectors.get(query.like);
+      if (vector) looksLike.push(vector);
+      else missing.photo = true;
+    }
+    for (const id of query?.taught ?? []) {
+      const word = taughtWords.find((each) => each.id === id);
+      const vector = word && wordVector(word, vectors);
+      if (vector) looksLike.push(vector);
+      else if (word) missing.words.push(word.name);
+    }
+    return { looksLike, missing };
+    // `ready` changes as photos are looked at, so missing ones are tried again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, taughtWords, results, ready]);
   const found = useMemo<Found | null>(() => {
     if (!query || query.chips.length === 0) return null;
     const wordsVector = query.what ? (vector?.what === query.what ? vector.vector : null) : null;
     if (query.what && !wordsVector) return null;
+    if (looks.missing.photo || looks.missing.words.length > 0) return null;
     const byId = new Map(state.photos.map((photo) => [photo.id, photo]));
     const photos = photoOrder(state).flatMap((id) => {
       const photo = byId.get(id);
       return photo ? [photo] : [];
     });
-    return findPhotos({ query, vector: wordsVector, photos, people: index, vectors: results() });
+    return findPhotos({
+      query,
+      vector: wordsVector,
+      looksLike: looks.looksLike,
+      exclude: new Set(query.like ? [query.like] : []),
+      photos,
+      people: index,
+      vectors: results(),
+    });
     // `ready` changes as photos are looked at, so results include them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, vector, state, index, results, ready]);
+  }, [query, vector, looks, state, index, results, ready]);
 
   const shownIds = useMemo(
     () =>
@@ -217,13 +266,29 @@ export function FindProvider({
     setShowMore(false);
   }, [text]);
 
+  const searchLike = useCallback((photoId: string) => {
+    setWords((current) => (current.state === 'failed' ? { state: 'idle' } : current));
+    setText('');
+    setSubmitted('');
+    setLike(photoId);
+    setIgnore(new Set());
+    setShowMore(false);
+  }, []);
+
   const value = useMemo<FindValue>(
     () => ({
       text,
       setText,
       submit,
+      searchLike,
       query,
       toggleChip: (key) => {
+        // A photo tapped off is gone, rather than coming back with the next search.
+        if (key === 'like') {
+          setLike(null);
+          setShowMore(false);
+          return;
+        }
         setIgnore((current) => {
           const next = new Set(current);
           if (!next.delete(key)) next.add(key);
@@ -247,8 +312,22 @@ export function FindProvider({
       setShowMore,
       shownIds,
       wordsOff,
+      notLookedAt: looks.missing,
     }),
-    [text, submit, query, what, wordsOff, words, vector, found, showMore, shownIds],
+    [
+      text,
+      submit,
+      searchLike,
+      query,
+      what,
+      wordsOff,
+      words,
+      vector,
+      found,
+      showMore,
+      shownIds,
+      looks,
+    ],
   );
 
   return <FindContext value={value}>{children}</FindContext>;
