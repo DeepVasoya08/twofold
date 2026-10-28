@@ -569,3 +569,15 @@ export type PutWordRequest = UpdateRecordRequest;
 export interface WordList {
   words: StoredWord[];
 }
+
+/** Most smart albums (saved searches) one space keeps. */
+export const MAX_SMART_ALBUMS = 100;
+
+/** A smart album: a saved search, sealed for the owner. */
+export type StoredSmartAlbum = StoredAlbum;
+
+export type PutSmartAlbumRequest = UpdateRecordRequest;
+
+export interface SmartAlbumList {
+  albums: StoredSmartAlbum[];
+}

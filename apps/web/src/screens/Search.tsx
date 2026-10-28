@@ -1,15 +1,24 @@
+import { useState } from 'react';
+import type { SubmitEvent } from 'react';
+
+import { errorMessage } from '../app/account-ops';
 import { useFind } from '../app/find';
-import type { NotLookedAt } from '../app/find';
-import { Link } from '../app/router';
+import type { NotLookedAt } from '../app/answer';
+import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useSearch } from '../app/search';
+import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
+import { Dialog } from '../components/Dialog';
 import { EmptyState } from '../components/EmptyState';
+import { TextField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { pluralize } from '../lib/format';
+import type { ParsedQuery } from '../lib/search/query';
 import { SEARCH_RESOURCES } from '../lib/search/resources';
+import { MAX_SMART_TITLE, smartAlbumFits, suggestTitle } from '../lib/search/smart-album';
 import type { Photo } from '../mock/data';
 
 import './search.css';
@@ -39,6 +48,7 @@ export function Search() {
   const find = useFind();
   const search = useSearch();
   const { state } = useVault();
+  const [saving, setSaving] = useState(false);
   const { query, found, words } = find;
   const byId = new Map(state.photos.map((photo) => [photo.id, photo]));
   const photosFor = (ids: readonly string[]): Photo[] =>
@@ -147,6 +157,19 @@ export function Search() {
         </div>
       )}
 
+      {found && search.enabled && (
+        <button
+          type="button"
+          className="btn btn--secondary btn--sm search-save"
+          onClick={() => {
+            setSaving(true);
+          }}
+        >
+          <Icon name="album-add" size={16} />
+          Save as album
+        </button>
+      )}
+
       {found && (
         <>
           {best.length === 0 && more.length === 0 ? (
@@ -179,6 +202,114 @@ export function Search() {
           )}
         </>
       )}
+      {query && find.saved && (
+        <SaveSearchDialog
+          open={saving}
+          query={query}
+          saved={find.saved}
+          wordsVector={find.wordsVector}
+          onClose={() => {
+            setSaving(false);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Saves the search on screen as a smart album, which fills itself from then on. */
+function SaveSearchDialog({
+  open,
+  query,
+  saved,
+  wordsVector,
+  onClose,
+}: {
+  open: boolean;
+  query: ParsedQuery;
+  saved: { text: string; ignore: string[]; like: string | null };
+  wordsVector: Float32Array | null;
+  onClose: () => void;
+}) {
+  const search = useSearch();
+  const toast = useToast();
+  const { navigate } = useRouter();
+  const [title, setTitle] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const shownTitle = title ?? suggestTitle(query.chips);
+
+  const close = () => {
+    setTitle(null);
+    setError(null);
+    onClose();
+  };
+
+  const onSubmit = (event: SubmitEvent) => {
+    event.preventDefault();
+    const name = shownTitle.trim();
+    if (!name) {
+      setError('Give your album a name.');
+      return;
+    }
+    const fresh = {
+      title: name,
+      ...saved,
+      savedAt: new Date().toISOString(),
+      what: query.what,
+      vector: query.what ? wordsVector : null,
+    };
+    if (!smartAlbumFits({ ...fresh, id: '' })) {
+      setError('This search is too long to save as an album.');
+      return;
+    }
+    if (busy) return;
+    setBusy(true);
+    search
+      .saveSmartAlbum(fresh)
+      .then(
+        (stored) => {
+          toast.show(`“${stored.title}” saved to Albums`);
+          close();
+          navigate(paths.smartAlbum(stored.id));
+        },
+        (caught: unknown) => {
+          setError(errorMessage(caught));
+        },
+      )
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={close}
+      title="Save as album"
+      description="A smart album fills itself with photos that match this search, as they’re added. It runs on this device, and the search is saved encrypted."
+    >
+      <form className="form" onSubmit={onSubmit} noValidate>
+        <TextField
+          label="Album name"
+          autoFocus
+          value={shownTitle}
+          maxLength={MAX_SMART_TITLE}
+          onChange={(event) => {
+            setTitle(event.currentTarget.value);
+            setError(null);
+          }}
+          error={error}
+        />
+        <div className="dialog__actions">
+          <button type="button" className="btn btn--ghost" onClick={close}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy}>
+            Save
+          </button>
+        </div>
+      </form>
+    </Dialog>
   );
 }

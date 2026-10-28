@@ -228,6 +228,31 @@ describe('taught word records', () => {
   });
 });
 
+describe('smart album records', () => {
+  it('open only as a smart album, in their own space', async () => {
+    const space = await newSpace();
+    const sealed = await sealOwnerRecord(space, 'smart-album', 's1', text('beach'));
+    expect(
+      new TextDecoder().decode(await openOwnerRecord(space, 'smart-album', 's1', sealed)),
+    ).toBe('beach');
+    await expect(openOwnerRecord(space, 'word', 's1', sealed)).rejects.toThrow(DecryptionError);
+    await expect(openRecord(await ownerAccess(space), 'album', 's1', sealed)).rejects.toThrow(
+      DecryptionError,
+    );
+    await expect(openOwnerRecord(await newSpace(), 'smart-album', 's1', sealed)).rejects.toThrow(
+      DecryptionError,
+    );
+    await expect(openOwnerRecord(space, 'smart-album', 's2', sealed)).rejects.toThrow(
+      DecryptionError,
+    );
+    const raw = fromBase64Url(sealed);
+    if (!raw) throw new Error('bad base64url');
+    await expect(
+      openOwnerRecord(space, 'smart-album', 's1', toBase64Url(flip(raw, 30))),
+    ).rejects.toThrow(DecryptionError);
+  });
+});
+
 describe('profile photo records', () => {
   it('open only as a profile, in their own space', async () => {
     const space = await newSpace();

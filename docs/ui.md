@@ -202,6 +202,16 @@ words, each with Forget. Looking alike is compared with its own tuning (`LOOKS_T
 `lib/search/find.ts`), since photos score much higher against photos than against words.
 If the photos haven't been looked at yet, the search says so instead of showing nothing.
 
+**Save as album** (under a search's chips, while Smart search is on) saves the search as a
+smart album (`screens/SmartAlbum.tsx`, `/albums/smart/:id`). It keeps what was typed, the
+chips tapped off, the "More like this" photo, the words' search vector and when it was
+saved, so dates like "last year" keep meaning the year they meant then and opening it never
+needs the text half. Each time it's shown, the search runs again over the photos looked at
+so far (`useSmartAlbum` in `app/answer.ts`), so new photos that match appear on their own.
+Smart albums show under All albums with a "Smart" badge, can be renamed or deleted (their
+photos stay), and can't be shared. If a taught word or name it used changes, the album says
+to save the search again.
+
 ## Accounts and locking
 
 - Signed out: only the welcome, sign-up, log-in and recovery screens are reachable; library

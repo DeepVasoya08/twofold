@@ -53,6 +53,20 @@
   border-color: var(--border-strong);
 }
 
+/* A smart album's chips say what it looks for; they aren't buttons. */
+.search-chip--still {
+  padding: 6px 14px;
+  cursor: default;
+}
+
+.search-chip--still:hover {
+  border-color: var(--border);
+}
+
+.search-save {
+  margin: 12px 0 0;
+}
+
 .search-note {
   display: flex;
   flex-wrap: wrap;

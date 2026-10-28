@@ -54,6 +54,17 @@ describe('photo context', () => {
     expect(paths.photo('p1', { kind: 'all' })).toBe('/photos/p1');
   });
 
+  it('matches a smart album, and round-trips its photo context', () => {
+    expect(matchRoute(paths.smartAlbum('s 1'))).toEqual({ name: 'smart-album', albumId: 's 1' });
+    expect(matchRoute('/albums/kyoto')).toEqual({ name: 'album', albumId: 'kyoto' });
+    const opened = paths.photo('p1', { kind: 'smart', albumId: 's1' });
+    expect(opened).toBe('/photos/p1?from=smart:s1');
+    expect(parsePhotoContext(opened.slice(opened.indexOf('?')))).toEqual({
+      kind: 'smart',
+      albumId: 's1',
+    });
+  });
+
   it('round-trips the search context, which names no query', () => {
     const found = paths.photo('p1', { kind: 'search' });
     expect(found).toBe('/photos/p1?from=search');

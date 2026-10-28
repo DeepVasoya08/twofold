@@ -7,6 +7,7 @@ import { matchRoute } from './app/routes';
 import type { Route } from './app/routes';
 import { AppShell } from './components/AppShell';
 import { Album } from './screens/Album';
+import { SmartAlbumView } from './screens/SmartAlbum';
 import { Albums } from './screens/Albums';
 import { Favorites } from './screens/Favorites';
 import { Gallery } from './screens/Gallery';
@@ -42,6 +43,7 @@ const titles: Record<Route['name'], string> = {
   gallery: 'Photos · Twofold',
   albums: 'Albums · Twofold',
   album: 'Album · Twofold',
+  'smart-album': 'Album · Twofold',
   favorites: 'Favorites · Twofold',
   search: 'Search · Twofold',
   people: 'People · Twofold',
@@ -95,6 +97,12 @@ function Screen({ route }: { route: Route }) {
       return (
         <AppShell uploadAlbumId={route.albumId}>
           <Album albumId={route.albumId} />
+        </AppShell>
+      );
+    case 'smart-album':
+      return (
+        <AppShell>
+          <SmartAlbumView albumId={route.albumId} />
         </AppShell>
       );
     case 'favorites':

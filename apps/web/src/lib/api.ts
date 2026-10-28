@@ -30,6 +30,7 @@ import type {
   ProfilePhotoResponse,
   SearchSegmentPage,
   PutFileResponse,
+  SmartAlbumList,
   WordList,
   SignUpRequest,
   SmartFeaturesRequest,
@@ -349,6 +350,11 @@ export function spaceApi(token: string) {
       call<undefined>('PUT', `/space/words/${encodeURIComponent(id)}`, { meta }, headers),
     deleteWord: (id: string) =>
       call<undefined>('DELETE', `/space/words/${encodeURIComponent(id)}`, {}, headers),
+    listSmartAlbums: () => call<SmartAlbumList>('GET', '/space/smart-albums', undefined, headers),
+    putSmartAlbum: (id: string, meta: string) =>
+      call<undefined>('PUT', `/space/smart-albums/${encodeURIComponent(id)}`, { meta }, headers),
+    deleteSmartAlbum: (id: string) =>
+      call<undefined>('DELETE', `/space/smart-albums/${encodeURIComponent(id)}`, {}, headers),
   };
 }
 

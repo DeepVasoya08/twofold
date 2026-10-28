@@ -173,3 +173,63 @@ test('"More like this" starts a search from a photo', async ({ page }) => {
   await expect(chips(page)).toHaveCount(0);
   await expect(page.getByText('This photo hasn’t been looked at yet.')).toHaveCount(0);
 });
+
+test('a search saved as a smart album fills itself, and can be renamed and deleted', async ({
+  page,
+}) => {
+  await page.route('**/resources/search/**', (route) => route.fulfill({ status: 404 }));
+  await signUp(page);
+  await uploadPhotos(page, 2, distinctPhotos(2));
+  await expect(page.getByText('2 photos added to your vault')).toBeVisible();
+
+  await goTo(page, 'Search');
+  await searchFor(page, 'photos from this year');
+  await expect(page.getByText('2 best matches')).toBeVisible();
+  await page.getByRole('button', { name: 'Save as album' }).click();
+  const save = page.getByRole('dialog', { name: 'Save as album' });
+  await expect(save.getByLabel('Album name')).toHaveValue('This year');
+  await save.getByLabel('Album name').fill('This year so far');
+  await save.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('“This year so far” saved to Albums')).toBeVisible();
+  await expect(page).toHaveURL(/\/albums\/smart\/[^/]+$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'This year so far' })).toBeVisible();
+  await expect(tiles(page)).toHaveCount(2);
+
+  // New photos that match show up on their own, and the album is kept through a lock.
+  await uploadPhotos(page, 1, distinctPhotos(3).slice(2));
+  await expect(page.getByText('1 photo added to your vault')).toBeVisible();
+  await lock(page);
+  await unlockWith(page, 'Correct-Horse-Battery-9');
+  await goTo(page, 'Albums');
+  const card = page.getByRole('link', { name: /This year so far/ });
+  await expect(card.getByTestId('smart-badge')).toBeVisible();
+  await expect(card).toContainText('3 photos');
+  await card.click();
+  await expect(tiles(page)).toHaveCount(3);
+
+  // A photo opens in the viewer, which steps through the album and comes back to it.
+  const albumUrl = page.url();
+  await tiles(page).first().click();
+  await expect(page).toHaveURL(/\?from=smart:/);
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveURL(albumUrl);
+
+  await page.getByRole('button', { name: 'Actions for This year so far' }).click();
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  const rename = page.getByRole('dialog', { name: 'Rename album' });
+  await rename.getByLabel('Album name').fill('2026');
+  await rename.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: '2026' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Actions for 2026' }).click();
+  await page.getByRole('menuitem', { name: 'Delete album' }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete “2026”?' })
+    .getByRole('button', { name: 'Delete album' })
+    .click();
+  await expect(page).toHaveURL('/albums');
+  await expect(page.getByRole('link', { name: /2026/ })).toHaveCount(0);
+  // Its photos stay.
+  await goTo(page, 'Photos');
+  await expect(tiles(page)).toHaveCount(3);
+});

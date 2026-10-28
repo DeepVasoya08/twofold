@@ -4,13 +4,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   MAX_SEARCH_SEGMENTS,
+  MAX_SMART_ALBUMS,
   MAX_WORDS,
   SEARCH_SEGMENT_PAGE,
   SEARCH_SIZES,
   SPACE_HEADER,
   STORAGE_SIZES,
 } from '@twofold/types';
-import type { SearchSegmentPage, WordList } from '@twofold/types';
+import type { SearchSegmentPage, SmartAlbumList, WordList } from '@twofold/types';
 
 import type { Env } from './env';
 import { createTestDb } from './test/d1';
@@ -181,6 +182,58 @@ describe('taught words', () => {
         .status,
     ).toBe(400);
     expect((await client.request('DELETE', '/space/words/short', {})).status).toBe(400);
+  });
+});
+
+describe('smart albums', () => {
+  const putAlbum = (id: string, meta: string, c = client) =>
+    c.request('PUT', `/space/smart-albums/${id}`, { meta });
+  async function albums(c = client): Promise<SmartAlbumList['albums']> {
+    const res = await c.request('GET', '/space/smart-albums');
+    expect(res.status).toBe(200);
+    return (await res.json<SmartAlbumList>()).albums;
+  }
+
+  it('are saved, changed and deleted, per space, apart from words', async () => {
+    const id = newId();
+    const meta = newMeta();
+    expect((await putAlbum(id, meta)).status).toBe(204);
+    expect(await albums()).toEqual([{ id, meta }]);
+    expect(await words()).toEqual([]);
+    const changed = newMeta();
+    await putAlbum(id, changed);
+    expect(await albums()).toEqual([{ id, meta: changed }]);
+    const own = client.headers;
+    useSpace(client, toBase64Url(randomBytes(16)));
+    expect(await albums()).toEqual([]);
+    client.headers = own;
+    expect((await client.request('DELETE', `/space/smart-albums/${id}`, {})).status).toBe(204);
+    expect((await client.request('DELETE', `/space/smart-albums/${id}`, {})).status).toBe(404);
+  });
+
+  it('stop at the limit', async () => {
+    await putAlbum(newId(), newMeta());
+    const tag = (sqlite.prepare('SELECT space FROM smart_albums').get() as { space: string }).space;
+    const insert = sqlite.prepare('INSERT INTO smart_albums (space, id, meta) VALUES (?, ?, ?)');
+    for (let i = 1; i < MAX_SMART_ALBUMS; i++) insert.run(tag, newId(), 'x');
+    expect((await putAlbum(newId(), newMeta())).status).toBe(409);
+  });
+
+  it('go with the search data, and are only for the owner', async () => {
+    await putAlbum(newId(), newMeta());
+    expect((await client.request('DELETE', '/space/search-data', {})).status).toBe(204);
+    expect(await albums()).toEqual([]);
+    await putAlbum(newId(), newMeta());
+    expect((await client.request('DELETE', '/space', {})).status).toBe(204);
+    expect(await albums()).toEqual([]);
+
+    const memberToken = toBase64Url(randomBytes(16));
+    const member = { id: newId(), token: memberToken, meta: newMeta(), access: 'edit' };
+    expect((await client.request('POST', '/space/members', member)).status).toBe(201);
+    const guest = await signUp('kim@example.com');
+    useSpace(guest, memberToken);
+    expect((await guest.request('GET', '/space/smart-albums')).status).toBe(403);
+    expect((await putAlbum(newId(), newMeta(), guest)).status).toBe(403);
   });
 });
 
