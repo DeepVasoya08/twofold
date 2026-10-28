@@ -30,9 +30,9 @@ test('searching by date, with the query kept out of the URL and browser storage'
   await uploadPhotos(page, 2, distinctPhotos(2));
   await expect(page.getByText('2 photos added to your vault')).toBeVisible();
 
-  await goTo(page, 'Search');
-  await expect(page.getByRole('heading', { level: 1, name: 'Search' })).toBeVisible();
+  // Search is in the top of every screen: searching from Photos opens the results.
   await searchFor(page, 'photos from this year');
+  await expect(page.getByRole('heading', { level: 1, name: 'Search' })).toBeVisible();
   await expect(chips(page).getByRole('button')).toHaveText(['This year']);
   await expect(page.getByText('2 best matches')).toBeVisible();
   await expect(tiles(page)).toHaveCount(2);
@@ -62,8 +62,8 @@ test('searching by date, with the query kept out of the URL and browser storage'
   // Locking forgets the search.
   await lock(page);
   await unlockWith(page, 'Correct-Horse-Battery-9');
-  await goTo(page, 'Search');
   await expect(box(page)).toHaveValue('');
+  await page.goto('/search');
   await expect(tiles(page)).toHaveCount(0);
 });
 
@@ -77,7 +77,6 @@ test('a search in the private space never finds the main library’s photos', as
   await uploadPhotos(page, 1, distinctPhotos(3).slice(2));
   await expect(page.getByText('1 photo added to your vault')).toBeVisible();
 
-  await goTo(page, 'Search');
   await searchFor(page, 'this year');
   await expect(page.getByText('1 best match')).toBeVisible();
   await expect(tiles(page)).toHaveCount(1);
@@ -85,7 +84,6 @@ test('a search in the private space never finds the main library’s photos', as
 
 test('asks for "This is me" when searching for yourself', async ({ page }) => {
   await signUp(page);
-  await goTo(page, 'Search');
   await searchFor(page, 'me');
   await expect(page.getByText('choose “This is me”')).toBeVisible();
 });
@@ -120,7 +118,6 @@ test('teaching search a word from photos, searching for it, and forgetting it', 
   // The word is kept, sealed, through a lock.
   await lock(page);
   await unlockWith(page, 'Correct-Horse-Battery-9');
-  await goTo(page, 'Search');
   await searchFor(page, 'Biscuit last year');
   await expect(chips(page).getByRole('button')).toHaveText(['Biscuit', 'Last year']);
   // The photos haven't been looked at here (the resources aren't served in tests).
@@ -142,7 +139,6 @@ test('teaching search a word from photos, searching for it, and forgetting it', 
   await goTo(page, 'Settings');
   await page.getByRole('button', { name: 'Forget “Biscuit”' }).click();
   await expect(page.getByText('Search forgot “Biscuit”')).toBeVisible();
-  await goTo(page, 'Search');
   await searchFor(page, 'Biscuit');
   await expect(chips(page).getByRole('button')).toHaveText(['biscuit']);
   await expect(page.getByText(/model/i)).toHaveCount(0);
@@ -182,7 +178,6 @@ test('a search saved as a smart album fills itself, and can be renamed and delet
   await uploadPhotos(page, 2, distinctPhotos(2));
   await expect(page.getByText('2 photos added to your vault')).toBeVisible();
 
-  await goTo(page, 'Search');
   await searchFor(page, 'photos from this year');
   await expect(page.getByText('2 best matches')).toBeVisible();
   await page.getByRole('button', { name: 'Save as album' }).click();
@@ -232,4 +227,28 @@ test('a search saved as a smart album fills itself, and can be renamed and delet
   // Its photos stay.
   await goTo(page, 'Photos');
   await expect(tiles(page)).toHaveCount(3);
+});
+
+test('search is on every screen instead of a tab, and "/" jumps to it', async ({ page }) => {
+  await signUp(page);
+  await uploadPhotos(page, 1);
+  await expect(page.getByText('1 photo added to your vault')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('link', { name: 'Search', exact: true })).toHaveCount(0);
+
+  await goTo(page, 'Albums');
+  await expect(page.getByRole('heading', { level: 1, name: 'Albums' })).toBeVisible();
+  await page.keyboard.press('/');
+  await expect(box(page)).toBeFocused();
+  await page.keyboard.type('this year');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL('/search');
+  await expect(page.getByText('1 best match')).toBeVisible();
+
+  // Moving on keeps what was typed in the box, ready to change.
+  await goTo(page, 'Favorites');
+  await expect(box(page)).toHaveValue('this year');
+  await searchFor(page, 'photos from this year');
+  await expect(page).toHaveURL('/search');
+  await expect(chips(page).getByRole('button')).toHaveText(['This year']);
 });

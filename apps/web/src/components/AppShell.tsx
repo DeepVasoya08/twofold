@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type { ReactNode } from 'react';
 
 import { useAccount, useMe } from '../app/account';
@@ -9,6 +10,7 @@ import { isViewOnly, useVault } from '../app/vault';
 import { Avatar, LockBadge, Logo } from './Brand';
 import { DownloadDialog } from './DownloadDialog';
 import { DownloadProgress } from './DownloadProgress';
+import { SearchBar } from './SearchBar';
 import { SmartSearchCard } from './SmartSearchCard';
 import { Icon } from './Icon';
 import { InviteRequests } from './Invites';
@@ -25,21 +27,12 @@ const nav: {
   label: string;
   icon: IconName;
   match: (path: string) => boolean;
-  /** Left out of the phone tab bar, which has a button in the top bar instead. */
-  noTab?: boolean;
 }[] = [
   {
     to: paths.gallery,
     label: 'Photos',
     icon: 'photos',
     match: (path) => path === paths.gallery || path.startsWith(`${paths.gallery}/`),
-  },
-  {
-    to: paths.search,
-    label: 'Search',
-    icon: 'search',
-    match: (path) => path === paths.search,
-    noTab: true,
   },
   {
     to: paths.albums,
@@ -85,6 +78,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
   const { photo } = useProfile();
   const { openDialog: openUpload } = useUploads();
   const isPrivate = space === 'private';
+  const searchInput = useRef<HTMLInputElement>(null);
   // Locking drops the keys and every decrypted photo; the next password decides the space.
   const lock = () => {
     lockAccount();
@@ -146,9 +140,17 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
           {isPrivate && <PrivatePill />}
         </div>
         <div className="shell__topbar-actions">
-          <Link to={paths.search} className="icon-btn" aria-label="Search">
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => {
+              searchInput.current?.scrollIntoView({ block: 'center' });
+              searchInput.current?.focus();
+            }}
+            aria-label="Search"
+          >
             <Icon name="search" />
-          </Link>
+          </button>
           <button type="button" className="icon-btn" onClick={lock} aria-label="Lock Twofold">
             <Icon name="lock" />
           </button>
@@ -164,27 +166,28 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
       </header>
 
       <main className="shell__content" id="content">
+        <div className="shell__search">
+          <SearchBar inputRef={searchInput} />
+        </div>
         <InviteRequests />
         {children}
       </main>
 
       <nav className="shell__tabs" aria-label="Main">
-        {nav
-          .filter((item) => !item.noTab)
-          .map((item) => {
-            const active = item.match(pathname);
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={`shell__tab${active ? ' is-active' : ''}`}
-                aria-current={active ? 'page' : undefined}
-              >
-                <Icon name={item.icon} size={22} filled={active && item.icon === 'heart'} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+        {nav.map((item) => {
+          const active = item.match(pathname);
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              className={`shell__tab${active ? ' is-active' : ''}`}
+              aria-current={active ? 'page' : undefined}
+            >
+              <Icon name={item.icon} size={22} filled={active && item.icon === 'heart'} />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
       </nav>
 
       <UploadDialog albumId={uploadTarget} />
