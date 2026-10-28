@@ -41,6 +41,8 @@ export class FakeServer {
   /** By `token/id`: each space's sealed search segments. */
   searchSegments = new Map<string, { token: string; id: string; data: string }>();
   people = new Map<string, { token: string; id: string; meta: string }>();
+  /** By `token/id`: each space's sealed taught words. */
+  words = new Map<string, { token: string; id: string; meta: string }>();
 
   api = (token: string): SpaceApi => {
     const member = this.members.get(token);
@@ -378,6 +380,25 @@ export class FakeServer {
         for (const [key, entry] of this.searchSegments) {
           if (entry.token === space) this.searchSegments.delete(key);
         }
+        for (const [key, entry] of this.words) if (entry.token === space) this.words.delete(key);
+      },
+      listWords: async () => {
+        ownerOnly();
+        await Promise.resolve();
+        const words = [...this.words.values()]
+          .filter((entry) => entry.token === space)
+          .map(({ id, meta }) => ({ id, meta }));
+        return { words };
+      },
+      putWord: async (id, meta) => {
+        ownerOnly();
+        await Promise.resolve();
+        this.words.set(`${space}/${id}`, { token: space, id, meta });
+      },
+      deleteWord: async (id) => {
+        ownerOnly();
+        await Promise.resolve();
+        if (!this.words.delete(`${space}/${id}`)) throw new ApiError(404, 'Not here');
       },
     };
   };

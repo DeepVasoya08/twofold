@@ -5,10 +5,12 @@ import { spaceApi } from '../lib/api';
 import type { SpaceApi } from '../lib/api';
 import { decodeSegment, encodeSegment, splitResults } from '../lib/search/segment';
 import type { SearchResults } from '../lib/search/segment';
+import { parseWord, wordMeta } from '../lib/search/taught';
+import type { TaughtWord } from '../lib/search/taught';
 
 /**
- * The open space's search vectors, stored in segments sealed under the space's own key.
- * Owner-only, so it always uses the space's own token, never a share token; vectors for
+ * The open space's search vectors, stored in segments sealed under the space's own key, and
+ * the words taught to search, one sealed record each. Owner-only, so it always uses the space's own token, never a share token; vectors for
  * photos in libraries shared with you are kept here too, in your own space.
  */
 
@@ -19,6 +21,7 @@ export interface SavedSearch {
   results: SearchResults;
   /** Ids of the segments the results came from, to merge them later. */
   segments: string[];
+  words: TaughtWord[];
 }
 
 export interface SearchStore {
@@ -30,8 +33,21 @@ export interface SearchStore {
    * returns the new ones' ids. They're saved first, so a failure part way loses nothing.
    */
   replaceSegments: (results: SearchResults, old: readonly string[]) => Promise<string[]>;
-  /** Forgets every search vector in the space. */
+  saveWord: (word: TaughtWord) => Promise<void>;
+  deleteWord: (id: string) => Promise<void>;
+  /** Forgets every search vector and taught word in the space. */
   forget: () => Promise<void>;
+  newId: () => Promise<string>;
+}
+
+const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
+
+function decode(bytes: Uint8Array): unknown {
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
 }
 
 export function remoteSearchStore(
@@ -59,6 +75,8 @@ export function remoteSearchStore(
     load: async () => {
       const crypto = await loadCrypto();
       const api = await remote();
+      const storedWords = api.listWords();
+      storedWords.catch(() => undefined);
       const results: SearchResults = new Map();
       const segments: string[] = [];
       let after: string | undefined;
@@ -76,7 +94,15 @@ export function remoteSearchStore(
         }
         after = page.next ?? undefined;
       } while (after);
-      return { results, segments };
+      const words: TaughtWord[] = [];
+      for (const stored of (await storedWords).words) {
+        const opened = await crypto
+          .openOwnerRecord(keys, 'word', stored.id, stored.meta)
+          .catch(() => null);
+        const word = opened && parseWord(stored.id, decode(opened));
+        if (word) words.push(word);
+      }
+      return { results, segments, words };
     },
 
     saveResults: saveSegments,
@@ -90,23 +116,39 @@ export function remoteSearchStore(
       return ids;
     },
 
+    saveWord: async (word) => {
+      const crypto = await loadCrypto();
+      const api = await remote();
+      const meta = await crypto.sealOwnerRecord(keys, 'word', word.id, encode(wordMeta(word)));
+      await api.putWord(word.id, meta);
+    },
+
+    deleteWord: async (id) => {
+      const api = await remote();
+      await api.deleteWord(id);
+    },
+
     forget: async () => {
       const api = await remote();
       await api.deleteSearchData();
     },
+
+    newId: async () => (await loadCrypto()).newRecordId(),
   };
 }
 
 /** Keeps everything in memory: for rendering tests and previews. */
 export function memorySearchStore(initial: Partial<SavedSearch> = {}): SearchStore {
   let results: SearchResults = new Map(initial.results);
+  const words = new Map((initial.words ?? []).map((word) => [word.id, word]));
   let next = 0;
-  const newId = () => {
+  const newId = (prefix = 'segment') => {
     next += 1;
-    return `segment-${String(next)}`;
+    return `${prefix}-${String(next)}`;
   };
   return {
-    load: () => Promise.resolve({ results: new Map(results), segments: [] }),
+    load: () =>
+      Promise.resolve({ results: new Map(results), segments: [], words: [...words.values()] }),
     saveResults: (added) => {
       for (const [photoId, vector] of added) results.set(photoId, vector);
       return Promise.resolve([newId()]);
@@ -115,9 +157,19 @@ export function memorySearchStore(initial: Partial<SavedSearch> = {}): SearchSto
       results = new Map(kept);
       return Promise.resolve([newId()]);
     },
-    forget: () => {
-      results = new Map();
+    saveWord: (word) => {
+      words.set(word.id, word);
       return Promise.resolve();
     },
+    deleteWord: (id) => {
+      words.delete(id);
+      return Promise.resolve();
+    },
+    forget: () => {
+      results = new Map();
+      words.clear();
+      return Promise.resolve();
+    },
+    newId: () => Promise.resolve(newId('word')),
   };
 }

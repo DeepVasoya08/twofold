@@ -4,6 +4,11 @@
  * one fixed threshold either shows junk or misses things; instead each score is compared
  * with how the rest of the library scores for the same query. The clear matches are "best";
  * the next tier is offered with "Show more".
+ *
+ * A search can also be for photos that look like others: one photo ("More like this") or a
+ * taught word's photos. Photos score much higher against photos than against words, so
+ * those comparisons have their own tuning. With words to rank by too, looking alike is a
+ * filter, like a person's name.
  */
 import type { PersonLabel } from '../people/grouping';
 import type { ParsedQuery } from './query';
@@ -28,6 +33,39 @@ export const MORE_DEVIATIONS = 1.2;
 export const BEST_NEAR_TOP = 0.05;
 /** With fewer photos than this, the spread says little, so only the floors count. */
 export const FEW_PHOTOS = 20;
+
+export interface Tuning {
+  showFloor: number;
+  bestFloor: number;
+  bestDeviations: number;
+  moreDeviations: number;
+  nearTop: number;
+}
+
+/** For ranking by words. */
+export const WORDS_TUNING: Tuning = {
+  showFloor: SHOW_FLOOR,
+  bestFloor: BEST_FLOOR,
+  bestDeviations: BEST_DEVIATIONS,
+  moreDeviations: MORE_DEVIATIONS,
+  nearTop: BEST_NEAR_TOP,
+};
+
+/*
+ * Tuned on the same 400 photos, two photos counting as alike when their captions share an
+ * everyday word: two photos score 0.34 on average (words and photos: about 0.2). Taught with
+ * three photos, about 4 others are best matches, 2.6 times as often alike as chance would
+ * give, and with "Show more" about half of the alike photos are shown. Real libraries, with
+ * the same dog or room again and again, score alike photos higher than this.
+ */
+/** For ranking by how much photos look like others. */
+export const LOOKS_TUNING: Tuning = {
+  showFloor: 0.5,
+  bestFloor: 0.6,
+  bestDeviations: 2.5,
+  moreDeviations: 1.5,
+  nearTop: 0.15,
+};
 
 /** CLIP matches a short description best when it's worded like a caption. */
 export function clipPrompt(what: string): string {
@@ -60,15 +98,18 @@ export function similarity(a: Float32Array, b: Float32Array): number {
 }
 
 /** The scores a best match and a weaker one need, given how the whole library scored. */
-export function thresholds(library: readonly number[]): { bestAt: number; moreAt: number } {
-  if (library.length < FEW_PHOTOS) return { bestAt: BEST_FLOOR, moreAt: SHOW_FLOOR };
+export function thresholds(
+  library: readonly number[],
+  tuning: Tuning = WORDS_TUNING,
+): { bestAt: number; moreAt: number } {
+  if (library.length < FEW_PHOTOS) return { bestAt: tuning.bestFloor, moreAt: tuning.showFloor };
   const mean = library.reduce((total, score) => total + score, 0) / library.length;
   const spread = Math.sqrt(
     library.reduce((total, score) => total + (score - mean) ** 2, 0) / library.length,
   );
   return {
-    bestAt: Math.max(BEST_FLOOR, mean + BEST_DEVIATIONS * spread),
-    moreAt: Math.max(SHOW_FLOOR, mean + MORE_DEVIATIONS * spread),
+    bestAt: Math.max(tuning.bestFloor, mean + tuning.bestDeviations * spread),
+    moreAt: Math.max(tuning.showFloor, mean + tuning.moreDeviations * spread),
   };
 }
 
@@ -76,10 +117,11 @@ export function thresholds(library: readonly number[]): { bestAt: number; moreAt
 export function cutoff(
   scored: readonly { id: string; score: number }[],
   library: readonly number[] = scored.map((each) => each.score),
+  tuning: Tuning = WORDS_TUNING,
 ): { best: string[]; more: string[] } {
   const sorted = [...scored].sort((a, b) => b.score - a.score);
-  const { moreAt, ...floors } = thresholds(library);
-  const bestAt = Math.max(floors.bestAt, (sorted[0]?.score ?? 0) - BEST_NEAR_TOP);
+  const { moreAt, ...floors } = thresholds(library, tuning);
+  const bestAt = Math.max(floors.bestAt, (sorted[0]?.score ?? 0) - tuning.nearTop);
   const best = sorted.filter((each) => each.score >= bestAt).map((each) => each.id);
   const more = sorted
     .filter((each) => each.score < bestAt && each.score >= moreAt)
@@ -102,38 +144,72 @@ function passesPeople(query: ParsedQuery, photoId: string, people: PeopleIndex):
   );
 }
 
+/** Every looked-at photo's score against `vector`. */
+function scoresFor(vector: Float32Array, vectors: SearchResults): Map<string, number> {
+  const scores = new Map<string, number>();
+  for (const [id, found] of vectors) if (found) scores.set(id, similarity(vector, found));
+  return scores;
+}
+
 /**
  * Finds photos for a query. `photos` is the open space's photos, newest first. `vector` is
  * the query's words as a search vector, or null when no words are left after the filters.
+ * `looksLike` holds what the photos must look like (a photo's vector, a taught word's), and
+ * `exclude` photos never to show (the photo "More like this" started from).
  */
 export function findPhotos({
   query,
   vector,
+  looksLike = [],
+  exclude = new Set(),
   photos,
   people,
   vectors,
 }: {
   query: ParsedQuery;
   vector: Float32Array | null;
+  looksLike?: readonly Float32Array[];
+  exclude?: ReadonlySet<string>;
   photos: readonly { id: string; takenAt: string }[];
   people: PeopleIndex;
   vectors: SearchResults;
 }): Found {
   const { when } = query;
   const passed = photos.filter(
-    (photo) => (!when || takenIn(when, photo.takenAt)) && passesPeople(query, photo.id, people),
+    (photo) =>
+      !exclude.has(photo.id) &&
+      (!when || takenIn(when, photo.takenAt)) &&
+      passesPeople(query, photo.id, people),
   );
-  if (!vector) return { best: passed.map((photo) => photo.id), more: [], notReady: 0 };
-  // How the whole library scores sets the bar, even when filters leave only a few photos.
-  const scores = new Map<string, number>();
-  for (const [id, found] of vectors) if (found) scores.set(id, similarity(vector, found));
-  let notReady = 0;
-  const scored: { id: string; score: number }[] = [];
-  for (const photo of passed) {
-    const score = scores.get(photo.id);
-    if (score !== undefined) scored.push({ id: photo.id, score });
-    // A photo whose preview couldn't be read (null) can't match words; it's not "not ready".
-    else if (!vectors.has(photo.id)) notReady++;
+  if (!vector && looksLike.length === 0) {
+    return { best: passed.map((photo) => photo.id), more: [], notReady: 0 };
   }
-  return { ...cutoff(scored, [...scores.values()]), notReady };
+  // How the whole library scores sets the bar, even when filters leave only a few photos.
+  const looks = looksLike.map((look) => {
+    const scores = scoresFor(look, vectors);
+    return { scores, moreAt: thresholds([...scores.values()], LOOKS_TUNING).moreAt };
+  });
+  let notReady = 0;
+  const alike: string[] = [];
+  for (const photo of passed) {
+    if (!vectors.has(photo.id)) notReady++;
+    // A photo whose preview couldn't be read (null) can't match; it's not "not ready".
+    else if (looks.every((look) => (look.scores.get(photo.id) ?? -1) >= look.moreAt)) {
+      alike.push(photo.id);
+    }
+  }
+  if (vector) {
+    const scores = scoresFor(vector, vectors);
+    const scored = alike.flatMap((id) => {
+      const score = scores.get(id);
+      return score === undefined ? [] : [{ id, score }];
+    });
+    return { ...cutoff(scored, [...scores.values()]), notReady };
+  }
+  // Ranked by how alike they look, on average.
+  const average = (id: string) =>
+    looks.reduce((total, look) => total + (look.scores.get(id) ?? 0), 0) / looks.length;
+  const library = [...vectors.keys()].filter((id) => vectors.get(id)).map(average);
+  const scored = alike.map((id) => ({ id, score: average(id) }));
+  return { ...cutoff(scored, library, LOOKS_TUNING), notReady };
 }

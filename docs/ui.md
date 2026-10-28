@@ -179,6 +179,8 @@ search is read by a small parser (`lib/search/query.ts`) into who, when and what
   Typing "me" with nobody marked shows a note pointing to People.
 - **When**: a year, a month ("in December", any year), a month and year, today, yesterday,
   and this or last week, month or year.
+- **Taught words**: names taught to search (below), which find photos that look like the
+  photos they were taught with.
 - **What**: everything else, minus words like "photos", ranked by Smart search.
 
 Who and when filter the open space's photos; what ranks them (`lib/search/find.ts`). Each
@@ -190,6 +192,15 @@ The first search with words downloads the text half (about 65 MB, once), with a 
 line that says "resources". Once it's loaded on a quick device, results follow the typing;
 otherwise they come on Enter. With Smart search off, people and dates still work and words
 explain how to turn it on. The query is never put in the URL or saved; locking forgets it.
+
+**More like this** (the magnifier in the photo viewer, while Smart search is on) starts a
+new search for photos that look like that one, shown as a "Like this photo" chip; words
+typed after it narrow it down. **Teach a word** (in the selection bar, for 3 to 5 photos)
+names what the photos show, like a pet or a place; typing that name then finds photos that
+look like them. A name can't be a person's or another word's. Settings → Search lists the
+words, each with Forget. Looking alike is compared with its own tuning (`LOOKS_TUNING` in
+`lib/search/find.ts`), since photos score much higher against photos than against words.
+If the photos haven't been looked at yet, the search says so instead of showing nothing.
 
 ## Accounts and locking
 

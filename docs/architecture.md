@@ -72,7 +72,8 @@ everything from one origin, so there is no CORS and the CSP can stay at
     `/joined` (the libraries and albums this space joined), `/faces` (sealed face data in
     segments: list paged, add, delete), `/people` (sealed person records: list, put,
     delete), `/face-data` (delete both), `/search` (sealed search vectors in segments: list
-    paged, add, delete), `/search-data` (delete them all) and `/pending-invites` (invites
+    paged, add, delete), `/words` (sealed words taught to search: list, put, delete), `/search-data` (delete
+    the vectors and words) and `/pending-invites` (invites
     this space has in progress, on either side: list, add, replace, remove). `DELETE /membership` lets a
     member leave. A token given one album only reaches `GET /photos`, `/albums`, `/thumbs`,
     `/photos/:id/:part` (that album's listed photos) and `DELETE /membership`. See
@@ -88,7 +89,7 @@ everything from one origin, so there is no CORS and the CSP can stay at
     own update. The API tests count round trips per request (`test/d1.ts`).
   - Tables: `accounts`, `sessions` (token hashes only), `login_failures`, `photos`,
     `albums`, `album_items`, `members`, `joined`, `pending_invites`, `face_segments`,
-    `people` and `search_segments` (keyed by space, never
+    `people`, `search_segments` and `search_words` (keyed by space, never
     by account), and `invites` (up to a week, keyed by hashes of the code, link and handle).
   - API tests run the real migrations on Node's built-in SQLite (`src/test/d1.ts`) and an
     in-memory R2 (`src/test/r2.ts`).

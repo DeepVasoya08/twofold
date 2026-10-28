@@ -557,3 +557,15 @@ export type PutSearchSegmentRequest = PutFaceSegmentRequest;
 
 /** Removes segments merged into a newer one. */
 export type DeleteSearchSegmentsRequest = DeleteFaceSegmentsRequest;
+
+/** Most words one space can teach search. */
+export const MAX_WORDS = 200;
+
+/** A word taught to search: its name and the photos that show it, sealed for the owner. */
+export type StoredWord = StoredAlbum;
+
+export type PutWordRequest = UpdateRecordRequest;
+
+export interface WordList {
+  words: StoredWord[];
+}

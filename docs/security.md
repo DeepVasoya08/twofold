@@ -475,15 +475,22 @@ so photos can later be found by describing them. The server stores only cipherte
   segment id as associated data, padded to 16 KiB blocks (`sealSearchSegment` in
   `packages/crypto/src/storage.ts`). Segments are at most 256 KiB and count against the
   storage quota. The vectors held in memory are zeroed when the vault locks.
-- **Owner only.** The routes (`/api/space/search`, `/search-data`) refuse share tokens.
+- **Taught words.** A word taught to search is an owner-only record of kind `word` (sealed
+  like a person): its name, the ids of the 3 to 5 photos it was taught with, and their
+  average vector, quantised to bytes, so the word keeps working after its photos are
+  deleted. The server sees only that the space has some number of them (at most 200).
+- **Owner only.** The routes (`/api/space/search`, `/words`, `/search-data`) refuse share
+  tokens.
   Each member works out vectors on their own device, into their own space.
-- **Deleting.** Settings → Search → "Delete search data" removes every segment for the open
-  space (`DELETE /api/space/search-data`), and wiping a space removes them too.
+- **Deleting.** Settings → Search → "Delete search data" removes every segment and taught
+  word for the open space (`DELETE /api/space/search-data`), and wiping a space removes
+  them too. Each word can also be forgotten on its own.
 - **Searching.** Queries are read and turned into vectors on the device: the text half
   (and its word list, `merges.txt`) is served and pinned like the photo half, downloaded on
   the first search with words, and runs in its own worker. A query is never sent anywhere,
   never put in the URL (so it can't land in browser history; the viewer's link only says
-  `from=search`) and never saved; it lives in memory until lock. The search box asks the
+  `from=search`) and never saved; it lives in memory until lock. "More like this" works
+  the same way: the photo it started from is held in memory, not in the URL. The search box asks the
   browser not to autocomplete. A search only ever sees the open space's photos, people and
   vectors.
 - **Trade-off.** A vector says roughly what a photo shows (a beach, a dog, two people). It

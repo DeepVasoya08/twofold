@@ -149,6 +149,44 @@ describe('parseQuery: what is left', () => {
   });
 });
 
+describe('parseQuery: taught words and "More like this"', () => {
+  const words = [
+    { id: 'w-bis', name: 'Biscuit' },
+    { id: 'w-cab', name: 'the cabin' },
+    { id: 'w-ana', name: 'Ana María garden' },
+  ];
+  const withWords = (text: string, ignore: string[] = [], like: string | null = null) =>
+    parseQuery(text, { people, words, like, now, ignore: new Set(ignore) });
+
+  it('reads a taught word like a name, as a filter with a chip', () => {
+    const q = withWords('Biscuit at the cabin last year');
+    expect(q).toMatchObject({ taught: ['w-bis', 'w-cab'], what: '', people: [] });
+    expect(q.chips.map((chip) => chip.label)).toEqual(['Biscuit', 'the cabin', 'Last year']);
+    expect(q.chips[0]).toMatchObject({ key: 'word:w-bis', kind: 'word', wordId: 'w-bis' });
+  });
+
+  it('matches the longest name, whether a person’s or a word’s', () => {
+    expect(withWords('Ana María garden')).toMatchObject({ taught: ['w-ana'], people: [] });
+    expect(withWords('Ana María at home')).toMatchObject({
+      taught: [],
+      people: ['p-am'],
+      what: 'home',
+    });
+  });
+
+  it('leaves a word tapped off for CLIP', () => {
+    expect(withWords('Biscuit', ['word:w-bis'])).toMatchObject({ taught: [], what: 'biscuit' });
+  });
+
+  it('puts the photo "More like this" started from first, until it is tapped off', () => {
+    const q = withWords('on the beach', [], 'photo-1');
+    expect(q.like).toBe('photo-1');
+    expect(q.chips.map((chip) => chip.label)).toEqual(['Like this photo', 'beach']);
+    expect(withWords('', [], 'photo-1').chips.map((chip) => chip.key)).toEqual(['like']);
+    expect(withWords('', ['like'], 'photo-1')).toMatchObject({ like: null, chips: [] });
+  });
+});
+
 describe('queryWords', () => {
   it('splits on anything but letters, digits and apostrophes', () => {
     expect(queryWords('  Café, rock’n’roll! 2024 ')).toEqual(['café', "rock'n'roll", '2024']);

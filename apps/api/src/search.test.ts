@@ -4,12 +4,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   MAX_SEARCH_SEGMENTS,
+  MAX_WORDS,
   SEARCH_SEGMENT_PAGE,
   SEARCH_SIZES,
   SPACE_HEADER,
   STORAGE_SIZES,
 } from '@twofold/types';
-import type { SearchSegmentPage } from '@twofold/types';
+import type { SearchSegmentPage, WordList } from '@twofold/types';
 
 import type { Env } from './env';
 import { createTestDb } from './test/d1';
@@ -54,6 +55,17 @@ async function segments(c = client, after?: string): Promise<SearchSegmentPage> 
 
 const put = (id: string, data: string, c = client) =>
   c.request('PUT', `/space/search/${id}`, { data });
+
+const newMeta = () => toBase64Url(randomBytes(400));
+
+async function words(c = client): Promise<WordList['words']> {
+  const res = await c.request('GET', '/space/words');
+  expect(res.status).toBe(200);
+  return (await res.json<WordList>()).words;
+}
+
+const putWord = (id: string, meta: string, c = client) =>
+  c.request('PUT', `/space/words/${id}`, { meta });
 
 describe('search segments', () => {
   it('are stored per space and listed back in pages', async () => {
@@ -132,20 +144,64 @@ describe('search segments', () => {
   });
 });
 
+describe('taught words', () => {
+  it('are saved, changed and deleted, per space', async () => {
+    const id = newId();
+    const meta = newMeta();
+    expect((await putWord(id, meta)).status).toBe(204);
+    expect(await words()).toEqual([{ id, meta }]);
+    const changed = newMeta();
+    await putWord(id, changed);
+    expect(await words()).toEqual([{ id, meta: changed }]);
+    // The other password's space sees none of them.
+    const own = client.headers;
+    useSpace(client, toBase64Url(randomBytes(16)));
+    expect(await words()).toEqual([]);
+    client.headers = own;
+    expect((await client.request('DELETE', `/space/words/${id}`, {})).status).toBe(204);
+    expect(await words()).toEqual([]);
+    expect((await client.request('DELETE', `/space/words/${id}`, {})).status).toBe(404);
+  });
+
+  it('stop at the limit, though ones already kept can still change', async () => {
+    const first = newId();
+    await putWord(first, newMeta());
+    const tag = (sqlite.prepare('SELECT space FROM search_words').get() as { space: string }).space;
+    const insert = sqlite.prepare('INSERT INTO search_words (space, id, meta) VALUES (?, ?, ?)');
+    for (let i = 1; i < MAX_WORDS; i++) insert.run(tag, newId(), 'x');
+    expect((await putWord(newId(), newMeta())).status).toBe(409);
+    expect((await putWord(first, newMeta())).status).toBe(204);
+  });
+
+  it('refuse malformed requests', async () => {
+    expect((await putWord('short', newMeta())).status).toBe(400);
+    expect((await putWord(newId(), 'not base64!')).status).toBe(400);
+    expect(
+      (await client.request('PUT', `/space/words/${newId()}`, { meta: newMeta(), extra: 1 }))
+        .status,
+    ).toBe(400);
+    expect((await client.request('DELETE', '/space/words/short', {})).status).toBe(400);
+  });
+});
+
 describe('search data', () => {
   it('is forgotten all at once, giving its storage back', async () => {
     await put(newId(), segmentData(800));
+    await putWord(newId(), newMeta());
     await client.request('PUT', `/space/faces/${newId()}`, { data: segmentData(300) });
     expect((await client.request('DELETE', '/space/search-data', {})).status).toBe(204);
     expect((await segments()).segments).toEqual([]);
+    expect(await words()).toEqual([]);
     // Face results stay.
     expect(stored()).toBe(300);
   });
 
   it('goes with the rest of the space when the space is wiped', async () => {
     await put(newId(), segmentData(800));
+    await putWord(newId(), newMeta());
     expect((await client.request('DELETE', '/space', {})).status).toBe(204);
     expect((await segments()).segments).toEqual([]);
+    expect(await words()).toEqual([]);
     expect(stored()).toBe(0);
   });
 
@@ -166,6 +222,9 @@ describe('search data', () => {
       expect((await put(id, segmentData(), guest)).status).toBe(403);
       expect((await guest.request('DELETE', '/space/search', { ids: [id] })).status).toBe(403);
       expect((await guest.request('DELETE', '/space/search-data', {})).status).toBe(403);
+      expect((await guest.request('GET', '/space/words')).status).toBe(403);
+      expect((await putWord(id, newMeta(), guest)).status).toBe(403);
+      expect((await guest.request('DELETE', `/space/words/${id}`, {})).status).toBe(403);
     }
   });
 });

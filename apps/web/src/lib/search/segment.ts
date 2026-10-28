@@ -17,6 +17,8 @@ export const VECTOR_LENGTH = 512;
 const VERSION = 1;
 const HEADER_BYTES = 8;
 const ID_BYTES = 16;
+/** One vector, packed: a scale (f32) and 512 signed bytes. */
+export const PACKED_BYTES = 4 + VECTOR_LENGTH;
 
 /** A photo's search vector (length 1), or null if its preview couldn't be read. */
 export type SearchVector = Float32Array | null;
@@ -25,7 +27,37 @@ export type SearchVector = Float32Array | null;
 export type SearchResults = Map<string, SearchVector>;
 
 export function entryBytes(vector: SearchVector): number {
-  return ID_BYTES + 1 + (vector ? 4 + VECTOR_LENGTH : 0);
+  return ID_BYTES + 1 + (vector ? PACKED_BYTES : 0);
+}
+
+/** Packs a vector of VECTOR_LENGTH numbers as a scale and one signed byte each. */
+export function packVector(vector: Float32Array): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(PACKED_BYTES);
+  const view = new DataView(out.buffer);
+  let largest = 0;
+  for (const v of vector) largest = Math.max(largest, Math.abs(v));
+  const scale = largest > 0 ? largest / 127 : 1;
+  view.setFloat32(0, scale);
+  for (let i = 0; i < VECTOR_LENGTH; i++) view.setInt8(4 + i, Math.round((vector[i] ?? 0) / scale));
+  return out;
+}
+
+/** Reads a packed vector back, at length 1; null if it isn't one. */
+export function unpackVector(bytes: Uint8Array): Float32Array | null {
+  if (bytes.length !== PACKED_BYTES) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const scale = view.getFloat32(0);
+  const vector = new Float32Array(VECTOR_LENGTH);
+  let sum = 0;
+  for (let i = 0; i < VECTOR_LENGTH; i++) {
+    const v = view.getInt8(4 + i) * scale;
+    vector[i] = v;
+    sum += v * v;
+  }
+  const length = Math.sqrt(sum);
+  if (!(length > 0)) return null;
+  for (let i = 0; i < VECTOR_LENGTH; i++) vector[i] = (vector[i] ?? 0) / length;
+  return vector;
 }
 
 /** Packs vectors for many photos. Photos whose id isn't a record id are skipped. */
@@ -47,14 +79,8 @@ export function encodeSegment(results: SearchResults): Uint8Array<ArrayBuffer> {
     out[offset] = vector ? 1 : 0;
     offset += 1;
     if (!vector) continue;
-    let largest = 0;
-    for (const v of vector) largest = Math.max(largest, Math.abs(v));
-    const scale = largest > 0 ? largest / 127 : 1;
-    view.setFloat32(offset, scale);
-    for (let i = 0; i < VECTOR_LENGTH; i++) {
-      view.setInt8(offset + 4 + i, Math.round((vector[i] ?? 0) / scale));
-    }
-    offset += 4 + VECTOR_LENGTH;
+    out.set(packVector(vector), offset);
+    offset += PACKED_BYTES;
   }
   return out;
 }
@@ -79,20 +105,11 @@ export function decodeSegment(bytes: Uint8Array): SearchResults | null {
       results.set(id, null);
       continue;
     }
-    if (hasVector !== 1 || offset + 4 + VECTOR_LENGTH > bytes.length) return null;
-    const scale = view.getFloat32(offset);
-    const vector = new Float32Array(VECTOR_LENGTH);
-    let sum = 0;
-    for (let i = 0; i < VECTOR_LENGTH; i++) {
-      const v = view.getInt8(offset + 4 + i) * scale;
-      vector[i] = v;
-      sum += v * v;
-    }
-    const length = Math.sqrt(sum);
-    if (!(length > 0)) return null;
-    for (let i = 0; i < VECTOR_LENGTH; i++) vector[i] = (vector[i] ?? 0) / length;
+    if (hasVector !== 1 || offset + PACKED_BYTES > bytes.length) return null;
+    const vector = unpackVector(bytes.subarray(offset, offset + PACKED_BYTES));
+    if (!vector) return null;
     results.set(id, vector);
-    offset += 4 + VECTOR_LENGTH;
+    offset += PACKED_BYTES;
   }
   return offset === bytes.length ? results : null;
 }

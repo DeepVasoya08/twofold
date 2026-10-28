@@ -6,6 +6,7 @@ import type { SpaceKeys } from '@twofold/crypto';
 import { useAccount, useMe } from '../app/account';
 import { errorMessage } from '../app/account-ops';
 import { useFind } from '../app/find';
+import { useSearch } from '../app/search';
 import { useGroupPhotoIds } from '../app/people';
 import { Link, useRouter } from '../app/router';
 import { parsePhotoContext, paths } from '../app/routes';
@@ -82,7 +83,8 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
 
   const context = parsePhotoContext(search);
   const groupPhotoIds = useGroupPhotoIds(context.kind === 'person' ? context.groupId : null);
-  const { shownIds } = useFind();
+  const { shownIds, searchLike } = useFind();
+  const smartSearch = useSearch();
   const list = photosInContext(
     state,
     context,
@@ -244,6 +246,20 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
           >
             <Icon name="info" />
           </button>
+          {smartSearch.enabled && (
+            <button
+              type="button"
+              className="viewer__btn"
+              onClick={() => {
+                searchLike(photo.id);
+                navigate(paths.search);
+              }}
+              aria-label="More like this"
+              title="More like this"
+            >
+              <Icon name="search" />
+            </button>
+          )}
           <a
             className="viewer__btn viewer__btn--wide-only"
             href={photo.fullSrc}

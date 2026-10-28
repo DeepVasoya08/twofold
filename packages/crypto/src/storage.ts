@@ -36,10 +36,11 @@ export type RecordKind = 'photo' | 'album';
 /**
  * Records only the space's owner can open: who it is shared with, the libraries it has
  * joined, the key of its profile photo, invites still in progress (either side's secret key
- * for one invite), and people (a name and the faces confirmed or turned down). They use a
- * subkey that members never receive.
+ * for one invite), people (a name and the faces confirmed or turned down), and words taught
+ * to search (a name and the photos that show it). They use a subkey that members never
+ * receive.
  */
-export type OwnerRecordKind = 'member' | 'joined' | 'profile' | 'invite' | 'person';
+export type OwnerRecordKind = 'member' | 'joined' | 'profile' | 'invite' | 'person' | 'word';
 
 /** Segments of results worked out on the device: faces found, and photos' search vectors. */
 export type SegmentKind = 'faces' | 'search';
