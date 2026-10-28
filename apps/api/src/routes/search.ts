@@ -1,8 +1,14 @@
 import { Hono } from 'hono';
 
 import { fromBase64Url } from '@twofold/crypto/webcrypto';
-import { MAX_SEARCH_SEGMENTS, MAX_WORDS, SEARCH_SEGMENT_PAGE, STORAGE_SIZES } from '@twofold/types';
-import type { SearchSegmentPage, WordList } from '@twofold/types';
+import {
+  MAX_SEARCH_SEGMENTS,
+  MAX_SMART_ALBUMS,
+  MAX_WORDS,
+  SEARCH_SEGMENT_PAGE,
+  STORAGE_SIZES,
+} from '@twofold/types';
+import type { SearchSegmentPage, SmartAlbumList, StoredWord, WordList } from '@twofold/types';
 
 import { releaseStorage, reserveStorage } from '../db';
 import { messages, readBody } from '../respond';
@@ -21,7 +27,15 @@ import {
   listSegments,
 } from '../segment-db';
 import type { AppEnv } from '../session';
-import { countWords, deleteAllWords, deleteWord, hasWord, listWords, putWord } from '../word-db';
+import {
+  countRecords,
+  deleteAllRecords,
+  deleteRecord,
+  hasRecord,
+  listRecords,
+  putRecord,
+} from '../search-record-db';
+import type { SearchRecordTable } from '../search-record-db';
 import { requireOwner } from './owner';
 
 /**
@@ -29,7 +43,7 @@ import { requireOwner } from './owner';
  * header): segments of photos' search vectors, sealed on the device, counting against
  * storage like photos. Owner-only, like face results: someone a library is shared with
  * works out search vectors on their own device and keeps them in their own space. Words
- * taught to search are sealed records, like people.
+ * taught to search and smart albums (saved searches) are sealed records, like people.
  */
 export const search = new Hono<AppEnv>();
 
@@ -40,6 +54,8 @@ search.use('/search/*', requireOwner);
 search.use('/search-data', requireOwner);
 search.use('/words', requireOwner);
 search.use('/words/*', requireOwner);
+search.use('/smart-albums', requireOwner);
+search.use('/smart-albums/*', requireOwner);
 
 search.get('/search', async (c) => {
   const after = c.req.query('after') ?? '';
@@ -82,37 +98,63 @@ search.delete('/search', async (c) => {
   return c.body(null, 204);
 });
 
-search.get('/words', async (c) =>
-  c.json<WordList>({ words: await listWords(c.env.DB, c.get('space')) }),
+/** List, save and delete routes for one kind of sealed search record. */
+function recordRoutes(
+  path: string,
+  table: SearchRecordTable,
+  limit: number,
+  errors: { full: string; gone: string },
+  list: (records: StoredWord[]) => object,
+): void {
+  search.get(path, async (c) => c.json(list(await listRecords(c.env.DB, table, c.get('space')))));
+
+  /** Saves a record, new or changed. */
+  search.put(`${path}/:id`, async (c) => {
+    const id = recordIdSchema.safeParse(c.req.param('id'));
+    const body = await readBody(c, updateRecordSchema);
+    if (!id.success || !body) return c.json({ error: messages.badRequest }, 400);
+    const tag = c.get('space');
+    // Only a new record can go over the limit.
+    const full = (await countRecords(c.env.DB, table, tag)) >= limit;
+    if (full && !(await hasRecord(c.env.DB, table, tag, id.data))) {
+      return c.json({ error: errors.full }, 409);
+    }
+    await putRecord(c.env.DB, table, tag, { id: id.data, meta: body.meta });
+    return c.body(null, 204);
+  });
+
+  search.delete(`${path}/:id`, async (c) => {
+    const id = recordIdSchema.safeParse(c.req.param('id'));
+    if (!id.success || !(await readBody(c, emptySchema))) {
+      return c.json({ error: messages.badRequest }, 400);
+    }
+    if (!(await deleteRecord(c.env.DB, table, c.get('space'), id.data))) {
+      return c.json({ error: errors.gone }, 404);
+    }
+    return c.body(null, 204);
+  });
+}
+
+recordRoutes(
+  '/words',
+  'search_words',
+  MAX_WORDS,
+  { full: 'You’ve taught search the most words it keeps.', gone: 'That word isn’t here anymore.' },
+  (words): WordList => ({ words }),
 );
 
-/** Saves a word, new or changed. */
-search.put('/words/:id', async (c) => {
-  const id = recordIdSchema.safeParse(c.req.param('id'));
-  const body = await readBody(c, updateRecordSchema);
-  if (!id.success || !body) return c.json({ error: messages.badRequest }, 400);
-  const tag = c.get('space');
-  // Only a new word can go over the limit.
-  const full = (await countWords(c.env.DB, tag)) >= MAX_WORDS;
-  if (full && !(await hasWord(c.env.DB, tag, id.data))) {
-    return c.json({ error: 'You’ve taught search the most words it keeps.' }, 409);
-  }
-  await putWord(c.env.DB, tag, { id: id.data, meta: body.meta });
-  return c.body(null, 204);
-});
+recordRoutes(
+  '/smart-albums',
+  'smart_albums',
+  MAX_SMART_ALBUMS,
+  {
+    full: 'You have the most smart albums Twofold keeps.',
+    gone: 'That smart album isn’t here anymore.',
+  },
+  (albums): SmartAlbumList => ({ albums }),
+);
 
-search.delete('/words/:id', async (c) => {
-  const id = recordIdSchema.safeParse(c.req.param('id'));
-  if (!id.success || !(await readBody(c, emptySchema))) {
-    return c.json({ error: messages.badRequest }, 400);
-  }
-  if (!(await deleteWord(c.env.DB, c.get('space'), id.data))) {
-    return c.json({ error: 'That word isn’t here anymore.' }, 404);
-  }
-  return c.body(null, 204);
-});
-
-/** Forgets every search vector and taught word in the space. */
+/** Forgets every search vector, taught word and smart album in the space. */
 search.delete('/search-data', async (c) => {
   if (!(await readBody(c, emptySchema))) return c.json({ error: messages.badRequest }, 400);
   const freed = await deleteSearchData(c.env.DB, c.get('space'));
@@ -120,8 +162,11 @@ search.delete('/search-data', async (c) => {
   return c.body(null, 204);
 });
 
-/** Deletes every search segment and word of a space, and returns the bytes segments held. */
+/**
+ * Deletes every search segment, word and smart album of a space, and returns the bytes the
+ * segments held.
+ */
 export async function deleteSearchData(db: D1Database, space: string): Promise<number> {
-  await deleteAllWords(db, space);
+  await deleteAllRecords(db, space);
   return deleteAllSegments(db, TABLE, space);
 }

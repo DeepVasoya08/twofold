@@ -107,6 +107,37 @@ describe('taught words', () => {
   });
 });
 
+describe('smart albums', () => {
+  it('are sealed, loaded back, kept to their own space, and forgotten with search data', async () => {
+    const server = new FakeServer();
+    const space = await newSpace();
+    const store = remoteSearchStore(space, server.api);
+    const album = {
+      id: await store.newId(),
+      title: 'Beach days',
+      text: 'beach last year',
+      ignore: [],
+      like: null,
+      savedAt: '2026-10-28T10:00:00.000Z',
+      what: 'beach',
+      vector: vector(5),
+    };
+    await store.saveSmartAlbum(album);
+    const [stored] = [...server.smartAlbums.values()];
+    expect(stored?.meta).not.toContain('beach');
+    expect(server.words.size).toBe(0);
+
+    const [loaded] = (await remoteSearchStore(space, server.api).load()).smartAlbums;
+    expect(loaded).toMatchObject({ title: 'Beach days', text: 'beach last year', what: 'beach' });
+    expect((await remoteSearchStore(await newSpace(), server.api).load()).smartAlbums).toEqual([]);
+    await store.deleteSmartAlbum(album.id);
+    expect((await store.load()).smartAlbums).toEqual([]);
+    await store.saveSmartAlbum(album);
+    await store.forget();
+    expect((await store.load()).smartAlbums).toEqual([]);
+  });
+});
+
 describe('memorySearchStore', () => {
   it('keeps vectors in memory', async () => {
     const store = memorySearchStore();

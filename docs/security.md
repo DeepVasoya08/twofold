@@ -479,11 +479,16 @@ so photos can later be found by describing them. The server stores only cipherte
   like a person): its name, the ids of the 3 to 5 photos it was taught with, and their
   average vector, quantised to bytes, so the word keeps working after its photos are
   deleted. The server sees only that the space has some number of them (at most 200).
-- **Owner only.** The routes (`/api/space/search`, `/words`, `/search-data`) refuse share
-  tokens.
+- **Smart albums.** A saved search is an owner-only record of kind `smart-album`: its
+  title, the typed text, the chips tapped off, the "More like this" photo id, when it was
+  saved and the words' vector (quantised). Its photos are never listed in it; they're
+  found again on the device each time. Members never see smart albums, and they can't be
+  shared. The server sees only how many a space has (at most 100).
+- **Owner only.** The routes (`/api/space/search`, `/words`, `/smart-albums`,
+  `/search-data`) refuse share tokens.
   Each member works out vectors on their own device, into their own space.
-- **Deleting.** Settings → Search → "Delete search data" removes every segment and taught
-  word for the open space (`DELETE /api/space/search-data`), and wiping a space removes
+- **Deleting.** Settings → Search → "Delete search data" removes every segment, taught
+  word and smart album for the open space (`DELETE /api/space/search-data`), and wiping a space removes
   them too. Each word can also be forgotten on its own.
 - **Searching.** Queries are read and turned into vectors on the device: the text half
   (and its word list, `merges.txt`) is served and pinned like the photo half, downloaded on

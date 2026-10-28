@@ -9,16 +9,15 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
-import { clipPrompt, findPhotos } from '../lib/search/find';
-import type { Found, PeopleIndex } from '../lib/search/find';
+import { clipPrompt } from '../lib/search/find';
+import type { Found } from '../lib/search/find';
 import { EncoderStopped } from '../lib/search/photo-encoder';
 import type { QueryEncoder } from '../lib/search/query-encoder';
 import { parseQuery } from '../lib/search/query';
-import type { NamedPerson, NamedWord, ParsedQuery } from '../lib/search/query';
-import { wordVector } from '../lib/search/taught';
-import { photoOrder, useGroups, usePeople } from './people';
+import type { ParsedQuery } from '../lib/search/query';
+import { shownPhotos, useAnswer, useNames } from './answer';
+import type { NotLookedAt } from './answer';
 import { useSearch } from './search';
-import { useVault } from './vault';
 
 /**
  * The search box's state for the open space: what was typed, what it was read as, and what
@@ -53,6 +52,10 @@ interface FindValue {
   searchLike: (photoId: string) => void;
   /** What the last search was read as; null before the first. */
   query: ParsedQuery | null;
+  /** What was last searched for, with what was tapped off and the photo it started from. */
+  saved: { text: string; ignore: string[]; like: string | null } | null;
+  /** The last search's words as a search vector, once worked out. */
+  wordsVector: Float32Array | null;
   /** Taps a chip off (or back on), searching again without that part. */
   toggleChip: (key: string) => void;
   words: WordsState;
@@ -73,11 +76,6 @@ interface FindValue {
   notLookedAt: NotLookedAt;
 }
 
-export interface NotLookedAt {
-  photo: boolean;
-  words: string[];
-}
-
 const FindContext = createContext<FindValue | null>(null);
 
 export function FindProvider({
@@ -91,9 +89,6 @@ export function FindProvider({
     ((onProgress: (received: number, total: number) => void) => QueryEncoder) | null;
   now?: () => Date;
 }) {
-  const { state } = useVault();
-  const people = usePeople();
-  const { groups, hidden } = useGroups();
   const search = useSearch();
   const [text, setText] = useState('');
   const [submitted, setSubmitted] = useState<string | null>(null);
@@ -115,25 +110,13 @@ export function FindProvider({
     [],
   );
 
-  const named = useMemo<NamedPerson[]>(
-    () =>
-      people.people
-        .filter((person) => person.name !== '')
-        .map(({ id, name, me, labels }) => ({ id, name, me, labels })),
-    [people.people],
-  );
-  const taught = useMemo<NamedWord[]>(
-    () => search.words.map(({ id, name }) => ({ id, name })),
-    [search.words],
-  );
+  const names = useNames();
   const query = useMemo(
     () =>
-      submitted === null
-        ? null
-        : parseQuery(submitted, { people: named, words: taught, like, now: now(), ignore }),
+      submitted === null ? null : parseQuery(submitted, { ...names, like, now: now(), ignore }),
     // `now` is read when the query changes, not every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [submitted, named, taught, like, ignore],
+    [submitted, names, like, ignore],
   );
 
   const wordsOff = !search.enabled ? 'off' : makeQueryEncoder ? null : 'unavailable';
@@ -187,76 +170,13 @@ export function FindProvider({
     };
   }, [quick, text, submitted]);
 
-  const index = useMemo<PeopleIndex>(() => {
-    const inPhoto = new Map<string, Set<string>>();
-    for (const group of [...groups, ...hidden]) {
-      for (const photoId of group.photoIds) {
-        const found = inPhoto.get(photoId) ?? new Set<string>();
-        found.add(group.id);
-        inPhoto.set(photoId, found);
-      }
-    }
-    return {
-      inPhoto,
-      meId: people.people.find((person) => person.me)?.id ?? null,
-      labelsOf: new Map(people.people.map((person) => [person.id, person.labels])),
-    };
-  }, [groups, hidden, people.people]);
-
-  const ready = search.progress.done;
-  const { results, words: taughtWords } = search;
-  /** What the photos must look like, and what can't be looked for yet. */
-  const looks = useMemo(() => {
-    const vectors = results();
-    const looksLike: Float32Array[] = [];
-    const missing: NotLookedAt = { photo: false, words: [] };
-    if (query?.like) {
-      const vector = vectors.get(query.like);
-      if (vector) looksLike.push(vector);
-      else missing.photo = true;
-    }
-    for (const id of query?.taught ?? []) {
-      const word = taughtWords.find((each) => each.id === id);
-      const vector = word && wordVector(word, vectors);
-      if (vector) looksLike.push(vector);
-      else if (word) missing.words.push(word.name);
-    }
-    return { looksLike, missing };
-    // `ready` changes as photos are looked at, so missing ones are tried again.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, taughtWords, results, ready]);
-  const found = useMemo<Found | null>(() => {
-    if (!query || query.chips.length === 0) return null;
-    const wordsVector = query.what ? (vector?.what === query.what ? vector.vector : null) : null;
-    if (query.what && !wordsVector) return null;
-    if (looks.missing.photo || looks.missing.words.length > 0) return null;
-    const byId = new Map(state.photos.map((photo) => [photo.id, photo]));
-    const photos = photoOrder(state).flatMap((id) => {
-      const photo = byId.get(id);
-      return photo ? [photo] : [];
-    });
-    return findPhotos({
-      query,
-      vector: wordsVector,
-      looksLike: looks.looksLike,
-      exclude: new Set(query.like ? [query.like] : []),
-      photos,
-      people: index,
-      vectors: results(),
-    });
-    // `ready` changes as photos are looked at, so results include them.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, vector, looks, state, index, results, ready]);
-
-  const shownIds = useMemo(
-    () =>
-      !found
-        ? []
-        : found.best.length === 0
-          ? found.more
-          : [...found.best, ...(showMore ? found.more : [])],
-    [found, showMore],
+  const answer = useAnswer();
+  const wordsVector = vector?.what === what ? vector.vector : null;
+  const { found, notLookedAt } = useMemo(
+    () => answer(query, wordsVector),
+    [answer, query, wordsVector],
   );
+  const shownIds = useMemo(() => shownPhotos(found, showMore), [found, showMore]);
 
   const submit = useCallback(() => {
     // A failure is tried again with each new search.
@@ -282,6 +202,8 @@ export function FindProvider({
       submit,
       searchLike,
       query,
+      saved: submitted === null ? null : { text: submitted, ignore: [...ignore], like },
+      wordsVector,
       toggleChip: (key) => {
         // A photo tapped off is gone, rather than coming back with the next search.
         if (key === 'like') {
@@ -312,13 +234,17 @@ export function FindProvider({
       setShowMore,
       shownIds,
       wordsOff,
-      notLookedAt: looks.missing,
+      notLookedAt,
     }),
     [
       text,
       submit,
       searchLike,
       query,
+      submitted,
+      ignore,
+      like,
+      wordsVector,
       what,
       wordsOff,
       words,
@@ -326,7 +252,7 @@ export function FindProvider({
       found,
       showMore,
       shownIds,
-      looks,
+      notLookedAt,
     ],
   );
 

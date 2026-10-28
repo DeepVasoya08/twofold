@@ -43,6 +43,8 @@ export class FakeServer {
   people = new Map<string, { token: string; id: string; meta: string }>();
   /** By `token/id`: each space's sealed taught words. */
   words = new Map<string, { token: string; id: string; meta: string }>();
+  /** By `token/id`: each space's sealed smart albums. */
+  smartAlbums = new Map<string, { token: string; id: string; meta: string }>();
 
   api = (token: string): SpaceApi => {
     const member = this.members.get(token);
@@ -381,6 +383,9 @@ export class FakeServer {
           if (entry.token === space) this.searchSegments.delete(key);
         }
         for (const [key, entry] of this.words) if (entry.token === space) this.words.delete(key);
+        for (const [key, entry] of this.smartAlbums) {
+          if (entry.token === space) this.smartAlbums.delete(key);
+        }
       },
       listWords: async () => {
         ownerOnly();
@@ -399,6 +404,24 @@ export class FakeServer {
         ownerOnly();
         await Promise.resolve();
         if (!this.words.delete(`${space}/${id}`)) throw new ApiError(404, 'Not here');
+      },
+      listSmartAlbums: async () => {
+        ownerOnly();
+        await Promise.resolve();
+        const albums = [...this.smartAlbums.values()]
+          .filter((entry) => entry.token === space)
+          .map(({ id, meta }) => ({ id, meta }));
+        return { albums };
+      },
+      putSmartAlbum: async (id, meta) => {
+        ownerOnly();
+        await Promise.resolve();
+        this.smartAlbums.set(`${space}/${id}`, { token: space, id, meta });
+      },
+      deleteSmartAlbum: async (id) => {
+        ownerOnly();
+        await Promise.resolve();
+        if (!this.smartAlbums.delete(`${space}/${id}`)) throw new ApiError(404, 'Not here');
       },
     };
   };

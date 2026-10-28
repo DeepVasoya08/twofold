@@ -11,6 +11,8 @@ export type Route =
   | { name: 'gallery' }
   | { name: 'albums' }
   | { name: 'album'; albumId: string }
+  /** A search saved as an album. */
+  | { name: 'smart-album'; albumId: string }
   | { name: 'favorites' }
   /** The query is never in the URL, so it can't end up in the browser's history. */
   | { name: 'search' }
@@ -40,6 +42,7 @@ export const paths = {
   gallery: '/photos',
   albums: '/albums',
   album: (albumId: string) => `/albums/${encodeURIComponent(albumId)}`,
+  smartAlbum: (albumId: string) => `/albums/smart/${encodeURIComponent(albumId)}`,
   favorites: '/favorites',
   search: '/search',
   people: '/people',
@@ -119,6 +122,10 @@ export function matchRoute(pathname: string): Route {
   const staticRoute = staticRoutes[path];
   if (staticRoute) return staticRoute;
 
+  const smart = /^\/albums\/smart\/([^/]+)$/.exec(path);
+  const smartId = smart?.[1] === undefined ? null : decodeSegment(smart[1]);
+  if (smartId) return { name: 'smart-album', albumId: smartId };
+
   const album = /^\/albums\/([^/]+)$/.exec(path);
   const albumId = album?.[1] === undefined ? null : decodeSegment(album[1]);
   if (albumId) return { name: 'album', albumId };
@@ -144,12 +151,16 @@ export type PhotoContext =
   /** The last search's results, held in memory: the URL only says "search". */
   | { kind: 'search' }
   | { kind: 'album'; albumId: string }
+  /** A smart album's photos, found again on this device: the URL only names the album. */
+  | { kind: 'smart'; albumId: string }
   | { kind: 'person'; groupId: string };
 
 function formatContext(context: PhotoContext): string {
   switch (context.kind) {
     case 'album':
       return `album:${encodeURIComponent(context.albumId)}`;
+    case 'smart':
+      return `smart:${encodeURIComponent(context.albumId)}`;
     case 'person':
       return `person:${encodeURIComponent(context.groupId)}`;
     default:
@@ -164,6 +175,10 @@ export function parsePhotoContext(search: string): PhotoContext {
   if (from?.startsWith('album:')) {
     const albumId = decodeSegment(from.slice('album:'.length));
     if (albumId) return { kind: 'album', albumId };
+  }
+  if (from?.startsWith('smart:')) {
+    const albumId = decodeSegment(from.slice('smart:'.length));
+    if (albumId) return { kind: 'smart', albumId };
   }
   if (from?.startsWith('person:')) {
     const groupId = decodeSegment(from.slice('person:'.length));

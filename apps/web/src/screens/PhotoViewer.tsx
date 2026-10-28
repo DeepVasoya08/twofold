@@ -5,6 +5,7 @@ import type { SpaceKeys } from '@twofold/crypto';
 
 import { useAccount, useMe } from '../app/account';
 import { errorMessage } from '../app/account-ops';
+import { useSmartAlbum } from '../app/answer';
 import { useFind } from '../app/find';
 import { useSearch } from '../app/search';
 import { useGroupPhotoIds } from '../app/people';
@@ -28,7 +29,7 @@ import './photo-viewer.css';
 
 /**
  * The photos the viewer steps through. A person's come from `listedIds`, in order, and so
- * do a search's.
+ * do a search's and a smart album's.
  */
 export function photosInContext(
   state: VaultState,
@@ -39,7 +40,8 @@ export function photosInContext(
     case 'album':
       return albumPhotos(state, context.albumId);
     case 'person':
-    case 'search': {
+    case 'search':
+    case 'smart': {
       const byId = new Map(state.photos.map((photo) => [photo.id, photo]));
       return (listedIds ?? []).flatMap((id) => {
         const photo = byId.get(id);
@@ -63,6 +65,8 @@ function closeTarget(context: PhotoContext): string {
       return paths.person(context.groupId);
     case 'search':
       return paths.search;
+    case 'smart':
+      return paths.smartAlbum(context.albumId);
     case 'all':
       return paths.gallery;
   }
@@ -85,10 +89,19 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
   const groupPhotoIds = useGroupPhotoIds(context.kind === 'person' ? context.groupId : null);
   const { shownIds, searchLike } = useFind();
   const smartSearch = useSearch();
+  const smart = useSmartAlbum(
+    context.kind === 'smart'
+      ? smartSearch.smartAlbums.find((album) => album.id === context.albumId)
+      : undefined,
+  );
   const list = photosInContext(
     state,
     context,
-    context.kind === 'search' ? shownIds : groupPhotoIds,
+    context.kind === 'search'
+      ? shownIds
+      : context.kind === 'smart'
+        ? [...(smart?.found?.best ?? []), ...(smart?.found?.more ?? [])]
+        : groupPhotoIds,
   );
   // A photo un-favorited from the favorites view is no longer in that list; keep showing it.
   const photo = state.photos.find((candidate) => candidate.id === photoId);

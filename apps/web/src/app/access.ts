@@ -43,6 +43,7 @@ export function redirectFor(
     case 'gallery':
     case 'albums':
     case 'album':
+    case 'smart-album':
     case 'favorites':
     case 'search':
     case 'people':

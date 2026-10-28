@@ -17,6 +17,7 @@ import type { PhotoEncoder } from '../lib/search/photo-encoder';
 import { SEARCH_RESOURCES, resourceCached } from '../lib/search/resources';
 import { loadSearchSetting, saveSearchSetting } from '../lib/search/search-setting';
 import type { SearchResults } from '../lib/search/segment';
+import type { SmartAlbum } from '../lib/search/smart-album';
 import { centroid, vectorsOf } from '../lib/search/taught';
 import type { TaughtWord } from '../lib/search/taught';
 import { photoOrder, usePeople } from './people';
@@ -31,7 +32,7 @@ import { useVault } from './vault';
  * after face grouping has had its turn and paused while uploads run or the tab is hidden.
  * Phones look at their own new uploads only, and download the resource on Wi-Fi unless the
  * person taps "Download now". Locking unmounts this with the vault, and the vectors held in
- * memory are wiped. It also keeps the words taught to search.
+ * memory are wiped. It also keeps the words taught to search, and smart albums.
  */
 
 export type SearchStatus = 'off' | 'loading' | 'scanning' | 'waiting' | 'ready' | 'failed';
@@ -70,6 +71,11 @@ interface SearchValue {
   /** Teaches search a word: a name, and photos that show it. */
   teach: (name: string, photoIds: readonly string[]) => Promise<TaughtWord>;
   forgetWord: (id: string) => Promise<void>;
+  /** Searches saved as albums in the open space. */
+  smartAlbums: readonly SmartAlbum[];
+  /** Saves a search as a smart album, or saves changes to one (by its id). */
+  saveSmartAlbum: (album: Omit<SmartAlbum, 'id'> & { id?: string }) => Promise<SmartAlbum>;
+  deleteSmartAlbum: (id: string) => Promise<void>;
   /** Forgets every search vector and taught word in the open space. */
   forget: () => Promise<void>;
 }
@@ -116,6 +122,7 @@ export function SearchProvider({
   const [allowed, setAllowed] = useState(false);
   const [done, setDone] = useState(0);
   const [words, setWords] = useState<TaughtWord[]>([]);
+  const [smartAlbums, setSmartAlbums] = useState<SmartAlbum[]>([]);
   /** Bumped to start the scan again: new photos, Wi-Fi, a retry. */
   const [round, setRound] = useState(0);
   /** Bumped to load again after a failed load. */
@@ -182,6 +189,7 @@ export function SearchProvider({
     if (!on) {
       wipeResults(live.current);
       setWords([]);
+      setSmartAlbums([]);
     }
   }, []);
 
@@ -195,6 +203,7 @@ export function SearchProvider({
         live.current = saved.results;
         segments.current = saved.segments;
         setWords(saved.words);
+        setSmartAlbums(saved.smartAlbums);
         setDone(order.current.filter((id) => saved.results.has(id)).length);
         setLoaded(true);
       },
@@ -371,11 +380,27 @@ export function SearchProvider({
         await store.deleteWord(id);
         setWords((current) => current.filter((word) => word.id !== id));
       },
+      smartAlbums,
+      saveSmartAlbum: async (changes) => {
+        const album: SmartAlbum = { ...changes, id: changes.id ?? (await store.newId()) };
+        await store.saveSmartAlbum(album);
+        setSmartAlbums((current) =>
+          current.some((each) => each.id === album.id)
+            ? current.map((each) => (each.id === album.id ? album : each))
+            : [...current, album],
+        );
+        return album;
+      },
+      deleteSmartAlbum: async (id) => {
+        await store.deleteSmartAlbum(id);
+        setSmartAlbums((current) => current.filter((album) => album.id !== id));
+      },
       forget: async () => {
         await store.forget();
         wipeResults(live.current);
         segments.current = [];
         setWords([]);
+        setSmartAlbums([]);
         setDone(0);
         setEnabled(false);
       },
@@ -392,6 +417,7 @@ export function SearchProvider({
       loaded,
       store,
       words,
+      smartAlbums,
     ],
   );
 

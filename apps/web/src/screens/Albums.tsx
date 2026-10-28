@@ -4,6 +4,8 @@ import type { SubmitEvent } from 'react';
 import { errorMessage } from '../app/account-ops';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
+import { useSmartAlbum } from '../app/answer';
+import { useSearch } from '../app/search';
 import { useToast } from '../app/toast';
 import { albumCover, albumPhotos, isViewOnly, useVault } from '../app/vault';
 import { AlbumActions } from '../components/AlbumActions';
@@ -13,6 +15,7 @@ import { TextField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import { PhotoImage } from '../components/PhotoImage';
 import { formatDateRange, pluralize } from '../lib/format';
+import type { SmartAlbum } from '../lib/search/smart-album';
 import type { Album } from '../mock/data';
 
 import './albums.css';
@@ -51,8 +54,11 @@ const EMPTY: Record<AlbumTab, string> = {
 
 export function Albums() {
   const { state, createAlbum } = useVault();
+  const { enabled, smartAlbums: savedSearches } = useSearch();
   const [tab, setTab] = useState<AlbumTab>('all');
   const shown = albumsInTab(state.albums, tab);
+  // Smart albums are your own and can't be shared, so only All albums lists them.
+  const smart = tab === 'all' && enabled ? savedSearches : [];
   const [busy, setBusy] = useState(false);
   const { navigate } = useRouter();
   const toast = useToast();
@@ -95,7 +101,7 @@ export function Albums() {
     <div className="page">
       <PageHeader
         title="Albums"
-        subtitle={pluralize(shown.length, 'album')}
+        subtitle={pluralize(shown.length + smart.length, 'album')}
         actions={
           <button
             type="button"
@@ -130,7 +136,7 @@ export function Albums() {
       </div>
 
       <div role="tabpanel" id="album-tab-panel" aria-labelledby={`album-tab-${tab}`}>
-        {shown.length === 0 && <p className="album-tabs__empty">{EMPTY[tab]}</p>}
+        {shown.length + smart.length === 0 && <p className="album-tabs__empty">{EMPTY[tab]}</p>}
         {tab === 'with-me' && (
           <p className="album-tabs__code">
             Got an invite code from someone? <Link to={paths.joinCode}>Enter it here</Link>
@@ -191,6 +197,9 @@ export function Albums() {
               </li>
             );
           })}
+          {smart.map((album) => (
+            <SmartAlbumCard key={album.id} album={album} />
+          ))}
         </ul>
       </div>
 
@@ -219,6 +228,36 @@ export function Albums() {
         </form>
       </Dialog>
     </div>
+  );
+}
+
+/** A smart album's card: its photos are found again on this device. */
+function SmartAlbumCard({ album }: { album: SmartAlbum }) {
+  const { state } = useVault();
+  const answer = useSmartAlbum(album);
+  const ids = [...(answer?.found?.best ?? []), ...(answer?.found?.more ?? [])];
+  const cover = state.photos.find((photo) => photo.id === ids[0]);
+  return (
+    <li className="album-grid__item">
+      <Link to={paths.smartAlbum(album.id)} className="album-card">
+        <span className="album-card__cover">
+          {cover ? (
+            <PhotoImage photoId={cover.id} src={cover.src} alt="" loading="lazy" />
+          ) : (
+            <span className="album-card__empty">
+              <Icon name="search" size={28} />
+            </span>
+          )}
+          <span className="album-card__badge" data-testid="smart-badge">
+            <Icon name="sparkle" size={12} /> Smart
+          </span>
+        </span>
+        <span className="album-card__title">{album.title}</span>
+        <span className="album-card__meta">
+          {answer?.found ? pluralize(ids.length, 'photo') : 'Fills itself as photos are added'}
+        </span>
+      </Link>
+    </li>
   );
 }
 

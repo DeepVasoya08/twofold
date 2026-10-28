@@ -5,12 +5,14 @@ import { spaceApi } from '../lib/api';
 import type { SpaceApi } from '../lib/api';
 import { decodeSegment, encodeSegment, splitResults } from '../lib/search/segment';
 import type { SearchResults } from '../lib/search/segment';
+import { parseSmartAlbum, smartMeta } from '../lib/search/smart-album';
+import type { SmartAlbum } from '../lib/search/smart-album';
 import { parseWord, wordMeta } from '../lib/search/taught';
 import type { TaughtWord } from '../lib/search/taught';
 
 /**
  * The open space's search vectors, stored in segments sealed under the space's own key, and
- * the words taught to search, one sealed record each. Owner-only, so it always uses the space's own token, never a share token; vectors for
+ * the words taught to search and smart albums, one sealed record each. Owner-only, so it always uses the space's own token, never a share token; vectors for
  * photos in libraries shared with you are kept here too, in your own space.
  */
 
@@ -22,6 +24,7 @@ export interface SavedSearch {
   /** Ids of the segments the results came from, to merge them later. */
   segments: string[];
   words: TaughtWord[];
+  smartAlbums: SmartAlbum[];
 }
 
 export interface SearchStore {
@@ -35,6 +38,8 @@ export interface SearchStore {
   replaceSegments: (results: SearchResults, old: readonly string[]) => Promise<string[]>;
   saveWord: (word: TaughtWord) => Promise<void>;
   deleteWord: (id: string) => Promise<void>;
+  saveSmartAlbum: (album: SmartAlbum) => Promise<void>;
+  deleteSmartAlbum: (id: string) => Promise<void>;
   /** Forgets every search vector and taught word in the space. */
   forget: () => Promise<void>;
   newId: () => Promise<string>;
@@ -77,6 +82,8 @@ export function remoteSearchStore(
       const api = await remote();
       const storedWords = api.listWords();
       storedWords.catch(() => undefined);
+      const storedAlbums = api.listSmartAlbums();
+      storedAlbums.catch(() => undefined);
       const results: SearchResults = new Map();
       const segments: string[] = [];
       let after: string | undefined;
@@ -102,7 +109,15 @@ export function remoteSearchStore(
         const word = opened && parseWord(stored.id, decode(opened));
         if (word) words.push(word);
       }
-      return { results, segments, words };
+      const smartAlbums: SmartAlbum[] = [];
+      for (const stored of (await storedAlbums).albums) {
+        const opened = await crypto
+          .openOwnerRecord(keys, 'smart-album', stored.id, stored.meta)
+          .catch(() => null);
+        const album = opened && parseSmartAlbum(stored.id, decode(opened));
+        if (album) smartAlbums.push(album);
+      }
+      return { results, segments, words, smartAlbums };
     },
 
     saveResults: saveSegments,
@@ -128,6 +143,23 @@ export function remoteSearchStore(
       await api.deleteWord(id);
     },
 
+    saveSmartAlbum: async (album) => {
+      const crypto = await loadCrypto();
+      const api = await remote();
+      const meta = await crypto.sealOwnerRecord(
+        keys,
+        'smart-album',
+        album.id,
+        encode(smartMeta(album)),
+      );
+      await api.putSmartAlbum(album.id, meta);
+    },
+
+    deleteSmartAlbum: async (id) => {
+      const api = await remote();
+      await api.deleteSmartAlbum(id);
+    },
+
     forget: async () => {
       const api = await remote();
       await api.deleteSearchData();
@@ -141,6 +173,7 @@ export function remoteSearchStore(
 export function memorySearchStore(initial: Partial<SavedSearch> = {}): SearchStore {
   let results: SearchResults = new Map(initial.results);
   const words = new Map((initial.words ?? []).map((word) => [word.id, word]));
+  const albums = new Map((initial.smartAlbums ?? []).map((album) => [album.id, album]));
   let next = 0;
   const newId = (prefix = 'segment') => {
     next += 1;
@@ -148,7 +181,12 @@ export function memorySearchStore(initial: Partial<SavedSearch> = {}): SearchSto
   };
   return {
     load: () =>
-      Promise.resolve({ results: new Map(results), segments: [], words: [...words.values()] }),
+      Promise.resolve({
+        results: new Map(results),
+        segments: [],
+        words: [...words.values()],
+        smartAlbums: [...albums.values()],
+      }),
     saveResults: (added) => {
       for (const [photoId, vector] of added) results.set(photoId, vector);
       return Promise.resolve([newId()]);
@@ -165,9 +203,18 @@ export function memorySearchStore(initial: Partial<SavedSearch> = {}): SearchSto
       words.delete(id);
       return Promise.resolve();
     },
+    saveSmartAlbum: (album) => {
+      albums.set(album.id, album);
+      return Promise.resolve();
+    },
+    deleteSmartAlbum: (id) => {
+      albums.delete(id);
+      return Promise.resolve();
+    },
     forget: () => {
       results = new Map();
       words.clear();
+      albums.clear();
       return Promise.resolve();
     },
     newId: () => Promise.resolve(newId('word')),
