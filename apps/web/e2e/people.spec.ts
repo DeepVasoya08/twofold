@@ -51,6 +51,17 @@ test('faces are found on the device, grouped, named, merged and forgotten', asyn
   await expect(page.getByRole('heading', { level: 1, name: 'Ada' })).toBeVisible();
   await expect(page.locator('.photo-tile')).toHaveCount(3);
 
+  // Say Ada is the person using Twofold, and family.
+  await page.getByRole('button', { name: 'Person actions' }).click();
+  await page.getByRole('menuitem', { name: 'This is me' }).click();
+  await expect(page.getByText('Marked as you')).toBeVisible();
+  await page.getByRole('button', { name: 'Person actions' }).click();
+  await page.getByRole('menuitem', { name: 'Labels' }).click();
+  const labels = page.getByRole('dialog', { name: 'Labels' });
+  await labels.getByLabel('Family').check();
+  await labels.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('You · Family · 3 photos')).toBeVisible();
+
   // Merge another group into Ada (a person the models told apart, but the user knows best).
   await page.getByRole('link', { name: 'People' }).filter({ visible: true }).first().click();
   await cards(page).filter({ hasText: 'Add a name' }).first().click();
@@ -74,7 +85,7 @@ test('faces are found on the device, grouped, named, merged and forgotten', asyn
   await lock(page);
   await unlockWith(page, MAIN_PASSWORD);
   await goTo(page, 'People');
-  await expect(cards(page).filter({ hasText: 'Ada' })).toContainText('5 photos', {
+  await expect(cards(page).filter({ hasText: 'Ada' })).toContainText('You · Family · 5 photos', {
     timeout: 30_000,
   });
 

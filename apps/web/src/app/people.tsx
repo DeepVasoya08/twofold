@@ -12,8 +12,8 @@ import type { ReactNode } from 'react';
 import type { FaceFinder } from '../lib/people/face-finder';
 import { runScan } from '../lib/people/face-scan';
 import { faceGroupingOn, loadFaceSetting, saveFaceSetting } from '../lib/people/face-setting';
-import { confirmedFaces, groupFaces, withRejected } from '../lib/people/grouping';
-import type { Group, Person } from '../lib/people/grouping';
+import { confirmedFaces, groupFaces, meChanges, withRejected } from '../lib/people/grouping';
+import type { Group, Person, PersonLabel } from '../lib/people/grouping';
 import type { FaceResults } from '../lib/people/segment';
 import type { Settled } from '../lib/settle-each';
 import { useAccount } from './account';
@@ -49,6 +49,9 @@ interface PeopleValue {
   /** Puts `from`'s faces into `into` and returns the id of the person they make. */
   merge: (from: Group, into: Group) => Promise<string>;
   setHidden: (group: Group, hidden: boolean) => Promise<string>;
+  /** Says this is (or isn't) the person using Twofold; anyone else marked so stops being. */
+  setMe: (group: Group, me: boolean) => Promise<string>;
+  setLabels: (group: Group, labels: readonly PersonLabel[]) => Promise<string>;
   /** Says these photos aren't this person. */
   removePhotos: (group: Group, photoIds: readonly string[]) => Promise<Settled<string>>;
   /** Forgets every face and person in the open space, and stops finding faces here. */
@@ -229,6 +232,8 @@ export function PeopleProvider({
         faces: confirmedFaces(group.faces.map((face) => face.ref)),
         rejected: [],
         hidden: false,
+        me: false,
+        labels: [],
       };
     return {
       enabled,
@@ -248,6 +253,8 @@ export function PeopleProvider({
           name: person.name || (other.person?.name ?? ''),
           faces: confirmedFaces(person.faces, otherFaces),
           hidden: person.hidden && (other.person?.hidden ?? false),
+          me: person.me || (other.person?.me ?? false),
+          labels: [...new Set([...person.labels, ...(other.person?.labels ?? [])])],
         };
         await save(merged);
         if (other.person) {
@@ -258,6 +265,14 @@ export function PeopleProvider({
         return merged.id;
       },
       setHidden: async (group, hidden) => save({ ...(await personFor(group)), hidden }),
+      setMe: async (group, me) => {
+        let id = group.id;
+        for (const changed of meChanges(people, await personFor(group), me))
+          id = await save(changed);
+        return id;
+      },
+      setLabels: async (group, labels) =>
+        save({ ...(await personFor(group)), labels: [...new Set(labels)] }),
       removePhotos: async (group, photoIds) => {
         const chosen = new Set(photoIds);
         const refs = group.faces.filter((face) => chosen.has(face.photoId)).map((face) => face.ref);

@@ -147,9 +147,10 @@ Faces are grouped on the device (`lib/people/grouping.ts`): a face joins a named
 when it looks enough like them, and the rest are clustered. A group shows once someone is
 in at least 3 photos. Each card shows a crop of the face (`components/FaceThumb.tsx`).
 On a person's page you can add a name or rename, merge with someone else, hide them from
-People (and show them again), and select photos to take out with "Not this person", which
+People (and show them again), say "This is me" (only one person can be, so marking someone
+else moves it), give them labels (Friends, Family, Work), and select photos to take out with "Not this person", which
 the grouping then remembers. The photo viewer opened from a person steps through only
-their photos.
+their photos. "You" and labels show before the photo count on the card and the page.
 
 Settings → People turns it off on this device (what was found stays, encrypted) or
 deletes all face data for the open space.

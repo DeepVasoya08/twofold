@@ -438,8 +438,9 @@ server stores only what it stores for photos: ciphertext it can't read.
   (`sealFaceSegment` in `packages/crypto/src/storage.ts`). A segment is at most 256 KiB
   and can't be replaced, only deleted; segments are merged as they go stale.
 - **People.** A name, the faces confirmed as that person, faces marked "not this person"
-  and whether they're hidden are an owner record of kind `person`, sealed like other
-  records. Unnamed groups are worked out on the device each time and never stored.
+  whether they're hidden, whether they're "me" and their labels (Friends, Family, Work)
+  are an owner record of kind `person`, sealed like other records. Like everything else
+  in a space, "me" and labels belong to that space only. Unnamed groups are worked out on the device each time and never stored.
 - **Owner only.** Face data and people belong to the space's owner: the routes
   (`/api/space/faces`, `/people`, `/face-data`) refuse share tokens, so members of a shared
   library never see them. Each member who turns face grouping on analyses on their own

@@ -5,6 +5,7 @@ import {
   confirmedFaces,
   faceRef,
   groupFaces,
+  meChanges,
   photoOf,
   withRejected,
 } from './grouping';
@@ -32,6 +33,8 @@ const person = (overrides: Partial<Person>): Person => ({
   faces: [],
   rejected: [],
   hidden: false,
+  me: false,
+  labels: [],
   ...overrides,
 });
 
@@ -122,5 +125,23 @@ describe('face refs', () => {
     expect(updated.faces).toEqual([b]);
     expect(updated.rejected[0]).toBe(a);
     expect(updated.rejected).toHaveLength(2);
+  });
+});
+
+describe('meChanges', () => {
+  it('marks one person as me and unmarks whoever was before', () => {
+    const before = [person({ id: 'a', me: true }), person({ id: 'b' }), person({ id: 'c' })];
+    const changed = meChanges(before, person({ id: 'b' }), true);
+    expect(changed.map(({ id, me }) => ({ id, me }))).toEqual([
+      { id: 'a', me: false },
+      { id: 'b', me: true },
+    ]);
+  });
+
+  it('only changes the person when unmarking', () => {
+    const before = [person({ id: 'a', me: true })];
+    expect(meChanges(before, person({ id: 'a', me: true }), false)).toEqual([
+      person({ id: 'a', me: false }),
+    ]);
   });
 });

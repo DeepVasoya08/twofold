@@ -20,13 +20,14 @@ import { PhotoGrid } from '../components/PhotoGrid';
 import { SelectButton } from '../components/SelectButton';
 import { SelectionBar } from '../components/SelectionBar';
 import { pluralize } from '../lib/format';
-import type { Group } from '../lib/people/grouping';
+import { PERSON_LABELS } from '../lib/people/grouping';
+import type { Group, PersonLabel } from '../lib/people/grouping';
 import type { Photo } from '../mock/data';
-import { groupName } from './People';
+import { aboutPerson, groupName, labelNames } from './People';
 
 import './people.css';
 
-type Open = 'name' | 'merge' | null;
+type Open = 'name' | 'merge' | 'labels' | null;
 
 export function Person({ groupId }: { groupId: string }) {
   const people = usePeople();
@@ -39,6 +40,7 @@ export function Person({ groupId }: { groupId: string }) {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [labels, setLabels] = useState<PersonLabel[]>([]);
 
   const group = [...groups, ...hidden].find((each) => each.id === groupId);
   const back = { to: paths.people, label: 'People' };
@@ -104,7 +106,26 @@ export function Person({ groupId }: { groupId: string }) {
   };
 
   const hiddenNow = group.person?.hidden === true;
+  const isMe = group.person?.me === true;
   const items: MenuItem[] = [
+    {
+      label: isMe ? 'This isn’t me' : 'This is me',
+      icon: 'person',
+      onSelect: () => {
+        change(
+          () => people.setMe(group, !isMe),
+          isMe ? 'No longer marked as you' : 'Marked as you',
+        );
+      },
+    },
+    {
+      label: 'Labels',
+      icon: 'users',
+      onSelect: () => {
+        setLabels(group.person?.labels ?? []);
+        setOpen('labels');
+      },
+    },
     {
       label: 'Merge with someone',
       icon: 'users',
@@ -132,7 +153,7 @@ export function Person({ groupId }: { groupId: string }) {
             ? 'Someone'
             : group.person.name
         }
-        subtitle={pluralize(photos.length, 'photo')}
+        subtitle={aboutPerson(group, pluralize(photos.length, 'photo'))}
         back={back}
         actions={
           <>
@@ -192,6 +213,56 @@ export function Person({ groupId }: { groupId: string }) {
             }}
             error={error}
           />
+          <div className="dialog__actions">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => {
+                setOpen(null);
+              }}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy}>
+              Save
+            </button>
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={open === 'labels'}
+        onClose={() => {
+          setOpen(null);
+        }}
+        title="Labels"
+        description="Labels let you search for groups, like “my friends at the beach”."
+      >
+        <form
+          className="form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            change(() => people.setLabels(group, labels), 'Labels saved');
+          }}
+        >
+          <fieldset className="label-choices">
+            <legend className="visually-hidden">Labels</legend>
+            {PERSON_LABELS.map((label) => (
+              <label key={label} className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={labels.includes(label)}
+                  onChange={(event) => {
+                    const on = event.currentTarget.checked;
+                    setLabels((current) =>
+                      on ? [...current, label] : current.filter((each) => each !== label),
+                    );
+                  }}
+                />
+                <span>{labelNames[label]}</span>
+              </label>
+            ))}
+          </fieldset>
           <div className="dialog__actions">
             <button
               type="button"

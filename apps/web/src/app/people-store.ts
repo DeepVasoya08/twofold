@@ -4,7 +4,8 @@ import { FACE_SEGMENT_DELETE_MAX } from '@twofold/types';
 import { spaceApi } from '../lib/api';
 import type { SpaceApi } from '../lib/api';
 import { MAX_PERSON_FACES } from '../lib/people/grouping';
-import type { Person } from '../lib/people/grouping';
+import { isPersonLabel } from '../lib/people/grouping';
+import type { Person, PersonLabel } from '../lib/people/grouping';
 import { decodeSegment, encodeSegment, splitResults } from '../lib/people/segment';
 import type { FaceResults } from '../lib/people/segment';
 
@@ -47,6 +48,10 @@ interface PersonMeta {
   faces: string[];
   rejected: string[];
   hidden: boolean;
+  /** Left out by versions before "This is me"; read as false. */
+  me?: boolean;
+  /** Left out by versions before labels; read as none. */
+  labels?: PersonLabel[];
 }
 
 function isStringList(value: unknown): value is string[] {
@@ -55,21 +60,26 @@ function isStringList(value: unknown): value is string[] {
 
 export function parsePerson(id: string, value: unknown): Person | null {
   if (typeof value !== 'object' || value === null) return null;
-  const { v, name, faces, rejected, hidden } = value as Record<string, unknown>;
+  const { v, name, faces, rejected, hidden, me, labels } = value as Record<string, unknown>;
   if (v !== 1 || typeof name !== 'string' || typeof hidden !== 'boolean') return null;
   if (!isStringList(faces) || !isStringList(rejected)) return null;
+  if (me !== undefined && typeof me !== 'boolean') return null;
+  if (labels !== undefined && !Array.isArray(labels)) return null;
   return {
     id,
     name,
     faces: faces.slice(0, MAX_PERSON_FACES),
     rejected: rejected.slice(0, MAX_PERSON_FACES),
     hidden,
+    me: me ?? false,
+    // A label this version doesn't know is dropped rather than refusing the person.
+    labels: [...new Set((labels ?? []).filter(isPersonLabel))],
   };
 }
 
 function personMeta(person: Person): PersonMeta {
-  const { name, faces, rejected, hidden } = person;
-  return { v: 1, name, faces, rejected, hidden };
+  const { name, faces, rejected, hidden, me, labels } = person;
+  return { v: 1, name, faces, rejected, hidden, me, labels };
 }
 
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));

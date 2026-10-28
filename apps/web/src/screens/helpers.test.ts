@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { albumsInTab } from './Albums';
 import { filterByOwner } from './Gallery';
+import { aboutPerson } from './People';
 import { sharedWithLine } from './Settings';
 import { isInviteCode, normalizeInviteCode, parseInviteInput } from './JoinCode';
 import { countWords } from './Recover';
@@ -108,5 +109,22 @@ describe('albumsInTab', () => {
   it('shows your albums shared with someone under Shared by me', () => {
     expect(albumsInTab(all, 'by-me')).toEqual([sharedByMe]);
     expect(albumsInTab([{ ...sharedByMe, sharedWith: [] }], 'by-me')).toEqual([]);
+  });
+});
+
+describe('aboutPerson', () => {
+  const group = (me: boolean, labels: ('friends' | 'family' | 'work')[]) => ({
+    id: 'p',
+    person: { id: 'p', name: 'Ada', faces: [], rejected: [], hidden: false, me, labels },
+    faces: [],
+    photoIds: [],
+  });
+
+  it('puts "You" and labels before the photo count', () => {
+    expect(aboutPerson(group(true, ['family']), '3 photos')).toBe('You · Family · 3 photos');
+    expect(aboutPerson(group(false, []), '3 photos')).toBe('3 photos');
+    expect(aboutPerson({ id: 'g', person: null, faces: [], photoIds: [] }, '1 photo')).toBe(
+      '1 photo',
+    );
   });
 });
