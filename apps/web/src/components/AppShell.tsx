@@ -9,6 +9,7 @@ import { isViewOnly, useVault } from '../app/vault';
 import { Avatar, LockBadge, Logo } from './Brand';
 import { DownloadDialog } from './DownloadDialog';
 import { DownloadProgress } from './DownloadProgress';
+import { SmartSearchCard } from './SmartSearchCard';
 import { Icon } from './Icon';
 import { InviteRequests } from './Invites';
 import type { IconName } from './Icon';
@@ -173,6 +174,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
       <div className="status-cards">
         <UploadProgress />
         <DownloadProgress />
+        <SmartSearchCard />
       </div>
     </div>
   );

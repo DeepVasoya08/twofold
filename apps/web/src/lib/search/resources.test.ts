@@ -8,6 +8,7 @@ import {
   SEARCH_RESOURCES,
   chunkUrls,
   downloadResource,
+  resourceCached,
 } from './resources';
 import type { SearchResource } from './resources';
 
@@ -101,5 +102,29 @@ describe('downloadResource', () => {
     await expect(
       downloadResource(resource, undefined, { load: offline, chunkBytes: SMALL }),
     ).rejects.toThrow(ResourceError);
+  });
+});
+
+describe('resourceCached', () => {
+  it('asks the HTTP cache only, and says yes only when every chunk is there', async () => {
+    const resource: SearchResource = { name: 'fake', size: 150, sha256: 'x' };
+    const asked: (RequestInit | undefined)[] = [];
+    const cache = (cached: string[]): typeof fetch =>
+      ((url: string, init?: RequestInit) => {
+        asked.push(init);
+        return Promise.resolve(
+          cached.includes(url)
+            ? new Response(new Uint8Array(1))
+            : new Response(null, { status: 504 }),
+        );
+      }) as typeof fetch;
+    const urls = chunkUrls(resource, 64);
+    expect(await resourceCached(resource, { load: cache(urls), chunkBytes: 64 })).toBe(true);
+    expect(asked[0]).toEqual({ cache: 'only-if-cached', mode: 'same-origin' });
+    expect(await resourceCached(resource, { load: cache(urls.slice(0, 2)), chunkBytes: 64 })).toBe(
+      false,
+    );
+    const refusing = (() => Promise.reject(new TypeError('unsupported'))) as typeof fetch;
+    expect(await resourceCached(resource, { load: refusing, chunkBytes: 64 })).toBe(false);
   });
 });

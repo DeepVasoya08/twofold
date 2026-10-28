@@ -450,6 +450,38 @@ server stores only what it stores for photos: ciphertext it can't read.
   unencrypted and only the space key opens it, but anyone who has that key (the password)
   can read it, the same as the photos themselves.
 
+## Smart search
+
+Smart search works out what each photo shows on the device, as a vector of 512 numbers,
+so photos can later be found by describing them. The server stores only ciphertext.
+
+- **On by default, per device.** It uses no face data, so it doesn't wait for the smart
+  features question: it's on unless turned off in Settings → Search on that device, saved
+  in that browser's `localStorage` (`twofold.smartSearch`). It applies to whichever space
+  is open, so the setting and the download look the same with or without a private space.
+- **On the device.** The photo half of OpenCLIP ViT-B/32 (LAION-2B weights, MIT), stored
+  with 8-bit weights, runs in ONNX Runtime Web (WebAssembly) in a Web Worker
+  (`apps/web/src/lib/search`). It's served in chunks from Twofold's own origin and checked
+  against a pinned SHA-256 before it's loaded. Nothing is downloaded until there's a photo
+  to look at. Like face grouping, the worker reads the decrypted 640px preview and keeps
+  nothing after looking at it.
+- **Phones.** A phone looks only at the photos it uploads, and downloads the resource only
+  on Wi-Fi, when the browser already has it cached, or after the person taps "Download
+  now". Browsers that don't say how they're connected (Safari, Firefox) count as not on
+  Wi-Fi.
+- **Search data.** Vectors are quantised to bytes and saved in segments, sealed like face
+  segments but under `crypto_kdf` subkey 4 of the space key, with kind `search` and the
+  segment id as associated data, padded to 16 KiB blocks (`sealSearchSegment` in
+  `packages/crypto/src/storage.ts`). Segments are at most 256 KiB and count against the
+  storage quota. The vectors held in memory are zeroed when the vault locks.
+- **Owner only.** The routes (`/api/space/search`, `/search-data`) refuse share tokens.
+  Each member works out vectors on their own device, into their own space.
+- **Deleting.** Settings → Search → "Delete search data" removes every segment for the open
+  space (`DELETE /api/space/search-data`), and wiping a space removes them too.
+- **Trade-off.** A vector says roughly what a photo shows (a beach, a dog, two people). It
+  never leaves the device unencrypted, but anyone with the space key can read it, the same
+  as the photos.
+
 ## Sessions and the API
 
 - Passwords never reach the API. It sees the keyring (salt, KDF settings, sealed slots,
@@ -494,8 +526,8 @@ server stores only what it stores for photos: ciphertext it can't read.
   reloading drops them and remounts the vault, which drops every decrypted photo and
   revokes its object URLs.
 - Nothing secret is written to `localStorage`, IndexedDB or caches. `localStorage` holds
-  only this device's settings: the auto-lock time and whether face grouping was turned on or
-  off here.
+  only this device's settings: the auto-lock time, and whether face grouping and Smart
+  search were turned on or off here.
 - Only raster photo formats are stored or shown (JPEG, PNG, GIF, WebP, HEIC, AVIF;
   `apps/web/src/lib/photo-types.ts`). An SVG is a document that can carry script, so it is
   refused on upload and left out if a record names it.

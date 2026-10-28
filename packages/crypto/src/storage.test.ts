@@ -12,10 +12,12 @@ import {
   newFileKey,
   newRecordId,
   openFaceSegment,
+  openSearchSegment,
   openOwnerRecord,
   openRecord,
   ownerAccess,
   sealFaceSegment,
+  sealSearchSegment,
   sealOwnerRecord,
   sealRecord,
   spaceToken,
@@ -275,6 +277,52 @@ describe('sealFaceSegment / openFaceSegment', () => {
 
   it('refuses a segment that would be too large', async () => {
     await expect(sealFaceSegment(await newSpace(), 's1', bytes(256 * 1024))).rejects.toThrow(
+      'too large',
+    );
+  });
+});
+
+describe('sealSearchSegment / openSearchSegment', () => {
+  it('round-trips in its own space, padded to 16 KiB steps', async () => {
+    const space = await newSpace();
+    const data = bytes(5000);
+    const sealed = await sealSearchSegment(space, 's1', data);
+    expect(await openSearchSegment(space, 's1', sealed)).toEqual(data);
+    const small = fromBase64Url(await sealSearchSegment(space, 's2', bytes(10)));
+    expect(small?.length).toBe(fromBase64Url(sealed)?.length);
+  });
+
+  it('refuses the wrong key, another id, and tampering', async () => {
+    const space = await newSpace();
+    const sealed = await sealSearchSegment(space, 's1', bytes(100));
+    await expect(openSearchSegment(await newSpace(), 's1', sealed)).rejects.toThrow(
+      DecryptionError,
+    );
+    await expect(openSearchSegment(space, 's2', sealed)).rejects.toThrow(DecryptionError);
+    const raw = fromBase64Url(sealed);
+    if (!raw) throw new Error('bad base64url');
+    await expect(openSearchSegment(space, 's1', toBase64Url(flip(raw, 30)))).rejects.toThrow(
+      DecryptionError,
+    );
+    await expect(
+      openSearchSegment(space, 's1', toBase64Url(raw.subarray(0, raw.length - 1))),
+    ).rejects.toThrow(DecryptionError);
+  });
+
+  it('keeps search and face segments apart, and from members', async () => {
+    const space = await newSpace();
+    const search = await sealSearchSegment(space, 's1', bytes(100));
+    const faces = await sealFaceSegment(space, 's1', bytes(100));
+    await expect(openFaceSegment(space, 's1', search)).rejects.toThrow(DecryptionError);
+    await expect(openSearchSegment(space, 's1', faces)).rejects.toThrow(DecryptionError);
+    await expect(openRecord(await ownerAccess(space), 'photo', 's1', search)).rejects.toThrow(
+      DecryptionError,
+    );
+    await expect(openOwnerRecord(space, 'person', 's1', search)).rejects.toThrow(DecryptionError);
+  });
+
+  it('refuses a segment that would be too large', async () => {
+    await expect(sealSearchSegment(await newSpace(), 's1', bytes(256 * 1024))).rejects.toThrow(
       'too large',
     );
   });

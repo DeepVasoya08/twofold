@@ -85,4 +85,22 @@ export async function downloadResource(
   return bytes;
 }
 
+/**
+ * Whether the browser already holds every chunk of a resource, so loading it costs no
+ * download. Asks the HTTP cache only; a browser that can't say answers false.
+ */
+export async function resourceCached(
+  resource: SearchResource,
+  { load = fetch, chunkBytes = CHUNK_BYTES }: { load?: typeof fetch; chunkBytes?: number } = {},
+): Promise<boolean> {
+  for (const url of chunkUrls(resource, chunkBytes)) {
+    const response = await load(url, { cache: 'only-if-cached', mode: 'same-origin' }).catch(
+      () => null,
+    );
+    await response?.body?.cancel().catch(() => undefined);
+    if (!response?.ok) return false;
+  }
+  return true;
+}
+
 const MISMATCH = 'A downloaded resource didn’t match the one Twofold was built with.';

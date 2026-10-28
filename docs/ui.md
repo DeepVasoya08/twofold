@@ -154,6 +154,21 @@ their photos.
 Settings → People turns it off on this device (what was found stays, encrypted) or
 deletes all face data for the open space.
 
+## Smart search
+
+Smart search is on by default on every device (`app/search.tsx`). Once there's a photo to
+look at, after face grouping has had its turn, the device downloads its resources (about
+89 MB, once) and works out each photo's search vector in the background, pausing while
+photos upload or the tab is hidden. A computer looks at every photo; a phone looks only at
+the photos it uploads, and waits for Wi-Fi before downloading unless the person taps
+"Download now". A small card in the status corner (`components/SmartSearchCard.tsx`) shows
+the download with a Pause button, the Wi-Fi wait, or what went wrong with "Try again";
+nothing shows while photos are looked at. Text says "resources", never models.
+
+Settings → Search shows how far it has got ("120 of 900 photos ready to search"), turns it
+off on this device, or deletes all search data for the open space. Searching itself comes
+next.
+
 ## Accounts and locking
 
 - Signed out: only the welcome, sign-up, log-in and recovery screens are reachable; library

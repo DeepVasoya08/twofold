@@ -38,6 +38,8 @@ export class FakeServer {
   pending = new Map<string, { token: string; invite: StoredPendingInvite }>();
   /** By `token/id`: each space's sealed face segments and people. */
   faceSegments = new Map<string, { token: string; id: string; data: string }>();
+  /** By `token/id`: each space's sealed search segments. */
+  searchSegments = new Map<string, { token: string; id: string; data: string }>();
   people = new Map<string, { token: string; id: string; meta: string }>();
 
   api = (token: string): SpaceApi => {
@@ -349,6 +351,33 @@ export class FakeServer {
         ownerOnly();
         await Promise.resolve();
         if (!this.people.delete(`${space}/${id}`)) throw new ApiError(404, 'Not here');
+      },
+      listSearchSegments: async (after = '') => {
+        ownerOnly();
+        await Promise.resolve();
+        const segments = [...this.searchSegments.values()]
+          .filter((entry) => entry.token === space && entry.id > after)
+          .sort((a, b) => (a.id < b.id ? -1 : 1))
+          .map(({ id, data }) => ({ id, data }));
+        return { segments, next: null };
+      },
+      putSearchSegment: async (id, data) => {
+        ownerOnly();
+        await Promise.resolve();
+        if (this.searchSegments.has(`${space}/${id}`)) throw new ApiError(409, 'Taken');
+        this.searchSegments.set(`${space}/${id}`, { token: space, id, data });
+      },
+      deleteSearchSegments: async (ids) => {
+        ownerOnly();
+        await Promise.resolve();
+        for (const id of ids) this.searchSegments.delete(`${space}/${id}`);
+      },
+      deleteSearchData: async () => {
+        ownerOnly();
+        await Promise.resolve();
+        for (const [key, entry] of this.searchSegments) {
+          if (entry.token === space) this.searchSegments.delete(key);
+        }
       },
     };
   };

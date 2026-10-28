@@ -80,7 +80,10 @@ test('faces are found on the device, grouped, named, merged and forgotten', asyn
 
   // Forget it all.
   await goTo(page, 'Settings');
-  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page
+    .getByRole('region', { name: 'People', exact: true })
+    .getByRole('button', { name: 'Delete', exact: true })
+    .click();
   await page
     .getByRole('dialog', { name: 'Delete face data?' })
     .getByRole('button', { name: 'Delete face data' })

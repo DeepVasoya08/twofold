@@ -28,6 +28,7 @@ import type {
   PreLoginRequest,
   PreLoginResponse,
   ProfilePhotoResponse,
+  SearchSegmentPage,
   PutFileResponse,
   SignUpRequest,
   SmartFeaturesRequest,
@@ -328,6 +329,20 @@ export function spaceApi(token: string) {
       call<undefined>('PUT', `/space/people/${encodeURIComponent(id)}`, { meta }, headers),
     deletePerson: (id: string) =>
       call<undefined>('DELETE', `/space/people/${encodeURIComponent(id)}`, {}, headers),
+    /** Sealed search vectors, a page at a time. Owner-only, like face results. */
+    listSearchSegments: (after?: string) =>
+      call<SearchSegmentPage>(
+        'GET',
+        `/space/search${after ? `?after=${encodeURIComponent(after)}` : ''}`,
+        undefined,
+        headers,
+      ),
+    putSearchSegment: (id: string, data: string) =>
+      call<undefined>('PUT', `/space/search/${encodeURIComponent(id)}`, { data }, headers),
+    deleteSearchSegments: (ids: string[]) =>
+      call<undefined>('DELETE', '/space/search', { ids }, headers),
+    /** Forgets every search vector in the space. */
+    deleteSearchData: () => call<undefined>('DELETE', '/space/search-data', {}, headers),
   };
 }
 

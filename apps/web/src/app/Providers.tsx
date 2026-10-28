@@ -18,38 +18,59 @@ import { UploadsProvider } from './uploads';
 import { PeopleProvider } from './people';
 import { memoryPeopleStore, remotePeopleStore } from './people-store';
 import { workerFaceFinder } from '../lib/people/face-finder';
-import type { FaceFinder } from '../lib/people/face-finder';
+import type { FaceFinder, FaceWorker } from '../lib/people/face-finder';
+import { workerPhotoEncoder } from '../lib/search/photo-encoder';
+import type { EncoderWorker, PhotoEncoder } from '../lib/search/photo-encoder';
+import { SearchProvider } from './search';
+import { memorySearchStore, remoteSearchStore } from './search-store';
 import { VaultProvider, emptyVaults } from './vault';
 import type { VaultsState } from './vault';
+
+/** A worker whose module loads on first use; messages sent before then wait for it. */
+function lazyWorker(load: () => Promise<Worker>): FaceWorker & EncoderWorker {
+  const ready = load();
+  return {
+    postMessage: (message) => {
+      void ready.then((started) => {
+        started.postMessage(message);
+      });
+    },
+    addEventListener: (type, listener) => {
+      void ready.then((started) => {
+        started.addEventListener(type, listener);
+      });
+    },
+    terminate: () => {
+      void ready.then((started) => {
+        started.terminate();
+      });
+    },
+  };
+}
 
 /**
  * Finds faces in a Web Worker, loaded only once face grouping runs. Without Web Workers or
  * OffscreenCanvas (older browsers), every request fails and People says so.
  */
 function startFaceFinder(): FaceFinder {
-  return workerFaceFinder(() => {
-    const ready = import('../lib/people/spawn-face-worker').then(({ spawnFaceWorker }) =>
-      spawnFaceWorker(),
-    );
-    // Messages sent before the worker module has loaded wait for it.
-    return {
-      postMessage: (message) => {
-        void ready.then((started) => {
-          started.postMessage(message);
-        });
-      },
-      addEventListener: (type, listener) => {
-        void ready.then((started) => {
-          started.addEventListener(type, listener);
-        });
-      },
-      terminate: () => {
-        void ready.then((started) => {
-          started.terminate();
-        });
-      },
-    };
-  });
+  return workerFaceFinder(() =>
+    lazyWorker(() =>
+      import('../lib/people/spawn-face-worker').then(({ spawnFaceWorker }) => spawnFaceWorker()),
+    ),
+  );
+}
+
+/** Works out search vectors in a Web Worker, loaded only once there's a photo to look at. */
+function startEncoder(onProgress: (received: number, total: number) => void): PhotoEncoder {
+  return workerPhotoEncoder(
+    () =>
+      lazyWorker(() =>
+        import('../lib/search/spawn-encoder-worker').then(({ spawnEncoderWorker }) =>
+          spawnEncoderWorker(),
+        ),
+      ),
+    onProgress,
+  );
 }
 
 /** The open space's vault, with a store made once from the keys it was mounted with. */
@@ -75,6 +96,9 @@ function OpenVault({
   const [peopleStore] = useState(() =>
     session && !initialVault ? remotePeopleStore(session.opened.space) : memoryPeopleStore(),
   );
+  const [searchStore] = useState(() =>
+    session && !initialVault ? remoteSearchStore(session.opened.space) : memorySearchStore(),
+  );
   return (
     <VaultProvider
       space={space}
@@ -94,10 +118,15 @@ function OpenVault({
                 store={peopleStore}
                 makeFinder={session && !initialVault ? startFaceFinder : null}
               >
-                <DownloadsProvider>
-                  <IdleLock />
-                  {children}
-                </DownloadsProvider>
+                <SearchProvider
+                  store={searchStore}
+                  makeEncoder={session && !initialVault ? startEncoder : null}
+                >
+                  <DownloadsProvider>
+                    <IdleLock />
+                    {children}
+                  </DownloadsProvider>
+                </SearchProvider>
               </PeopleProvider>
             </UploadsProvider>
           </StorageProvider>

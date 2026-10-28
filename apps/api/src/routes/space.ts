@@ -106,6 +106,7 @@ import {
 import type { PhotoSize } from '../space-db';
 import { requireOwner } from './owner';
 import { people } from './people';
+import { deleteSearchData, search } from './search';
 
 export const PAGE_SIZE = 500;
 export const MAX_ALBUMS = 1000;
@@ -196,6 +197,7 @@ space.use(requireSpace, limitMemberTokens);
 
 // People are kept per space like everything else, and only for its owner.
 space.route('/', people);
+space.route('/', search);
 
 /**
  * Deletes photos and their files, and gives their bytes back to the account deleting them.
@@ -559,8 +561,8 @@ space.delete('/albums/:id/items/:photo', async (c) => {
 });
 
 /**
- * Deletes everything in the space: every photo, its files, every album, its sharing, and its
- * people.
+ * Deletes everything in the space: every photo, its files, every album, its sharing, its
+ * people and its search vectors.
  */
 space.delete('/', requireOwner, async (c) => {
   if (!(await readBody(c, emptySchema))) return c.json({ error: messages.badRequest }, 400);
@@ -573,7 +575,10 @@ space.delete('/', requireOwner, async (c) => {
   }
   await deleteAlbums(c.env.DB, tag);
   await deleteSharing(c.env.DB, tag);
-  const freed = (await deleteProfilePhoto(c.env.DB, tag)) + (await deleteFaceData(c.env.DB, tag));
+  const freed =
+    (await deleteProfilePhoto(c.env.DB, tag)) +
+    (await deleteFaceData(c.env.DB, tag)) +
+    (await deleteSearchData(c.env.DB, tag));
   await releaseStorage(c.env.DB, c.get('account').id, freed);
   return c.body(null, 204);
 });

@@ -27,6 +27,15 @@
   cursor: pointer;
 }
 
+.upload-progress--static {
+  align-items: flex-start;
+  cursor: default;
+}
+
+.upload-progress--static .btn {
+  justify-self: start;
+}
+
 .upload-progress.is-failed {
   color: var(--danger);
 }

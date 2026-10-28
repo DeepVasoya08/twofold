@@ -11,6 +11,8 @@ const phrase = (page: Page) =>
 test('sharing a library view-only with an invite code, changing it, then stopping', async ({
   browser,
 }) => {
+  // Two sign-ups and an unlock, each hashing a password: slow on a busy machine.
+  test.setTimeout(120_000);
   // Two people, each in their own browser.
   const alice = await (await browser.newContext()).newPage();
   const bob = await (await browser.newContext()).newPage();
