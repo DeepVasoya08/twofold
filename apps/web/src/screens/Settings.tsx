@@ -28,6 +28,7 @@ import { Dialog } from '../components/Dialog';
 import { PasswordField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import { PeopleSettings } from '../components/PeopleSettings';
+import { SearchSettings } from '../components/SearchSettings';
 import type { IconName } from '../components/Icon';
 import { ProfileDialog } from '../components/ProfileDialog';
 import { StorageMeter } from '../components/StorageMeter';
@@ -660,6 +661,10 @@ export function Settings() {
 
       <Section title="People">
         <PeopleSettings />
+      </Section>
+
+      <Section title="Search">
+        <SearchSettings />
       </Section>
 
       <Section title="Devices">

@@ -90,6 +90,13 @@ export function Privacy() {
         to whether face grouping should start on, and the day you gave it. You can turn it off on
         any device in Settings, and delete all face data for a space there.
       </p>
+      <h3>Smart search</h3>
+      <p>
+        Smart search lets you find photos by describing them. Your device works out what each photo
+        shows, and that is encrypted there before it’s stored, so we can’t read it. It uses no face
+        data. It’s on unless you turn it off on a device in Settings, where you can also delete all
+        search data for a space.
+      </p>
       <h3>Security</h3>
       <p>
         To stop people guessing passwords, we count failed sign-in attempts for each email address
@@ -108,7 +115,7 @@ export function Privacy() {
         <li>We don’t use analytics or tracking services, or third-party cookies.</li>
         <li>
           We don’t scan, analyze or train anything on your photos. Face grouping, if you turn it on,
-          runs only on your device.
+          and Smart search run only on your device.
         </li>
         <li>
           We don’t keep per-request access logs of your use of the app. Our hosting provider still

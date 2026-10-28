@@ -1,68 +1,31 @@
 import type { StoredFaceSegment, StoredPerson } from '@twofold/types';
 
+import { countSegments, deleteSegments, insertSegment, listSegments } from './segment-db';
+
 /**
  * People queries: sealed face segments and people, every query scoped to a space tag. No
  * query, row or index involves an account.
  */
 
-/** Segments after the cursor, in id order. */
-export async function listFaceSegments(
-  db: D1Database,
-  space: string,
-  after: string,
-  limit: number,
-): Promise<StoredFaceSegment[]> {
-  const { results } = await db
-    .prepare('SELECT id, data FROM face_segments WHERE space = ? AND id > ? ORDER BY id LIMIT ?')
-    .bind(space, after, limit)
-    .all<StoredFaceSegment>();
-  return results;
-}
+const FACES = 'face_segments';
 
-export async function countFaceSegments(db: D1Database, space: string): Promise<number> {
-  const row = await db
-    .prepare('SELECT COUNT(*) AS count FROM face_segments WHERE space = ?')
-    .bind(space)
-    .first<{ count: number }>();
-  return row?.count ?? 0;
-}
+/** Segments after the cursor, in id order. */
+export const listFaceSegments = (db: D1Database, space: string, after: string, limit: number) =>
+  listSegments(db, FACES, space, after, limit);
+
+export const countFaceSegments = (db: D1Database, space: string) => countSegments(db, FACES, space);
 
 /** Returns false if the space already has a segment with this id. */
-export async function insertFaceSegment(
+export const insertFaceSegment = (
   db: D1Database,
   space: string,
   segment: StoredFaceSegment,
   size: number,
-): Promise<boolean> {
-  const result = await db
-    .prepare(
-      `INSERT INTO face_segments (space, id, data, size) VALUES (?, ?, ?, ?)
-       ON CONFLICT (space, id) DO NOTHING`,
-    )
-    .bind(space, segment.id, segment.data, size)
-    .run();
-  return result.meta.changes === 1;
-}
+) => insertSegment(db, FACES, space, segment, size);
 
 /** Deletes segments and returns the bytes the ones this call deleted held. */
-export async function deleteFaceSegments(
-  db: D1Database,
-  space: string,
-  ids: readonly string[],
-): Promise<number> {
-  if (ids.length === 0) return 0;
-  const results = await db.batch(
-    ids.map((id) =>
-      db
-        .prepare('DELETE FROM face_segments WHERE space = ? AND id = ? RETURNING size')
-        .bind(space, id),
-    ),
-  );
-  return results.reduce(
-    (total, result) => total + ((result.results[0] as { size: number } | undefined)?.size ?? 0),
-    0,
-  );
-}
+export const deleteFaceSegments = (db: D1Database, space: string, ids: readonly string[]) =>
+  deleteSegments(db, FACES, space, ids);
 
 export async function listPeople(db: D1Database, space: string): Promise<StoredPerson[]> {
   const { results } = await db

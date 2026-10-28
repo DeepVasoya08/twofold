@@ -36,6 +36,8 @@ interface UploadsValue {
   addFiles: (files: FileList | null, albumId: string | undefined) => void;
   /** Drops the photos that haven't started. Those already uploading finish. */
   cancelWaiting: () => void;
+  /** Ids of the photos this device stored since the vault was unlocked. */
+  uploadedHere: ReadonlySet<string>;
 }
 
 const UploadsContext = createContext<UploadsValue | null>(null);
@@ -79,6 +81,7 @@ const preview: UploaderDeps['preview'] = {
 export function UploadsProvider({ children }: { children: ReactNode }) {
   const { upload, showUploaded } = useVault();
   const toast = useToast();
+  const [uploadedHere, setUploadedHere] = useState<ReadonlySet<string>>(() => new Set());
   const [uploader] = useState(
     () => new Uploader({ prepare: preparePhoto, upload, onStored: showUploaded, preview }),
   );
@@ -89,6 +92,7 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
       upload,
       onStored: (photos) => {
         showUploaded(photos);
+        setUploadedHere((current) => new Set([...current, ...photos.map((photo) => photo.id)]));
         toast.show(`${pluralize(photos.length, 'photo')} added to your vault`);
       },
       preview,
@@ -134,8 +138,9 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
         uploader.add([...(files ?? [])], albumId);
       },
       cancelWaiting: uploader.cancelWaiting,
+      uploadedHere,
     }),
-    [uploader, items, summary, running, dialogOpen],
+    [uploader, items, summary, running, dialogOpen, uploadedHere],
   );
 
   return <UploadsContext value={value}>{children}</UploadsContext>;

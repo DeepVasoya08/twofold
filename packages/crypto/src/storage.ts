@@ -1,4 +1,4 @@
-import { FACE_SIZES, STORAGE_SIZES } from '@twofold/types';
+import { FACE_SIZES, SEARCH_SIZES, STORAGE_SIZES } from '@twofold/types';
 
 import type { SpaceKeys } from './keyring';
 import { getSodium } from './sodium';
@@ -20,11 +20,14 @@ import { fromBase64Url, toBase64Url } from './webcrypto';
  */
 
 const KDF_CONTEXT = 'twfspace';
-const SUBKEY = { records: 1, owner: 2, faces: 3 } as const;
+const SUBKEY = { records: 1, owner: 2, faces: 3, search: 4 } as const;
 const CHUNK_BYTES = 64 * 1024;
 const PAD_BLOCK = 256;
-/** Face segments are padded to 16 KiB steps, so their size says little about what's inside. */
-const FACE_PAD_BLOCK = 16 * 1024;
+/**
+ * Face and search segments are padded to 16 KiB steps, so their size says little about
+ * what's inside.
+ */
+const SEGMENT_PAD_BLOCK = 16 * 1024;
 const RECORD_KEY_BYTES = 32;
 
 /** Records everyone with access to a space can open: photos and albums. */
@@ -38,8 +41,11 @@ export type RecordKind = 'photo' | 'album';
  */
 export type OwnerRecordKind = 'member' | 'joined' | 'profile' | 'invite' | 'person';
 
-/** What's sealed under a space's own key: its records, and segments of face results. */
-type SealedKind = RecordKind | OwnerRecordKind | 'faces';
+/** Segments of results worked out on the device: faces found, and photos' search vectors. */
+export type SegmentKind = 'faces' | 'search';
+
+/** What's sealed under a space's own key: its records, and segments of results. */
+type SealedKind = RecordKind | OwnerRecordKind | SegmentKind;
 
 interface Sealing {
   padBlock: number;
@@ -233,40 +239,72 @@ export async function openOwnerRecord(
   }
 }
 
-const FACE_SEALING: Sealing = { padBlock: FACE_PAD_BLOCK, maxBytes: FACE_SIZES.maxSegment };
+const SEGMENT_SEALING: Record<SegmentKind, Sealing> = {
+  faces: { padBlock: SEGMENT_PAD_BLOCK, maxBytes: FACE_SIZES.maxSegment },
+  search: { padBlock: SEGMENT_PAD_BLOCK, maxBytes: SEARCH_SIZES.maxSegment },
+};
 
 /**
- * Seals a segment of face results (which faces each photo has, and their fingerprints)
- * under a subkey of the space key that members never receive, bound to the segment's id.
- * Padded to 16 KiB steps, so its size doesn't show how many faces it holds.
+ * Seals a segment of results under a subkey of the space key that members never receive,
+ * one subkey per kind, bound to the segment's id. Padded to 16 KiB steps, so its size
+ * doesn't show how many photos or faces it holds.
  */
-export async function sealFaceSegment(
+async function sealSegment(
   space: SpaceKeys,
+  kind: SegmentKind,
   id: string,
   data: Uint8Array,
 ): Promise<string> {
   const sodium = await getSodium();
-  const key = await subkey(space, SUBKEY.faces);
+  const key = await subkey(space, SUBKEY[kind]);
   try {
-    return await sealWith(key, 'faces', id, data, FACE_SEALING);
+    return await sealWith(key, kind, id, data, SEGMENT_SEALING[kind]);
   } finally {
     sodium.memzero(key);
   }
 }
 
-/** Opens a face segment. Throws DecryptionError if it doesn't open. */
-export async function openFaceSegment(
+async function openSegment(
   space: SpaceKeys,
+  kind: SegmentKind,
   id: string,
   sealedText: string,
 ): Promise<Uint8Array> {
   const sodium = await getSodium();
-  const key = await subkey(space, SUBKEY.faces);
+  const key = await subkey(space, SUBKEY[kind]);
   try {
-    return await openWith(key, 'faces', id, sealedText, FACE_SEALING);
+    return await openWith(key, kind, id, sealedText, SEGMENT_SEALING[kind]);
   } finally {
     sodium.memzero(key);
   }
+}
+
+/** Seals a segment of face results (which faces each photo has, and their fingerprints). */
+export function sealFaceSegment(space: SpaceKeys, id: string, data: Uint8Array): Promise<string> {
+  return sealSegment(space, 'faces', id, data);
+}
+
+/** Opens a face segment. Throws DecryptionError if it doesn't open. */
+export function openFaceSegment(
+  space: SpaceKeys,
+  id: string,
+  sealedText: string,
+): Promise<Uint8Array> {
+  return openSegment(space, 'faces', id, sealedText);
+}
+
+/** Seals a segment of search vectors (what each photo shows, as numbers for Smart search). */
+export function sealSearchSegment(space: SpaceKeys, id: string, data: Uint8Array): Promise<string> {
+  return sealSegment(space, 'search', id, data);
+}
+
+/** Opens a search segment. Throws DecryptionError if it doesn't open. */
+export function openSearchSegment(
+  space: SpaceKeys,
+  id: string,
+  sealedText: string,
+): Promise<Uint8Array> {
+  return openSegment(space, 'search', id, sealedText);
 }
 
 /** A new random key for one photo's files. */

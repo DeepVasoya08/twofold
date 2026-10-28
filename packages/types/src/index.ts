@@ -530,3 +530,30 @@ export type PutPersonRequest = UpdateRecordRequest;
 export interface PersonList {
   people: StoredPerson[];
 }
+
+/**
+ * Smart search: what each photo shows, worked out on the device as a vector of numbers and
+ * sealed in segments like face results, so another device can download them instead of
+ * looking at every photo again. Owner-only, for the same reason as face results.
+ */
+export const SEARCH_SIZES = {
+  /** Largest sealed segment, in bytes before base64url. */
+  maxSegment: 256 * 1024,
+} as const;
+
+/** Most segments one space keeps; the device merges them well before this. */
+export const MAX_SEARCH_SEGMENTS = 400;
+/** Segments per `GET /space/search` page. */
+export const SEARCH_SEGMENT_PAGE = 16;
+/** Most segments one `DELETE /space/search` removes. */
+export const SEARCH_SEGMENT_DELETE_MAX = 100;
+
+/** A sealed segment of search vectors. */
+export type StoredSearchSegment = StoredFaceSegment;
+
+export type SearchSegmentPage = FaceSegmentPage;
+
+export type PutSearchSegmentRequest = PutFaceSegmentRequest;
+
+/** Removes segments merged into a newer one. */
+export type DeleteSearchSegmentsRequest = DeleteFaceSegmentsRequest;

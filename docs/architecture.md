@@ -30,8 +30,12 @@ everything from one origin, so there is no CORS and the CSP can stay at
   `lib/people/face-worker.ts`. The model files are bundled assets, pinned by SHA-256.
   Smart search's two resources (OpenCLIP ViT-B/32, about 89 MB and 65 MB) are built at
   deploy time and served as 24 MiB chunks from `/resources/search/`; `lib/search/resources.ts`
-  joins them and checks the pinned SHA-256. A hidden page, `/lab/speed`, times them on the
-  device it's opened on, with made-up inputs, so they can be tuned on real phones.
+  joins them and checks the pinned SHA-256. The photo half runs in
+  `lib/search/encoder-worker.ts`, on the same WebAssembly backend; it loads the fast way
+  and starts again the low-memory way if that runs out of memory (`photo-encoder.ts`).
+  Face grouping and Smart search share the background scan in `lib/background-scan.ts`.
+  A hidden page, `/lab/speed`, times them on the device it's opened on, with made-up
+  inputs, so they can be tuned on real phones.
 - **apps/api** — the Worker code: a Hono app mounted at `/api`, and the app shell
   fallback (`src/app-shell.ts`). `/api/*` requests always run Worker code
   (`run_worker_first`); other paths are answered from assets when a file matches, and
@@ -65,7 +69,8 @@ everything from one origin, so there is no CORS and the CSP can stay at
     Owner-only: `/members` (who the space, or one album of it, is shared with; add, remove),
     `/joined` (the libraries and albums this space joined), `/faces` (sealed face data in
     segments: list paged, add, delete), `/people` (sealed person records: list, put,
-    delete), `/face-data` (delete both) and `/pending-invites` (invites
+    delete), `/face-data` (delete both), `/search` (sealed search vectors in segments: list
+    paged, add, delete), `/search-data` (delete them all) and `/pending-invites` (invites
     this space has in progress, on either side: list, add, replace, remove). `DELETE /membership` lets a
     member leave. A token given one album only reaches `GET /photos`, `/albums`, `/thumbs`,
     `/photos/:id/:part` (that album's listed photos) and `DELETE /membership`. See
@@ -80,8 +85,8 @@ everything from one origin, so there is no CORS and the CSP can stay at
     counts both guess limits in one batch, and a commit checks the files' sizes inside its
     own update. The API tests count round trips per request (`test/d1.ts`).
   - Tables: `accounts`, `sessions` (token hashes only), `login_failures`, `photos`,
-    `albums`, `album_items`, `members`, `joined`, `pending_invites`, `face_segments` and
-    `people` (keyed by space, never
+    `albums`, `album_items`, `members`, `joined`, `pending_invites`, `face_segments`,
+    `people` and `search_segments` (keyed by space, never
     by account), and `invites` (up to a week, keyed by hashes of the code, link and handle).
   - API tests run the real migrations on Node's built-in SQLite (`src/test/d1.ts`) and an
     in-memory R2 (`src/test/r2.ts`).

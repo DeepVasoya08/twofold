@@ -4,6 +4,8 @@ import {
   FACE_SEGMENT_DELETE_MAX,
   FACE_SIZES,
   KEY_SIZES,
+  SEARCH_SEGMENT_DELETE_MAX,
+  SEARCH_SIZES,
   MEMBER_ACCESS,
   SHARE_SIZES,
   SMART_FEATURES_VERSION,
@@ -169,4 +171,17 @@ export const faceSegmentSchema = z.strictObject({
 
 export const deleteFaceSegmentsSchema = z.strictObject({
   ids: z.array(recordId).min(1).max(FACE_SEGMENT_DELETE_MAX),
+});
+
+/** A sealed search segment: nonce, ciphertext and tag, at most SEARCH_SIZES.maxSegment bytes. */
+export const searchSegmentSchema = z.strictObject({
+  data: z
+    .string()
+    .min(base64UrlLength(40))
+    .max(base64UrlLength(SEARCH_SIZES.maxSegment))
+    .regex(/^[A-Za-z0-9_-]+$/),
+});
+
+export const deleteSearchSegmentsSchema = z.strictObject({
+  ids: z.array(recordId).min(1).max(SEARCH_SEGMENT_DELETE_MAX),
 });
