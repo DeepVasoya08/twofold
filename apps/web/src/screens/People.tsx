@@ -11,7 +11,7 @@ import { EmptyState } from '../components/EmptyState';
 import { FaceThumb } from '../components/FaceThumb';
 import { pluralize } from '../lib/format';
 import { MODEL_DOWNLOAD_MB } from '../lib/people/models';
-import type { Group } from '../lib/people/grouping';
+import type { Group, PersonLabel } from '../lib/people/grouping';
 
 import './people.css';
 
@@ -38,6 +38,23 @@ export function progressLine(status: PeopleStatus, done: number, total: number):
 export function groupName(group: Group): string {
   const name = group.person?.name ?? '';
   return name === '' ? 'Add a name' : name;
+}
+
+export const labelNames: Record<PersonLabel, string> = {
+  friends: 'Friends',
+  family: 'Family',
+  work: 'Work',
+};
+
+/** "You", then any labels, before `rest` (usually the photo count). */
+export function aboutPerson(group: Group, rest: string): string {
+  const person = group.person;
+  const parts = [
+    ...(person?.me ? ['You'] : []),
+    ...(person?.labels ?? []).map((label) => labelNames[label]),
+    rest,
+  ];
+  return parts.join(' · ');
 }
 
 /** Turning face grouping on, with what it does and what it downloads. */
@@ -117,7 +134,7 @@ export function People() {
                   {groupName(group)}
                 </span>
                 <span className="person-card__meta">
-                  {pluralize(group.photoIds.length, 'photo')}
+                  {aboutPerson(group, pluralize(group.photoIds.length, 'photo'))}
                 </span>
               </Link>
             </li>

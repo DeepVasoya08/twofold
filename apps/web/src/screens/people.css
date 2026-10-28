@@ -95,3 +95,15 @@
     gap: 20px 14px;
   }
 }
+
+.label-choices {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.label-choices .checkbox {
+  margin: 0;
+}

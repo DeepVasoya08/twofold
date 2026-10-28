@@ -17,6 +17,8 @@ const ada = (id: string): Person => ({
   faces: [`${photoId(1)}#0`],
   rejected: [],
   hidden: false,
+  me: false,
+  labels: [],
 });
 
 describe('remotePeopleStore', () => {
@@ -69,6 +71,18 @@ describe('remotePeopleStore', () => {
     expect(loaded.results.size).toBe(3);
   });
 
+  it('saves "This is me" and labels sealed with the person', async () => {
+    const server = new FakeServer();
+    const space = await newSpace();
+    await remotePeopleStore(space, server.api).savePerson({
+      ...ada('p1'),
+      me: true,
+      labels: ['friends'],
+    });
+    const [loaded] = (await remotePeopleStore(space, server.api).load()).people;
+    expect(loaded).toMatchObject({ id: 'p1', me: true, labels: ['friends'] });
+  });
+
   it('seals people for the owner only, and deletes and forgets them', async () => {
     const server = new FakeServer();
     const space = await newSpace();
@@ -102,11 +116,22 @@ describe('parsePerson', () => {
       faces: ['a#0'],
       rejected: [],
       hidden: true,
+      me: false,
+      labels: [],
     });
     expect(parsePerson('p', { ...valid, v: 2 })).toBeNull();
     expect(parsePerson('p', { ...valid, faces: [1] })).toBeNull();
     expect(parsePerson('p', { ...valid, hidden: 'yes' })).toBeNull();
+    expect(parsePerson('p', { ...valid, me: 'yes' })).toBeNull();
+    expect(parsePerson('p', { ...valid, labels: 'friends' })).toBeNull();
     expect(parsePerson('p', null)).toBeNull();
+  });
+
+  it('reads "This is me" and labels, dropping labels it does not know', () => {
+    const saved = { v: 1, name: 'Ada', faces: [], rejected: [], hidden: false };
+    expect(
+      parsePerson('p', { ...saved, me: true, labels: ['family', 'pets', 'family', 'work'] }),
+    ).toMatchObject({ me: true, labels: ['family', 'work'] });
   });
 });
 

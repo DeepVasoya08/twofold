@@ -38,7 +38,31 @@ export interface Person {
   /** Faces the user said aren't this person. */
   rejected: FaceRef[];
   hidden: boolean;
+  /** Whether this is the person using Twofold: at most one person in a space. */
+  me: boolean;
+  /** Groups they belong to, so searches like "my friends" mean something. */
+  labels: PersonLabel[];
 }
+
+/** The groups a person can be put in. */
+export const PERSON_LABELS = ['friends', 'family', 'work'] as const;
+export type PersonLabel = (typeof PERSON_LABELS)[number];
+
+/**
+ * The people to save when `person` becomes (or stops being) the one using Twofold: them,
+ * and anyone else who was marked so, since only one person can be.
+ */
+export function meChanges(people: readonly Person[], person: Person, me: boolean): Person[] {
+  const others = me
+    ? people
+        .filter((other) => other.me && other.id !== person.id)
+        .map((other) => ({ ...other, me: false }))
+    : [];
+  return [...others, { ...person, me }];
+}
+
+export const isPersonLabel = (value: unknown): value is PersonLabel =>
+  (PERSON_LABELS as readonly unknown[]).includes(value);
 
 export interface Face extends StoredFace {
   ref: FaceRef;
