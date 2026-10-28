@@ -172,8 +172,8 @@ export function Privacy() {
         account in Settings. That deletes your account, its sessions, and the photos in every space
         your device has the keys for when you delete it. Encrypted data we can’t link to you any
         more (for example, a private space whose password wasn’t entered) can’t be decrypted by
-        anyone, and may stay in storage. Deleted data can also remain in our provider’s backups for
-        up to 30 days.
+        anyone, and may stay in storage. Deleted data can also remain for up to 30 days in our
+        backups and our provider’s, which hold the same encrypted data and are themselves encrypted.
       </p>
 
       <h2>Your rights</h2>

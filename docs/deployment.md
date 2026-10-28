@@ -22,6 +22,9 @@ It deploys the exact commit CI tested, in this order:
 The job stops at the first failing step. Fix the cause and use **Re-run jobs** on the
 failed Deploy run.
 
+Nightly database backups run in a separate workflow (`backup.yml`) with their own token;
+setup and restore are in [backups.md](backups.md).
+
 ## One-time setup
 
 Do these steps in order, before the first push to `main`. Each one maps to a deploy

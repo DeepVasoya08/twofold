@@ -124,6 +124,13 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
 - **Infrastructure keeps its own history.** R2 records when each object was uploaded, and
   D1 keeps point-in-time history for its Time Travel window, so a deleted photo's sealed
   row (not its key or contents) can outlive the delete for that long.
+- **Backups keep 30 days of history too.** A nightly export of D1 is kept for 30 days
+  ([backups.md](backups.md)). It holds what D1 holds (sealed records, salts, login
+  verifiers, emails, the per-account storage total), so it carries the same signals as Time
+  Travel: earlier copies of each keyring row, and deleted rows for up to 30 days. Each export
+  is sealed (`crypto_box_seal` of a fresh secretstream key, `@twofold/crypto/backup`) to a
+  public key whose secret half is kept offline, so a leaked export can't be used for
+  offline password guessing.
 - **Sign-up reveals whether an email is registered** (and `POST /api/auth/prelogin`
   answers 404 for unknown emails). Hiding it needs email verification, which doesn't exist
   yet.
