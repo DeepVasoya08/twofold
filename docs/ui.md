@@ -171,8 +171,10 @@ off on this device, or deletes all search data for the open space.
 
 ## Search
 
-`/search` (Search in the sidebar; the magnifier in the phone's top bar) has one box. A
-search is read by a small parser (`lib/search/query.ts`) into who, when and what:
+The search box sits at the top of every signed-in screen (`components/SearchBar.tsx`, in
+the app shell), so there's no Search tab. "/" jumps to it, and on phones the magnifier in
+the top bar does too. Searching from any screen opens the results at `/search`; the URL
+never holds what was typed. A search is read by a small parser (`lib/search/query.ts`) into who, when and what:
 
 - **Who**: names from People, "me"/"my" (whoever is marked "This is me"), "us"/"we" (me and
   at least one other person) and "friends", "family" or "work" when someone has that label.

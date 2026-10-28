@@ -99,7 +99,7 @@ export async function uploadPhotos(
 
 export async function goTo(
   page: Page,
-  link: 'Photos' | 'Search' | 'Albums' | 'People' | 'Favorites' | 'Settings',
+  link: 'Photos' | 'Albums' | 'People' | 'Favorites' | 'Settings',
 ) {
   await page.getByRole('link', { name: link }).filter({ visible: true }).first().click();
 }

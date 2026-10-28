@@ -65,34 +65,13 @@ export function Search() {
   return (
     <div className="page">
       <PageHeader title="Search" subtitle="Searches run on this device and aren’t saved." />
-      <form
-        role="search"
-        className="search-box"
-        onSubmit={(event) => {
-          event.preventDefault();
-          find.submit();
-        }}
-      >
-        <Icon name="search" size={18} />
-        <input
-          type="search"
-          className="search-box__input"
-          aria-label="Search your photos"
-          placeholder="Try “beach”, “Estrella last year” or “us in December”"
-          value={find.text}
-          maxLength={300}
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-          enterKeyHint="search"
-          onChange={(event) => {
-            find.setText(event.currentTarget.value);
-          }}
-        />
-        <button type="submit" className="btn btn--primary btn--sm">
-          Search
-        </button>
-      </form>
+
+      {!query && (
+        <EmptyState icon="search" title="Search your photos">
+          Type in the search box above, from any screen. Try a place, a person, a date or what’s in
+          the photo.
+        </EmptyState>
+      )}
 
       {query && query.chips.length > 0 && (
         <ul className="search-chips" aria-label="What the search looked for">

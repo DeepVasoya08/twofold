@@ -12,6 +12,7 @@
 
 .search-box:focus-within {
   border-color: var(--accent);
+  box-shadow: var(--focus);
 }
 
 .search-box__input {
@@ -24,6 +25,11 @@
   font: inherit;
   font-size: 16px;
   outline: none;
+}
+
+/* The whole box shows focus, so the field inside it doesn't draw a second ring. */
+.search-box__input:focus-visible {
+  box-shadow: none;
 }
 
 .search-chips {
