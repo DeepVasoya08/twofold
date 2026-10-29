@@ -75,7 +75,7 @@ export function countRowsSql(tables: readonly string[]): string {
       (table) =>
         `SELECT '${table.replaceAll("'", "''")}' AS name, count(*) AS n FROM ${quote(table)}`,
     )
-    .join(' UNION ALL ');
+    .join('; ');
 }
 
 export function parseCounts(json: string): Map<string, number> {

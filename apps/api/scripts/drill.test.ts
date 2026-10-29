@@ -68,7 +68,8 @@ function fakeWrangler(tables: string[], sealedFile = path('export.sealed')) {
       return '';
     }
     if (command?.startsWith('SELECT')) {
-      return JSON.stringify([{ results: tables.map((name) => ({ name, n: 3 })) }]);
+      // D1 answers each statement with its own result.
+      return JSON.stringify(tables.map((name) => ({ results: [{ name, n: 3 }] })));
     }
     throw new Error(`unexpected wrangler call: ${args.join(' ')}`);
   };
@@ -194,6 +195,14 @@ describe('drill SQL', () => {
       'PRAGMA defer_foreign_keys = true; DROP TABLE IF EXISTS "a""b"',
     );
     expect(countRowsSql(["it's"])).toBe(`SELECT 'it''s' AS name, count(*) AS n FROM "it's"`);
+  });
+
+  it('counts each table in its own statement', () => {
+    // D1 refuses a compound SELECT with more than a few terms (UNION ALL of every table).
+    const tables = Array.from({ length: 30 }, (_, i) => `t${String(i)}`);
+    const sql = countRowsSql(tables);
+    expect(sql).not.toContain('UNION');
+    expect(sql.split('; ')).toHaveLength(30);
   });
 });
 
