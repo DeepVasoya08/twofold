@@ -75,7 +75,7 @@ export function countRowsSql(tables: readonly string[]): string {
       (table) =>
         `SELECT '${table.replaceAll("'", "''")}' AS name, count(*) AS n FROM ${quote(table)}`,
     )
-    .join(' UNION ALL ');
+    .join('; ');
 }
 
 export function parseCounts(json: string): Map<string, number> {
@@ -145,18 +145,47 @@ export const runWrangler: Wrangler = async (args) => {
   const bin = join(dirname(manifestPath), manifest.bin.wrangler);
   return new Promise((resolve, reject) => {
     // stdin is closed, so wrangler doesn't wait for a confirmation that never comes.
-    const child = spawn(process.execPath, [bin, ...args], { stdio: ['ignore', 'pipe', 'inherit'] });
+    const child = spawn(process.execPath, [bin, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
+    let err = '';
     child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => (out += chunk));
+    child.stderr.on('data', (chunk: string) => {
+      err += chunk;
+      process.stderr.write(chunk);
+    });
     child.on('error', reject);
     child.on('close', (code) => {
       if (code === 0) resolve(out);
-      else
-        reject(new Error(`wrangler ${args.slice(0, 3).join(' ')} failed (exit ${String(code)}).`));
+      else reject(new Error(wranglerFailure(args, code, out, err)));
     });
   });
 };
+
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+
+/**
+ * Says which wrangler step failed and why. Wrangler prints some errors on stdout (with
+ * --json, all of them), so the last lines of both are included. Neither holds export data:
+ * the export goes in as a file, and only table names and counts come back.
+ */
+export function wranglerFailure(
+  args: readonly string[],
+  code: number | null,
+  stdout: string,
+  stderr: string,
+): string {
+  const lines = `${stdout}\n${stderr}`
+    .replace(ANSI, '')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim() !== '');
+  const step = args.includes('--file')
+    ? `${args.slice(0, 3).join(' ')} (import)`
+    : args.slice(0, 3).join(' ');
+  return [`wrangler ${step} failed (exit ${String(code)}).`, ...lines.slice(-20)].join('\n');
+}
 
 /** Empties the staging database; returns the summary to print. */
 export async function wipe(wrangler: Wrangler): Promise<string> {

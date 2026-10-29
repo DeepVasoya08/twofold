@@ -17,6 +17,7 @@ import {
   run,
   STAGING_DATABASE,
   type Wrangler,
+  wranglerFailure,
 } from './drill';
 
 const EXPORT = 'PRAGMA defer_foreign_keys=TRUE;\nCREATE TABLE accounts (id TEXT);\n';
@@ -67,7 +68,8 @@ function fakeWrangler(tables: string[], sealedFile = path('export.sealed')) {
       return '';
     }
     if (command?.startsWith('SELECT')) {
-      return JSON.stringify([{ results: tables.map((name) => ({ name, n: 3 })) }]);
+      // D1 answers each statement with its own result.
+      return JSON.stringify(tables.map((name) => ({ results: [{ name, n: 3 }] })));
     }
     throw new Error(`unexpected wrangler call: ${args.join(' ')}`);
   };
@@ -194,6 +196,14 @@ describe('drill SQL', () => {
     );
     expect(countRowsSql(["it's"])).toBe(`SELECT 'it''s' AS name, count(*) AS n FROM "it's"`);
   });
+
+  it('counts each table in its own statement', () => {
+    // D1 refuses a compound SELECT with more than a few terms (UNION ALL of every table).
+    const tables = Array.from({ length: 30 }, (_, i) => `t${String(i)}`);
+    const sql = countRowsSql(tables);
+    expect(sql).not.toContain('UNION');
+    expect(sql.split('; ')).toHaveLength(30);
+  });
 });
 
 describe('drill command', () => {
@@ -210,5 +220,29 @@ describe('drill command', () => {
     await expect(run([], fake.wrangler)).rejects.toThrow(/Usage/);
     await expect(run(['2026-10-29T0912Z'], fake.wrangler)).rejects.toBeInstanceOf(UsageError);
     expect(fake.calls).toEqual([]);
+  });
+});
+
+describe('wrangler failures', () => {
+  it('name the step and keep the error from either stream, without colour codes', () => {
+    const esc = String.fromCharCode(27);
+    const message = wranglerFailure(
+      ['d1', 'execute', STAGING_DATABASE, '--remote', '--file', 'd1.sql'],
+      1,
+      '{"error": {"text": "table accounts already exists"}}\n',
+      `${esc}[31m✘ [ERROR]${esc}[0m Authentication error\n\n`,
+    );
+    expect(message).toContain(`wrangler d1 execute ${STAGING_DATABASE} (import) failed (exit 1).`);
+    expect(message).toContain('table accounts already exists');
+    expect(message).toContain('✘ [ERROR] Authentication error');
+    expect(message).not.toContain(esc);
+  });
+
+  it('keep only the last lines', () => {
+    const stdout = Array.from({ length: 50 }, (_, i) => `line ${String(i)}`).join('\n');
+    const message = wranglerFailure(['d1', 'execute', STAGING_DATABASE], 1, stdout, '');
+    expect(message).toContain('line 49');
+    expect(message).not.toContain('line 29\n');
+    expect(message.split('\n')).toHaveLength(21);
   });
 });
