@@ -19,6 +19,7 @@ import { People } from './screens/People';
 import { Person } from './screens/Person';
 import { PhotoViewer } from './screens/PhotoViewer';
 import { Privacy } from './screens/Privacy';
+import { RecentlyDeleted } from './screens/RecentlyDeleted';
 import { Recover } from './screens/Recover';
 import { RecoveryKey } from './screens/RecoveryKey';
 import { Search } from './screens/Search';
@@ -45,6 +46,7 @@ const titles: Record<Route['name'], string> = {
   album: 'Album · Twofold',
   'smart-album': 'Album · Twofold',
   favorites: 'Favorites · Twofold',
+  trash: 'Recently deleted · Twofold',
   search: 'Search · Twofold',
   people: 'People · Twofold',
   person: 'People · Twofold',
@@ -109,6 +111,12 @@ function Screen({ route }: { route: Route }) {
       return (
         <AppShell>
           <Favorites />
+        </AppShell>
+      );
+    case 'trash':
+      return (
+        <AppShell>
+          <RecentlyDeleted />
         </AppShell>
       );
     case 'search':

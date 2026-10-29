@@ -11,7 +11,7 @@ import { paths } from '../app/routes';
 import { allSelected, batchMessage } from '../app/selection';
 import type { Selection } from '../app/selection';
 import { useToast } from '../app/toast';
-import { isViewOnly, useVault } from '../app/vault';
+import { isViewOnly, trashNote, useVault } from '../app/vault';
 import { pluralize } from '../lib/format';
 import type { Settled } from '../lib/settle-each';
 import type { Album } from '../mock/data';
@@ -89,13 +89,30 @@ export function SelectionBar({
   const shareable = count > 0 && photos.every((photo) => photo.library === undefined);
   const viewOnly = photos.some(isViewOnly);
 
-  const run = (change: () => Promise<Settled<string>>, done: (photos: string) => string) => {
+  const run = (
+    change: () => Promise<Settled<string>>,
+    done: (photos: string) => string,
+    undo?: (photoIds: readonly string[]) => Promise<unknown>,
+  ) => {
     if (busy) return;
     setBusy(true);
     change()
       .then(
         (result) => {
-          toast.show(batchMessage(result, done));
+          const changed = result.done;
+          toast.show(
+            batchMessage(result, done),
+            undo && changed.length > 0
+              ? {
+                  label: 'Undo',
+                  run: () => {
+                    undo(changed).catch((error: unknown) => {
+                      toast.show(errorMessage(error));
+                    });
+                  },
+                }
+              : undefined,
+          );
           selection.replace(result.failed);
         },
         (error: unknown) => {
@@ -344,13 +361,13 @@ export function SelectionBar({
           setOpen(null);
         }}
         title={count === 1 ? 'Delete this photo?' : `Delete ${pluralize(count, 'photo')}?`}
-        description={
+        description={`${
           shared
-            ? "They will be removed for everyone, including from libraries shared with you. This can't be undone."
+            ? 'They will be removed for everyone, including from libraries shared with you.'
             : space === 'private'
-              ? "They will be removed from your private space, and for anyone you share it with. This can't be undone."
-              : "They will be removed for everyone you share this library with. This can't be undone."
-        }
+              ? 'They will be removed from your private space, and for anyone you share it with.'
+              : 'They will be removed for everyone you share this library with.'
+        } ${trashNote(count)}`}
       >
         <div className="dialog__actions">
           <button
@@ -370,7 +387,8 @@ export function SelectionBar({
             onClick={() => {
               run(
                 () => vault.deletePhotos(ids),
-                (deleted) => `${deleted} deleted`,
+                (deleted) => `${deleted} moved to Recently deleted`,
+                (deleted) => vault.restorePhotos(deleted),
               );
             }}
           >

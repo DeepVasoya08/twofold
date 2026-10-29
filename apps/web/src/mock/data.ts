@@ -45,6 +45,11 @@ export interface Photo {
   viewOnly?: boolean;
   /** Encrypted bytes it takes up on the server (both files), once it is stored. */
   size?: number;
+  /**
+   * Set while the photo is in Recently deleted: when it was deleted (ISO 8601). It is
+   * deleted for good 30 days later.
+   */
+  deletedAt?: string;
 }
 
 export interface Album {

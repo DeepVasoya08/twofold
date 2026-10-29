@@ -16,9 +16,11 @@ interface PhotoGridProps {
   context: PhotoContext;
   /** Lets photos be picked; while picking, a tap selects instead of opening. */
   selection?: Pick<Selection, 'selected' | 'selecting' | 'toggle'> | undefined;
+  /** A short line over each tile, such as how long a deleted photo has left. */
+  note?: ((photo: Photo) => string) | undefined;
 }
 
-export function PhotoGrid({ photos, context, selection }: PhotoGridProps) {
+export function PhotoGrid({ photos, context, selection, note }: PhotoGridProps) {
   const selecting = selection?.selecting ?? false;
   return (
     <ul className={`photo-grid${selecting ? ' is-selecting' : ''}`}>
@@ -30,6 +32,7 @@ export function PhotoGrid({ photos, context, selection }: PhotoGridProps) {
           selected={selection?.selected.has(photo.id) ?? false}
           selecting={selecting}
           toggle={selection?.toggle}
+          note={note?.(photo)}
         />
       ))}
     </ul>
@@ -42,6 +45,7 @@ interface PhotoTileProps {
   selected: boolean;
   selecting: boolean;
   toggle: ((photoId: string) => void) | undefined;
+  note?: string | undefined;
 }
 
 /**
@@ -54,6 +58,7 @@ const PhotoTile = memo(function PhotoTile({
   selected,
   selecting,
   toggle,
+  note,
 }: PhotoTileProps) {
   const shared = photo.library === undefined ? '' : `, shared by ${photo.library}`;
   const label = `Photo from ${formatShortDay(photo.takenAt)}${photo.location ? `, ${photo.location}` : ''}${shared}`;
@@ -83,7 +88,8 @@ const PhotoTile = memo(function PhotoTile({
             <span className="photo-tile__shared-name">{photo.library}</span>
           </span>
         )}
-        {photo.favorite && (
+        {note && <span className="photo-tile__note">{note}</span>}
+        {photo.favorite && !note && (
           <span className="photo-tile__fav" aria-hidden="true">
             <Icon name="heart" size={14} filled />
           </span>

@@ -201,6 +201,16 @@ export function Albums() {
             <SmartAlbumCard key={album.id} album={album} />
           ))}
         </ul>
+        {tab === 'all' && (
+          <Link to={paths.trash} className="albums__trash">
+            <Icon name="trash" size={18} />
+            <span className="albums__trash-title">Recently deleted</span>
+            <span className="albums__trash-count">
+              {state.trash && state.trash.length > 0 ? pluralize(state.trash.length, 'photo') : ''}
+            </span>
+            <Icon name="chevron-right" size={18} />
+          </Link>
+        )}
       </div>
 
       <Dialog open={creating} onClose={closeCreate} title="New album">

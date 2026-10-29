@@ -132,7 +132,7 @@ test('deleting a photo asks first', async ({ page }) => {
   await page.getByRole('button', { name: 'Delete' }).click();
   const dialog = page.getByRole('dialog', { name: 'Delete this photo?' });
   await dialog.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByText('Photo deleted')).toBeVisible();
+  await expect(page.getByText('Moved to Recently deleted')).toBeVisible();
   await expect(page).toHaveURL('/photos');
 });
 

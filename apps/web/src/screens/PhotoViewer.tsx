@@ -13,7 +13,8 @@ import { Link, useRouter } from '../app/router';
 import { parsePhotoContext, paths } from '../app/routes';
 import type { PhotoContext } from '../app/routes';
 import { useToast } from '../app/toast';
-import { albumPhotos, isViewOnly, timelinePhotos, useVault } from '../app/vault';
+import type { ToastAction } from '../app/toast';
+import { albumPhotos, isViewOnly, timelinePhotos, trashNote, useVault } from '../app/vault';
 import type { VaultState } from '../app/vault';
 import { Avatar } from '../components/Brand';
 import { Dialog } from '../components/Dialog';
@@ -74,7 +75,8 @@ function closeTarget(context: PhotoContext): string {
 
 export function PhotoViewer({ photoId }: { photoId: string }) {
   const { search, navigate, back } = useRouter();
-  const { state, space, toggleFavorite, deletePhoto, movePhoto, loadFull } = useVault();
+  const { state, space, toggleFavorite, deletePhoto, restorePhotos, movePhoto, loadFull } =
+    useVault();
   const { otherSpaceOpen } = useAccount();
   const me = useMe();
   const [busy, setBusy] = useState(false);
@@ -180,14 +182,14 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
   };
 
   /** Runs a change to the photo, showing `failed` if it doesn't go through. */
-  const act = (change: () => Promise<void>, done: string) => {
+  const act = (change: () => Promise<void>, done: string, action?: ToastAction) => {
     if (busy) return;
     setBusy(true);
     change().then(
       () => {
         setBusy(false);
         closeDialog();
-        toast.show(done);
+        toast.show(done, action);
         leave();
       },
       (error: unknown) => {
@@ -199,7 +201,20 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
   };
 
   const onDelete = () => {
-    act(() => deletePhoto(photo.id), 'Photo deleted');
+    const photoId = photo.id;
+    act(() => deletePhoto(photoId), 'Moved to Recently deleted', {
+      label: 'Undo',
+      run: () => {
+        restorePhotos([photoId]).then(
+          (result) => {
+            if (result.failed.length > 0) toast.show(errorMessage(result.error));
+          },
+          (error: unknown) => {
+            toast.show(errorMessage(error));
+          },
+        );
+      },
+    });
   };
 
   const move = (otherKeys?: SpaceKeys) => {
@@ -446,13 +461,13 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
         open={dialog === 'delete'}
         onClose={closeDialog}
         title="Delete this photo?"
-        description={
+        description={`${
           photo.library !== undefined
-            ? `It will be removed from ${photo.library}’s library for everyone. This can’t be undone.`
+            ? `It will be removed from ${photo.library}’s library for everyone.`
             : isPrivate
-              ? "It will be removed from your private space, and for anyone you share it with. This can't be undone."
-              : "It will be removed for everyone you share this library with. This can't be undone."
-        }
+              ? 'It will be removed from your private space, and for anyone you share it with.'
+              : 'It will be removed for everyone you share this library with.'
+        } ${trashNote(1)}`}
       >
         <div className="dialog__actions">
           <button type="button" className="btn btn--ghost" onClick={closeDialog}>

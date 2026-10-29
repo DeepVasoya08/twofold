@@ -202,3 +202,29 @@
   color: var(--accent-text);
   font-weight: 600;
 }
+
+.albums__trash {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.albums__trash:hover {
+  background: var(--surface);
+}
+
+.albums__trash-title {
+  flex: 1;
+  font-weight: 600;
+}
+
+.albums__trash-count {
+  color: var(--text-2);
+  font-size: 14px;
+}

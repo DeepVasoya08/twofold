@@ -39,6 +39,46 @@ import type { Album, Photo } from '../mock/data';
 export interface VaultState {
   photos: Photo[];
   albums: Album[];
+  /** Photos in Recently deleted, newest deletion first, once they have loaded. */
+  trash?: Photo[];
+}
+
+/** How long a photo stays in Recently deleted before it is deleted for good. */
+export const TRASH_DAYS = 30;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** What a delete confirmation says about getting photos back. */
+export function trashNote(count: number): string {
+  return `You can restore ${count === 1 ? 'it' : 'them'} from Recently deleted for ${String(TRASH_DAYS)} days.`;
+}
+
+/** Whole days until a photo deleted at `deletedAt` is deleted for good; 0 once it is due. */
+export function trashDaysLeft(deletedAt: string, now = Date.now()): number {
+  const left = Date.parse(deletedAt) + TRASH_DAYS * DAY_MS - now;
+  return Math.max(0, Math.ceil(left / DAY_MS));
+}
+
+/** Whether a deleted photo's 30 days are up. */
+export function trashExpired(photo: Pick<Photo, 'deletedAt'>, now = Date.now()): boolean {
+  return photo.deletedAt !== undefined && trashDaysLeft(photo.deletedAt, now) === 0;
+}
+
+/** A photo back from Recently deleted. */
+function withoutDeletedAt(photo: Photo): Photo {
+  const rest = { ...photo };
+  delete rest.deletedAt;
+  return rest;
+}
+
+/** Albums whose chosen cover is one of `gone` lose it, and show their newest photo instead. */
+function withoutCovers(albums: Album[], gone: ReadonlySet<string>): Album[] {
+  return albums.map((album) => {
+    if (album.coverPhotoId === undefined || !gone.has(album.coverPhotoId)) return album;
+    const rest = { ...album };
+    delete rest.coverPhotoId;
+    return rest;
+  });
 }
 
 export type VaultAction =
@@ -47,6 +87,9 @@ export type VaultAction =
   | { type: 'set-thumbs'; urls: ReadonlyMap<string, string> }
   | { type: 'toggle-favorite'; photoId: string }
   | { type: 'delete-photos'; photoIds: readonly string[] }
+  | { type: 'trash-photos'; photoIds: readonly string[]; deletedAt: string }
+  | { type: 'restore-photos'; photoIds: readonly string[] }
+  | { type: 'set-trash'; trash: Photo[] }
   | { type: 'add-photos'; photos: Photo[] }
   | { type: 'set-details'; photoIds: readonly string[]; change: PhotoDetails }
   | { type: 'create-album'; album: Album }
@@ -77,29 +120,35 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
   switch (action.type) {
     case 'loaded':
       return action.state;
-    case 'set-image':
+    case 'set-image': {
+      const update = (photo: Photo): Photo => {
+        if (action.part === 'thumb') {
+          return photo.id === action.photoId ? { ...photo, src: action.url } : photo;
+        }
+        if (photo.id === action.photoId) return { ...photo, fullSrc: action.url };
+        // The store keeps one original at a time and has revoked the others.
+        if (photo.fullSrc === undefined) return photo;
+        const rest = { ...photo };
+        delete rest.fullSrc;
+        return rest;
+      };
       return {
         ...state,
-        photos: state.photos.map((photo) => {
-          if (action.part === 'thumb') {
-            return photo.id === action.photoId ? { ...photo, src: action.url } : photo;
-          }
-          if (photo.id === action.photoId) return { ...photo, fullSrc: action.url };
-          // The store keeps one original at a time and has revoked the others.
-          if (photo.fullSrc === undefined) return photo;
-          const rest = { ...photo };
-          delete rest.fullSrc;
-          return rest;
-        }),
+        photos: state.photos.map(update),
+        ...(state.trash && { trash: state.trash.map(update) }),
       };
-    case 'set-thumbs':
+    }
+    case 'set-thumbs': {
+      const update = (photo: Photo): Photo => {
+        const url = action.urls.get(photo.id);
+        return url === undefined ? photo : { ...photo, src: url };
+      };
       return {
         ...state,
-        photos: state.photos.map((photo) => {
-          const url = action.urls.get(photo.id);
-          return url === undefined ? photo : { ...photo, src: url };
-        }),
+        photos: state.photos.map(update),
+        ...(state.trash && { trash: state.trash.map(update) }),
       };
+    }
     case 'toggle-favorite':
       return {
         ...state,
@@ -110,15 +159,38 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
     case 'delete-photos': {
       const gone = new Set(action.photoIds);
       return {
+        ...state,
         photos: state.photos.filter((photo) => !gone.has(photo.id)),
-        albums: state.albums.map((album) => {
-          if (album.coverPhotoId === undefined || !gone.has(album.coverPhotoId)) return album;
-          const rest = { ...album };
-          delete rest.coverPhotoId;
-          return rest;
-        }),
+        albums: withoutCovers(state.albums, gone),
+        ...(state.trash && { trash: state.trash.filter((photo) => !gone.has(photo.id)) }),
       };
     }
+    case 'trash-photos': {
+      const gone = new Set(action.photoIds);
+      const moved = state.photos
+        .filter((photo) => gone.has(photo.id))
+        .map((photo) => ({ ...photo, deletedAt: action.deletedAt }));
+      return {
+        ...state,
+        photos: state.photos.filter((photo) => !gone.has(photo.id)),
+        albums: withoutCovers(state.albums, gone),
+        trash: [...moved, ...(state.trash ?? [])],
+      };
+    }
+    case 'restore-photos': {
+      const back = new Set(action.photoIds);
+      const trash = state.trash ?? [];
+      return {
+        ...state,
+        photos: [
+          ...trash.filter((photo) => back.has(photo.id)).map(withoutDeletedAt),
+          ...state.photos,
+        ],
+        trash: trash.filter((photo) => !back.has(photo.id)),
+      };
+    }
+    case 'set-trash':
+      return { ...state, trash: action.trash };
     case 'set-details': {
       const ids = new Set(action.photoIds);
       return {
@@ -152,6 +224,7 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
       };
     case 'delete-album':
       return {
+        ...state,
         photos: state.photos.map((photo) =>
           withDetails(photo, { albumId: action.albumId, included: false }),
         ),
@@ -226,6 +299,67 @@ const MOVES_AT_ONCE = 2;
 
 export type VaultStatus = 'loading' | 'ready' | 'failed';
 
+const GONE = 'That photo isn’t in your vault anymore.';
+
+/**
+ * Moves photos with one batched call, after `check` lets each through. Photos `check`
+ * refuses, or that the call didn't move, are failed.
+ */
+async function moveAll(
+  photoIds: readonly string[],
+  move: (photoIds: string[]) => Promise<string[]>,
+  check?: (photoId: string) => unknown,
+): Promise<Settled<string>> {
+  let error: unknown;
+  const allowed = photoIds.filter((photoId) => {
+    try {
+      check?.(photoId);
+      return true;
+    } catch (caught) {
+      error ??= caught;
+      return false;
+    }
+  });
+  let moved = new Set<string>();
+  if (allowed.length > 0) {
+    try {
+      moved = new Set(await move(allowed));
+    } catch (caught) {
+      error ??= caught;
+    }
+  }
+  const settled: Settled<string> = {
+    done: photoIds.filter((photoId) => moved.has(photoId)),
+    failed: photoIds.filter((photoId) => !moved.has(photoId)),
+  };
+  if (settled.failed.length > 0) settled.error = error ?? new FormError(GONE);
+  return settled;
+}
+
+/**
+ * Loads Recently deleted after the library, and deletes for good whatever has been there 30
+ * days. That only happens on a device that opens the space, since the server never learns
+ * when a photo was deleted. Best effort: what fails stays for next time.
+ */
+export async function loadTrash(
+  store: Pick<SpaceStore, 'listTrash' | 'remove'>,
+  stopped: () => boolean,
+  done: (trash: Photo[]) => void,
+  now = Date.now(),
+): Promise<void> {
+  const trash = await store.listTrash().catch(() => null);
+  if (!trash || stopped()) return;
+  const expired = trash.filter((photo) => trashExpired(photo, now));
+  const purged = await settleEach(expired, SAVES_AT_ONCE, (photo) => store.remove(photo.id));
+  if (stopped()) return;
+  const gone = new Set(purged.done.map((photo) => photo.id));
+  done(
+    trash
+      .filter((photo) => !gone.has(photo.id))
+      .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? '')),
+  );
+}
+
 interface VaultValue {
   /** Photos and albums of the open space. */
   state: VaultState;
@@ -243,9 +377,14 @@ interface VaultValue {
   /** Shows photos that `upload` stored, all in one change. */
   showUploaded: (photos: Photo[]) => void;
   toggleFavorite: (photoId: string) => Promise<void>;
+  /** Moves a photo to Recently deleted. */
   deletePhoto: (photoId: string) => Promise<void>;
-  /** Changes to many photos: each goes through or fails on its own. */
+  /** Moves photos to Recently deleted: each goes through or fails on its own. */
   deletePhotos: (photoIds: readonly string[]) => Promise<Settled<string>>;
+  /** Brings photos back from Recently deleted. */
+  restorePhotos: (photoIds: readonly string[]) => Promise<Settled<string>>;
+  /** Deletes photos in Recently deleted for good, with their files. */
+  deleteForever: (photoIds: readonly string[]) => Promise<Settled<string>>;
   /**
    * Sets a favorite, or puts photos in an album or takes them out, saving only the photos it
    * changes. A photo can only go in an album of its own library.
@@ -361,6 +500,9 @@ export function VaultProvider({
         if (stopped()) return;
         dispatch({ type: 'loaded', state: loaded });
         setStatus('ready');
+        void loadTrash(store, stopped, (trash) => {
+          dispatch({ type: 'set-trash', trash });
+        });
       },
       () => {
         if (!stopped()) setStatus('failed');
@@ -418,14 +560,30 @@ export function VaultProvider({
       },
       deletePhoto: async (photoId) => {
         findChangeable(photoId);
-        await store.remove(photoId);
-        dispatch({ type: 'delete-photos', photoIds: [photoId] });
+        const deletedAt = new Date().toISOString();
+        const moved = await store.trash([photoId], deletedAt);
+        if (!moved.includes(photoId)) throw new FormError(GONE);
+        dispatch({ type: 'trash-photos', photoIds: moved, deletedAt });
       },
       deletePhotos: async (photoIds) => {
-        const result = await settleEach(photoIds, SAVES_AT_ONCE, async (photoId) => {
-          findChangeable(photoId);
-          await store.remove(photoId);
-        });
+        const deletedAt = new Date().toISOString();
+        const result = await moveAll(
+          photoIds,
+          (ids) => store.trash(ids, deletedAt),
+          findChangeable,
+        );
+        dispatch({ type: 'trash-photos', photoIds: result.done, deletedAt });
+        return result;
+      },
+      restorePhotos: async (photoIds) => {
+        const result = await moveAll(photoIds, (ids) => store.restore(ids));
+        dispatch({ type: 'restore-photos', photoIds: result.done });
+        return result;
+      },
+      deleteForever: async (photoIds) => {
+        const result = await settleEach(photoIds, SAVES_AT_ONCE, (photoId) =>
+          store.remove(photoId),
+        );
         dispatch({ type: 'delete-photos', photoIds: result.done });
         return result;
       },

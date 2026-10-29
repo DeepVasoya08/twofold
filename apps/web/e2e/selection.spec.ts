@@ -89,7 +89,7 @@ test('favorite and delete several photos at once', async ({ page }) => {
     .getByRole('dialog', { name: 'Delete 3 photos?' })
     .getByRole('button', { name: 'Delete' })
     .click();
-  await expect(page.getByText('3 photos deleted')).toBeVisible();
+  await expect(page.getByText('3 photos moved to Recently deleted')).toBeVisible();
   await expect(page.getByText('Your library is ready')).toBeVisible();
 
   await page.reload();
