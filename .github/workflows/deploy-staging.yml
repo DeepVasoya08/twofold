@@ -1,0 +1,95 @@
+name: Deploy staging
+
+# Deploys a branch to the staging copy (twofold-staging), which has its own database and
+# bucket (docs/staging.md). Run by hand from the Actions tab. The first run creates the
+# database and bucket.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or commit to deploy
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  STAGING_DATABASE: twofold-staging
+  STAGING_BUCKET: twofold-staging-blobs
+
+jobs:
+  deploy:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Uses the production environment's Cloudflare token and account; every resource it
+    # touches is named in wrangler.jsonc's staging section.
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Find or create the staging database and bucket
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          find_id() {
+            pnpm exec wrangler d1 list --json 2>/dev/null |
+              jq -r --arg name "$STAGING_DATABASE" '.[] | select(.name == $name) | .uuid'
+          }
+          id="$(find_id)"
+          if [ -z "$id" ]; then
+            pnpm exec wrangler d1 create "$STAGING_DATABASE"
+            id="$(find_id)"
+          fi
+          if [ -z "$id" ]; then
+            echo "::error::Couldn't find or create the $STAGING_DATABASE database."
+            exit 1
+          fi
+          sed -i "s/00000000-0000-0000-0000-000000000001/${id}/" wrangler.jsonc
+          if ! pnpm exec wrangler r2 bucket info "$STAGING_BUCKET" >/dev/null 2>&1; then
+            pnpm exec wrangler r2 bucket create "$STAGING_BUCKET"
+          fi
+
+      - name: Apply D1 migrations
+        working-directory: apps/api
+        run: pnpm exec wrangler d1 migrations apply DB --remote --env staging
+
+      - name: Build Smart search resources
+        working-directory: apps/web
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -r scripts/search-resources/requirements.txt
+          .venv/bin/python scripts/search-resources/build.py public/resources/search "$RUNNER_TEMP/search-resources"
+
+      - name: Build web app
+        run: pnpm --filter @twofold/web run build
+
+      # Staging is for testing, so search engines are asked to stay away.
+      - name: Keep staging out of search engines
+        run: |
+          printf 'User-agent: *\nDisallow: /\n' > apps/web/dist/robots.txt
+
+      - name: Deploy Worker
+        working-directory: apps/api
+        run: pnpm exec wrangler deploy --env staging

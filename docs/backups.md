@@ -127,8 +127,10 @@ It prints a bookmark for the state before the restore. Keep it: restoring to tha
 Data written after the export is lost, so prefer the newest export. Sessions in it may
 have expired; people just log in again.
 
+Practise a restore every quarter on staging, never on production: see
+[staging.md](staging.md#restore-drill-every-quarter).
+
 ## Still to come
 
 - R2 copy-on-write into `twofold-backups/r2/` by a separate Worker (needs Workers Paid for
   Queues).
-- A staging Worker and a quarterly restore drill.

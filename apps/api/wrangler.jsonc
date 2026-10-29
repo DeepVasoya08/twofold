@@ -38,4 +38,22 @@
       "migrations_dir": "migrations",
     },
   ],
+  "env": {
+    // A separate copy for restore drills and trying changes before production
+    // (docs/staging.md). It shares nothing with production: its own Worker, database and
+    // bucket. Bindings aren't inherited, so both are listed again.
+    "staging": {
+      "name": "twofold-staging",
+      "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "twofold-staging-blobs" }],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "twofold-staging",
+          // Replaced at deploy time with the ID deploy-staging.yml looks up (or creates).
+          "database_id": "00000000-0000-0000-0000-000000000001",
+          "migrations_dir": "migrations",
+        },
+      ],
+    },
+  },
 }
