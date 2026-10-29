@@ -10,6 +10,7 @@ import {
   SHARE_SIZES,
   SMART_FEATURES_VERSION,
   STORAGE_SIZES,
+  TRASH_BATCH_MAX,
 } from '@twofold/types';
 
 /** Length of an unpadded base64url string encoding `bytes` bytes. */
@@ -98,6 +99,14 @@ export const createPhotoSchema = z.strictObject({
 export const createAlbumSchema = z.strictObject({ id: recordId, meta: sealedRecord });
 
 export const updateRecordSchema = z.strictObject({ meta: sealedRecord });
+
+export const trashSchema = z.strictObject({
+  photos: z
+    .array(z.strictObject({ id: recordId, meta: sealedRecord }))
+    .min(1)
+    .max(TRASH_BATCH_MAX)
+    .refine((photos) => new Set(photos.map((photo) => photo.id)).size === photos.length),
+});
 
 /** An encrypted profile photo: secretstream output, at most STORAGE_SIZES.maxProfilePhoto. */
 export const profilePhotoSchema = z.strictObject({

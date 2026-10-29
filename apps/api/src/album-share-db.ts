@@ -127,7 +127,10 @@ interface ItemRow {
   full_size: number;
 }
 
-/** The shared album's committed photos after the cursor, in id order. */
+/**
+ * The shared album's committed photos after the cursor, in id order. Photos in Recently
+ * deleted are left out until they're restored.
+ */
 export async function listSharedAlbumPhotos(
   db: D1Database,
   space: string,
@@ -140,7 +143,7 @@ export async function listSharedAlbumPhotos(
       `SELECT photos.id AS id, album_items.meta AS meta, thumb_size, full_size
          FROM album_items JOIN photos ON photos.id = album_items.photo
         WHERE album_items.album = ? AND album_items.space = ? AND photos.space = album_items.space
-          AND photos.pending_since IS NULL AND photos.id > ?
+          AND photos.pending_since IS NULL AND photos.trashed = 0 AND photos.id > ?
         ORDER BY photos.id LIMIT ?`,
     )
     .bind(album, space, after, limit)
@@ -153,7 +156,10 @@ export async function listSharedAlbumPhotos(
   }));
 }
 
-/** Which of these photos the shared album lists: the only files its people may download. */
+/**
+ * Which of these photos the shared album lists (and aren't in Recently deleted): the only
+ * files its people may download.
+ */
 export async function sharedAlbumPhotoIds(
   db: D1Database,
   space: string,
@@ -165,7 +171,7 @@ export async function sharedAlbumPhotoIds(
     .prepare(
       `SELECT photo FROM album_items JOIN photos ON photos.id = album_items.photo
         WHERE album_items.album = ? AND album_items.space = ? AND photos.space = album_items.space
-          AND photos.pending_since IS NULL
+          AND photos.pending_since IS NULL AND photos.trashed = 0
           AND album_items.photo IN (${ids.map(() => '?').join(', ')})`,
     )
     .bind(album, space, ...ids)

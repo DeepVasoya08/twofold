@@ -168,6 +168,16 @@ other accounts; see [Sharing](#sharing).
   fallback. Nothing is listed or served until commit,
   and a committed photo's files can't be overwritten. Records are at most 2 KiB, previews
   1 MiB and originals 64 MiB of ciphertext.
+- **Recently deleted.** Deleting a photo first sets a `trashed` flag on its row and
+  replaces its sealed record in the same statement (`POST /api/space/trash`); restoring
+  clears it (`POST /api/space/trash/restore`). The record carries when it was deleted;
+  the server stores no date, so nothing at rest says when a space (a private one
+  included) was used. The device deletes a photo for good once 30 days have passed, the
+  next time the space is opened, so a space nobody opens keeps its deleted photos until
+  then. Trashed photos are hidden from the photo list and from shared albums, still
+  count against storage, and can be listed (`GET /api/space/trash`) only by the owner
+  and members who can edit. Moving a photo to the other space, wiping a space and
+  deleting the account still delete at once.
 - **Moving** a photo to the other space downloads and decrypts it, adds it to the other
   space under a new id and key, then deletes the original. The two copies share nothing
   the server can match.
