@@ -23,6 +23,7 @@ import type {
   PhotoPage,
   ProfilePhotoResponse,
   PutFileResponse,
+  TrashResponse,
 } from '@twofold/types';
 
 import {
@@ -56,6 +57,7 @@ import {
   profilePhotoSchema,
   recordIdSchema,
   spaceTokenSchema,
+  trashSchema,
   updateMemberSchema,
   updateRecordSchema,
 } from '../schemas';
@@ -95,9 +97,11 @@ import {
   insertPendingPhoto,
   listAlbums,
   listPhotos,
+  listTrashedPhotos,
   objectKey,
   objectKeys,
   replaceProfilePhoto,
+  setPhotosTrashed,
   somePhotos,
   stalePendingPhotos,
   updateAlbumMeta,
@@ -436,6 +440,39 @@ space.put('/photos/:id', async (c) => {
     return c.json({ error: notFound }, 404);
   }
   return c.body(null, 204);
+});
+
+/**
+ * Recently deleted: photos moved here are hidden from the photo list and shared albums until
+ * they're restored or deleted for good (DELETE /photos/:id). The device keeps when each was
+ * deleted in its sealed metadata and deletes it for good after 30 days; the server never
+ * learns when. View-only members can't see it, since they can't restore anything.
+ */
+space.get('/trash', async (c) => {
+  if (c.get('access') !== 'edit') return c.json({ error: viewOnly }, 403);
+  const after = c.req.query('after') ?? '';
+  if (after !== '' && !recordIdSchema.safeParse(after).success) {
+    return c.json({ error: messages.badRequest }, 400);
+  }
+  const photos = await listTrashedPhotos(c.env.DB, c.get('space'), after, PAGE_SIZE);
+  const next = photos.length === PAGE_SIZE ? (photos.at(-1)?.id ?? null) : null;
+  return c.json<PhotoPage>({ photos, next });
+});
+
+/** Moves photos into Recently deleted. They keep counting against storage. */
+space.post('/trash', async (c) => {
+  const body = await readBody(c, trashSchema);
+  if (!body) return c.json({ error: messages.badRequest }, 400);
+  const photoIds = await setPhotosTrashed(c.env.DB, c.get('space'), body.photos, true);
+  return c.json<TrashResponse>({ photoIds });
+});
+
+/** Brings photos back from Recently deleted, into the library and any shared albums. */
+space.post('/trash/restore', async (c) => {
+  const body = await readBody(c, trashSchema);
+  if (!body) return c.json({ error: messages.badRequest }, 400);
+  const photoIds = await setPhotosTrashed(c.env.DB, c.get('space'), body.photos, false);
+  return c.json<TrashResponse>({ photoIds });
 });
 
 space.delete('/photos/:id', async (c) => {

@@ -322,6 +322,23 @@ export interface UpdateRecordRequest {
   meta: string;
 }
 
+/** The most photos one request may move into or out of Recently deleted. */
+export const TRASH_BATCH_MAX = 100;
+
+/**
+ * Moves photos into Recently deleted, or restores them. Each photo's sealed metadata is
+ * replaced in the same step, since it carries when the photo was deleted (the server never
+ * stores that).
+ */
+export interface TrashRequest {
+  photos: { id: string; meta: string }[];
+}
+
+/** The photos a trash or restore request moved; ones already moved or gone are left out. */
+export interface TrashResponse {
+  photoIds: string[];
+}
+
 /**
  * Sharing. A space is shared by giving another account a share token of its own (sent in
  * SPACE_HEADER instead of the space id) and the space's records key. Who a space is shared

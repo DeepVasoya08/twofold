@@ -41,7 +41,7 @@ export async function listPhotos(
   const { results } = await db
     .prepare(
       `SELECT id, meta, thumb_size, full_size, pending_since FROM photos
-        WHERE space = ? AND id > ? AND pending_since IS NULL
+        WHERE space = ? AND id > ? AND pending_since IS NULL AND trashed = 0
         ORDER BY id LIMIT ?`,
     )
     .bind(space, after, limit)
@@ -136,6 +136,48 @@ export async function stalePendingPhotos(
 ): Promise<PhotoSize[]> {
   const { results } = await db.prepare(STALE_PENDING_SQL).bind(space, before).all<PhotoSize>();
   return results;
+}
+
+/** The space's photos in Recently deleted after the cursor, in id order. */
+export async function listTrashedPhotos(
+  db: D1Database,
+  space: string,
+  after: string,
+  limit: number,
+): Promise<StoredPhoto[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, meta, thumb_size, full_size, pending_since FROM photos
+        WHERE space = ? AND trashed = 1 AND id > ?
+        ORDER BY id LIMIT ?`,
+    )
+    .bind(space, after, limit)
+    .all<PhotoRow>();
+  return results.map(toPhoto);
+}
+
+/**
+ * Moves committed photos into Recently deleted (`trashed` true) or back out, replacing their
+ * sealed metadata in the same statement. Returns the ids this call moved: photos already
+ * there, still uploading or not in this space are left as they are.
+ */
+export async function setPhotosTrashed(
+  db: D1Database,
+  space: string,
+  photos: readonly { id: string; meta: string }[],
+  trashed: boolean,
+): Promise<string[]> {
+  const results = await db.batch(
+    photos.map((photo) =>
+      db
+        .prepare(
+          `UPDATE photos SET meta = ?, trashed = ?
+            WHERE space = ? AND id = ? AND pending_since IS NULL AND trashed = ?`,
+        )
+        .bind(photo.meta, trashed ? 1 : 0, space, photo.id, trashed ? 0 : 1),
+    ),
+  );
+  return photos.filter((_, index) => results[index]?.meta.changes === 1).map((photo) => photo.id);
 }
 
 /** Returns false if the photo isn't a committed photo in this space. */
