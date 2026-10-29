@@ -2,7 +2,7 @@ name: Backup
 
 # Nightly sealed export of the D1 database (docs/backups.md). The export is sealed to
 # BACKUP_PUBLIC_KEY on the runner, so only the offline secret key can open it, and the plain
-# export never leaves the runner. Skipped until the backup is set up.
+# export never leaves the runner. The variables and secrets live in the production environment.
 on:
   schedule:
     - cron: '30 20 * * *' # 02:00 in India, when the app is quietest
@@ -18,8 +18,10 @@ concurrency:
 jobs:
   d1:
     name: Back up D1
-    if: vars.BACKUP_PUBLIC_KEY != ''
     runs-on: ubuntu-latest
+    # Environment variables and secrets are only visible to a job inside its environment,
+    # and never to a job-level `if`.
+    environment: production
     timeout-minutes: 15
     env:
       # Its own token: D1 export and writing to the backup bucket, nothing else.
@@ -29,6 +31,13 @@ jobs:
       BACKUP_PUBLIC_KEY: ${{ vars.BACKUP_PUBLIC_KEY }}
       BACKUP_BUCKET: twofold-backups
     steps:
+      - name: Check setup
+        run: |
+          if [ -z "$BACKUP_PUBLIC_KEY" ] || [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::BACKUP_PUBLIC_KEY or CLOUDFLARE_BACKUP_API_TOKEN is not set in the production environment (see docs/backups.md)."
+            exit 1
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -47,7 +56,7 @@ jobs:
         working-directory: apps/api
         run: |
           if [ -z "$D1_DATABASE_ID" ]; then
-            echo "::error::Repository variable D1_DATABASE_ID is not set (see docs/deployment.md)."
+            echo "::error::Variable D1_DATABASE_ID is not set (see docs/deployment.md)."
             exit 1
           fi
           sed -i "s/00000000-0000-0000-0000-000000000000/${D1_DATABASE_ID}/" wrangler.jsonc

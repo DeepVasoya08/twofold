@@ -25,8 +25,9 @@ Only the secret key can open an export, and it never goes to GitHub or Cloudflar
 export holds salts and login verifiers, which would allow offline password guessing, so
 this sealing matters even though photos and keys in it are already encrypted.
 
-The job is skipped while `BACKUP_PUBLIC_KEY` is unset. A failed run emails the repository
-owner. GitHub turns scheduled workflows off after 60 days without commits; if that happens,
+The job runs in the `production` environment and fails with a clear error while
+`BACKUP_PUBLIC_KEY` or `CLOUDFLARE_BACKUP_API_TOKEN` is missing there, so a backup is never
+silently skipped. A failed run emails the repository owner. GitHub turns scheduled workflows off after 60 days without commits; if that happens,
 re-enable it on the Actions tab.
 
 D1 answers other requests slowly while an export runs, which is why it runs at night.
@@ -73,10 +74,13 @@ from it.
 
 ### 4. Configure GitHub
 
-| Where               | Name                          | Value                  |
-| ------------------- | ----------------------------- | ---------------------- |
-| Secrets → Actions   | `CLOUDFLARE_BACKUP_API_TOKEN` | the token from step 3  |
-| Variables → Actions | `BACKUP_PUBLIC_KEY`           | the public key, step 1 |
+Add both to the `production` environment (Settings → Environments → production), where the
+deploy workflow's values already are:
+
+| Where                 | Name                          | Value                  |
+| --------------------- | ----------------------------- | ---------------------- |
+| Environment secrets   | `CLOUDFLARE_BACKUP_API_TOKEN` | the token from step 3  |
+| Environment variables | `BACKUP_PUBLIC_KEY`           | the public key, step 1 |
 
 `CLOUDFLARE_ACCOUNT_ID` and `D1_DATABASE_ID` are shared with the deploy workflow.
 
