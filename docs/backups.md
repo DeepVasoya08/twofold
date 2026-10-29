@@ -93,7 +93,15 @@ Always start with the least drastic option.
 
 ### The database changed badly in the last 30 days (7 on Free)
 
-Use D1 Time Travel. It restores in place, and the database ID stays the same.
+Use D1 Time Travel. It restores in place, and the database ID stays the same. A restore
+rewinds the live database for everyone: anything written after that point (accounts,
+uploads, shares, deletes) is gone, and photos uploaded since then lose their records.
+Check the point with `info` first.
+
+`apps/api/wrangler.jsonc` holds a placeholder database ID that only the deploy workflow
+fills in. Before these commands, set `database_id` there to your real ID (the
+`D1_DATABASE_ID` variable) and don't commit it. Timestamps need the full form with seconds
+(`2026-11-02T10:00:00Z`) or a Unix time.
 
 ```sh
 cd apps/api
@@ -101,8 +109,8 @@ pnpm exec wrangler d1 time-travel info DB --timestamp 2026-11-02T10:00:00Z   # c
 pnpm exec wrangler d1 time-travel restore DB --timestamp 2026-11-02T10:00:00Z
 ```
 
-It prints a bookmark for the state before the restore, so a restore can be undone the same
-way.
+It prints a bookmark for the state before the restore. Keep it: restoring to that bookmark
+(`--bookmark <it>`) undoes the restore.
 
 ### Time Travel can't help (database deleted, or older than its window)
 
