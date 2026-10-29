@@ -58,6 +58,8 @@ const icons = {
   trash: (
     <path d="M4 7h16M10 11v6M14 11v6M6 7l.9 11.2A2 2 0 0 0 8.9 20h6.2a2 2 0 0 0 2-1.8L18 7M9 7V4.5h6V7" />
   ),
+  /** Restore: an arrow turning back. */
+  restore: <path d="M4 5v5h5M4.6 15a8 8 0 1 0 1.9-8.4L4 10" />,
   download: <path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M4.5 20h15" />,
   eye: (
     <>

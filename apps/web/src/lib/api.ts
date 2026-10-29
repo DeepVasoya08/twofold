@@ -35,6 +35,8 @@ import type {
   SignUpRequest,
   SmartFeaturesRequest,
   StoredProfilePhoto,
+  TrashRequest,
+  TrashResponse,
   UpdateKeyringRequest,
   UpdateNameRequest,
 } from '@twofold/types';
@@ -254,7 +256,22 @@ export function spaceApi(token: string) {
       return parts;
     },
     updatePhoto: (id: string, meta: string) => call<undefined>('PUT', photo(id), { meta }, headers),
+    /** Deletes a photo and its files for good. */
     deletePhoto: (id: string) => call<undefined>('DELETE', photo(id), {}, headers),
+    /** Photos in Recently deleted, a page at a time. */
+    listTrash: (after?: string) =>
+      call<PhotoPage>(
+        'GET',
+        `/space/trash${after ? `?after=${encodeURIComponent(after)}` : ''}`,
+        undefined,
+        headers,
+      ),
+    /** Moves photos into Recently deleted, each with its new sealed metadata. */
+    trashPhotos: (photos: TrashRequest['photos']) =>
+      call<TrashResponse>('POST', '/space/trash', { photos }, headers),
+    /** Brings photos back from Recently deleted, each with its new sealed metadata. */
+    restorePhotos: (photos: TrashRequest['photos']) =>
+      call<TrashResponse>('POST', '/space/trash/restore', { photos }, headers),
     createAlbum: (body: CreateAlbumRequest) =>
       call<undefined>('POST', '/space/albums', body, headers),
     updateAlbum: (id: string, meta: string) =>

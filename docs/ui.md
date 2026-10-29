@@ -119,6 +119,16 @@ exists but is low-key (Settings → Sharing).
 - Albums has three tabs: **All albums**, **Shared with me** (other people's albums, shared
   alone or with their library) and **Shared by me** (your albums shared with at least one
   person). Cards say who an album is from or shared with.
+- **Delete** (in the selection bar or the viewer) moves photos to **Recently deleted**: the
+  toast has **Undo** for 6 seconds, and the confirmation says they can be restored for 30
+  days. Recently deleted is linked at the bottom of Albums (All albums tab) and lives at
+  `/recently-deleted`. A tap there selects (photos aren't opened); each tile shows how many
+  days are left; the bar offers **Restore** and **Delete now**, and **Empty** deletes
+  everything there for good. Deleted photos still count against storage. When it was
+  deleted is sealed in the photo's record, so the device opening the space deletes for good
+  whatever is past 30 days (`loadTrash` in `app/vault.tsx`); a space nobody opens keeps
+  them until it is opened. View-only members never see it; members who can edit see and
+  restore what's deleted in that library.
 - Code: `app/selection.ts` (selection state), `components/SelectionBar.tsx`,
   `AlbumPicker.tsx`, `DownloadDialog.tsx`, `AlbumActions.tsx`, `AlbumShareDialog.tsx`,
   `MoveSpaceDialog.tsx` (shared with the viewer), and the vault's batch changes in
@@ -267,6 +277,7 @@ Routes are the same in both spaces; the content depends on which space is open.
 | `/albums`              | Albums, with tabs and "New album"                                  |
 | `/albums/:id`          | One album, with Download and its menu                              |
 | `/favorites`           | Favorites                                                          |
+| `/recently-deleted`    | Recently deleted: restore, delete now, or empty                    |
 | `/people`              | People found in photos (or turning face grouping on)               |
 | `/people/:id`          | One person's photos: name, merge, hide, "Not this person"          |
 | `/settings`            | Profile, passwords, sharing, security, devices, appearance         |

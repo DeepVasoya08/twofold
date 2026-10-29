@@ -1,6 +1,6 @@
 import type { SpaceAccess, SpaceKeys } from '@twofold/crypto';
-import { STORAGE_SIZES, THUMB_BATCH_MAX } from '@twofold/types';
-import type { PhotoPart } from '@twofold/types';
+import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@twofold/types';
+import type { PhotoPage, PhotoPart } from '@twofold/types';
 
 import { spaceApi } from '../lib/api';
 import { isPhotoType } from '../lib/photo-types';
@@ -89,7 +89,21 @@ export interface SpaceStore {
   ) => Promise<Photo>;
   /** Saves a photo's favorite and albums. */
   update: (photo: Photo) => Promise<void>;
+  /** Deletes a photo and its files for good. */
   remove: (photoId: string) => Promise<void>;
+  /**
+   * Photos in Recently deleted, each with `deletedAt`. Empty where you can only view (the
+   * server doesn't show it there).
+   */
+  listTrash: () => Promise<Photo[]>;
+  /**
+   * Moves photos into Recently deleted, recording when in their sealed metadata (the server
+   * never learns it). Returns the ids it moved; ones it doesn't know or that were already
+   * moved are left out.
+   */
+  trash: (photoIds: readonly string[], deletedAt: string) => Promise<string[]>;
+  /** Brings photos back from Recently deleted. Returns the ids it moved. */
+  restore: (photoIds: readonly string[]) => Promise<string[]>;
   createAlbum: (title: string) => Promise<Album>;
   renameAlbum: (albumId: string, title: string) => Promise<void>;
   /** Deletes an album. Its photos stay; take the album out of them with `update`. */
@@ -137,6 +151,8 @@ interface PhotoMeta {
   albumIds: string[];
   /** Set when a member (not the library's owner) added it. */
   by?: AddedBy;
+  /** Set while it is in Recently deleted: when it was deleted (ISO 8601). */
+  deletedAt?: string;
 }
 
 /** How this device reaches a library someone shared with it. */
@@ -185,9 +201,14 @@ function parsePhotoMeta(value: unknown): PhotoMeta | null {
     typeof favorite === 'boolean' &&
     Array.isArray(albumIds) &&
     albumIds.every((id) => typeof id === 'string');
-  if (!ok) return null;
+  const { deletedAt } = value;
+  const deletedOk =
+    deletedAt === undefined ||
+    (typeof deletedAt === 'string' && !Number.isNaN(Date.parse(deletedAt)));
+  if (!ok || !deletedOk) return null;
   const meta: PhotoMeta = { v, key, type, width, height, takenAt, favorite, albumIds };
   if (by) meta.by = by;
+  if (deletedAt !== undefined) meta.deletedAt = deletedAt;
   return meta;
 }
 
@@ -238,6 +259,7 @@ function toPhoto(
     ...addedBy(meta, membership),
     favorite: meta.favorite,
     albumIds: meta.albumIds,
+    ...(meta.deletedAt !== undefined && { deletedAt: meta.deletedAt }),
   };
 }
 
@@ -394,6 +416,58 @@ export function remoteStore(
     }
   };
 
+  /** Opens every page of photos `listPage` returns, and remembers their keys. */
+  const openPhotos = async (listPage: (after?: string) => Promise<PhotoPage>) => {
+    const crypto = await loadCrypto();
+    const keys = await access();
+    const photos: Photo[] = [];
+    let after: string | undefined;
+    do {
+      const page = await listPage(after);
+      for (const stored of page.photos) {
+        // A record that doesn't open was tampered with or isn't ours: leave it out.
+        const opened = await crypto
+          .openRecord(keys, 'photo', stored.id, stored.meta)
+          .catch(() => null);
+        const meta = opened && parsePhotoMeta(decode(opened));
+        const key = meta && crypto.fromBase64Url(meta.key);
+        if (!meta || key?.length !== 32) continue;
+        known.set(stored.id, { key, meta });
+        photos.push(toPhoto(stored.id, meta, membership, stored.thumbSize + stored.fullSize));
+      }
+      after = page.next ?? undefined;
+    } while (after);
+    return photos;
+  };
+
+  /**
+   * Moves known photos into or out of Recently deleted, a batch at a time, with their
+   * metadata resealed as `change` makes it. Returns the ids the server moved.
+   */
+  const moveTrash = async (
+    photoIds: readonly string[],
+    change: (meta: PhotoMeta) => PhotoMeta,
+    send: (photos: { id: string; meta: string }[]) => Promise<{ photoIds: string[] }>,
+  ) => {
+    const ids = photoIds.filter((photoId) => known.has(photoId));
+    const moved: string[] = [];
+    for (let start = 0; start < ids.length; start += TRASH_BATCH_MAX) {
+      const batch = ids.slice(start, start + TRASH_BATCH_MAX);
+      const metas = new Map(batch.map((photoId) => [photoId, change(lookup(photoId).meta)]));
+      const sealed = await Promise.all(
+        [...metas].map(async ([id, meta]) => ({ id, meta: await sealPhoto(id, meta) })),
+      );
+      const answer = await send(sealed);
+      for (const photoId of answer.photoIds) {
+        const entry = known.get(photoId);
+        const meta = metas.get(photoId);
+        if (entry && meta) known.set(photoId, { ...entry, meta });
+        moved.push(photoId);
+      }
+    }
+    return moved;
+  };
+
   return {
     list: async () => {
       const api = await remote();
@@ -402,23 +476,7 @@ export function remoteStore(
       // Albums are asked for alongside the photos, not after them.
       const storedAlbums = api.listAlbums();
       storedAlbums.catch(() => undefined);
-      const photos: Photo[] = [];
-      let after: string | undefined;
-      do {
-        const page = await api.listPhotos(after);
-        for (const stored of page.photos) {
-          // A record that doesn't open was tampered with or isn't ours: leave it out.
-          const opened = await crypto
-            .openRecord(keys, 'photo', stored.id, stored.meta)
-            .catch(() => null);
-          const meta = opened && parsePhotoMeta(decode(opened));
-          const key = meta && crypto.fromBase64Url(meta.key);
-          if (!meta || key?.length !== 32) continue;
-          known.set(stored.id, { key, meta });
-          photos.push(toPhoto(stored.id, meta, membership, stored.thumbSize + stored.fullSize));
-        }
-        after = page.next ?? undefined;
-      } while (after);
+      const photos = await openPhotos((after) => api.listPhotos(after));
       const albums: Album[] = [];
       for (const stored of (await storedAlbums).albums) {
         const opened = await crypto
@@ -556,6 +614,29 @@ export function remoteStore(
       forget(photoId);
     },
 
+    listTrash: async () => {
+      const api = await remote();
+      return openPhotos((after) => api.listTrash(after));
+    },
+
+    trash: async (photoIds, deletedAt) => {
+      const api = await remote();
+      return moveTrash(photoIds, (meta) => ({ ...meta, deletedAt }), api.trashPhotos);
+    },
+
+    restore: async (photoIds) => {
+      const api = await remote();
+      return moveTrash(
+        photoIds,
+        (meta) => {
+          const rest = { ...meta };
+          delete rest.deletedAt;
+          return rest;
+        },
+        api.restorePhotos,
+      );
+    },
+
     createAlbum: async (title) => {
       const crypto = await loadCrypto();
       const id = await crypto.newRecordId();
@@ -686,6 +767,19 @@ export function combinedStore(
   const photoStores = new Map<string, SpaceStore>();
   const albumStores = new Map<string, SpaceStore>();
   const storeOf = (photoId: string) => photoStores.get(photoId) ?? own;
+  /** Runs `task` once per store, with the photos that live there, and joins the answers. */
+  const eachStore = async (
+    photoIds: readonly string[],
+    task: (store: SpaceStore, ids: string[]) => Promise<string[]>,
+  ) => {
+    const byStore = new Map<SpaceStore, string[]>();
+    for (const photoId of photoIds) {
+      const store = storeOf(photoId);
+      byStore.set(store, [...(byStore.get(store) ?? []), photoId]);
+    }
+    const answers = await Promise.all([...byStore].map(([store, ids]) => task(store, ids)));
+    return answers.flat();
+  };
   const albumStoreOf = (albumId: string) => albumStores.get(albumId) ?? own;
 
   return {
@@ -791,6 +885,25 @@ export function combinedStore(
       await changeable(storeOf(photoId)).remove(photoId);
       photoStores.delete(photoId);
     },
+    listTrash: async () => {
+      // Libraries you can only view keep their Recently deleted to themselves.
+      const sources = shared.filter((source) => !readOnly.has(source.store));
+      const [mine, ...theirs] = await Promise.all([
+        own.listTrash(),
+        ...sources.map((source) => source.store.listTrash().catch(() => [])),
+      ]);
+      const photos = [...mine];
+      sources.forEach((source, index) => {
+        for (const photo of theirs[index] ?? []) {
+          photoStores.set(photo.id, source.store);
+          photos.push({ ...photo, library: source.name });
+        }
+      });
+      return photos;
+    },
+    trash: (photoIds, deletedAt) =>
+      eachStore(photoIds, (store, ids) => changeable(store).trash(ids, deletedAt)),
+    restore: (photoIds) => eachStore(photoIds, (store, ids) => changeable(store).restore(ids)),
     createAlbum: (title) => own.createAlbum(title),
     renameAlbum: async (albumId, title) =>
       changeable(albumStoreOf(albumId)).renameAlbum(albumId, title),
@@ -856,6 +969,9 @@ export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): Spac
     },
     update: () => Promise.resolve(),
     remove: () => Promise.resolve(),
+    listTrash: () => Promise.resolve([]),
+    trash: (photoIds) => Promise.resolve([...photoIds]),
+    restore: (photoIds) => Promise.resolve([...photoIds]),
     createAlbum: (title) => Promise.resolve({ id: newId(), title }),
     renameAlbum: () => Promise.resolve(),
     removeAlbum: () => Promise.resolve(),

@@ -18,7 +18,10 @@ import type { InviteApi, SpaceApi } from '../lib/api';
  * given one album reaches only that album's listed photos, read-only.
  */
 export class FakeServer {
-  photos = new Map<string, { token: string; photo: StoredPhoto; committed: boolean }>();
+  photos = new Map<
+    string,
+    { token: string; photo: StoredPhoto; committed: boolean; trashed?: boolean }
+  >();
   files = new Map<string, Uint8Array<ArrayBuffer>>();
   albums = new Map<string, { token: string; album: StoredAlbum; shared: string | null }>();
   /** By `album/photo`: a shared album's sealed copy of a photo's details. */
@@ -57,7 +60,28 @@ export class FakeServer {
       if (scope !== null) throw new ApiError(403, 'Album only');
       if (member?.access === 'view') throw new ApiError(403, 'View only');
     };
-    const listed = (id: string) => scope === null || this.items.has(`${scope}/${id}`);
+    // Someone given one album sees only what it lists, and nothing in Recently deleted.
+    const listed = (id: string) =>
+      scope === null || (this.items.has(`${scope}/${id}`) && !this.photos.get(id)?.trashed);
+    const editOnly = () => {
+      if (member && (scope !== null || member.access === 'view')) {
+        throw new ApiError(403, 'View only');
+      }
+    };
+    const moveTrash = (photos: { id: string; meta: string }[], trashed: boolean) => {
+      writable();
+      const moved: string[] = [];
+      for (const { id, meta } of photos) {
+        const entry = this.photos.get(id);
+        if (entry?.token !== space || !entry.committed || Boolean(entry.trashed) === trashed) {
+          continue;
+        }
+        entry.trashed = trashed;
+        entry.photo.meta = meta;
+        moved.push(id);
+      }
+      return Promise.resolve({ photoIds: moved });
+    };
     const mine = (id: string) => {
       const entry = this.photos.get(id);
       if (entry?.token !== space || !listed(id)) throw new ApiError(404, 'Not here');
@@ -78,7 +102,13 @@ export class FakeServer {
       listPhotos: () =>
         Promise.resolve({
           photos: [...this.photos.values()]
-            .filter((entry) => entry.token === space && entry.committed && listed(entry.photo.id))
+            .filter(
+              (entry) =>
+                entry.token === space &&
+                entry.committed &&
+                !entry.trashed &&
+                listed(entry.photo.id),
+            )
             .map((entry) =>
               scope === null
                 ? entry.photo
@@ -132,6 +162,17 @@ export class FakeServer {
         for (const [index, part] of parts.entries()) onThumb?.(index, part);
         return Promise.resolve(parts);
       },
+      listTrash: () => {
+        editOnly();
+        return Promise.resolve({
+          photos: [...this.photos.values()]
+            .filter((entry) => entry.token === space && entry.trashed)
+            .map((entry) => entry.photo),
+          next: null,
+        });
+      },
+      trashPhotos: (photos) => moveTrash(photos, true),
+      restorePhotos: (photos) => moveTrash(photos, false),
       updatePhoto: (id, meta) => {
         writable();
         mine(id).photo.meta = meta;

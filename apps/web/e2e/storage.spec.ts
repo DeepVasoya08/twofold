@@ -63,20 +63,70 @@ test('photos, favorites and albums are still there after locking and on a new lo
   await expect(decryptedTiles(page)).toHaveCount(3);
 });
 
-test('a deleted photo stays deleted', async ({ page }) => {
+test('a deleted photo goes to Recently deleted, can be undone or restored, and is gone for good only when asked', async ({
+  page,
+}) => {
   await signUp(page);
-  await uploadPhotos(page, 1);
-  await page.locator('.photo-tile').first().click();
-  await page.getByRole('button', { name: 'Delete' }).click();
-  await page
-    .getByRole('dialog', { name: 'Delete this photo?' })
-    .getByRole('button', { name: 'Delete' })
-    .click();
-  await expect(page.getByText('Photo deleted')).toBeVisible();
+  await uploadPhotos(page, 2);
+  await expect(page.locator('.photo-tile img')).toHaveCount(2);
+  const deleteOpenPhoto = async () => {
+    await page.getByRole('button', { name: 'Delete' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Delete this photo?' });
+    await expect(dialog).toContainText('You can restore it from Recently deleted for 30 days.');
+    await dialog.getByRole('button', { name: 'Delete' }).click();
+    await expect(page.getByText('Moved to Recently deleted')).toBeVisible();
+  };
 
+  // Undo on the toast puts it straight back.
+  await page.locator('.photo-tile').first().click();
+  await deleteOpenPhoto();
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.photo-tile')).toHaveCount(2);
+
+  // Deleted again, it stays in Recently deleted across a lock, with its 30 days counting down.
+  await page.locator('.photo-tile').first().click();
+  await deleteOpenPhoto();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.photo-tile')).toHaveCount(1);
+  await lock(page);
+  await unlockWith(page, MAIN_PASSWORD);
+  await expect(page.locator('.photo-tile img')).toHaveCount(1);
+  await goTo(page, 'Albums');
+  await page.getByRole('link', { name: /Recently deleted/ }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Recently deleted' })).toBeVisible();
+  await expect(page.locator('.photo-tile img')).toHaveCount(1);
+  await expect(page.locator('.photo-tile__note')).toHaveText('30 days left');
+
+  // Restored, it is back in the library.
+  await page.locator('.photo-tile').first().click();
+  await page.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByText('1 photo restored')).toBeVisible();
+  await expect(page.getByText('Nothing here')).toBeVisible();
+  await goTo(page, 'Photos');
+  await expect(page.locator('.photo-tile img')).toHaveCount(2);
+
+  // Deleted and then emptied, it is gone for good, after a reload too.
+  await page.locator('.photo-tile').first().click();
+  await deleteOpenPhoto();
+  await page.keyboard.press('Escape');
   await page.reload();
   await unlockWith(page, MAIN_PASSWORD);
-  await expect(page.getByText('Your library is ready')).toBeVisible();
+  await goTo(page, 'Albums');
+  await page.getByRole('link', { name: /Recently deleted/ }).click();
+  await expect(page.locator('.photo-tile')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Empty' }).click();
+  await page
+    .getByRole('dialog', { name: 'Empty Recently deleted?' })
+    .getByRole('button', { name: 'Delete for good' })
+    .click();
+  await expect(page.getByText('1 photo deleted for good')).toBeVisible();
+  await expect(page.getByText('Nothing here')).toBeVisible();
+  await page.reload();
+  await unlockWith(page, MAIN_PASSWORD);
+  await goTo(page, 'Albums');
+  await page.getByRole('link', { name: /Recently deleted/ }).click();
+  await expect(page.getByText('Nothing here')).toBeVisible();
 });
 
 test('moved photos stay in their new space, and moving back asks for the main password', async ({
