@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./backup": "./src/backup.ts",
     "./webcrypto": "./src/webcrypto.ts",
     "./password-worker": "./src/password-worker.ts",
     "./file-crypto-worker": "./src/file-crypto-worker.ts"
