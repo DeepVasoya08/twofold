@@ -2,14 +2,34 @@
 
 What protects Twofold's data, how to set it up, and how to bring things back.
 
-| Store                | Protection                                                    | Kept                               |
-| -------------------- | ------------------------------------------------------------- | ---------------------------------- |
-| D1 (`twofold`)       | D1 Time Travel: rewind to any minute                          | 30 days on Workers Paid, 7 on Free |
-| D1 (`twofold`)       | Nightly sealed export to `twofold-backups/d1/` (`backup.yml`) | 30 days                            |
-| R2 (`twofold-blobs`) | Not yet: the copy Worker needs Workers Paid (Queues)          | —                                  |
+| Store                | Protection                                                     | Kept                                  |
+| -------------------- | -------------------------------------------------------------- | ------------------------------------- |
+| D1 (`twofold`)       | D1 Time Travel: rewind to any minute                           | 30 days on Workers Paid, 7 on Free    |
+| D1 (`twofold`)       | Nightly sealed export to `twofold-backups/d1/` (`backup.yml`)  | 30 days                               |
+| R2 (`twofold-blobs`) | Hourly copy to `twofold-backups/r2/` (`twofold-backup` Worker) | Until 30 days after a file is deleted |
 
 D1 matters most. It holds every account's key slots, so without it the photos in R2 can't
 be decrypted by anyone, recovery key or not.
+
+## How the photo backup works
+
+A separate Worker, `twofold-backup` (`apps/api/src/backup`, `wrangler.backup.jsonc`), runs
+every hour at minute 17. It holds the photo bucket and the backup bucket; the app's Worker
+never holds the backup bucket. Each run lists both buckets and then:
+
+1. Copies every file that isn't backed up yet to `twofold-backups/r2/<same name>`, once
+   the file is an hour old (a pending upload may still be retried). A first backup of many
+   files spreads over several runs, at most 500 files per run.
+2. Marks copies whose file has disappeared, with an empty `gone/<name>`. Its upload time
+   is when the file was first missed.
+3. Removes a copy and its mark 30 days after the mark. A photo deleted by mistake, or by
+   someone with access to the photo bucket, can still be restored for those 30 days.
+
+The files are already encrypted on the device, so the copies are ciphertext; this keeps
+deleted photos' ciphertext for 30 days more. If the photo bucket ever lists empty while
+copies exist, nothing is marked: that's far more likely a broken binding than every photo
+deleted at once. Failed copies are retried the next hour, and a run with failures shows as
+an error in the Worker's logs and metrics. It logs only counts, never file names.
 
 ## How the nightly export works
 
@@ -57,6 +77,8 @@ pnpm exec wrangler r2 bucket create twofold-backups
 pnpm exec wrangler r2 bucket lock add twofold-backups d1-30-days d1/ --retention-days 30
 # Then exports are removed a day after the lock ends.
 pnpm exec wrangler r2 bucket lifecycle add twofold-backups d1-expiry d1/ --expire-days 31
+# Photo copies can't be deleted or overwritten for 30 days either.
+pnpm exec wrangler r2 bucket lock add twofold-backups r2-30-days r2/ --retention-days 30
 ```
 
 ### 3. Create the backup API token
@@ -127,10 +149,25 @@ It prints a bookmark for the state before the restore. Keep it: restoring to tha
 Data written after the export is lost, so prefer the newest export. Sessions in it may
 have expired; people just log in again.
 
+### Photo files are missing or damaged
+
+Copies keep the photo bucket's names, so a restore copies `r2/<name>` back to `<name>`.
+The photo's database record must exist too: if it was deleted, rewind the database first
+(Time Travel, above).
+
+- **One photo:** with its ID (from the database row),
+  `pnpm exec wrangler r2 object get twofold-backups/r2/photos/<id>/full --file full --remote`
+  then `pnpm exec wrangler r2 object put twofold-blobs/photos/<id>/full --file full --remote`,
+  and the same for `thumb`. Delete the local files afterwards.
+- **Everything:** wrangler can't list a bucket, so use rclone with an R2 API token
+  (**R2 → Manage API tokens**, Object Read & Write on both buckets):
+  `rclone copy r2:twofold-backups/r2/ r2:twofold-blobs/ --ignore-existing`. Files that are
+  still there are left alone.
+
 Practise a restore every quarter on staging, never on production: see
 [staging.md](staging.md#restore-drill-every-quarter).
 
 ## Still to come
 
-- R2 copy-on-write into `twofold-backups/r2/` by a separate Worker (needs Workers Paid for
-  Queues).
+- An off-Cloudflare copy (for example Backblaze B2), so one Cloudflare account isn't the
+  only place the data lives.

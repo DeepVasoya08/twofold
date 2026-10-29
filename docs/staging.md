@@ -10,7 +10,7 @@ are separate from production accounts.
 
 Go to **Actions → Deploy staging → Run workflow** and pick a branch (`main` by default).
 
-The first run creates the database and the bucket. Every run applies migrations and
+The first run creates the database and the two buckets. Every run applies migrations and
 deploys. It uses the production environment's `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID`, and the names in `wrangler.jsonc`'s `staging` section decide what
 it touches. If the token isn't allowed to create a D1 database or an R2 bucket, the run
@@ -22,7 +22,9 @@ pnpm exec wrangler d1 create twofold-staging
 pnpm exec wrangler r2 bucket create twofold-staging-blobs
 ```
 
-Staging's `robots.txt` blocks search engines.
+Staging's `robots.txt` blocks search engines. Staging has its own photo backup Worker
+(`twofold-staging-backup`) copying into `twofold-staging-backups`, so changes to the backup
+can be tried there first.
 
 ## Restore drill (every quarter)
 
@@ -61,5 +63,6 @@ pnpm --filter @twofold/api drill wipe
 
 ## Restore log
 
-| Date | Export | Result |
-| ---- | ------ | ------ |
+| Date       | Export                       | Result                                               |
+| ---------- | ---------------------------- | ---------------------------------------------------- |
+| 2026-10-29 | `d1/2026-10-29T0912Z.sealed` | Opened and imported; owner signed in. Staging wiped. |

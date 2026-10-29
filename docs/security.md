@@ -134,6 +134,11 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   loads it into the separate staging database ([staging.md](staging.md)), which is wiped
   again afterwards. The opened export never goes to GitHub, and the drill deletes it when it
   finishes.
+- **Photo files are copied to a backup bucket** every hour by a separate Worker, and a
+  deleted photo's copy is kept 30 days after the deletion ([backups.md](backups.md)). The
+  copies are the same ciphertext under the same random names, so they reveal nothing the
+  photo bucket doesn't, but deleted photos' ciphertext outlives the delete by 30 days. The
+  backup bucket is locked for those 30 days, so a stolen token can't wipe it.
 - **Sign-up reveals whether an email is registered** (and `POST /api/auth/prelogin`
   answers 404 for unknown emails). Hiding it needs email verification, which doesn't exist
   yet.
