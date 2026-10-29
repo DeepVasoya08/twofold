@@ -23,7 +23,8 @@ The job stops at the first failing step. Fix the cause and use **Re-run jobs** o
 failed Deploy run.
 
 Nightly database backups run in a separate workflow (`backup.yml`) with their own token;
-setup and restore are in [backups.md](backups.md).
+setup and restore are in [backups.md](backups.md). A separate staging copy, deployed by
+hand, is described in [staging.md](staging.md).
 
 ## One-time setup
 

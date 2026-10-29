@@ -130,7 +130,10 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   Travel: earlier copies of each keyring row, and deleted rows for up to 30 days. Each export
   is sealed (`crypto_box_seal` of a fresh secretstream key, `@twofold/crypto/backup`) to a
   public key whose secret half is kept offline, so a leaked export can't be used for
-  offline password guessing.
+  offline password guessing. A restore drill opens one on the owner's own computer and
+  loads it into the separate staging database ([staging.md](staging.md)), which is wiped
+  again afterwards. The opened export never goes to GitHub, and the drill deletes it when it
+  finishes.
 - **Sign-up reveals whether an email is registered** (and `POST /api/auth/prelogin`
   answers 404 for unknown emails). Hiding it needs email verification, which doesn't exist
   yet.

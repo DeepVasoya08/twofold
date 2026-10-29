@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
-    "backup": "node --experimental-transform-types --no-warnings --import ./scripts/register.mjs scripts/backup.ts"
+    "backup": "node --experimental-transform-types --no-warnings --import ./scripts/register.mjs scripts/backup.ts",
+    "drill": "node --experimental-transform-types --no-warnings --import ./scripts/register.mjs scripts/drill.ts"
   },
   "dependencies": {
     "@twofold/crypto": "workspace:*",
