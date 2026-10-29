@@ -20,6 +20,7 @@ stops at that step. Create them once by hand and run it again:
 cd apps/api
 pnpm exec wrangler d1 create twofold-staging
 pnpm exec wrangler r2 bucket create twofold-staging-blobs
+pnpm exec wrangler r2 bucket create twofold-staging-backups
 ```
 
 Staging's `robots.txt` blocks search engines. Staging has its own photo backup Worker
