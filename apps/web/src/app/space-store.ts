@@ -138,9 +138,9 @@ export interface SpaceStore {
   fingerprint: (original: Uint8Array) => Promise<string>;
   /**
    * Fingerprints of the photos listed so far (including Recently deleted once it has been
-   * listed), for skipping photos already here.
+   * listed), each with its photo's id, for skipping photos already here.
    */
-  fingerprints: () => ReadonlySet<string>;
+  fingerprints: () => ReadonlyMap<string, string>;
   /** Revokes every object URL this store made. */
   dispose: () => void;
 }
@@ -757,8 +757,9 @@ export function remoteStore(
     },
 
     fingerprints: () => {
-      const found = new Set<string>();
-      for (const { meta } of known.values()) if (meta.fp !== undefined) found.add(meta.fp);
+      const found = new Map<string, string>();
+      for (const [photoId, { meta }] of known)
+        if (meta.fp !== undefined) found.set(meta.fp, photoId);
       return found;
     },
 
@@ -1025,7 +1026,7 @@ export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): Spac
     read: () => Promise.reject(new FormError('This preview can’t move photos.')),
     original: () => Promise.reject(new FormError('This preview can’t download photos.')),
     fingerprint: () => Promise.reject(new FormError('This preview can’t import photos.')),
-    fingerprints: () => new Set(),
+    fingerprints: () => new Map(),
     dispose: () => undefined,
   };
 }

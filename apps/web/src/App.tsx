@@ -11,6 +11,7 @@ import { SmartAlbumView } from './screens/SmartAlbum';
 import { Albums } from './screens/Albums';
 import { Favorites } from './screens/Favorites';
 import { Gallery } from './screens/Gallery';
+import { Import } from './screens/Import';
 import { JoinCode } from './screens/JoinCode';
 import { JoinInvite } from './screens/JoinInvite';
 import { LogIn } from './screens/LogIn';
@@ -52,6 +53,7 @@ const titles: Record<Route['name'], string> = {
   person: 'People · Twofold',
   photo: 'Photo · Twofold',
   settings: 'Settings · Twofold',
+  import: 'Import photos · Twofold',
   share: 'Share · Twofold',
   join: 'Invite · Twofold',
   'join-code': 'Enter an invite code · Twofold',
@@ -141,6 +143,12 @@ function Screen({ route }: { route: Route }) {
       return (
         <AppShell>
           <Settings />
+        </AppShell>
+      );
+    case 'import':
+      return (
+        <AppShell>
+          <Import />
         </AppShell>
       );
     case 'share':

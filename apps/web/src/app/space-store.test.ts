@@ -238,13 +238,13 @@ describe('remoteStore', () => {
   it('fingerprints each photo inside its sealed record, so a later import can skip it', async () => {
     const { server, space } = await setUp();
     const store = remoteStore(space, server.api);
-    await store.add(PHOTO, []);
+    const added = await store.add(PHOTO, []);
     const fingerprint = await store.fingerprint(PHOTO.full);
 
     const later = remoteStore(space, server.api);
-    expect(later.fingerprints()).toEqual(new Set());
+    expect(later.fingerprints()).toEqual(new Map());
     await later.list();
-    expect(later.fingerprints()).toEqual(new Set([fingerprint]));
+    expect(later.fingerprints()).toEqual(new Map([[fingerprint, added.id]]));
     expect(later.fingerprints().has(await later.fingerprint(bytes('another photo')))).toBe(false);
 
     // The server only ever has it sealed, and another space's fingerprint differs.

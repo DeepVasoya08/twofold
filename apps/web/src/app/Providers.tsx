@@ -15,6 +15,7 @@ import { sessionStore } from './sharing';
 import { StorageProvider } from './storage';
 import { memoryStore, remoteStore } from './space-store';
 import { UploadsProvider } from './uploads';
+import { ImportsProvider } from './imports';
 import { PeopleProvider } from './people';
 import { memoryPeopleStore, remotePeopleStore } from './people-store';
 import { workerFaceFinder } from '../lib/people/face-finder';
@@ -130,24 +131,26 @@ function OpenVault({
         <ProfileProvider store={profileStore}>
           <StorageProvider remote={session !== null && !initialVault}>
             <UploadsProvider>
-              <PeopleProvider
-                store={peopleStore}
-                makeFinder={session && !initialVault ? startFaceFinder : null}
-              >
-                <SearchProvider
-                  store={searchStore}
-                  makeEncoder={session && !initialVault ? startEncoder : null}
+              <ImportsProvider>
+                <PeopleProvider
+                  store={peopleStore}
+                  makeFinder={session && !initialVault ? startFaceFinder : null}
                 >
-                  <FindProvider
-                    makeQueryEncoder={session && !initialVault ? startQueryEncoder : null}
+                  <SearchProvider
+                    store={searchStore}
+                    makeEncoder={session && !initialVault ? startEncoder : null}
                   >
-                    <DownloadsProvider>
-                      <IdleLock />
-                      {children}
-                    </DownloadsProvider>
-                  </FindProvider>
-                </SearchProvider>
-              </PeopleProvider>
+                    <FindProvider
+                      makeQueryEncoder={session && !initialVault ? startQueryEncoder : null}
+                    >
+                      <DownloadsProvider>
+                        <IdleLock />
+                        {children}
+                      </DownloadsProvider>
+                    </FindProvider>
+                  </SearchProvider>
+                </PeopleProvider>
+              </ImportsProvider>
             </UploadsProvider>
           </StorageProvider>
         </ProfileProvider>
