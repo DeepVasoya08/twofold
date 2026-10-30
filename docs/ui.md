@@ -293,7 +293,12 @@ dated, encrypted (also in a worker), then its two files are uploaded together. T
 when the photo was taken, read from its own EXIF block (JPEG, HEIC, AVIF, WebP and PNG,
 `lib/photo-date.ts`), with its time zone when the camera wrote one; a photo without one
 takes the file's own date, and failing that, now. The date goes into the photo's sealed
-metadata like everything else, so the server never sees it. The progress bar
+metadata like everything else, so the server never sees it. Browsers other than Safari
+can't decode HEIC, so for those the preview worker decodes it with libheif, compiled to
+WebAssembly (`lib/heif.ts`, the `libheif-js` package, LGPL-3.0, unmodified). Its 1.4 MB of
+WebAssembly is fetched the first time a HEIC photo needs it, photos over 50 megapixels are
+refused rather than risk running out of memory, and the original is stored byte for byte
+either way. The progress bar
 follows those steps. Stored photos are held back and added to the library together when
 the whole batch has finished, so the grid and the storage figure change once rather than
 after every photo. Up to three photos go at once, in the order they were added, so each
@@ -329,7 +334,9 @@ Decrypted previews reach the grid in batches, at most every 100 ms, so a large l
 redraws a few times a second rather than once per photo. A request that fails is tried
 again after 1, 2 and 4 seconds (`app/thumb-loader.ts`), so a dropped connection doesn't
 leave tiles empty. The viewer then fetches and
-decrypts the original.
+decrypts the original. A HEIC original in a browser that can't show HEIC (all but Safari)
+is shown through a JPEG copy, at most 4096 px on its longer side, made in the thumbnail
+worker and kept in memory only while the photo is open; Download still saves the original.
 
 The photo viewer zooms with the mouse wheel or a trackpad pinch (towards the pointer),
 a two-finger pinch on touch screens, a double-click (toggles 2.5×), and the `+`, `-` and

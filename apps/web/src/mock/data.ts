@@ -18,6 +18,11 @@ export interface Photo {
   src: string;
   /** In-memory object URL of the decrypted original, once the viewer has asked for it. */
   fullSrc?: string;
+  /**
+   * In-memory object URL of a JPEG copy of the original, shown instead of it when this
+   * browser can't show the original's format (HEIC outside Safari).
+   */
+  viewSrc?: string;
   width: number;
   height: number;
   /** ISO 8601 timestamp. */

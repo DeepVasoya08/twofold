@@ -10,8 +10,7 @@ import type { ReactNode } from 'react';
 
 import { pluralize } from '../lib/format';
 import { photoTakenAt } from '../lib/photo-date';
-import { pageThumbnailer, workerThumbnailer } from '../lib/thumbnailer';
-import type { Thumbnailer } from '../lib/thumbnailer';
+import { loadThumbnailer } from '../lib/thumbnail-service';
 import { summarizeUploads } from '../lib/upload-progress';
 import type { UploadSummary } from '../lib/upload-progress';
 import { FormError } from './account-ops';
@@ -42,17 +41,6 @@ interface UploadsValue {
 }
 
 const UploadsContext = createContext<UploadsValue | null>(null);
-
-let thumbnailer: Promise<Thumbnailer> | null = null;
-
-/** Previews are made in a Web Worker where there is one, so the page stays smooth. */
-const loadThumbnailer = () =>
-  (thumbnailer ??=
-    typeof Worker === 'undefined'
-      ? Promise.resolve(pageThumbnailer)
-      : import('../lib/spawn-thumbnail-worker').then(({ spawnThumbnailWorker }) =>
-          workerThumbnailer(spawnThumbnailWorker),
-        ));
 
 /** Reads a file into what the vault stores: the original bytes and a JPEG preview. */
 async function preparePhoto(file: File): Promise<NewPhoto> {

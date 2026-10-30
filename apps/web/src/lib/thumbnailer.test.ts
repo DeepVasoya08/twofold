@@ -117,6 +117,21 @@ describe('workerThumbnailer', () => {
   });
 });
 
+describe('workerThumbnailer sizes', () => {
+  it('asks the worker, or the page, for the size wanted', async () => {
+    const worker = new FakeWorker();
+    const page = vi.fn(() => Promise.resolve(PAGE));
+    await workerThumbnailer(() => worker, page, 30)(file(), 4096);
+    const [posted] = worker.posted as [{ id: number; file: unknown; maxSide: number }];
+    expect(posted.file).toBeInstanceOf(Blob);
+    expect([posted.id, posted.maxSide]).toEqual([0, 4096]);
+    await workerThumbnailer(() => {
+      throw new Error('no workers');
+    }, page)(file(), 4096);
+    expect(page).toHaveBeenCalledWith(expect.any(Blob), 4096);
+  });
+});
+
 describe('answerThumbRequest', () => {
   const canvas: CanvasMaker = () => ({
     draw: () => true,
@@ -138,6 +153,24 @@ describe('answerThumbRequest', () => {
     });
     expect(sizes).toEqual([[640, 480]]);
     expect(close).toHaveBeenCalled();
+  });
+
+  it('draws a bigger copy when asked for one', async () => {
+    const sizes: number[][] = [];
+    vi.stubGlobal('createImageBitmap', () =>
+      Promise.resolve({ width: 8000, height: 6000, close: vi.fn() }),
+    );
+    await answerThumbRequest({ id: 5, file: file(), maxSide: 4096 }, (width, height) => {
+      sizes.push([width, height]);
+      return canvas(width, height);
+    });
+    expect(sizes).toEqual([[4096, 3072]]);
+    for (const maxSide of [0, -1, 1.5, 100_000, '640']) {
+      expect(await answerThumbRequest({ id: 6, file: file(), maxSide }, canvas)).toEqual({
+        id: 6,
+        ok: false,
+      });
+    }
   });
 
   it('says it couldn’t for an unreadable image, no canvas, or a bad request', async () => {
