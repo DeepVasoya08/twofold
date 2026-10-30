@@ -289,7 +289,11 @@ Routes are the same in both spaces; the content depends on which space is open.
 Upload is a dialog opened from the sidebar (desktop) or the top bar (phones); inside an
 album it also adds the photos to that album. Each photo is read on the device, given a
 640px JPEG preview (`lib/thumbnail.ts`, drawn in a Web Worker by `lib/thumbnailer.ts`),
-encrypted (also in a worker), then its two files are uploaded together; the progress bar
+dated, encrypted (also in a worker), then its two files are uploaded together. The date is
+when the photo was taken, read from its own EXIF block (JPEG, HEIC, AVIF, WebP and PNG,
+`lib/photo-date.ts`), with its time zone when the camera wrote one; a photo without one
+takes the file's own date, and failing that, now. The date goes into the photo's sealed
+metadata like everything else, so the server never sees it. The progress bar
 follows those steps. Stored photos are held back and added to the library together when
 the whole batch has finished, so the grid and the storage figure change once rather than
 after every photo. Up to three photos go at once, in the order they were added, so each

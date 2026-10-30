@@ -9,6 +9,7 @@ import {
 import type { ReactNode } from 'react';
 
 import { pluralize } from '../lib/format';
+import { photoTakenAt } from '../lib/photo-date';
 import { pageThumbnailer, workerThumbnailer } from '../lib/thumbnailer';
 import type { Thumbnailer } from '../lib/thumbnailer';
 import { summarizeUploads } from '../lib/upload-progress';
@@ -57,13 +58,14 @@ const loadThumbnailer = () =>
 async function preparePhoto(file: File): Promise<NewPhoto> {
   const thumbnail = await (await loadThumbnailer())(file);
   if (!thumbnail) throw new FormError('Twofold can’t read this image.');
+  const full = new Uint8Array(await file.arrayBuffer());
   return {
     thumb: thumbnail.bytes,
-    full: new Uint8Array(await file.arrayBuffer()),
+    full,
     type: file.type,
     width: thumbnail.width,
     height: thumbnail.height,
-    takenAt: new Date().toISOString(),
+    takenAt: photoTakenAt(full, file.lastModified),
   };
 }
 
