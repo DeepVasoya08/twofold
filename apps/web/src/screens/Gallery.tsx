@@ -109,9 +109,18 @@ export function Gallery() {
             open Twofold with your private password.
           </EmptyState>
         ) : (
-          <EmptyState icon="image-plus" title="Your library is ready">
-            Add your first photos with the Upload button. They&apos;re encrypted on this device
-            before they go anywhere.
+          <EmptyState
+            icon="image-plus"
+            title="Your library is ready"
+            action={
+              <Link to={paths.import} className="btn btn--secondary">
+                <Icon name="cloud" size={18} />
+                Import from Google Photos
+              </Link>
+            }
+          >
+            Add your first photos with the Upload button, or bring your library over from Google
+            Photos. They&apos;re encrypted on this device before they go anywhere.
           </EmptyState>
         )
       ) : (

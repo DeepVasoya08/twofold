@@ -69,11 +69,8 @@ const ZIP = takeoutZip({
 
 test('imports a Google Takeout export with its dates and albums, once', async ({ page }) => {
   await signUp(page);
-  await goTo(page, 'Settings');
-  await page
-    .getByRole('region', { name: 'Import' })
-    .getByRole('button', { name: 'Import' })
-    .click();
+  // An empty library offers it straight away.
+  await page.getByRole('link', { name: 'Import from Google Photos' }).click();
   await expect(page.getByRole('heading', { name: 'Import from Google Photos' })).toBeVisible();
 
   const choose = async () => {
@@ -100,16 +97,25 @@ test('imports a Google Takeout export with its dates and albums, once', async ({
   await page.getByRole('link', { name: /Summer Trip/ }).click();
   await expect(page.getByRole('link', { name: /^Photo from Aug 20, 2016/ })).toBeVisible();
 
-  // The same export again brings in nothing new, and makes no second album.
-  await goTo(page, 'Settings');
+  // The same export again brings in nothing new, and makes no second album. This time the
+  // way in is the upload dialog, which every screen has.
   await page
-    .getByRole('region', { name: 'Import' })
-    .getByRole('button', { name: 'Import' })
+    .getByRole('button', { name: /^Upload/ })
+    .filter({ visible: true })
+    .first()
+    .click();
+  await page
+    .getByRole('dialog', { name: 'Add photos' })
+    .getByRole('button', { name: /Moving from Google Photos/ })
     .click();
   await page.getByRole('button', { name: 'Import more' }).click();
   await choose();
   await page.getByRole('button', { name: 'Import 2 photos' }).click();
   await expect(page.getByText('Import finished. 0 photos imported, 2 already here.')).toBeVisible();
+  await goTo(page, 'Settings');
+  await expect(
+    page.getByRole('region', { name: 'Import' }).getByRole('button', { name: 'Import' }),
+  ).toBeVisible();
   await goTo(page, 'Albums');
   await expect(page.getByRole('link', { name: /Summer Trip/ })).toHaveCount(1);
 });

@@ -321,8 +321,11 @@ many couldn't upload, until the list has been opened.
 
 ### Importing from Google Photos
 
-Settings > Import > Google Photos opens `/settings/import`, which brings a Google Takeout
-export into the open space (either space). The steps on the screen say how to ask Takeout
+`/settings/import` brings a Google Takeout export into the open space (either space). It is
+reached from three places, so it's easy to find on phones and computers alike: a "Moving from
+Google Photos?" card under the drop area of the upload dialog (which every screen opens, and
+which shows the import's progress while one runs), an "Import from Google Photos" button on
+the empty library, and Settings > Import. The steps on the screen say how to ask Takeout
 for Google Photos only, as .zip files. The person then picks every zip ("Choose zip
 files") or the folder they unzipped them into ("Choose a folder"). The zips never leave
 the device: `lib/zip-reader.ts` opens them there, reading only each zip's directory and then
