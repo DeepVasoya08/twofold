@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // The photo backup Worker (src/backup, docs/backups.md). Separate from the app's Worker,
+  // so the app never holds the backup bucket. No routes: it only runs on its schedule.
+  "name": "twofold-backup",
+  "main": "src/backup/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "triggers": { "crons": ["17 * * * *"] },
+  // Its own console errors only (counts, never file names); no per-run logs or traces.
+  "observability": {
+    "enabled": true,
+    "logs": { "invocation_logs": false },
+    "traces": { "enabled": false },
+  },
+  "r2_buckets": [
+    { "binding": "SOURCE", "bucket_name": "twofold-blobs" },
+    { "binding": "BACKUP", "bucket_name": "twofold-backups" },
+  ],
+  "env": {
+    // Backs up staging's photos into its own bucket (docs/staging.md).
+    "staging": {
+      "name": "twofold-staging-backup",
+      "r2_buckets": [
+        { "binding": "SOURCE", "bucket_name": "twofold-staging-blobs" },
+        { "binding": "BACKUP", "bucket_name": "twofold-staging-backups" },
+      ],
+    },
+  },
+}

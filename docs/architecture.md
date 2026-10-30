@@ -45,6 +45,9 @@ everything from one origin, so there is no CORS and the CSP can stay at
   ciphertext; never receives plaintext photos, passwords, or keys. R2 object keys are
   random IDs. D1 holds metadata. Schema changes are SQL files in `apps/api/migrations`,
   applied on deploy.
+  A second Worker, `twofold-backup` (`src/backup`, `wrangler.backup.jsonc`), has no
+  routes: every hour it copies photo files into the backup bucket
+  ([backups.md](backups.md)).
   - `/api/auth/*`: sign-up, prelogin (salt and KDF settings), login, logout.
   - `/api/account`: the signed-in account and its keyring; `PUT /api/account/keyring`
     replaces the keyring; `DELETE /api/account` deletes it; `GET /api/account/devices`

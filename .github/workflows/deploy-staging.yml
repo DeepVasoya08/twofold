@@ -21,6 +21,7 @@ concurrency:
 env:
   STAGING_DATABASE: twofold-staging
   STAGING_BUCKET: twofold-staging-blobs
+  STAGING_BACKUP_BUCKET: twofold-staging-backups
 
 jobs:
   deploy:
@@ -49,7 +50,7 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Find or create the staging database and bucket
+      - name: Find or create the staging database and buckets
         working-directory: apps/api
         run: |
           set -euo pipefail
@@ -67,9 +68,11 @@ jobs:
             exit 1
           fi
           sed -i "s/00000000-0000-0000-0000-000000000001/${id}/" wrangler.jsonc
-          if ! pnpm exec wrangler r2 bucket info "$STAGING_BUCKET" >/dev/null 2>&1; then
-            pnpm exec wrangler r2 bucket create "$STAGING_BUCKET"
-          fi
+          for bucket in "$STAGING_BUCKET" "$STAGING_BACKUP_BUCKET"; do
+            if ! pnpm exec wrangler r2 bucket info "$bucket" >/dev/null 2>&1; then
+              pnpm exec wrangler r2 bucket create "$bucket"
+            fi
+          done
 
       - name: Apply D1 migrations
         working-directory: apps/api
@@ -93,3 +96,7 @@ jobs:
       - name: Deploy Worker
         working-directory: apps/api
         run: pnpm exec wrangler deploy --env staging
+
+      - name: Deploy backup Worker
+        working-directory: apps/api
+        run: pnpm exec wrangler deploy -c wrangler.backup.jsonc --env staging

@@ -74,3 +74,8 @@ jobs:
       - name: Deploy Worker
         working-directory: apps/api
         run: pnpm exec wrangler deploy
+
+      # Copies photo files into the backup bucket every hour (docs/backups.md).
+      - name: Deploy backup Worker
+        working-directory: apps/api
+        run: pnpm exec wrangler deploy -c wrangler.backup.jsonc
