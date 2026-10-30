@@ -186,6 +186,16 @@ other accounts; see [Sharing](#sharing).
   count against storage, and can be listed (`GET /api/space/trash`) only by the owner
   and members who can edit. Moving a photo to the other space, wiping a space and
   deleting the account still delete at once.
+- **Fingerprints.** Each new photo's sealed record also holds `fp`, a keyed BLAKE2b hash
+  (`crypto_generichash`, 32 bytes) of its original, under a key derived from the space's
+  records key (`crypto_kdf`, context `twfprint`, id 1; `photoFingerprint` in
+  `packages/crypto/src/storage.ts`). The same photo always gets the same fingerprint in the
+  same space, so an import can skip photos already there by comparing against the records
+  it has opened, with no server lookup. The fingerprint never leaves the sealed record, and
+  it is keyed, so it can't be matched against a known photo without the space's keys.
+  Members who can add photos have the records key and compute the same fingerprints; they
+  can already see every photo, so this tells them nothing new. Photos stored before
+  fingerprints have none.
 - **Moving** a photo to the other space downloads and decrypts it, adds it to the other
   space under a new id and key, then deletes the original. The two copies share nothing
   the server can match.

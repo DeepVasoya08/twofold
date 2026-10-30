@@ -127,6 +127,32 @@ export async function newRecordId(): Promise<string> {
   return toBase64Url(sodium.randombytes_buf(STORAGE_SIZES.recordId));
 }
 
+const FINGERPRINT_CONTEXT = 'twfprint';
+const FINGERPRINT_BYTES = 32;
+
+/**
+ * A photo's fingerprint in one space: a keyed BLAKE2b hash (crypto_generichash) of its
+ * original, under a subkey of the space's records key. The same photo always gets the same
+ * fingerprint in the same space, so an import can tell which photos are already there; with
+ * a different key it says nothing about the photo. It is only ever stored inside the photo's
+ * sealed metadata, so the server never sees it.
+ */
+export async function photoFingerprint(access: SpaceAccess, original: Uint8Array): Promise<string> {
+  if (access.recordKey.length !== RECORD_KEY_BYTES) throw new Error('Malformed records key');
+  const sodium = await getSodium();
+  const key = sodium.crypto_kdf_derive_from_key(
+    sodium.crypto_generichash_KEYBYTES,
+    1,
+    FINGERPRINT_CONTEXT,
+    access.recordKey,
+  );
+  try {
+    return toBase64Url(sodium.crypto_generichash(FINGERPRINT_BYTES, original, key));
+  } finally {
+    sodium.memzero(key);
+  }
+}
+
 function associatedData(kind: SealedKind, id: string): Uint8Array {
   return new TextEncoder().encode(`twofold:${kind}:${id}`);
 }
