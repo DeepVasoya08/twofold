@@ -281,6 +281,7 @@ Routes are the same in both spaces; the content depends on which space is open.
 | `/people`              | People found in photos (or turning face grouping on)               |
 | `/people/:id`          | One person's photos: name, merge, hide, "Not this person"          |
 | `/settings`            | Profile, passwords, sharing, security, devices, appearance         |
+| `/settings/import`     | Import from Google Photos (a Takeout export)                       |
 | `/settings/share`      | Invite someone to the open space (or `?album=` one album), or join |
 | `/join/:token`         | Someone's invite link: accept it                                   |
 | `/join`                | Enter an invite code                                               |
@@ -317,6 +318,44 @@ Closing or reloading the tab can't keep uploading, so the browser asks before le
 uploads run; locking drops the queue with the vault. When everything has finished with the
 dialog closed, the list starts over, unless a photo failed: then the card stays, saying how
 many couldn't upload, until the list has been opened.
+
+### Importing from Google Photos
+
+`/settings/import` brings a Google Takeout export into the open space (either space). It is
+reached from three places, so it's easy to find on phones and computers alike: a "Moving from
+Google Photos?" card under the drop area of the upload dialog (which every screen opens, and
+which shows the import's progress while one runs), an "Import from Google Photos" button on
+the empty library, and Settings > Import. The steps on the screen say how to ask Takeout
+for Google Photos only, as .zip files. The person then picks every zip ("Choose zip
+files") or the folder they unzipped them into ("Choose a folder"). The zips never leave
+the device: `lib/zip-reader.ts` opens them there, reading only each zip's directory and then
+one photo at a time from the file on disk, so a 50 GB export doesn't have to fit in memory.
+
+`lib/import/takeout.ts` works out what's in the export from paths and sizes alone. Year
+folders ("Photos from 2019", and the same in a few other languages) give each photo a year;
+any other folder is an album, except Trash, Bin and Locked Folder, whose photos are never
+imported. A photo in an album is also in its year folder, so photos are matched by name and
+size and imported once, into every album they were in. Where Google kept an "-edited" copy,
+that copy is imported instead of the original. Each photo's JSON "sidecar" is found even when
+Google cut its name short or moved a "(1)". Videos are counted and skipped, since Twofold
+can't store videos yet.
+
+The screen then lists the export's years with their photo counts and about how much each
+takes up once stored (`lib/import/selection.ts`), and ticks the newest years that fit in the
+account's free space. Import stays off while the ticked years don't fit. Starting makes the
+export's albums first (reusing an album of the same title already in the space, so a second
+go doesn't make duplicates). The import then runs in `app/importer.ts`, which
+`app/imports.tsx` provides for as long as the vault is open, so the person can move around
+the app while it runs. Each photo is read from the zip, then fingerprinted (see
+`docs/security.md`). A photo the space already has is skipped and only added to its albums.
+Any other photo is given a preview and dated, using its own EXIF date first, then Google's
+`photoTakenTime`, then the file's date. It is then encrypted and uploaded the same way as an
+upload, a few at a time under the same limits as the upload queue. New photos are added to
+the library every 24 photos. A progress bar and a Stop button show while it runs. At the end,
+the screen says how many photos were imported, how many were already there, and which
+couldn't be imported and why. The browser asks before the tab is closed mid-import, imports
+count as use for auto-lock, and locking drops the import. Starting the same export again
+skips everything already brought in, so a stopped import can carry on.
 
 The grid shows a quiet placeholder until a photo's preview has been downloaded and
 decrypted. Previews are only asked for once their photo is near the screen (within about

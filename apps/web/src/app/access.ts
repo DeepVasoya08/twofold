@@ -51,6 +51,7 @@ export function redirectFor(
     case 'person':
     case 'photo':
     case 'settings':
+    case 'import':
     case 'share':
       if (status === 'unlocked') return null;
       return status === 'locked' ? paths.unlock : paths.login;

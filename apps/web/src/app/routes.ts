@@ -23,6 +23,8 @@ export type Route =
   | { name: 'person'; groupId: string }
   | { name: 'photo'; photoId: string }
   | { name: 'settings' }
+  /** Bringing photos in from a Google Photos export. */
+  | { name: 'import' }
   | { name: 'share' }
   /** Someone's invite link. The token only names the invite; it holds no key. */
   | { name: 'join'; token: string }
@@ -55,6 +57,7 @@ export const paths = {
     return from && from.kind !== 'all' ? `${base}?from=${formatContext(from)}` : base;
   },
   settings: '/settings',
+  import: '/settings/import',
   share: '/settings/share',
   /** Inviting someone to one album rather than the whole library. */
   shareAlbum: (albumId: string) => `/settings/share?album=${encodeURIComponent(albumId)}`,
@@ -107,6 +110,7 @@ const staticRoutes: Record<string, Route> = {
   '/search': { name: 'search' },
   '/people': { name: 'people' },
   '/settings': { name: 'settings' },
+  '/settings/import': { name: 'import' },
   '/settings/share': { name: 'share' },
   '/join': { name: 'join-code' },
   '/lab/speed': { name: 'speed-test' },

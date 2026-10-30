@@ -39,6 +39,52 @@
   font-size: 14px;
 }
 
+.upload-import {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  transition: background-color 0.15s var(--ease);
+}
+
+.upload-import:hover {
+  background: var(--surface-2);
+}
+
+.upload-import > svg:first-child {
+  flex: none;
+  color: var(--accent-text);
+}
+
+.upload-import > svg:last-child {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-3);
+}
+
+.upload-import__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.upload-import__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.upload-import__description {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
 .upload-list {
   display: grid;
   gap: 10px;

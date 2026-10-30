@@ -461,6 +461,25 @@ export function Settings() {
         </div>
       </Section>
 
+      <Section title="Import">
+        <Row
+          icon="upload"
+          title="Google Photos"
+          description={`Bring your photos and albums in from a Google Takeout export, into your ${where}.`}
+          action={
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              onClick={() => {
+                navigate(paths.import);
+              }}
+            >
+              Import
+            </button>
+          }
+        />
+      </Section>
+
       <Section title="Passwords">
         <Row
           icon="key"

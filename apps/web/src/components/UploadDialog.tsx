@@ -1,6 +1,9 @@
 import { useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 
+import { useImports } from '../app/imports';
+import { useRouter } from '../app/router';
+import { paths } from '../app/routes';
 import { useUploads } from '../app/uploads';
 import type { UploadItem } from '../app/uploads';
 import { PHOTO_TYPES } from '../lib/photo-types';
@@ -40,6 +43,9 @@ export function UploadDialog({ albumId }: UploadDialogProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const finished = items.length > 0 && !running;
   const waiting = items.some((item) => item.status === 'waiting');
+  const imports = useImports();
+  const { navigate } = useRouter();
+  const handled = imports.imported + imports.already + imports.failures.length;
 
   const onDrop = (event: DragEvent) => {
     event.preventDefault();
@@ -92,6 +98,28 @@ export function UploadDialog({ albumId }: UploadDialogProps) {
           }}
         />
       </div>
+
+      <button
+        type="button"
+        className="upload-import"
+        onClick={() => {
+          closeDialog();
+          navigate(paths.import);
+        }}
+      >
+        <Icon name="cloud" size={20} />
+        <span className="upload-import__text">
+          <span className="upload-import__title">
+            {imports.running ? 'Importing from Google Photos' : 'Moving from Google Photos?'}
+          </span>
+          <span className="upload-import__description">
+            {imports.running
+              ? `${handled.toLocaleString('en-US')} of ${imports.total.toLocaleString('en-US')} done`
+              : 'Import your whole library, with its albums and dates.'}
+          </span>
+        </span>
+        <Icon name="chevron-right" size={18} />
+      </button>
 
       {items.length > 0 && (
         <ul className="upload-list" aria-label="Uploads">

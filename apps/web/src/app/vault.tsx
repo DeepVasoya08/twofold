@@ -382,6 +382,12 @@ interface VaultValue {
   ) => Promise<Photo>;
   /** Shows photos that `upload` stored, all in one change. */
   showUploaded: (photos: Photo[]) => void;
+  /** Like `upload`, into any number of the space's own albums: for imports. */
+  importPhoto: (photo: NewPhoto, albumIds: string[]) => Promise<Photo>;
+  /** A photo's fingerprint in this space (see SpaceStore.fingerprint). */
+  fingerprint: SpaceStore['fingerprint'];
+  /** Fingerprints of the photos this space has, with their ids. */
+  knownFingerprints: SpaceStore['fingerprints'];
   toggleFavorite: (photoId: string) => Promise<void>;
   /** Moves a photo to Recently deleted. */
   deletePhoto: (photoId: string) => Promise<void>;
@@ -554,6 +560,9 @@ export function VaultProvider({
       space,
       upload: (photo, albumId, onStage) => store.add(photo, albumId ? [albumId] : [], onStage),
       showUploaded,
+      importPhoto: (photo, albumIds) => store.add(photo, albumIds),
+      fingerprint: (original) => store.fingerprint(original),
+      knownFingerprints: () => store.fingerprints(),
       toggleFavorite: async (photoId) => {
         const photo = findChangeable(photoId);
         dispatch({ type: 'toggle-favorite', photoId });

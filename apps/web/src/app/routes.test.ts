@@ -21,6 +21,7 @@ describe('matchRoute', () => {
     ['/search', 'search'],
     ['/people', 'people'],
     ['/settings', 'settings'],
+    ['/settings/import', 'import'],
     ['/settings/share', 'share'],
   ])('maps %s to %s', (path, name) => {
     expect(matchRoute(path).name).toBe(name);
