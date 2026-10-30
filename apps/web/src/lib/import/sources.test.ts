@@ -7,11 +7,12 @@ import { collectSources } from './sources';
 const bytes = (text: string) => new TextEncoder().encode(text);
 
 describe('collectSources', () => {
-  it('opens zips and takes loose files, keeping only photos, videos and JSON', async () => {
+  it('opens zips and takes loose files, keeping only photos, videos, JSON and CSV', async () => {
     const zip = buildZip([
       zipEntry('Takeout/Google Photos/Photos from 2019/IMG_1.jpg', bytes('photo one'), new Date()),
       zipEntry('Takeout/Google Photos/Photos from 2019/IMG_1.jpg.json', bytes('{}'), new Date()),
       zipEntry('Takeout/archive_browser.html', bytes('<html>'), new Date()),
+      zipEntry('Photos/Photo Details.csv', bytes('imgName'), new Date()),
     ]);
     const loose = new File([bytes('photo two')], 'IMG_2.png', { lastModified: 1_600_000_000_000 });
     const sources = await collectSources([
@@ -22,11 +23,12 @@ describe('collectSources', () => {
     expect(sources.map(({ path, size }) => [path, size])).toEqual([
       ['Takeout/Google Photos/Photos from 2019/IMG_1.jpg', 9],
       ['Takeout/Google Photos/Photos from 2019/IMG_1.jpg.json', 2],
+      ['Photos/Photo Details.csv', 7],
       ['IMG_2.png', 9],
     ]);
     expect(await sources[0]?.read()).toEqual(bytes('photo one'));
-    expect(await sources[2]?.read()).toEqual(bytes('photo two'));
-    expect(sources[2]?.lastModified).toBe(1_600_000_000_000);
+    expect(await sources[3]?.read()).toEqual(bytes('photo two'));
+    expect(sources[3]?.lastModified).toBe(1_600_000_000_000);
   });
 
   it('names the zip it couldn’t read', async () => {

@@ -281,7 +281,7 @@ Routes are the same in both spaces; the content depends on which space is open.
 | `/people`              | People found in photos (or turning face grouping on)               |
 | `/people/:id`          | One person's photos: name, merge, hide, "Not this person"          |
 | `/settings`            | Profile, passwords, sharing, security, devices, appearance         |
-| `/settings/import`     | Import from Google Photos (a Takeout export)                       |
+| `/settings/import`     | Import from Google Photos or Apple Photos (`?from=apple`)          |
 | `/settings/share`      | Invite someone to the open space (or `?album=` one album), or join |
 | `/join/:token`         | Someone's invite link: accept it                                   |
 | `/join`                | Enter an invite code                                               |
@@ -319,17 +319,26 @@ uploads run; locking drops the queue with the vault. When everything has finishe
 dialog closed, the list starts over, unless a photo failed: then the card stays, saying how
 many couldn't upload, until the list has been opened.
 
-### Importing from Google Photos
+### Importing from Google Photos and Apple Photos
 
-`/settings/import` brings a Google Takeout export into the open space (either space). It is
-reached from three places, so it's easy to find on phones and computers alike: a "Moving from
-Google Photos?" card under the drop area of the upload dialog (which every screen opens, and
-which shows the import's progress while one runs), an "Import from Google Photos" button on
-the empty library, and Settings > Import. The steps on the screen say how to ask Takeout
-for Google Photos only, as .zip files. The person then picks every zip ("Choose zip
-files") or the folder they unzipped them into ("Choose a folder"). The zips never leave
-the device: `lib/zip-reader.ts` opens them there, reading only each zip's directory and then
-one photo at a time from the file on disk, so a 50 GB export doesn't have to fit in memory.
+`/settings/import` brings a Google Photos or Apple Photos export into the open space (either
+space). It is reached from three places, so it's easy to find on phones and computers alike:
+a "Moving from Google or Apple Photos?" card under the drop area of the upload dialog (which
+every screen opens, and which shows the import's progress while one runs), an "Import from
+Google or Apple" button on the empty library, and Settings > Import (a row each for Google
+Photos and Apple Photos; the Apple one opens `?from=apple`). Two tabs show how to get each
+export:
+
+- Google Photos: ask Google Takeout for Google Photos only, as .zip files.
+- Apple Photos: ask privacy.apple.com for a copy of iCloud Photos (zips with Apple's
+  records), or on a Mac, use Photos' File › Export › Export Unmodified Originals into a
+  folder. A zip of photos downloaded from iCloud.com works too.
+
+The person then picks every zip ("Choose zip files") or the folder ("Choose a folder").
+Which kind of export it is comes from its files, not the tab (`lib/import/plan.ts`). The
+export never leaves the device: `lib/zip-reader.ts` opens zips there, reading only each
+zip's directory and then one photo at a time from the file on disk, so a 50 GB export
+doesn't have to fit in memory.
 
 `lib/import/takeout.ts` works out what's in the export from paths and sizes alone. Year
 folders ("Photos from 2019", and the same in a few other languages) give each photo a year;
@@ -337,25 +346,39 @@ any other folder is an album, except Trash, Bin and Locked Folder, whose photos 
 imported. A photo in an album is also in its year folder, so photos are matched by name and
 size and imported once, into every album they were in. Where Google kept an "-edited" copy,
 that copy is imported instead of the original. Each photo's JSON "sidecar" is found even when
-Google cut its name short or moved a "(1)". Videos are counted and skipped, since Twofold
-can't store videos yet.
+Google cut its name short or moved a "(1)", and says whether the photo was a favorite.
+Videos are counted and skipped, since Twofold can't store videos yet. In either kind of export
+a clip next to a photo of the same name (a Live Photo's IMG_0001.MOV beside IMG_0001.HEIC) is
+the photo's moving part: the still comes in and the clip is left out without being counted.
 
-The screen then lists the export's years with their photo counts and about how much each
-takes up once stored (`lib/import/selection.ts`), and ticks the newest years that fit in the
-account's free space. Import stays off while the ticked years don't fit. Starting makes the
-export's albums first (reusing an album of the same title already in the space, so a second
-go doesn't make duplicates). The import then runs in `app/importer.ts`, which
-`app/imports.tsx` provides for as long as the vault is open, so the person can move around
-the app while it runs. Each photo is read from the zip, then fingerprinted (see
-`docs/security.md`). A photo the space already has is skipped and only added to its albums.
-Any other photo is given a preview and dated, using its own EXIF date first, then Google's
-`photoTakenTime`, then the file's date. It is then encrypted and uploaded the same way as an
-upload, a few at a time under the same limits as the upload queue. New photos are added to
-the library every 24 photos. A progress bar and a Stop button show while it runs. At the end,
-the screen says how many photos were imported, how many were already there, and which
-couldn't be imported and why. The browser asks before the tab is closed mid-import, imports
-count as use for auto-lock, and locking drops the import. Starting the same export again
-skips everything already brought in, so a stopped import can carry on.
+`lib/import/apple.ts` reads Apple's exports. A copy of iCloud Photos comes in parts ("iCloud
+Photos Part 1 of 3"), each with a "Photo Details" CSV giving every photo's date (in GMT,
+"Monday March 26,2018 9:12 PM GMT"), and whether it is a favorite, hidden or deleted, plus an
+"Albums" folder with a CSV per album listing its photos by name. Deleted photos are never
+imported. Hidden photos only go into the private space: importing into the library leaves
+them out and says how many, and suggests importing them from the private space. A Mac export
+or an iCloud.com zip has no records, so its photos have no year until they're imported and
+dated by their EXIF (a file's own date is often when it was exported), and its folders aren't
+treated as albums.
+
+The screen then lists the export's years (or "All photos" when it has none) with their photo
+counts and about how much each takes up once stored (`lib/import/selection.ts`), and ticks
+the newest years that fit in the account's free space. Import stays off while the ticked
+years don't fit. Starting makes the export's albums first (reusing an album of the same
+title already in the space, so a second go doesn't make duplicates). The import then runs in
+`app/importer.ts`, which `app/imports.tsx` provides for as long as the vault is open, so the
+person can move around the app while it runs. Each photo is read from the zip, then
+fingerprinted (see `docs/security.md`). A photo the space already has is skipped and only
+added to its albums. Any other photo is given a preview and dated, using its own EXIF date
+first, then the export's records (Google's `photoTakenTime`, Apple's
+`originalCreationDate`), then the file's date. A photo the export marks as a favorite comes
+in as a favorite. It is then encrypted and uploaded the same way as an upload, a few at a
+time under the same limits as the upload queue. New photos are added to the library every 24
+photos. A progress bar and a Stop button show while it runs. At the end, the screen says how
+many photos were imported, how many were already there, and which couldn't be imported and
+why. The browser asks before the tab is closed mid-import, imports count as use for auto-
+lock, and locking drops the import. Starting the same export again skips everything already
+brought in, so a stopped import can carry on.
 
 The grid shows a quiet placeholder until a photo's preview has been downloaded and
 decrypted. Previews are only asked for once their photo is near the screen (within about

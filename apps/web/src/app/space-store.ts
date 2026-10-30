@@ -49,6 +49,8 @@ export interface NewPhoto {
   width: number;
   height: number;
   takenAt: string;
+  /** Whether it starts as a favorite, as when an import brings one over. */
+  favorite?: boolean;
 }
 
 /** Where an upload is: encrypting on this device, then sending ciphertext. */
@@ -587,7 +589,7 @@ export function remoteStore(
         width: photo.width,
         height: photo.height,
         takenAt: photo.takenAt,
-        favorite: false,
+        favorite: photo.favorite ?? false,
         albumIds,
         fp: await crypto.photoFingerprint(await access(), photo.full),
       };
@@ -1009,7 +1011,7 @@ export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): Spac
         height: photo.height,
         takenAt: photo.takenAt,
         addedBy: 'me',
-        favorite: false,
+        favorite: photo.favorite ?? false,
         albumIds,
       });
     },

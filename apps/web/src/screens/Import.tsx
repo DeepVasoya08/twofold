@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { errorMessage } from '../app/account-ops';
 import { useImports } from '../app/imports';
 import type { ImportJob } from '../app/importer';
-import { Link } from '../app/router';
+import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useStorageUsage } from '../app/storage';
 import { useVault } from '../app/vault';
@@ -14,8 +14,14 @@ import { Icon } from '../components/Icon';
 import { pluralize } from '../lib/format';
 import type { Album } from '../mock/data';
 import { collectSources } from '../lib/import/sources';
-import { albumsOf, pickedItems, yearGroups, yearsThatFit } from '../lib/import/selection';
-import { planTakeout } from '../lib/import/takeout';
+import {
+  albumsOf,
+  itemsForSpace,
+  pickedItems,
+  yearGroups,
+  yearsThatFit,
+} from '../lib/import/selection';
+import { planExport } from '../lib/import/plan';
 import type { ImportPlan } from '../lib/import/takeout';
 import { formatBytes } from '../lib/storage-usage';
 
@@ -24,9 +30,77 @@ import '../components/upload-dialog.css';
 import './import.css';
 
 const TAKEOUT_URL = 'https://takeout.google.com/';
+const APPLE_DATA_URL = 'https://privacy.apple.com/';
 
-/** Picks Takeout zips, or the folder they were unzipped into. */
-function ChooseExport({ onChosen }: { onChosen: (files: File[]) => void }) {
+/** Where the photos come from, which decides the steps shown. */
+export type ImportFrom = 'google' | 'apple';
+
+/** The steps for getting a Google Photos export. */
+function GoogleSteps() {
+  return (
+    <ol className="import__steps">
+      <li>
+        Go to{' '}
+        <a href={TAKEOUT_URL} target="_blank" rel="noreferrer noopener">
+          Google Takeout
+        </a>
+        , click <strong>Deselect all</strong>, then tick <strong>Google Photos</strong>.
+      </li>
+      <li>
+        Choose <strong>.zip</strong> files and the biggest file size, then create the export.
+      </li>
+      <li>When Google emails you, download every zip, then choose them here.</li>
+    </ol>
+  );
+}
+
+/** The two ways to get photos out of Apple Photos. */
+function AppleSteps() {
+  return (
+    <div className="import__ways">
+      <div>
+        <h2 className="import__way">From iCloud, on any device</h2>
+        <ol className="import__steps">
+          <li>
+            Go to{' '}
+            <a href={APPLE_DATA_URL} target="_blank" rel="noreferrer noopener">
+              privacy.apple.com
+            </a>
+            , sign in and choose <strong>Request a copy of your data</strong>.
+          </li>
+          <li>
+            Tick <strong>iCloud Photos</strong>, pick the biggest file size, and finish the request.
+          </li>
+          <li>
+            When Apple emails you, download every part, then choose the zips here. Albums, favorites
+            and dates come along.
+          </li>
+        </ol>
+      </div>
+      <div>
+        <h2 className="import__way">From Photos on a Mac</h2>
+        <ol className="import__steps">
+          <li>
+            Select the photos (<kbd>⌘</kbd> <kbd>A</kbd> for all), then choose{' '}
+            <strong>File › Export › Export Unmodified Originals</strong>.
+          </li>
+          <li>Save them to a new folder, then choose that folder here.</li>
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+/** Picks an export's zips, or the folder it was unzipped or saved into. */
+function ChooseExport({
+  from,
+  onFrom,
+  onChosen,
+}: {
+  from: ImportFrom;
+  onFrom: (from: ImportFrom) => void;
+  onChosen: (files: File[]) => void;
+}) {
   const zipInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   // React doesn't know the folder picker's attribute, so it's set here.
@@ -36,23 +110,32 @@ function ChooseExport({ onChosen }: { onChosen: (files: File[]) => void }) {
 
   return (
     <div className="import">
-      <ol className="import__steps">
-        <li>
-          Go to{' '}
-          <a href={TAKEOUT_URL} target="_blank" rel="noreferrer noopener">
-            Google Takeout
-          </a>
-          , click <strong>Deselect all</strong>, then tick <strong>Google Photos</strong>.
-        </li>
-        <li>
-          Choose <strong>.zip</strong> files and the biggest file size, then create the export.
-        </li>
-        <li>When Google emails you, download every zip, then choose them here.</li>
-      </ol>
+      <div className="segmented" role="tablist" aria-label="Import from">
+        {(
+          [
+            ['google', 'Google Photos'],
+            ['apple', 'Apple Photos'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            className="segmented__option"
+            aria-selected={from === value}
+            onClick={() => {
+              onFrom(value);
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {from === 'google' ? <GoogleSteps /> : <AppleSteps />}
       <p className="share__note">
         <Icon name="shield" size={16} />
         Your export is opened on this device. Each photo is encrypted here before it’s uploaded, and
-        the zips never leave this device.
+        the export itself never leaves this device.
       </p>
       <div className="import__choose">
         <button
@@ -77,7 +160,7 @@ function ChooseExport({ onChosen }: { onChosen: (files: File[]) => void }) {
         accept=".zip,application/zip"
         multiple
         tabIndex={-1}
-        aria-label="Choose Takeout zip files"
+        aria-label="Choose export zip files"
         onChange={(event) => {
           onChosen([...(event.currentTarget.files ?? [])]);
           event.currentTarget.value = '';
@@ -89,7 +172,7 @@ function ChooseExport({ onChosen }: { onChosen: (files: File[]) => void }) {
         type="file"
         multiple
         tabIndex={-1}
-        aria-label="Choose an unzipped Takeout folder"
+        aria-label="Choose an export folder"
         onChange={(event) => {
           onChosen([...(event.currentTarget.files ?? [])]);
           event.currentTarget.value = '';
@@ -105,12 +188,17 @@ function ReviewPlan({ plan, onCancel }: { plan: ImportPlan; onCancel: () => void
   const imports = useImports();
   const used = useStorageUsage();
   const free = Math.max(0, STORAGE_SIZES.accountQuota - used);
-  const groups = useMemo(() => yearGroups(plan.items), [plan.items]);
+  const isPrivate = vault.space === 'private';
+  const { items, hidden } = useMemo(
+    () => itemsForSpace(plan.items, isPrivate),
+    [plan.items, isPrivate],
+  );
+  const groups = useMemo(() => yearGroups(items), [items]);
   const [years, setYears] = useState(() => yearsThatFit(groups, free));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const picked = useMemo(() => pickedItems(plan.items, years), [plan.items, years]);
+  const picked = useMemo(() => pickedItems(items, years), [items, years]);
   const pickedBytes = groups
     .filter((group) => years.has(group.year))
     .reduce((total, group) => total + group.bytes, 0);
@@ -158,7 +246,7 @@ function ReviewPlan({ plan, onCancel }: { plan: ImportPlan; onCancel: () => void
   return (
     <div className="import">
       <p className="import__summary">
-        Found {pluralize(plan.items.length, 'photo')}
+        Found {pluralize(items.length, 'photo')}
         {plan.albums.length > 0 && <> in {pluralize(plan.albums.length, 'album')}</>}.
         {plan.videos > 0 && (
           <>
@@ -166,11 +254,23 @@ function ReviewPlan({ plan, onCancel }: { plan: ImportPlan; onCancel: () => void
             {pluralize(plan.videos, 'video')} will be skipped, as Twofold can’t store videos yet.
           </>
         )}
+        {hidden > 0 && (
+          <>
+            {' '}
+            {pluralize(hidden, 'hidden photo')} will be left out. To bring{' '}
+            {hidden === 1 ? 'it' : 'them'} in, open your private space and import there.
+          </>
+        )}
       </p>
       <fieldset className="import__years">
         <legend>Years to import</legend>
         {groups.map((group) => {
-          const label = group.year === null ? 'Not in a year' : String(group.year);
+          const label =
+            group.year !== null
+              ? String(group.year)
+              : groups.length === 1
+                ? 'All photos'
+                : 'Year not known yet';
           return (
             <label key={label} className="checkbox import__year">
               <input
@@ -292,14 +392,22 @@ function ImportStatus({ onAgain }: { onAgain: () => void }) {
   );
 }
 
+/** Which steps to show first: `?from=apple` for Apple Photos, otherwise Google Photos. */
+export function parseImportFrom(search: string): ImportFrom {
+  return new URLSearchParams(search).get('from') === 'apple' ? 'apple' : 'google';
+}
+
 /**
- * Bringing photos in from a Google Photos export (Google Takeout). The zips are read on this
- * device; each photo goes through the same encryption as an upload, into the open space,
- * with its date and albums kept. Photos already here are skipped.
+ * Bringing photos in from a Google Photos or Apple Photos export (or any folder of photos).
+ * The export is read on this device; each photo goes through the same encryption as an
+ * upload, into the open space, with its date, albums and favorite kept where the export
+ * records them. Photos already here are skipped.
  */
 export function Import() {
   const { space } = useVault();
   const imports = useImports();
+  const { search } = useRouter();
+  const [from, setFrom] = useState<ImportFrom>(() => parseImportFrom(search));
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -310,13 +418,13 @@ export function Import() {
     setReading(true);
     setError(null);
     collectSources(files)
-      .then((sources) => {
-        const found = planTakeout(sources);
+      .then(planExport)
+      .then((found) => {
         if (found.items.length === 0) {
           setError(
             found.videos > 0
               ? 'This export only has videos, which Twofold can’t store yet.'
-              : 'No photos were found. Choose the zips from Google Takeout, or the folder they were unzipped into.',
+              : 'No photos were found. Choose every zip of your export, or the folder it was saved or unzipped into.',
           );
           return;
         }
@@ -360,7 +468,7 @@ export function Import() {
     body = (
       <>
         <FormAlert message={error} />
-        <ChooseExport onChosen={onChosen} />
+        <ChooseExport from={from} onFrom={setFrom} onChosen={onChosen} />
       </>
     );
   }
@@ -368,8 +476,8 @@ export function Import() {
   return (
     <div className="page page--narrow">
       <PageHeader
-        title="Import from Google Photos"
-        subtitle={`Bring your photos and albums into your ${where}, with the dates they were taken.`}
+        title="Import photos"
+        subtitle={`Bring your photos and albums over from Google Photos or Apple Photos, into your ${where}.`}
         back={{ to: paths.settings, label: 'Settings' }}
       />
       <div className="share-card">{body}</div>

@@ -31,11 +31,17 @@ export interface ImportItem {
   source: ImportSource;
   /** Google's JSON details for it, if found. */
   sidecar?: ImportSource;
+  /** When it was taken, where the export's own records say (in ms). */
+  takenAt?: number;
+  /** Whether it was a favorite, where the export's own records say. */
+  favorite?: boolean;
+  /** Whether it was hidden in the app it came from. */
+  hidden?: boolean;
 }
 
 export interface ImportPlan {
   items: ImportItem[];
-  /** Videos found, which Twofold can't store yet. */
+  /** Videos found, which Twofold can't store yet (Live Photos' clips aren't counted). */
   videos: number;
   /** Album titles, in the order found. */
   albums: string[];
@@ -83,7 +89,7 @@ const SIDECAR_STEM_MAX = 46;
 /** A cut-short sidecar name still has at least this much of the photo's name. */
 const SIDECAR_STEM_MIN = 30;
 
-function splitPath(path: string): { folder: string; name: string } {
+export function splitPath(path: string): { folder: string; name: string } {
   const slash = path.lastIndexOf('/');
   const name = path.slice(slash + 1);
   const folderPath = slash < 0 ? '' : path.slice(0, slash);
@@ -103,6 +109,27 @@ export function photoTypeOf(name: string): string | null {
 
 export function isVideo(name: string): boolean {
   return VIDEO_EXTENSIONS.has(extensionOf(name));
+}
+
+function stemOf(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return (dot <= 0 ? name : name.slice(0, dot)).toLowerCase();
+}
+
+/** The names, without extensions, of the photos among a folder's files. */
+export function photoStems(names: Iterable<string>): Set<string> {
+  const stems = new Set<string>();
+  for (const name of names) if (photoTypeOf(name) !== null) stems.add(stemOf(name));
+  return stems;
+}
+
+/**
+ * Whether a video is the moving part of a Live Photo (or a motion photo): a clip next to a
+ * photo with the same name, such as IMG_0001.MOV beside IMG_0001.HEIC. The still comes in;
+ * the clip is left out, and not counted as a video.
+ */
+export function isLiveClip(name: string, stems: ReadonlySet<string>): boolean {
+  return isVideo(name) && stems.has(stemOf(name));
 }
 
 /** "IMG(1).jpg" is the second "IMG.jpg": its name without the number, and the number. */
@@ -170,11 +197,12 @@ export function planTakeout(sources: readonly ImportSource[]): ImportPlan {
       .filter((file) => file.path.toLowerCase().endsWith('.json'))
       .map((source) => ({ ...sidecarStem(splitPath(source.path).name), source }));
     const names = new Set(files.map((file) => splitPath(file.path).name));
+    const stems = photoStems(names);
     let photosHere = 0;
     for (const source of files) {
       const { name } = splitPath(source.path);
       if (isVideo(name)) {
-        videos += 1;
+        if (!isLiveClip(name, stems)) videos += 1;
         continue;
       }
       const type = photoTypeOf(name);
@@ -208,20 +236,28 @@ export function planTakeout(sources: readonly ImportSource[]): ImportPlan {
   return { items: [...items.values()], videos, albums };
 }
 
-/**
- * When a photo was taken, from Google's JSON details: `photoTakenTime.timestamp`, in seconds.
- * Undefined if the JSON doesn't say.
- */
-export function sidecarTakenAt(bytes: Uint8Array): number | undefined {
+/** What Google's JSON details say about a photo. */
+export interface SidecarDetails {
+  /** When it was taken (`photoTakenTime.timestamp`, in seconds), in ms. */
+  takenAt?: number;
+  favorite?: boolean;
+}
+
+/** Reads Google's JSON details for a photo; anything missing or unreadable is left out. */
+export function sidecarDetails(bytes: Uint8Array): SidecarDetails {
   let json: unknown;
   try {
     json = JSON.parse(new TextDecoder().decode(bytes));
   } catch {
-    return undefined;
+    return {};
   }
-  if (typeof json !== 'object' || json === null || !('photoTakenTime' in json)) return undefined;
+  if (typeof json !== 'object' || json === null) return {};
+  const details: SidecarDetails = {};
+  if ('favorited' in json && typeof json.favorited === 'boolean') details.favorite = json.favorited;
+  if (!('photoTakenTime' in json)) return details;
   const taken = json.photoTakenTime;
-  if (typeof taken !== 'object' || taken === null || !('timestamp' in taken)) return undefined;
+  if (typeof taken !== 'object' || taken === null || !('timestamp' in taken)) return details;
   const seconds = Number(taken.timestamp);
-  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : undefined;
+  if (Number.isFinite(seconds) && seconds > 0) details.takenAt = seconds * 1000;
+  return details;
 }

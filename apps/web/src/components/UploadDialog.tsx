@@ -110,7 +110,7 @@ export function UploadDialog({ albumId }: UploadDialogProps) {
         <Icon name="cloud" size={20} />
         <span className="upload-import__text">
           <span className="upload-import__title">
-            {imports.running ? 'Importing from Google Photos' : 'Moving from Google Photos?'}
+            {imports.running ? 'Importing photos' : 'Moving from Google or Apple Photos?'}
           </span>
           <span className="upload-import__description">
             {imports.running

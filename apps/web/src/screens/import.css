@@ -9,6 +9,12 @@
   margin: 0;
   padding-left: 22px;
   font-size: 15px;
+  list-style: decimal;
+}
+
+.import__steps li::marker {
+  color: var(--text-3);
+  font-weight: 600;
 }
 
 .import__choose {
@@ -83,4 +89,28 @@
 
 .import__failures li span {
   color: var(--text);
+}
+
+.import .segmented {
+  margin-bottom: 0;
+}
+
+.import__ways {
+  display: grid;
+  gap: 20px;
+}
+
+.import__way {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.import__steps kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-2);
+  font-family: inherit;
+  font-size: 13px;
 }

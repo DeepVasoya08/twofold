@@ -4,11 +4,15 @@ import type { ImportSource } from './takeout';
 
 /**
  * Turns what the person picked (Takeout zips, or the folder they unzipped) into the files of
- * an export, without reading any photo yet. Only photos, videos and JSON details are kept.
+ * an export, without reading any photo yet. Only photos, videos, and the JSON and CSV files
+ * that carry their details, are kept.
  */
 
 function wanted(path: string): boolean {
-  return photoTypeOf(path) !== null || isVideo(path) || path.toLowerCase().endsWith('.json');
+  const lower = path.toLowerCase();
+  return (
+    photoTypeOf(path) !== null || isVideo(path) || lower.endsWith('.json') || lower.endsWith('.csv')
+  );
 }
 
 export function isZip(file: File): boolean {

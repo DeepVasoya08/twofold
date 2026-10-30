@@ -61,3 +61,16 @@ export function yearsThatFit(groups: readonly YearGroup[], free: number): Set<nu
   }
   return picked;
 }
+
+/**
+ * The photos to offer in the open space. Photos that were hidden in the app they came from
+ * only go into the private space; the library leaves them out and counts them.
+ */
+export function itemsForSpace(
+  items: readonly ImportItem[],
+  isPrivate: boolean,
+): { items: ImportItem[]; hidden: number } {
+  if (isPrivate) return { items: [...items], hidden: 0 };
+  const shown = items.filter((item) => !item.hidden);
+  return { items: shown, hidden: items.length - shown.length };
+}

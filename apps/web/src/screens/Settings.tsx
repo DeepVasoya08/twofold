@@ -463,15 +463,33 @@ export function Settings() {
 
       <Section title="Import">
         <Row
-          icon="upload"
+          icon="cloud"
           title="Google Photos"
           description={`Bring your photos and albums in from a Google Takeout export, into your ${where}.`}
           action={
             <button
               type="button"
               className="btn btn--secondary btn--sm"
+              aria-label="Import from Google Photos"
               onClick={() => {
                 navigate(paths.import);
+              }}
+            >
+              Import
+            </button>
+          }
+        />
+        <Row
+          icon="cloud"
+          title="Apple Photos"
+          description={`Bring your photos in from a copy of your iCloud Photos or a Mac export, into your ${where}.`}
+          action={
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              aria-label="Import from Apple Photos"
+              onClick={() => {
+                navigate(paths.importFrom('apple'));
               }}
             >
               Import
