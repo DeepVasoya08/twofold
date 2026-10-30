@@ -4,6 +4,7 @@ import type { PhotoPage, PhotoPart } from '@twofold/types';
 
 import { spaceApi } from '../lib/api';
 import { isPhotoType } from '../lib/photo-types';
+import { viewableCopy } from '../lib/thumbnail-service';
 import type { SpaceApi } from '../lib/api';
 import type { Album, Photo } from '../mock/data';
 import { FormError } from './account-ops';
@@ -61,6 +62,12 @@ export interface SpaceStore {
    * latest original is kept: asking for another revokes the previous one.
    */
   image: (photoId: string, part: PhotoPart) => Promise<string>;
+  /**
+   * After `image(photoId, 'full')`: an object URL of a JPEG copy to show instead of the
+   * original, when this browser can't show the original (HEIC outside Safari). Undefined
+   * when the original shows as it is. Downloads still use the original.
+   */
+  viewImage: (photoId: string) => string | undefined;
   /**
    * Downloads and decrypts many previews, in as few requests as it can. Returns an object
    * URL for each one it got; photos it doesn't know, or whose preview didn't decrypt, are
@@ -292,7 +299,7 @@ export function remoteStore(
 
   const track = (
     photoId: string,
-    part: PhotoPart,
+    part: PhotoPart | 'view',
     bytes: Uint8Array<ArrayBuffer>,
     type: string,
   ) => {
@@ -306,7 +313,7 @@ export function remoteStore(
 
   const forget = (photoId: string) => {
     known.delete(photoId);
-    for (const part of ['thumb', 'full'] as const) {
+    for (const part of ['thumb', 'full', 'view'] as const) {
       const url = urls.get(`${photoId}/${part}`);
       if (url) URL.revokeObjectURL(url);
       urls.delete(`${photoId}/${part}`);
@@ -497,14 +504,18 @@ export function remoteStore(
       if (part === 'full') {
         // Originals can be large, so only the latest one stays decrypted in memory.
         for (const [name, url] of urls) {
-          if (name.endsWith('/full')) {
+          if (name.endsWith('/full') || name.endsWith('/view')) {
             URL.revokeObjectURL(url);
             urls.delete(name);
           }
         }
+        const copy = await viewableCopy(plain, entry.meta.type);
+        if (copy) track(photoId, 'view', copy, THUMB_TYPE);
       }
       return track(photoId, part, plain, part === 'thumb' ? THUMB_TYPE : entry.meta.type);
     },
+
+    viewImage: (photoId) => urls.get(`${photoId}/view`),
 
     thumbs: async (photoIds, onThumb) => {
       const found = new Map<string, string>();
@@ -834,6 +845,7 @@ export function combinedStore(
       return { photos, albums };
     },
     image: (photoId, part) => storeOf(photoId).image(photoId, part),
+    viewImage: (photoId) => storeOf(photoId).viewImage(photoId),
     thumbs: async (photoIds, onThumb) => {
       const byStore = new Map<SpaceStore, string[]>();
       for (const photoId of photoIds) {
@@ -941,6 +953,7 @@ export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): Spac
     list: () => Promise.resolve(initial),
     image: (photoId) =>
       Promise.resolve(initial.photos.find((photo) => photo.id === photoId)?.src ?? ''),
+    viewImage: () => undefined,
     thumbs: (photoIds) =>
       Promise.resolve(
         new Map(

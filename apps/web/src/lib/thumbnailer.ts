@@ -1,4 +1,4 @@
-import { drawThumbnail, pageCanvas } from './thumbnail';
+import { THUMB_MAX_SIDE, drawThumbnail, pageCanvas } from './thumbnail';
 import type { CanvasMaker, Thumbnail } from './thumbnail';
 
 /**
@@ -8,8 +8,14 @@ import type { CanvasMaker, Thumbnail } from './thumbnail';
  * preview is made on the page instead, as it would be without a worker.
  */
 
-/** Makes a preview of a photo; null if the image can't be read. */
-export type Thumbnailer = (file: Blob) => Promise<Thumbnail | null>;
+/**
+ * Makes a JPEG copy of a photo, no bigger than `maxSide` (the preview size by default); null
+ * if the image can't be read.
+ */
+export type Thumbnailer = (file: Blob, maxSide?: number) => Promise<Thumbnail | null>;
+
+/** The biggest copy a worker is asked for: more than any screen shows. */
+const MAX_SIDE_LIMIT = 8192;
 
 /** The parts of a Worker this module uses, so tests can stand in for one. */
 export interface ThumbWorker {
@@ -33,16 +39,22 @@ function isRequestId(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
+function isMaxSide(value: unknown): value is number {
+  return (
+    typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= MAX_SIDE_LIMIT
+  );
+}
+
 /** The worker's side: makes the preview, or says it couldn't. Never throws. */
 export async function answerThumbRequest(
   data: unknown,
   makeCanvas: CanvasMaker | null,
 ): Promise<ThumbReply> {
   if (!isRecord(data) || !isRequestId(data.id)) return { id: -1, ok: false };
-  const { id, file } = data;
-  if (!makeCanvas || !(file instanceof Blob)) return { id, ok: false };
+  const { id, file, maxSide = THUMB_MAX_SIDE } = data;
+  if (!makeCanvas || !(file instanceof Blob) || !isMaxSide(maxSide)) return { id, ok: false };
   try {
-    const thumb = await drawThumbnail(file, makeCanvas);
+    const thumb = await drawThumbnail(file, makeCanvas, maxSide);
     return thumb ? { id, ok: true, thumb } : { id, ok: false };
   } catch {
     return { id, ok: false };
@@ -70,7 +82,8 @@ interface Session {
 }
 
 /** On the page: what's used without a worker, and when the worker can't do one. */
-export const pageThumbnailer: Thumbnailer = (file) => drawThumbnail(file, pageCanvas);
+export const pageThumbnailer: Thumbnailer = (file, maxSide) =>
+  drawThumbnail(file, pageCanvas, maxSide);
 
 export function workerThumbnailer(
   spawn: () => ThumbWorker,
@@ -125,22 +138,22 @@ export function workerThumbnailer(
     return session;
   };
 
-  return async (file) => {
+  return async (file, maxSide = THUMB_MAX_SIDE) => {
     clearTimeout(idleTimer);
     const session = open();
-    if (!session) return fallback(file);
+    if (!session) return fallback(file, maxSide);
     const id = nextId;
     nextId += 1;
     const thumb = await new Promise<Thumbnail | null>((resolve) => {
       session.pending.set(id, resolve);
       try {
-        session.worker.postMessage({ id, file });
+        session.worker.postMessage({ id, file, maxSide });
       } catch {
         session.pending.delete(id);
         resolve(null);
         whenIdle(session);
       }
     });
-    return thumb ?? fallback(file);
+    return thumb ?? fallback(file, maxSide);
   };
 }

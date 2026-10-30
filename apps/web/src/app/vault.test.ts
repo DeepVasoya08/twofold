@@ -210,6 +210,26 @@ describe('images', () => {
     expect(second.photos.map((p) => p.fullSrc)).toEqual([undefined, 'blob:b', undefined]);
   });
 
+  it('keeps a viewable copy next to an original the browser can’t show', () => {
+    const heic = vaultReducer(state, {
+      type: 'set-image',
+      photoId: 'a',
+      part: 'full',
+      url: 'blob:heic',
+      viewUrl: 'blob:jpeg',
+    });
+    expect(heic.photos[0]).toMatchObject({ fullSrc: 'blob:heic', viewSrc: 'blob:jpeg' });
+    const other = vaultReducer(heic, {
+      type: 'set-image',
+      photoId: 'b',
+      part: 'full',
+      url: 'blob:b',
+    });
+    expect(other.photos[0]?.viewSrc).toBeUndefined();
+    expect(other.photos[0]?.fullSrc).toBeUndefined();
+    expect(other.photos[1]?.viewSrc).toBeUndefined();
+  });
+
   it('replaces everything once the space has loaded', () => {
     const loaded = { photos: [photo('z', '2026-05-01T00:00:00Z')], albums: [] };
     expect(vaultReducer(state, { type: 'loaded', state: loaded })).toBe(loaded);

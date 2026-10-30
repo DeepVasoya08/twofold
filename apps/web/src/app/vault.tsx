@@ -83,7 +83,7 @@ function withoutCovers(albums: Album[], gone: ReadonlySet<string>): Album[] {
 
 export type VaultAction =
   | { type: 'loaded'; state: VaultState }
-  | { type: 'set-image'; photoId: string; part: PhotoPart; url: string }
+  | { type: 'set-image'; photoId: string; part: PhotoPart; url: string; viewUrl?: string }
   | { type: 'set-thumbs'; urls: ReadonlyMap<string, string> }
   | { type: 'toggle-favorite'; photoId: string }
   | { type: 'delete-photos'; photoIds: readonly string[] }
@@ -125,11 +125,17 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
         if (action.part === 'thumb') {
           return photo.id === action.photoId ? { ...photo, src: action.url } : photo;
         }
-        if (photo.id === action.photoId) return { ...photo, fullSrc: action.url };
+        if (photo.id === action.photoId) {
+          const rest = { ...photo, fullSrc: action.url };
+          if (action.viewUrl === undefined) delete rest.viewSrc;
+          else rest.viewSrc = action.viewUrl;
+          return rest;
+        }
         // The store keeps one original at a time and has revoked the others.
-        if (photo.fullSrc === undefined) return photo;
+        if (photo.fullSrc === undefined && photo.viewSrc === undefined) return photo;
         const rest = { ...photo };
         delete rest.fullSrc;
+        delete rest.viewSrc;
         return rest;
       };
       return {
@@ -664,7 +670,14 @@ export function VaultProvider({
       loadFull: (photoId) => {
         void store.image(photoId, 'full').then(
           (url) => {
-            dispatch({ type: 'set-image', photoId, part: 'full', url });
+            const viewUrl = store.viewImage(photoId);
+            dispatch({
+              type: 'set-image',
+              photoId,
+              part: 'full',
+              url,
+              ...(viewUrl === undefined ? {} : { viewUrl }),
+            });
           },
           () => undefined,
         );

@@ -5,6 +5,8 @@
  * (lib/thumbnailer.ts), and on the page otherwise.
  */
 
+import { decodeHeif, isHeif } from './heif';
+
 export const THUMB_MAX_SIDE = 640;
 const THUMB_QUALITY = 0.82;
 
@@ -36,19 +38,40 @@ export function fitWithin(
   };
 }
 
-/** Draws the preview on a canvas from `makeCanvas`. Returns null if it can't be read. */
-export async function drawThumbnail(
-  file: Blob,
-  makeCanvas: CanvasMaker,
-): Promise<Thumbnail | null> {
-  let bitmap: ImageBitmap;
+/**
+ * Opens a photo for drawing. Browsers decode most formats themselves; a HEIC photo that this
+ * one can't is decoded with libheif instead (lib/heif.ts). Null if it can't be read.
+ */
+async function openImage(file: Blob): Promise<ImageBitmap | null> {
   try {
-    bitmap = await createImageBitmap(file);
+    return await createImageBitmap(file);
+  } catch {
+    // Not a format this browser reads; HEIC is the one worth a second try.
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (!isHeif(bytes)) return null;
+  try {
+    const pixels = await decodeHeif(bytes);
+    if (!pixels) return null;
+    return await createImageBitmap(new ImageData(pixels.data, pixels.width, pixels.height));
   } catch {
     return null;
   }
+}
+
+/**
+ * Draws a JPEG copy, no bigger than `maxSide` on its longer side, on a canvas from
+ * `makeCanvas`: the preview by default. Null if the image can't be read.
+ */
+export async function drawThumbnail(
+  file: Blob,
+  makeCanvas: CanvasMaker,
+  maxSide: number = THUMB_MAX_SIDE,
+): Promise<Thumbnail | null> {
+  const bitmap = await openImage(file);
+  if (!bitmap) return null;
   try {
-    const size = fitWithin(bitmap.width, bitmap.height, THUMB_MAX_SIDE);
+    const size = fitWithin(bitmap.width, bitmap.height, maxSide);
     const canvas = makeCanvas(size.width, size.height);
     if (!canvas.draw(bitmap, size.width, size.height)) return null;
     const blob = await canvas.toJpeg(THUMB_QUALITY);
