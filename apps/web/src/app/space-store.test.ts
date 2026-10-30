@@ -235,6 +235,47 @@ describe('remoteStore', () => {
     expect(photos.map((photo) => photo.id)).toEqual([b.id]);
   });
 
+  it('fingerprints each photo inside its sealed record, so a later import can skip it', async () => {
+    const { server, space } = await setUp();
+    const store = remoteStore(space, server.api);
+    await store.add(PHOTO, []);
+    const fingerprint = await store.fingerprint(PHOTO.full);
+
+    const later = remoteStore(space, server.api);
+    expect(later.fingerprints()).toEqual(new Set());
+    await later.list();
+    expect(later.fingerprints()).toEqual(new Set([fingerprint]));
+    expect(later.fingerprints().has(await later.fingerprint(bytes('another photo')))).toBe(false);
+
+    // The server only ever has it sealed, and another space's fingerprint differs.
+    const [entry] = [...server.photos.values()];
+    const meta = fromBase64Url(entry?.photo.meta ?? '') ?? new Uint8Array();
+    expect(contains(meta, bytes(fingerprint))).toBe(false);
+    const other = remoteStore(await newSpace(), server.api);
+    expect(await other.fingerprint(PHOTO.full)).not.toBe(fingerprint);
+  });
+
+  it('still lists photos stored before fingerprints existed', async () => {
+    const { server, space } = await setUp();
+    const added = await remoteStore(space, server.api).add(PHOTO, []);
+    const entry = server.photos.get(added.id);
+    if (!entry) throw new Error('missing');
+    const access = await ownerAccess(space);
+    const meta = JSON.parse(
+      new TextDecoder().decode(await openRecord(access, 'photo', added.id, entry.photo.meta)),
+    ) as Record<string, unknown>;
+    delete meta.fp;
+    entry.photo.meta = await sealRecord(
+      access,
+      'photo',
+      added.id,
+      new TextEncoder().encode(JSON.stringify(meta)),
+    );
+    const later = remoteStore(space, server.api);
+    expect((await later.list()).photos.map((photo) => photo.id)).toEqual([added.id]);
+    expect(later.fingerprints().size).toBe(0);
+  });
+
   it('refuses a tampered file', async () => {
     const { server, space } = await setUp();
     const added = await remoteStore(space, server.api).add(PHOTO, []);

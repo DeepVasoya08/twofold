@@ -131,6 +131,16 @@ export interface SpaceStore {
    * the bytes are the caller's, in memory only.
    */
   original: (photoId: string) => Promise<Original>;
+  /**
+   * The fingerprint a photo's original has in this space: the same bytes always give the
+   * same fingerprint here, and nothing the server could match elsewhere.
+   */
+  fingerprint: (original: Uint8Array) => Promise<string>;
+  /**
+   * Fingerprints of the photos listed so far (including Recently deleted once it has been
+   * listed), for skipping photos already here.
+   */
+  fingerprints: () => ReadonlySet<string>;
   /** Revokes every object URL this store made. */
   dispose: () => void;
 }
@@ -160,6 +170,11 @@ interface PhotoMeta {
   by?: AddedBy;
   /** Set while it is in Recently deleted: when it was deleted (ISO 8601). */
   deletedAt?: string;
+  /**
+   * The original's fingerprint in this space (see photoFingerprint), so an import can skip
+   * photos already here. Photos stored before fingerprints existed have none.
+   */
+  fp?: string;
 }
 
 /** How this device reaches a library someone shared with it. */
@@ -208,14 +223,16 @@ function parsePhotoMeta(value: unknown): PhotoMeta | null {
     typeof favorite === 'boolean' &&
     Array.isArray(albumIds) &&
     albumIds.every((id) => typeof id === 'string');
-  const { deletedAt } = value;
+  const { deletedAt, fp } = value;
   const deletedOk =
     deletedAt === undefined ||
     (typeof deletedAt === 'string' && !Number.isNaN(Date.parse(deletedAt)));
-  if (!ok || !deletedOk) return null;
+  const fpOk = fp === undefined || typeof fp === 'string';
+  if (!ok || !deletedOk || !fpOk) return null;
   const meta: PhotoMeta = { v, key, type, width, height, takenAt, favorite, albumIds };
   if (by) meta.by = by;
   if (deletedAt !== undefined) meta.deletedAt = deletedAt;
+  if (fp !== undefined) meta.fp = fp;
   return meta;
 }
 
@@ -572,6 +589,7 @@ export function remoteStore(
         takenAt: photo.takenAt,
         favorite: false,
         albumIds,
+        fp: await crypto.photoFingerprint(await access(), photo.full),
       };
       if (membership) meta.by = { id: membership.memberId, name: membership.myName };
       const api = await remote();
@@ -731,6 +749,17 @@ export function remoteStore(
     original: async (photoId) => {
       const { plain: full, entry } = await decrypt(photoId, 'full');
       return { full, type: entry.meta.type, takenAt: entry.meta.takenAt };
+    },
+
+    fingerprint: async (original) => {
+      const crypto = await loadCrypto();
+      return crypto.photoFingerprint(await access(), original);
+    },
+
+    fingerprints: () => {
+      const found = new Set<string>();
+      for (const { meta } of known.values()) if (meta.fp !== undefined) found.add(meta.fp);
+      return found;
     },
 
     dispose: () => {
@@ -932,6 +961,9 @@ export function combinedStore(
         : own.stopSharingAlbum(albumId),
     read: (photoId) => storeOf(photoId).read(photoId),
     original: (photoId) => storeOf(photoId).original(photoId),
+    // Imports go to your own library.
+    fingerprint: (original) => own.fingerprint(original),
+    fingerprints: () => own.fingerprints(),
     dispose: () => {
       own.dispose();
       for (const source of shared) source.store.dispose();
@@ -992,6 +1024,8 @@ export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): Spac
     stopSharingAlbum: () => Promise.resolve(),
     read: () => Promise.reject(new FormError('This preview can’t move photos.')),
     original: () => Promise.reject(new FormError('This preview can’t download photos.')),
+    fingerprint: () => Promise.reject(new FormError('This preview can’t import photos.')),
+    fingerprints: () => new Set(),
     dispose: () => undefined,
   };
 }

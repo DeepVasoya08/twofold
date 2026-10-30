@@ -16,6 +16,7 @@ import {
   openOwnerRecord,
   openRecord,
   ownerAccess,
+  photoFingerprint,
   sealFaceSegment,
   sealSearchSegment,
   sealOwnerRecord,
@@ -427,5 +428,54 @@ describe('encryptFile / decryptFile', () => {
     const mixed = a.slice();
     mixed.set(b.subarray(24 + 64 * 1024 + 17), 24 + 64 * 1024 + 17);
     await expect(decryptFile(key, mixed)).rejects.toThrow(DecryptionError);
+  });
+});
+
+describe('photoFingerprint', () => {
+  const photo = new Uint8Array(200_000).map((_, index) => (index * 31) % 251);
+
+  it('is the same for the same photo in the same space', async () => {
+    const access = await newAccess();
+    const first = await photoFingerprint(access, photo);
+    expect(await photoFingerprint(access, photo.slice())).toBe(first);
+    expect(fromBase64Url(first)?.length).toBe(32);
+  });
+
+  it('works for a member, who has only the records key', async () => {
+    const owner = await newAccess();
+    const member = memberAccess(spaceToken(await newSpace()), owner.recordKey);
+    expect(await photoFingerprint(member, photo)).toBe(await photoFingerprint(owner, photo));
+  });
+
+  it('differs in another space (wrong key)', async () => {
+    const one = await photoFingerprint(await newAccess(), photo);
+    const other = await photoFingerprint(await newAccess(), photo);
+    expect(other).not.toBe(one);
+  });
+
+  it('changes when a single byte of the photo changes (tampered data)', async () => {
+    const access = await newAccess();
+    const tampered = photo.slice();
+    tampered[123_456] = (tampered[123_456] ?? 0) ^ 1;
+    expect(await photoFingerprint(access, tampered)).not.toBe(
+      await photoFingerprint(access, photo),
+    );
+    expect(await photoFingerprint(access, photo.subarray(0, -1))).not.toBe(
+      await photoFingerprint(access, photo),
+    );
+  });
+
+  it('isn’t a plain hash of the photo', async () => {
+    const sodium = await import('libsodium-wrappers-sumo');
+    await sodium.default.ready;
+    const plain = toBase64Url(sodium.default.crypto_generichash(32, photo, null));
+    expect(await photoFingerprint(await newAccess(), photo)).not.toBe(plain);
+  });
+
+  it('refuses a malformed key', async () => {
+    const access = await newAccess();
+    await expect(
+      photoFingerprint({ ...access, recordKey: access.recordKey.subarray(0, 16) }, photo),
+    ).rejects.toThrow('Malformed records key');
   });
 });
