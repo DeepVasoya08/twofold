@@ -11,8 +11,8 @@
 ```
 
 A single Cloudflare Worker (`twofold`, configured in `apps/api/wrangler.jsonc`) serves
-everything from one origin, so there is no CORS and the CSP can stay at
-`connect-src 'self'`.
+everything from one origin, so there is no CORS and the CSP's `connect-src` needs only
+`'self'`, plus Google's Photos Picker hosts for Connect Google Photos.
 
 - **apps/web** — static SPA, served by the Worker through Workers Static Assets from
   `apps/web/dist`. The public pages (`/`, `/privacy`, `/terms`) are prerendered at build

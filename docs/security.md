@@ -9,7 +9,9 @@ non-negotiable; this document is the threat model and key design as they stand.
   (`libsodium-wrappers-sumo`, the build that includes Argon2id) plus Web Crypto SHA-256.
   The API imports only `@twofold/crypto/webcrypto`, which never loads libsodium.
 - The web app and the API share one origin (a single Worker), so there is no CORS
-  surface and `connect-src 'self'` covers API calls.
+  surface and `'self'` in `connect-src` covers API calls. The only other hosts the app may
+  connect to are Google's Photos Picker API (`photospicker.googleapis.com`) and the host
+  picked photos download from (`*.googleusercontent.com`), for Connect Google Photos.
 - The web app ships a strict Content-Security-Policy and related headers via
   `apps/web/public/_headers` (Workers Static Assets). `'wasm-unsafe-eval'` is allowed so
   libsodium's WebAssembly can load. libsodium is loaded on first use, not on the welcome page.
@@ -186,6 +188,15 @@ other accounts; see [Sharing](#sharing).
   count against storage, and can be listed (`GET /api/space/trash`) only by the owner
   and members who can edit. Moving a photo to the other space, wiping a space and
   deleting the account still delete at once.
+- **Connect Google Photos.** The browser signs in to Google itself (OAuth's token flow, in a
+  window of its own, asking only for `photospicker.mediaitems.readonly`, so Twofold can see
+  only the photos the person picks). Google sends the access token back in the URL fragment
+  of `/import/google/done`, which never reaches a server; that page passes it to the app over
+  a same-origin `BroadcastChannel`, checked against a random `state`, wipes it from the
+  address bar and closes. The token is kept in memory only, never logged or stored, and
+  forgotten when the import ends or the vault locks. Each picked photo downloads from Google
+  straight into the browser and goes through the same encryption as an upload; Twofold's
+  server never sees the photos or the Google account.
 - **Fingerprints.** Each new photo's sealed record also holds `fp`, a keyed BLAKE2b hash
   (`crypto_generichash`, 32 bytes) of its original, under a key derived from the space's
   records key (`crypto_kdf`, context `twfprint`, id 1; `photoFingerprint` in

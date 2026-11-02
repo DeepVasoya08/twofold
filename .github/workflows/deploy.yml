@@ -69,6 +69,9 @@ jobs:
 
       - name: Build web app
         run: pnpm --filter @twofold/web run build
+        env:
+          # Connect Google Photos' OAuth client (public; unset hides the button).
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
 
       # One Worker serves the web app (static assets) and the API (/api/*) on one origin.
       - name: Deploy Worker

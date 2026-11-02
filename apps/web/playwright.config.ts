@@ -34,5 +34,8 @@ export default defineConfig({
     ].join(' && '),
     port: PORT,
     reuseExistingServer: !isCI,
+    // A made-up Google client, so Connect Google Photos shows; e2e/import.spec.ts stands in
+    // for Google's servers.
+    env: { VITE_GOOGLE_CLIENT_ID: 'e2e-test.apps.googleusercontent.com' },
   },
 });

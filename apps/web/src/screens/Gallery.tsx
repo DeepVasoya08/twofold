@@ -115,12 +115,12 @@ export function Gallery() {
             action={
               <Link to={paths.import} className="btn btn--secondary">
                 <Icon name="cloud" size={18} />
-                Import from Google Photos
+                Import from Google or Apple
               </Link>
             }
           >
             Add your first photos with the Upload button, or bring your library over from Google
-            Photos. They&apos;re encrypted on this device before they go anywhere.
+            Photos or Apple Photos. They&apos;re encrypted on this device before they go anywhere.
           </EmptyState>
         )
       ) : (

@@ -87,6 +87,9 @@ jobs:
 
       - name: Build web app
         run: pnpm --filter @twofold/web run build
+        env:
+          # Connect Google Photos' OAuth client (public; unset hides the button).
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
 
       # Staging is for testing, so search engines are asked to stay away.
       - name: Keep staging out of search engines

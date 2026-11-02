@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PREVIEW_BYTES_ESTIMATE,
   albumsOf,
+  itemsForSpace,
   pickedItems,
   storedBytes,
   yearGroups,
@@ -49,5 +50,20 @@ describe('import selection', () => {
     const picked = pickedItems(items, new Set([2021]));
     expect(picked.map((each) => each.name)).toEqual(['b.jpg', 'd.jpg']);
     expect(albumsOf(picked, ['Trip', 'Family', 'Empty'])).toEqual(['Trip', 'Family']);
+  });
+});
+
+describe('itemsForSpace', () => {
+  const hidden = { ...item('h.jpg', 2020, 100), hidden: true };
+
+  it('leaves hidden photos out of the library, and counts them', () => {
+    expect(itemsForSpace([...items, hidden], false)).toEqual({ items, hidden: 1 });
+  });
+
+  it('takes them into the private space', () => {
+    expect(itemsForSpace([...items, hidden], true)).toEqual({
+      items: [...items, hidden],
+      hidden: 0,
+    });
   });
 });

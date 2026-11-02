@@ -8,7 +8,8 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
-import { sidecarTakenAt } from '../lib/import/takeout';
+import { sidecarDetails } from '../lib/import/takeout';
+import type { SidecarDetails } from '../lib/import/takeout';
 import type { ImportItem } from '../lib/import/takeout';
 import { photoTakenAt } from '../lib/photo-date';
 import { loadThumbnailer } from '../lib/thumbnail-service';
@@ -21,7 +22,8 @@ import { useVault } from './vault';
 interface ImportsValue extends ImporterState {
   /** Whether an import is going. */
   running: boolean;
-  start: (jobs: readonly ImportJob[]) => void;
+  /** Starts an import; `onDone` is called when it ends. */
+  start: (jobs: readonly ImportJob[], onDone?: () => void) => void;
   stop: () => void;
   /** Clears a finished import, for another. */
   reset: () => void;
@@ -29,19 +31,20 @@ interface ImportsValue extends ImporterState {
 
 const ImportsContext = createContext<ImportsValue | null>(null);
 
-/** When Google's details say it was taken, if they're there and readable. */
-async function sidecarTime(item: ImportItem): Promise<number | undefined> {
-  if (!item.sidecar) return undefined;
+/** What Google's details say about a photo, if they're there and readable. */
+async function readSidecar(item: ImportItem): Promise<SidecarDetails> {
+  if (!item.sidecar) return {};
   try {
-    return sidecarTakenAt(await item.sidecar.read());
+    return sidecarDetails(await item.sidecar.read());
   } catch {
-    return undefined;
+    return {};
   }
 }
 
 /**
- * Makes what the vault stores from an exported photo: a JPEG preview, and when it was taken
- * (the photo's own EXIF date first, then Google's details, then the file's date).
+ * Makes what the vault stores from an exported photo: a JPEG preview, when it was taken (the
+ * photo's own EXIF date first, then the export's records, then the file's date), and whether
+ * it was a favorite.
  */
 async function prepareImport(
   item: ImportItem,
@@ -49,8 +52,9 @@ async function prepareImport(
 ): Promise<NewPhoto> {
   const thumbnail = await (await loadThumbnailer())(new Blob([original], { type: item.type }));
   if (!thumbnail) throw new FormError('Twofold can’t read this image.');
-  const fallback = (await sidecarTime(item)) ?? item.source.lastModified ?? 0;
-  return {
+  const sidecar = await readSidecar(item);
+  const fallback = item.takenAt ?? sidecar.takenAt ?? item.source.lastModified ?? 0;
+  const photo: NewPhoto = {
     thumb: thumbnail.bytes,
     full: original,
     type: item.type,
@@ -58,6 +62,8 @@ async function prepareImport(
     height: thumbnail.height,
     takenAt: photoTakenAt(original, fallback),
   };
+  if (item.favorite ?? sidecar.favorite) photo.favorite = true;
+  return photo;
 }
 
 /**

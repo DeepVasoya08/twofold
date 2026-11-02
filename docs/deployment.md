@@ -77,12 +77,13 @@ or in the output of `pnpm exec wrangler whoami`.
 
 In the repository, open **Settings → Secrets and variables → Actions**:
 
-| Kind     | Tab           | Name                    | Value                                             |
-| -------- | ------------- | ----------------------- | ------------------------------------------------- |
-| Secret   | **Secrets**   | `CLOUDFLARE_API_TOKEN`  | the token from step 2                             |
-| Secret   | **Secrets**   | `CLOUDFLARE_ACCOUNT_ID` | your Cloudflare account ID                        |
-| Variable | **Variables** | `D1_DATABASE_ID`        | the ID from `wrangler d1 create`                  |
-| Variable | **Variables** | `SITE_URL` (optional)   | the public origin, e.g. `https://twofold.example` |
+| Kind     | Tab           | Name                          | Value                                             |
+| -------- | ------------- | ----------------------------- | ------------------------------------------------- |
+| Secret   | **Secrets**   | `CLOUDFLARE_API_TOKEN`        | the token from step 2                             |
+| Secret   | **Secrets**   | `CLOUDFLARE_ACCOUNT_ID`       | your Cloudflare account ID                        |
+| Variable | **Variables** | `D1_DATABASE_ID`              | the ID from `wrangler d1 create`                  |
+| Variable | **Variables** | `SITE_URL` (optional)         | the public origin, e.g. `https://twofold.example` |
+| Variable | **Variables** | `GOOGLE_CLIENT_ID` (optional) | the OAuth client ID from step 6                   |
 
 `D1_DATABASE_ID` must be a **variable**, not a secret: the workflow reads
 `vars.D1_DATABASE_ID`, so a secret with that name is invisible to it and the
@@ -117,6 +118,30 @@ because you add the domain in the dashboard, not from CI.
 Then set the `SITE_URL` repository variable (step 3) to the new origin and redeploy. The
 build writes it into the landing and legal pages' canonical links and link previews, the
 sitemap and robots.txt; without it they point at `https://twofold.deepvasoya08.workers.dev`.
+
+### 6. Google Photos connection (optional)
+
+"Connect Google Photos" on the import screen signs people in to Google in their browser and
+lets them pick photos with Google's Photos Picker API. It needs an OAuth client of your own;
+without the `GOOGLE_CLIENT_ID` variable the button is hidden and the export steps show
+instead.
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/), create a project.
+2. In **APIs & Services → Library**, enable **Photos Picker API**.
+3. In **Google Auth Platform**, set up the consent screen (External, app name, support
+   email). Under **Data access**, add only the scope
+   `https://www.googleapis.com/auth/photospicker.mediaitems.readonly`. Under **Audience**,
+   add test users: until Google verifies the app, at most 100 test users can connect.
+4. In **Clients**, create an OAuth client of type **Web application** with:
+   - Authorized JavaScript origin: the app's origin, e.g.
+     `https://twofold.deepvasoya08.workers.dev`
+   - Authorized redirect URI: the origin plus `/import/google/done`
+5. Set the client ID as the `GOOGLE_CLIENT_ID` repository variable (step 3) and redeploy.
+   The client ID is public (it is in the built app); there is no client secret, because the
+   browser signs in directly and Twofold's server never takes part.
+
+To let anyone connect, publish the app and ask Google to verify it from **Google Auth
+Platform → Verification center**; Google reviews the scope's use, which can take weeks.
 
 ## Checking a deploy
 

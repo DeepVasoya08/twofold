@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { planTakeout, sidecarTakenAt } from './takeout';
+import { planTakeout, sidecarDetails } from './takeout';
 import type { ImportSource } from './takeout';
 
 const ROOT = 'Takeout/Google Photos';
@@ -45,6 +45,16 @@ describe('planTakeout', () => {
       file('Photos from 2021/IMG_0001.jpg', 6000),
     ]);
     expect(plan.items.map((item) => item.year)).toEqual([2019, 2021]);
+  });
+
+  it('leaves out Live Photos’ clips without counting them as videos', () => {
+    const plan = planTakeout([
+      file('Photos from 2019/IMG_1.HEIC'),
+      file('Photos from 2019/IMG_1.MOV'),
+      file('Photos from 2019/IMG_2.MOV'),
+    ]);
+    expect(plan.items.map((item) => item.name)).toEqual(['IMG_1.HEIC']);
+    expect(plan.videos).toBe(1);
   });
 
   it('counts videos and ignores everything else', () => {
@@ -110,18 +120,21 @@ describe('planTakeout', () => {
   });
 });
 
-describe('sidecarTakenAt', () => {
-  it('reads when the photo was taken', () => {
-    expect(sidecarTakenAt(json({ photoTakenTime: { timestamp: '1552046400' } }))).toBe(
-      1552046400_000,
-    );
+describe('sidecarDetails', () => {
+  it('reads when the photo was taken, and whether it was a favorite', () => {
+    expect(sidecarDetails(json({ photoTakenTime: { timestamp: '1552046400' } }))).toEqual({
+      takenAt: 1552046400_000,
+    });
+    expect(
+      sidecarDetails(json({ favorited: true, photoTakenTime: { timestamp: '1552046400' } })),
+    ).toEqual({ takenAt: 1552046400_000, favorite: true });
   });
 
   it('ignores anything else', () => {
-    expect(sidecarTakenAt(json({ title: 'x' }))).toBeUndefined();
-    expect(sidecarTakenAt(json({ photoTakenTime: { timestamp: 'soon' } }))).toBeUndefined();
-    expect(sidecarTakenAt(json({ photoTakenTime: { timestamp: '0' } }))).toBeUndefined();
-    expect(sidecarTakenAt(new TextEncoder().encode('{nope'))).toBeUndefined();
-    expect(sidecarTakenAt(json(null))).toBeUndefined();
+    expect(sidecarDetails(json({ title: 'x', favorited: 'yes' }))).toEqual({});
+    expect(sidecarDetails(json({ photoTakenTime: { timestamp: 'soon' } }))).toEqual({});
+    expect(sidecarDetails(json({ photoTakenTime: { timestamp: '0' } }))).toEqual({});
+    expect(sidecarDetails(new TextEncoder().encode('{nope'))).toEqual({});
+    expect(sidecarDetails(json(null))).toEqual({});
   });
 });

@@ -74,7 +74,11 @@ async function finish(importer: Importer): Promise<void> {
 describe('Importer', () => {
   it('imports every photo into its albums and shows them at the end', async () => {
     const { importer, uploaded, shown } = setup();
-    importer.start([job('a.jpg', ['trip']), job('b.jpg'), job('c.jpg', ['trip', 'family'])]);
+    const onDone = vi.fn();
+    importer.start(
+      [job('a.jpg', ['trip']), job('b.jpg'), job('c.jpg', ['trip', 'family'])],
+      onDone,
+    );
     expect(importer.getState()).toMatchObject({ phase: 'running', total: 3 });
     await finish(importer);
     expect(uploaded).toEqual([
@@ -86,6 +90,7 @@ describe('Importer', () => {
       ['id-a.jpg', 'id-b.jpg', 'id-c.jpg'],
     ]);
     expect(importer.getState()).toMatchObject({ phase: 'done', imported: 3, already: 0 });
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 
   it('skips photos the space already has, adding them to the albums', async () => {
@@ -145,11 +150,13 @@ describe('Importer', () => {
 
   it('drops everything when the vault locks', async () => {
     const { importer, shown } = setup();
-    importer.start([job('a.jpg')]);
+    const onDone = vi.fn();
+    importer.start([job('a.jpg')], onDone);
     importer.dispose();
     await settle();
     await settle();
     expect(importer.getState().phase).toBe('idle');
     expect(shown).toEqual([]);
+    expect(onDone).not.toHaveBeenCalled();
   });
 });

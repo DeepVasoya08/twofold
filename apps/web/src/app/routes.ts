@@ -58,6 +58,8 @@ export const paths = {
   },
   settings: '/settings',
   import: '/settings/import',
+  /** The import screen, showing Apple Photos' steps first. */
+  importFrom: (from: 'apple') => `/settings/import?from=${from}`,
   share: '/settings/share',
   /** Inviting someone to one album rather than the whole library. */
   shareAlbum: (albumId: string) => `/settings/share?album=${encodeURIComponent(albumId)}`,
