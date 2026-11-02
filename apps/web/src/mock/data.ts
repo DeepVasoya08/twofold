@@ -67,6 +67,8 @@ export interface Photo {
 export interface FileDetails {
   name: string;
   type: string;
+  /** The file's own size in bytes, as it was added. */
+  bytes?: number;
 }
 
 export interface Album {

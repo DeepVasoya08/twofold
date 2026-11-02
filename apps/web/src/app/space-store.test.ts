@@ -118,7 +118,11 @@ describe('remoteStore', () => {
     const added = await store.add(FILE, []);
     expect(added).toMatchObject({
       src: '',
-      file: { name: 'Electricity bill March.pdf', type: 'application/pdf' },
+      file: {
+        name: 'Electricity bill March.pdf',
+        type: 'application/pdf',
+        bytes: FILE.full.length,
+      },
       albumIds: [],
     });
 

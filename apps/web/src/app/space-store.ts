@@ -191,6 +191,8 @@ interface PhotoMeta {
    */
   kind?: 'file';
   name?: string;
+  /** A file's own size in bytes, before encryption (its stored size includes a preview). */
+  bytes?: number;
 }
 
 /** How this device reaches a library someone shared with it. */
@@ -252,6 +254,9 @@ function parsePhotoMeta(value: unknown): PhotoMeta | null {
   if (value.kind === 'file' && typeof value.name === 'string') {
     meta.kind = 'file';
     meta.name = value.name;
+    if (typeof value.bytes === 'number' && Number.isSafeInteger(value.bytes) && value.bytes >= 0) {
+      meta.bytes = value.bytes;
+    }
   }
   return meta;
 }
@@ -271,7 +276,7 @@ function typeKnown(kind: unknown, name: unknown, type: string): boolean {
 /** A file's name and type, if the record is a file's. */
 function fileOf(meta: PhotoMeta): FileDetails | undefined {
   return meta.kind === 'file' && meta.name !== undefined
-    ? { name: meta.name, type: meta.type }
+    ? { name: meta.name, type: meta.type, ...(meta.bytes !== undefined && { bytes: meta.bytes }) }
     : undefined;
 }
 
@@ -645,6 +650,7 @@ export function remoteStore(
       if (file) {
         meta.kind = 'file';
         meta.name = file.name;
+        meta.bytes = photo.full.length;
       }
       if (membership) meta.by = { id: membership.memberId, name: membership.myName };
       const api = await remote();

@@ -28,7 +28,7 @@ function detailsOf(item: Photo): string {
   const file = item.file;
   const parts = [
     file ? fileKindLabel(fileKindOf(file.type, file.name)) : 'File',
-    ...(item.size === undefined ? [] : [formatBytes(item.size)]),
+    ...(file?.bytes === undefined ? [] : [formatBytes(file.bytes)]),
     formatShortDay(item.takenAt),
     ...(item.library === undefined ? [] : [`Shared by ${item.library}`]),
   ];
