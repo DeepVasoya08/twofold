@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 
-import type { PreLoginResponse } from '@twofold/types';
+import type { PreLoginResponse } from '@arcafold/types';
 
 import { findAccountByEmail, insertAccount } from '../db';
 import { checkProof, clientAddress } from '../proof';

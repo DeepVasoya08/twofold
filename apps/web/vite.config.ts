@@ -7,7 +7,7 @@ import { siteVerificationTag } from './src/build/site-verification';
 /** Adds Google's site ownership tag to the page head when the build has a token. */
 function googleSiteVerification(): Plugin {
   return {
-    name: 'twofold-google-site-verification',
+    name: 'arcafold-google-site-verification',
     transformIndexHtml(html) {
       const tag = siteVerificationTag(process.env.VITE_GOOGLE_SITE_VERIFICATION);
       return tag ? html.replace('</head>', `    ${tag}\n  </head>`) : html;

@@ -2,7 +2,7 @@ import { faq } from './faq';
 import type { PublicPage } from './pages';
 
 /** Where the site is served when SITE_URL isn't set at build time. */
-export const defaultSiteUrl = 'https://twofold.deepvasoya08.workers.dev';
+export const defaultSiteUrl = 'https://arcafold.deepvasoya08.workers.dev';
 
 /** The social preview card in public/, rendered by scripts/render-images.mjs. */
 export const ogImage = { path: '/og-image.png', width: 1200, height: 630 };

@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { fromBase64Url, loginVerifier, toBase64Url } from '@twofold/crypto/webcrypto';
+import { fromBase64Url, loginVerifier, toBase64Url } from '@arcafold/crypto/webcrypto';
 import type {
   AccountResponse,
   LoginRequest,
   SignUpRequest,
   UpdateKeyringRequest,
-} from '@twofold/types';
+} from '@arcafold/types';
 
 import { ApiError } from '../lib/api';
 import type * as ApiModule from '../lib/api';

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode, SubmitEvent } from 'react';
 
-import type { SpaceKeys } from '@twofold/crypto';
-import type { Device, MemberAccess } from '@twofold/types';
+import type { SpaceKeys } from '@arcafold/crypto';
+import type { Device, MemberAccess } from '@arcafold/types';
 
 import { useAccount, useMe } from '../app/account';
 import { useAutoLock } from '../app/auto-lock';

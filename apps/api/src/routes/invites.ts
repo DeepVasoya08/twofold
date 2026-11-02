@@ -2,9 +2,9 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { z } from 'zod';
 
-import { fromBase64Url, sha256, toBase64Url } from '@twofold/crypto/webcrypto';
-import { INVITE_TTL_MS } from '@twofold/types';
-import type { InviterView, JoinerView } from '@twofold/types';
+import { fromBase64Url, sha256, toBase64Url } from '@arcafold/crypto/webcrypto';
+import { INVITE_TTL_MS } from '@arcafold/types';
+import type { InviterView, JoinerView } from '@arcafold/types';
 
 import { returnAttempt, takeAttempt } from '../db';
 import { FAILURE_WINDOW_MS, MAX_FAILURES } from '../proof';

@@ -1,5 +1,5 @@
-import type { SpaceKeys } from '@twofold/crypto';
-import { STORAGE_SIZES } from '@twofold/types';
+import type { SpaceKeys } from '@arcafold/crypto';
+import { STORAGE_SIZES } from '@arcafold/types';
 
 import { spaceApi } from '../lib/api';
 import type { SpaceApi } from '../lib/api';
@@ -17,7 +17,7 @@ export interface ProfilePhotoStore {
   remove: () => Promise<void>;
 }
 
-const loadCrypto = () => import('@twofold/crypto');
+const loadCrypto = () => import('@arcafold/crypto');
 
 interface ProfileMeta {
   v: 1;

@@ -3,7 +3,7 @@
  * device, kept in localStorage like face grouping. Either way it applies to whichever space
  * is open, so the main library can't show whether Smart search runs in another space.
  */
-export const SEARCH_SETTING_KEY = 'twofold.smartSearch';
+export const SEARCH_SETTING_KEY = 'arcafold.smartSearch';
 
 export function loadSearchSetting(storage: Pick<Storage, 'getItem'> | undefined): boolean {
   try {

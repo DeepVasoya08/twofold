@@ -1,5 +1,5 @@
-import type { OpenedSlot, SlotIndex, SpaceKeys } from '@twofold/crypto';
-import type { AccountResponse, Keyring } from '@twofold/types';
+import type { OpenedSlot, SlotIndex, SpaceKeys } from '@arcafold/crypto';
+import type { AccountResponse, Keyring } from '@arcafold/types';
 
 import { ApiError, api, spaceApi } from '../lib/api';
 
@@ -12,7 +12,7 @@ import { ApiError, api, spaceApi } from '../lib/api';
 let hasherChosen = false;
 
 const loadCrypto = async () => {
-  const crypto = await import('@twofold/crypto');
+  const crypto = await import('@arcafold/crypto');
   // Argon2id runs in a Web Worker so the page keeps responding while it works.
   if (!hasherChosen && typeof Worker !== 'undefined') {
     hasherChosen = true;

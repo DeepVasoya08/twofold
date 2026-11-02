@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 
-import type { SpaceKeys } from '@twofold/crypto';
+import type { SpaceKeys } from '@arcafold/crypto';
 
 import { useAccount, useMe } from '../app/account';
 import { errorMessage } from '../app/account-ops';
@@ -291,7 +291,7 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
           <a
             className="viewer__btn viewer__btn--wide-only"
             href={photo.fullSrc}
-            download={`twofold-${photo.id}`}
+            download={`arcafold-${photo.id}`}
             aria-label="Download"
           >
             <Icon name="download" />

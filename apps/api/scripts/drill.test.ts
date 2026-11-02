@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { DecryptionError } from '@twofold/crypto';
+import { DecryptionError } from '@arcafold/crypto';
 
 import { run as backup, UsageError } from './backup';
 import {
@@ -27,8 +27,8 @@ let work: string;
 const path = (name: string) => join(dir, name);
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'twofold-drill-test-'));
-  work = await mkdtemp(join(tmpdir(), 'twofold-drill-work-'));
+  dir = await mkdtemp(join(tmpdir(), 'arcafold-drill-test-'));
+  work = await mkdtemp(join(tmpdir(), 'arcafold-drill-work-'));
   const output = await backup(['keygen', path('backup.key')], {});
   const publicKey = output.trim().split('\n').at(-1) ?? '';
   await writeFile(path('export.sql'), EXPORT);

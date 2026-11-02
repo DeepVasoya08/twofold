@@ -1,8 +1,8 @@
-import { toBase64Url } from '@twofold/crypto/webcrypto';
+import { toBase64Url } from '@arcafold/crypto/webcrypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { DeviceList, Keyring } from '@twofold/types';
+import type { DeviceList, Keyring } from '@arcafold/types';
 
 import { ACTIVE_STEP_MS } from './db';
 import type { Env } from './env';

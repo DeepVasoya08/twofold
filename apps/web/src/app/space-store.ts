@@ -1,6 +1,6 @@
-import type { SpaceAccess, SpaceKeys } from '@twofold/crypto';
-import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@twofold/types';
-import type { PhotoPage, PhotoPart } from '@twofold/types';
+import type { SpaceAccess, SpaceKeys } from '@arcafold/crypto';
+import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@arcafold/types';
+import type { PhotoPage, PhotoPart } from '@arcafold/types';
 
 import { spaceApi } from '../lib/api';
 import { isPhotoType } from '../lib/photo-types';
@@ -19,7 +19,7 @@ import { PartialThumbs } from './thumb-loader';
 let fileCryptoChosen = false;
 
 const loadCrypto = async () => {
-  const crypto = await import('@twofold/crypto');
+  const crypto = await import('@arcafold/crypto');
   // Originals encrypt and decrypt in a Web Worker so a large one doesn't freeze the page.
   if (!fileCryptoChosen && typeof Worker !== 'undefined') {
     fileCryptoChosen = true;

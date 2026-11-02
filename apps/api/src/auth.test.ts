@@ -1,8 +1,8 @@
-import { toBase64Url } from '@twofold/crypto/webcrypto';
+import { toBase64Url } from '@arcafold/crypto/webcrypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { AccountResponse, Keyring } from '@twofold/types';
+import type { AccountResponse, Keyring } from '@arcafold/types';
 
 import type { Env } from './env';
 import { MAX_EMAIL_FAILURES, MAX_FAILURES } from './proof';
@@ -40,7 +40,7 @@ describe('POST /api/auth/signup', () => {
     const body = await res.json<AccountResponse>();
     expect(body).toEqual({ email: EMAIL, name: 'Sam', smartFeatures: null, version: 1, keyring });
     expect(res.headers.get('set-cookie')).toMatch(
-      /^__Host-twofold_session=[\w-]{43}; Max-Age=2592000; Path=\/; HttpOnly; Secure; SameSite=Strict$/,
+      /^__Host-arcafold_session=[\w-]{43}; Max-Age=2592000; Path=\/; HttpOnly; Secure; SameSite=Strict$/,
     );
     expect((await client.request('GET', '/account')).status).toBe(200);
   });
@@ -108,7 +108,7 @@ describe('POST /api/auth/signup', () => {
   it('requires a JSON content type', async () => {
     const { app } = await import('./app');
     const res = await app.request(
-      'https://twofold.test/api/auth/signup',
+      'https://arcafold.test/api/auth/signup',
       {
         method: 'POST',
         body: JSON.stringify({ email: EMAIL, name: 'Sam', keyring }),
@@ -151,7 +151,7 @@ describe('POST /api/auth/login', () => {
       version: 1,
       keyring,
     });
-    expect(client.cookie).toMatch(/^__Host-twofold_session=/);
+    expect(client.cookie).toMatch(/^__Host-arcafold_session=/);
   });
 
   it('refuses a wrong key and an unknown email the same way', async () => {
@@ -269,7 +269,7 @@ describe('sessions', () => {
 
   it('rejects a missing, forged or expired session', async () => {
     expect((await client.request('GET', '/account')).status).toBe(401);
-    client.cookie = '__Host-twofold_session=forged';
+    client.cookie = '__Host-arcafold_session=forged';
     expect((await client.request('GET', '/account')).status).toBe(401);
     await signUp();
     sqlite.prepare('UPDATE sessions SET expires_at = 0').run();
@@ -280,7 +280,7 @@ describe('sessions', () => {
     const local = new Client(env, 'http://localhost:8787');
     const res = await signUp(local);
     expect(res.headers.get('set-cookie')).toMatch(
-      /^twofold_session=[\w-]{43};.*HttpOnly; SameSite=Strict$/,
+      /^arcafold_session=[\w-]{43};.*HttpOnly; SameSite=Strict$/,
     );
     expect((await local.request('GET', '/account')).status).toBe(200);
   });

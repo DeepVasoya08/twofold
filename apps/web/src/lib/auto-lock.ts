@@ -15,7 +15,7 @@ export const AUTO_LOCK_CHOICES: readonly { minutes: AutoLockMinutes; label: stri
 
 export const DEFAULT_AUTO_LOCK: AutoLockMinutes = 15;
 
-export const AUTO_LOCK_STORAGE_KEY = 'twofold.autoLockMinutes';
+export const AUTO_LOCK_STORAGE_KEY = 'arcafold.autoLockMinutes';
 
 /** Reads a stored or chosen value, falling back to the default for anything unknown. */
 export function parseAutoLock(value: string | null): AutoLockMinutes {

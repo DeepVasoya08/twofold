@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 
-import { fromBase64Url } from '@twofold/crypto/webcrypto';
-import { FACE_SEGMENT_PAGE, MAX_FACE_SEGMENTS, MAX_PEOPLE, STORAGE_SIZES } from '@twofold/types';
-import type { FaceSegmentPage, PersonList } from '@twofold/types';
+import { fromBase64Url } from '@arcafold/crypto/webcrypto';
+import { FACE_SEGMENT_PAGE, MAX_FACE_SEGMENTS, MAX_PEOPLE, STORAGE_SIZES } from '@arcafold/types';
+import type { FaceSegmentPage, PersonList } from '@arcafold/types';
 
 import { releaseStorage, reserveStorage } from '../db';
 import {

@@ -1,4 +1,4 @@
-import { STORAGE_SIZES } from '@twofold/types';
+import { STORAGE_SIZES } from '@arcafold/types';
 
 import { useStorageUsage } from '../app/storage';
 import { usageLabel, usedFraction } from '../lib/storage-usage';

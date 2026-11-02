@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "twofold",
+  "name": "arcafold",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   // Keep the Worker's own console logs (which never include keys, tokens or ids), but no
@@ -26,13 +26,13 @@
     {
       // Encrypted blobs only. Object keys are random IDs, never filenames.
       "binding": "BLOBS",
-      "bucket_name": "twofold-blobs",
+      "bucket_name": "arcafold-blobs",
     },
   ],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "twofold",
+      "database_name": "arcafold",
       // Replaced at deploy time from the D1_DATABASE_ID repository variable (see deploy.yml).
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations",
@@ -43,12 +43,12 @@
     // (docs/staging.md). It shares nothing with production: its own Worker, database and
     // bucket. Bindings aren't inherited, so both are listed again.
     "staging": {
-      "name": "twofold-staging",
-      "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "twofold-staging-blobs" }],
+      "name": "arcafold-staging",
+      "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "arcafold-staging-blobs" }],
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "twofold-staging",
+          "database_name": "arcafold-staging",
           // Replaced at deploy time with the ID deploy-staging.yml looks up (or creates).
           "database_id": "00000000-0000-0000-0000-000000000001",
           "migrations_dir": "migrations",

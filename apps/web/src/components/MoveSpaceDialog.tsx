@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
-import type { SpaceKeys } from '@twofold/crypto';
+import type { SpaceKeys } from '@arcafold/crypto';
 
 import { useAccount } from '../app/account';
 import type { Space } from '../app/vault';

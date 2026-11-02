@@ -5,7 +5,7 @@
  * are served from Arcafold's own origin like the rest of the app. The whole file is checked
  * against the SHA-256 pinned here before it's used, so a changed chunk is never run.
  */
-import { sha256, toBase64Url } from '@twofold/crypto/webcrypto';
+import { sha256, toBase64Url } from '@arcafold/crypto/webcrypto';
 
 export interface SearchResource {
   /** File name prefix of the chunks. */

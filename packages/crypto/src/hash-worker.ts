@@ -1,4 +1,4 @@
-import { KEY_SIZES } from '@twofold/types';
+import { KEY_SIZES } from '@arcafold/types';
 
 import { kdfInRange } from './keyring';
 import { MASTER_BYTES, argon2id } from './password-hash';

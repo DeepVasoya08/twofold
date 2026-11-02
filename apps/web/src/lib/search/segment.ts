@@ -7,7 +7,7 @@
  *   header:  "TS" · version (1) · model (1) · photo count (u32)
  *   photo:   id (16 bytes) · has vector (u8) · [scale (f32) · 512 × i8]
  */
-import { fromBase64Url, toBase64Url } from '@twofold/crypto/webcrypto';
+import { fromBase64Url, toBase64Url } from '@arcafold/crypto/webcrypto';
 
 /** Which model made the vectors. Vectors from any other are ignored and redone. */
 export const SEARCH_MODEL = 1;

@@ -244,7 +244,7 @@ to save the search again.
   none, so its time counts as idle, and the check runs again when the tab is shown. Uploads
   in progress count as use, so a long upload isn't dropped, and the countdown restarts when
   they finish. The choice is a per-browser preference in localStorage
-  (`twofold.autoLockMinutes`); nothing secret is stored with it. Logic in
+  (`arcafold.autoLockMinutes`); nothing secret is stored with it. Logic in
   `lib/idle-timer.ts` and `app/auto-lock.tsx`.
 - Delete account asks for a password.
 - Settings → You → Edit changes the name (shared by both spaces) and the profile photo

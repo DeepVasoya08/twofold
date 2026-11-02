@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 
-import { fromBase64Url, sha256, toBase64Url } from '@twofold/crypto/webcrypto';
+import { fromBase64Url, sha256, toBase64Url } from '@arcafold/crypto/webcrypto';
 import {
   MAX_ALBUM_MEMBERS,
   MAX_JOINED,
@@ -11,7 +11,7 @@ import {
   SPACE_HEADER,
   STORAGE_SIZES,
   THUMB_BATCH_MAX,
-} from '@twofold/types';
+} from '@arcafold/types';
 import type {
   AlbumItemList,
   AlbumList,
@@ -24,7 +24,7 @@ import type {
   ProfilePhotoResponse,
   PutFileResponse,
   TrashResponse,
-} from '@twofold/types';
+} from '@arcafold/types';
 
 import {
   albumItemIds,

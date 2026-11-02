@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { newSpace, openRecord, ownerAccess } from '@twofold/crypto';
+import { newSpace, openRecord, ownerAccess } from '@arcafold/crypto';
 
 import type { Photo } from '../mock/data';
 import { daysLeftLabel } from '../screens/RecentlyDeleted';

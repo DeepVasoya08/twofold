@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import type { z } from 'zod';
 
-import type { AccountResponse } from '@twofold/types';
+import type { AccountResponse } from '@arcafold/types';
 
 import type { AccountRecord } from './db';
 

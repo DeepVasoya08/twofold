@@ -1,4 +1,4 @@
-import type { PhotoPart, StoredAlbum, StoredPhoto, StoredProfilePhoto } from '@twofold/types';
+import type { PhotoPart, StoredAlbum, StoredPhoto, StoredProfilePhoto } from '@arcafold/types';
 
 /**
  * Storage queries. Every query is scoped to a space tag (the SHA-256 of the space's access

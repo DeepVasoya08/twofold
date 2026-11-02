@@ -1,5 +1,5 @@
-import { KEY_SIZES, SHARE_SIZES, STORAGE_SIZES } from '@twofold/types';
-import type { KdfParams } from '@twofold/types';
+import { KEY_SIZES, SHARE_SIZES, STORAGE_SIZES } from '@arcafold/types';
+import type { KdfParams } from '@arcafold/types';
 
 import { DEFAULT_KDF } from './keyring';
 import type { SpaceKeys } from './keyring';
@@ -29,8 +29,8 @@ import { WORDLIST } from './wordlist';
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_CHARS = 8;
 const PHRASE_WORDS = 4;
-const PHRASE_CONTEXT = 'twofold:safety-phrase:v2';
-const PHRASE_SALT_CONTEXT = 'twofold:safety-phrase-salt:v2';
+const PHRASE_CONTEXT = 'arcafold:safety-phrase:v2';
+const PHRASE_SALT_CONTEXT = 'arcafold:safety-phrase-salt:v2';
 
 /**
  * What one safety phrase costs: Argon2id at the login cost (64 MiB, 3 passes). Each side pays
@@ -38,7 +38,7 @@ const PHRASE_SALT_CONTEXT = 'twofold:safety-phrase-salt:v2';
  * about 2^44 times.
  */
 export const PHRASE_KDF: KdfParams = DEFAULT_KDF;
-const COMMIT_CONTEXT = 'twofold:invite-commit:v1';
+const COMMIT_CONTEXT = 'arcafold:invite-commit:v1';
 
 /**
  * What a sealed message is for, so one can't be replayed as another: the joiner's name
@@ -166,7 +166,7 @@ export async function safetyPhrase(inviterKey: string, joinerKey: string): Promi
 }
 
 function labelled(purpose: PeerMessage): Uint8Array {
-  return new TextEncoder().encode(`twofold:${purpose}:v1\n`);
+  return new TextEncoder().encode(`arcafold:${purpose}:v1\n`);
 }
 
 /** Seals a message for the other side of an invite (crypto_box, sender authenticated). */

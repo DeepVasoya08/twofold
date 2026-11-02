@@ -1,6 +1,6 @@
-import { loginVerifier, randomBytes, toBase64Url } from '@twofold/crypto/webcrypto';
-import { KEY_SIZES } from '@twofold/types';
-import type { Keyring, Slots } from '@twofold/types';
+import { loginVerifier, randomBytes, toBase64Url } from '@arcafold/crypto/webcrypto';
+import { KEY_SIZES } from '@arcafold/types';
+import type { Keyring, Slots } from '@arcafold/types';
 
 import { app } from '../app';
 import type { Env } from '../env';
@@ -29,7 +29,7 @@ export class Client {
 
   constructor(
     private readonly env: Env,
-    private readonly origin = 'https://twofold.test',
+    private readonly origin = 'https://arcafold.test',
   ) {}
 
   /** Extra headers sent with every request (a space token, for example). */

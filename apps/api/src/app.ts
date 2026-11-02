@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 
-import type { HealthResponse } from '@twofold/types';
+import type { HealthResponse } from '@arcafold/types';
 
 import { messages } from './respond';
 import { account } from './routes/account';

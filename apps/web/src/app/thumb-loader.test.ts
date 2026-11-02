@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { THUMB_BATCH_MAX } from '@twofold/types';
+import { THUMB_BATCH_MAX } from '@arcafold/types';
 
 import {
   PartialThumbs,

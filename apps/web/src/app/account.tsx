@@ -9,8 +9,8 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
-import type { SpaceKeys } from '@twofold/crypto';
-import type { AccountResponse, SmartFeaturesChoice } from '@twofold/types';
+import type { SpaceKeys } from '@arcafold/crypto';
+import type { AccountResponse, SmartFeaturesChoice } from '@arcafold/types';
 
 import { ApiError, api, onSessionEnded } from '../lib/api';
 import { onVisibleAgain } from '../lib/when-visible';

@@ -10,7 +10,7 @@
                                      └───────────────────────────────────┘
 ```
 
-A single Cloudflare Worker (`twofold`, configured in `apps/api/wrangler.jsonc`) serves
+A single Cloudflare Worker (`arcafold`, configured in `apps/api/wrangler.jsonc`) serves
 everything from one origin, so there is no CORS and the CSP's `connect-src` needs only
 `'self'`, plus Google's Photos Picker hosts for Connect Google Photos.
 
@@ -23,8 +23,8 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
   missing file (a path with an extension) gets a 404. Response headers for assets, the
   shell included, come from `apps/web/public/_headers`. All encryption and decryption happens
   here, through `packages/crypto`; password hashing (Argon2id) runs in a Web Worker
-  bundled from `@twofold/crypto/password-worker`, encrypting and decrypting originals in one
-  bundled from `@twofold/crypto/file-crypto-worker`, upload previews are drawn in
+  bundled from `@arcafold/crypto/password-worker`, encrypting and decrypting originals in one
+  bundled from `@arcafold/crypto/file-crypto-worker`, upload previews are drawn in
   `lib/thumbnail-worker.ts` (an OffscreenCanvas), and face grouping runs its two ONNX
   models (YuNet, SFace) with ONNX Runtime Web's WebAssembly backend in
   `lib/people/face-worker.ts`. The model files are bundled assets, pinned by SHA-256.
@@ -45,7 +45,7 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
   ciphertext; never receives plaintext photos, passwords, or keys. R2 object keys are
   random IDs. D1 holds metadata. Schema changes are SQL files in `apps/api/migrations`,
   applied on deploy.
-  A second Worker, `twofold-backup` (`src/backup`, `wrangler.backup.jsonc`), has no
+  A second Worker, `arcafold-backup` (`src/backup`, `wrangler.backup.jsonc`), has no
   routes: every hour it copies photo files into the backup bucket
   ([backups.md](backups.md)).
   - `/api/auth/*`: sign-up, prelogin (salt and KDF settings), login, logout.
@@ -56,7 +56,7 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
     `PUT /api/account/smart-features` keeps the answer to the smart features question. See
     [security.md](security.md#sessions-and-the-api).
   - `/api/space/*`: one space's encrypted photos and albums, addressed by the
-    `x-twofold-space` header. Uploads are two steps: `POST /photos` (id, sealed metadata,
+    `x-arcafold-space` header. Uploads are two steps: `POST /photos` (id, sealed metadata,
     sizes), then `PUT /photos/:id/thumb` and `/full` together (ciphertext, streamed to R2 at
     `photos/<id>/<part>`). Whichever file lands second sees the other and commits the photo,
     answering `{ committed: true }`; `POST /photos/:id/commit` is only a fallback for when
@@ -100,15 +100,15 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
 
 ## Local development
 
-- `pnpm --filter @twofold/api dev` runs `wrangler dev` on port 8787. Run `pnpm build`
+- `pnpm --filter @arcafold/api dev` runs `wrangler dev` on port 8787. Run `pnpm build`
   first and it serves the built web app too, exactly like production.
-- `pnpm --filter @twofold/web dev` runs Vite with hot reload on port 5173 and proxies
+- `pnpm --filter @arcafold/web dev` runs Vite with hot reload on port 5173 and proxies
   `/api` to port 8787, so the app still sees one origin.
 - `pnpm test:e2e` builds the web app, applies migrations to a local D1 database and runs
-  Playwright against `wrangler dev`. Run `pnpm --filter @twofold/api db:migrate:local` once
+  Playwright against `wrangler dev`. Run `pnpm --filter @arcafold/api db:migrate:local` once
   before using `wrangler dev` by hand.
 - **packages/crypto** — the only place crypto code may live; libsodium constructions only.
-  `@twofold/crypto/webcrypto` is the Web Crypto-only part the API uses.
+  `@arcafold/crypto/webcrypto` is the Web Crypto-only part the API uses.
 - **packages/types** — types shared between web, API, and (later) mobile.
 
 ## Workspace conventions

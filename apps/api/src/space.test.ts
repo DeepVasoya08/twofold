@@ -1,9 +1,9 @@
-import { fromBase64Url, randomBytes, sha256, toBase64Url } from '@twofold/crypto/webcrypto';
+import { fromBase64Url, randomBytes, sha256, toBase64Url } from '@arcafold/crypto/webcrypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { SPACE_HEADER, STORAGE_SIZES, THUMB_BATCH_MAX, readThumbBatch } from '@twofold/types';
-import type { AlbumList, PhotoPage, ProfilePhotoResponse, StoredPhoto } from '@twofold/types';
+import { SPACE_HEADER, STORAGE_SIZES, THUMB_BATCH_MAX, readThumbBatch } from '@arcafold/types';
+import type { AlbumList, PhotoPage, ProfilePhotoResponse, StoredPhoto } from '@arcafold/types';
 
 import type { Env } from './env';
 import { PAGE_SIZE, PENDING_TTL_MS } from './routes/space';

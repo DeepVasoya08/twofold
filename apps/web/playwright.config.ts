@@ -29,8 +29,8 @@ export default defineConfig({
   webServer: {
     command: [
       'pnpm run build',
-      'pnpm --filter @twofold/api exec wrangler d1 migrations apply DB --local',
-      `pnpm --filter @twofold/api exec wrangler dev --port ${String(PORT)} --ip 127.0.0.1`,
+      'pnpm --filter @arcafold/api exec wrangler d1 migrations apply DB --local',
+      `pnpm --filter @arcafold/api exec wrangler dev --port ${String(PORT)} --ip 127.0.0.1`,
     ].join(' && '),
     port: PORT,
     reuseExistingServer: !isCI,

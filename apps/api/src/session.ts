@@ -2,8 +2,8 @@ import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createMiddleware } from 'hono/factory';
 
-import { newSessionToken, sessionTokenHash } from '@twofold/crypto/webcrypto';
-import type { MemberAccess } from '@twofold/types';
+import { newSessionToken, sessionTokenHash } from '@arcafold/crypto/webcrypto';
+import type { MemberAccess } from '@arcafold/types';
 
 import { ACTIVE_STEP_MS, deleteSession, findSession, insertSession, touchSession } from './db';
 import type { AccountRecord } from './db';
@@ -37,7 +37,7 @@ export interface AppEnv {
  * development (wrangler dev), where a Secure cookie would not be sent back.
  */
 function cookieName(c: Context): string {
-  return isSecure(c) ? '__Host-twofold_session' : 'twofold_session';
+  return isSecure(c) ? '__Host-arcafold_session' : 'arcafold_session';
 }
 
 function isSecure(c: Context): boolean {

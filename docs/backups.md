@@ -2,22 +2,22 @@
 
 What protects Arcafold's data, how to set it up, and how to bring things back.
 
-| Store                | Protection                                                     | Kept                                  |
-| -------------------- | -------------------------------------------------------------- | ------------------------------------- |
-| D1 (`twofold`)       | D1 Time Travel: rewind to any minute                           | 30 days on Workers Paid, 7 on Free    |
-| D1 (`twofold`)       | Nightly sealed export to `twofold-backups/d1/` (`backup.yml`)  | 30 days                               |
-| R2 (`twofold-blobs`) | Hourly copy to `twofold-backups/r2/` (`twofold-backup` Worker) | Until 30 days after a file is deleted |
+| Store                 | Protection                                                       | Kept                                  |
+| --------------------- | ---------------------------------------------------------------- | ------------------------------------- |
+| D1 (`arcafold`)       | D1 Time Travel: rewind to any minute                             | 30 days on Workers Paid, 7 on Free    |
+| D1 (`arcafold`)       | Nightly sealed export to `arcafold-backups/d1/` (`backup.yml`)   | 30 days                               |
+| R2 (`arcafold-blobs`) | Hourly copy to `arcafold-backups/r2/` (`arcafold-backup` Worker) | Until 30 days after a file is deleted |
 
 D1 matters most. It holds every account's key slots, so without it the photos in R2 can't
 be decrypted by anyone, recovery key or not.
 
 ## How the photo backup works
 
-A separate Worker, `twofold-backup` (`apps/api/src/backup`, `wrangler.backup.jsonc`), runs
+A separate Worker, `arcafold-backup` (`apps/api/src/backup`, `wrangler.backup.jsonc`), runs
 every hour at minute 17. It holds the photo bucket and the backup bucket; the app's Worker
 never holds the backup bucket. Each run lists both buckets and then:
 
-1. Copies every file that isn't backed up yet to `twofold-backups/r2/<same name>`, once
+1. Copies every file that isn't backed up yet to `arcafold-backups/r2/<same name>`, once
    the file is an hour old (a pending upload may still be retried). A first backup of many
    files spreads over several runs, at most 500 files per run.
 2. Marks copies whose file has disappeared, with an empty `gone/<name>`. Its upload time
@@ -36,10 +36,10 @@ an error in the Worker's logs and metrics. It logs only counts, never file names
 `.github/workflows/backup.yml` runs at 20:30 UTC (02:00 in India) and on demand:
 
 1. `wrangler d1 export DB --remote` writes the whole database as SQL on the runner.
-2. `pnpm --filter @twofold/api backup seal` seals it to the `BACKUP_PUBLIC_KEY` variable
-   (`@twofold/crypto/backup`: a fresh secretstream key, sealed with `crypto_box_seal`). The
+2. `pnpm --filter @arcafold/api backup seal` seals it to the `BACKUP_PUBLIC_KEY` variable
+   (`@arcafold/crypto/backup`: a fresh secretstream key, sealed with `crypto_box_seal`). The
    plain export is deleted on the runner and never uploaded.
-3. The sealed file goes to `twofold-backups/d1/<UTC date and time>.sealed`.
+3. The sealed file goes to `arcafold-backups/d1/<UTC date and time>.sealed`.
 
 Only the secret key can open an export, and it never goes to GitHub or Cloudflare. The
 export holds salts and login verifiers, which would allow offline password guessing, so
@@ -58,7 +58,7 @@ D1 answers other requests slowly while an export runs, which is why it runs at n
 
 ```sh
 pnpm install
-pnpm --filter @twofold/api backup keygen "$HOME/twofold-backup.key"
+pnpm --filter @arcafold/api backup keygen "$HOME/arcafold-backup.key"
 ```
 
 It saves the secret key to that file (readable only by you) and prints the public key.
@@ -72,13 +72,13 @@ Use an absolute path: the command runs inside `apps/api`.
 
 ```sh
 cd apps/api
-pnpm exec wrangler r2 bucket create twofold-backups
+pnpm exec wrangler r2 bucket create arcafold-backups
 # Nothing can delete or overwrite an export for 30 days, our own tokens included.
-pnpm exec wrangler r2 bucket lock add twofold-backups d1-30-days d1/ --retention-days 30
+pnpm exec wrangler r2 bucket lock add arcafold-backups d1-30-days d1/ --retention-days 30
 # Then exports are removed a day after the lock ends.
-pnpm exec wrangler r2 bucket lifecycle add twofold-backups d1-expiry d1/ --expire-days 31
+pnpm exec wrangler r2 bucket lifecycle add arcafold-backups d1-expiry d1/ --expire-days 31
 # Photo copies can't be deleted or overwritten for 30 days either.
-pnpm exec wrangler r2 bucket lock add twofold-backups r2-30-days r2/ --retention-days 30
+pnpm exec wrangler r2 bucket lock add arcafold-backups r2-30-days r2/ --retention-days 30
 ```
 
 ### 3. Create the backup API token
@@ -136,13 +136,13 @@ It prints a bookmark for the state before the restore. Keep it: restoring to tha
 
 ### Time Travel can't help (database deleted, or older than its window)
 
-1. Download the export you want from the `twofold-backups` bucket (dashboard, or
-   `pnpm exec wrangler r2 object get twofold-backups/d1/<name>.sealed --file d1.sealed --remote`).
+1. Download the export you want from the `arcafold-backups` bucket (dashboard, or
+   `pnpm exec wrangler r2 object get arcafold-backups/d1/<name>.sealed --file d1.sealed --remote`).
 2. Open it on your own computer with the offline key:
-   `pnpm --filter @twofold/api backup open "$PWD/d1.sealed" "$PWD/d1.sql" "$HOME/twofold-backup.key"`
+   `pnpm --filter @arcafold/api backup open "$PWD/d1.sealed" "$PWD/d1.sql" "$HOME/arcafold-backup.key"`
 3. Create a new database and import it:
-   `pnpm exec wrangler d1 create twofold-restored` then
-   `pnpm exec wrangler d1 execute twofold-restored --remote --file d1.sql`.
+   `pnpm exec wrangler d1 create arcafold-restored` then
+   `pnpm exec wrangler d1 execute arcafold-restored --remote --file d1.sql`.
 4. Set the `D1_DATABASE_ID` variable to the new ID and re-run the deploy workflow.
 5. Delete `d1.sql` and `d1.sealed` from your computer.
 
@@ -156,12 +156,12 @@ The photo's database record must exist too: if it was deleted, rewind the databa
 (Time Travel, above).
 
 - **One photo:** with its ID (from the database row),
-  `pnpm exec wrangler r2 object get twofold-backups/r2/photos/<id>/full --file full --remote`
-  then `pnpm exec wrangler r2 object put twofold-blobs/photos/<id>/full --file full --remote`,
+  `pnpm exec wrangler r2 object get arcafold-backups/r2/photos/<id>/full --file full --remote`
+  then `pnpm exec wrangler r2 object put arcafold-blobs/photos/<id>/full --file full --remote`,
   and the same for `thumb`. Delete the local files afterwards.
 - **Everything:** wrangler can't list a bucket, so use rclone with an R2 API token
   (**R2 → Manage API tokens**, Object Read & Write on both buckets):
-  `rclone copy r2:twofold-backups/r2/ r2:twofold-blobs/ --ignore-existing`. Files that are
+  `rclone copy r2:arcafold-backups/r2/ r2:arcafold-blobs/ --ignore-existing`. Files that are
   still there are left alone.
 
 Practise a restore every quarter on staging, never on production: see

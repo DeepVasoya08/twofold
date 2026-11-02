@@ -7,7 +7,7 @@ non-negotiable; this document is the threat model and key design as they stand.
 
 - All crypto is confined to `packages/crypto` and uses standard libsodium constructions
   (`libsodium-wrappers-sumo`, the build that includes Argon2id) plus Web Crypto SHA-256.
-  The API imports only `@twofold/crypto/webcrypto`, which never loads libsodium.
+  The API imports only `@arcafold/crypto/webcrypto`, which never loads libsodium.
 - The web app and the API share one origin (a single Worker), so there is no CORS
   surface and `'self'` in `connect-src` covers API calls. The only other hosts the app may
   connect to are Google's Photos Picker API (`photospicker.googleapis.com`) and the host
@@ -40,7 +40,7 @@ A space key is 32 random bytes plus a 16-byte random space id, made on the devic
    (the parameters are stored with the account so they can be raised later; the client
    refuses anything below that minimum, so a hostile server can't downgrade them).
 2. `wrapKey` and `loginKey` are two `crypto_kdf_derive_from_key` subkeys of `master`
-   (context `twofold1`, ids 1 and 2).
+   (context `arcafold`, ids 1 and 2).
 3. A slot is `nonce ‖ crypto_secretbox(spaceKey ‖ spaceId, wrapKey)`: 88 bytes.
 4. The slot's **verifier** is `SHA-256(loginKey)`. The server keeps it to check logins.
    Guessing a password from a verifier still costs one Argon2id run per guess.
@@ -130,7 +130,7 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   ([backups.md](backups.md)). It holds what D1 holds (sealed records, salts, login
   verifiers, emails, the per-account storage total), so it carries the same signals as Time
   Travel: earlier copies of each keyring row, and deleted rows for up to 30 days. Each export
-  is sealed (`crypto_box_seal` of a fresh secretstream key, `@twofold/crypto/backup`) to a
+  is sealed (`crypto_box_seal` of a fresh secretstream key, `@arcafold/crypto/backup`) to a
   public key whose secret half is kept offline, so a leaked export can't be used for
   offline password guessing. A restore drill opens one on the owner's own computer and
   loads it into the separate staging database ([staging.md](staging.md)), which is wiped
@@ -153,7 +153,7 @@ Photos and albums belong to a **space**, never to an account. A space can be sha
 other accounts; see [Sharing](#sharing).
 
 - **Addressing.** A space's storage is named by its access token, the 16-byte space id
-  from its key slot, sent in the `x-twofold-space` header. D1 stores only
+  from its key slot, sent in the `x-arcafold-space` header. D1 stores only
   `SHA-256(token)` in a `space` column. There is no account column, no index by account
   and no table that maps one to the other, so the database can't say whose photos these
   are, or whether an account has one space or two. Storage routes still need a signed-in
@@ -165,7 +165,7 @@ other accounts; see [Sharing](#sharing).
   truncation fails to decrypt (`packages/crypto/src/storage.ts`).
 - **Records.** A photo's metadata (its key, media type, size in pixels, date, favorite,
   albums) and an album's title are JSON sealed with `crypto_aead_xchacha20poly1305_ietf`
-  under a `crypto_kdf` subkey of the space key (context `twfspace`). The associated data is
+  under a `crypto_kdf` subkey of the space key (context `arcspace`). The associated data is
   the record's kind and id, so the server can't swap one record for another, and the
   plaintext is padded to 256-byte blocks. Records that don't open are left out.
 - **What the server keeps.** Per photo: a random id, the space tag, the sealed record and
@@ -199,7 +199,7 @@ other accounts; see [Sharing](#sharing).
   server never sees the photos or the Google account.
 - **Fingerprints.** Each new photo's sealed record also holds `fp`, a keyed BLAKE2b hash
   (`crypto_generichash`, 32 bytes) of its original, under a key derived from the space's
-  records key (`crypto_kdf`, context `twfprint`, id 1; `photoFingerprint` in
+  records key (`crypto_kdf`, context `arcprint`, id 1; `photoFingerprint` in
   `packages/crypto/src/storage.ts`). The same photo always gets the same fingerprint in the
   same space, so an import can skip photos already there by comparing against the records
   it has opened, with no server lookup. The fingerprint never leaves the sealed record, and
@@ -240,7 +240,7 @@ under). It never gets the space key or the space id.
 
 - **Access.** The owner registers the member's share token with `POST /api/space/members`;
   D1 keeps only its SHA-256, in a `members` row next to the space's tag. A request whose
-  `x-twofold-space` header is a share token reaches the owner's photos and albums. The
+  `x-arcafold-space` header is a share token reaches the owner's photos and albums. The
   owner-only routes (who it's shared with, joined libraries, invites in progress, wiping the
   space) refuse share tokens.
 - **What a member may do.** Each library member row has an `access` of `view` or `edit`,
@@ -275,7 +275,7 @@ under). It never gets the space key or the space id.
   cancelled, or when the vault locks.
 - **Encrypting and decrypting off the main thread.** Originals are encrypted for upload with
   `encryptFile` and decrypted with `decryptFile` inside a Web Worker bundled from
-  `@twofold/crypto/file-crypto-worker`, so large files don't freeze the page. The worker is
+  `@arcafold/crypto/file-crypto-worker`, so large files don't freeze the page. The worker is
   a thread of the same page: the file key and bytes go to it and the result comes back.
   One worker serves a batch and shuts down after a few idle seconds. If it can't start or
   fails, the page does the work on its own thread; a wrong key or tampered file fails the
@@ -390,8 +390,8 @@ commitment it read before sending that key.
 **Why the words are slow to compute.** The words are the first 44 bits of Argon2id
 (`crypto_pwhash`, Argon2id13, 64 MiB and 3 passes, the same cost as a login) over the
 transcript: `T = BLAKE2b-256(inviter key ‖ joiner key)` keyed with the label
-`twofold:safety-phrase:v2`. The input is `T` in base64url and the 16-byte salt is
-`BLAKE2b-128(T)` keyed with `twofold:safety-phrase-salt:v2`, so the salt is fixed and
+`arcafold:safety-phrase:v2`. The input is `T` in base64url and the 16-byte salt is
+`BLAKE2b-128(T)` keyed with `arcafold:safety-phrase-salt:v2`, so the salt is fixed and
 domain-separated but needs nothing beyond the two keys. Each side computes it once per
 invite (a fraction of a second, in the same Web Worker that hashes passwords, falling back
 to the page's thread), and the result is kept in memory so checking again is free
@@ -468,7 +468,7 @@ server stores only what it stores for photos: ciphertext it can't read.
 /api/account/smart-features`, columns `smart_choice`, `smart_version`, `smart_at`) as a
   record of consent. It's the same whichever space is open, so it says nothing about a
   private space. A device that never chose follows the account; turning it on or off on a
-  device is saved in that browser's `localStorage` (`twofold.faceGrouping`) and wins there.
+  device is saved in that browser's `localStorage` (`arcafold.faceGrouping`) and wins there.
   Either way it applies to whichever space is open.
 - **On the device.** The models are YuNet (face detection, MIT) and SFace (face
   fingerprints, Apache 2.0), run by ONNX Runtime Web (WebAssembly) in a Web Worker
@@ -479,7 +479,7 @@ server stores only what it stores for photos: ciphertext it can't read.
 - **Face data.** For each photo the scan keeps each face's box, score and a 128-number
   fingerprint (quantised to bytes). Results are saved in **segments** of many photos,
   sealed with `crypto_aead_xchacha20poly1305_ietf` under `crypto_kdf` subkey 3 of the space
-  key (context `twfspace`), with the kind and segment id as associated data, and padded to
+  key (context `arcspace`), with the kind and segment id as associated data, and padded to
   16 KiB blocks so the size says little about how many faces were found
   (`sealFaceSegment` in `packages/crypto/src/storage.ts`). A segment is at most 256 KiB
   and can't be replaced, only deleted; segments are merged as they go stale.
@@ -504,7 +504,7 @@ so photos can later be found by describing them. The server stores only cipherte
 
 - **On by default, per device.** It uses no face data, so it doesn't wait for the smart
   features question: it's on unless turned off in Settings → Search on that device, saved
-  in that browser's `localStorage` (`twofold.smartSearch`). It applies to whichever space
+  in that browser's `localStorage` (`arcafold.smartSearch`). It applies to whichever space
   is open, so the setting and the download look the same with or without a private space.
 - **On the device.** The photo half of OpenCLIP ViT-B/32 (LAION-2B weights, MIT), stored
   with 8-bit weights, runs in ONNX Runtime Web (WebAssembly) in a Web Worker

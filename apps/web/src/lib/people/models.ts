@@ -3,7 +3,7 @@
  * (the CSP allows nothing else), and each is checked against the SHA-256 it was released
  * with before it's used, so a changed file is never run. See scripts/face-models/README.md.
  */
-import { sha256, toBase64Url } from '@twofold/crypto/webcrypto';
+import { sha256, toBase64Url } from '@arcafold/crypto/webcrypto';
 
 import recognizerUrl from './models/sface-2021dec-w8.onnx?url';
 import detectorUrl from './models/yunet-2023mar.onnx?url';

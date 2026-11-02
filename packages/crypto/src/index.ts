@@ -1,5 +1,5 @@
 /**
- * @twofold/crypto — the only place in Arcafold where cryptography happens.
+ * @arcafold/crypto — the only place in Arcafold where cryptography happens.
  *
  * Every primitive is a standard libsodium construction (Argon2id, crypto_kdf, secretbox,
  * BLAKE2b) or Web Crypto SHA-256. See docs/security.md for the key design.

@@ -8,7 +8,7 @@
  *   photo:   id (16 bytes) · face count (u8) · faces
  *   face:    x, y, width, height (u16, of 65535) · score (u8, of 255) · scale (f32) · 128 × i8
  */
-import { fromBase64Url, toBase64Url } from '@twofold/crypto/webcrypto';
+import { fromBase64Url, toBase64Url } from '@arcafold/crypto/webcrypto';
 
 import { EMBEDDING_LENGTH } from './sface';
 

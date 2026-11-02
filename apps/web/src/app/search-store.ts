@@ -1,5 +1,5 @@
-import type { SpaceKeys } from '@twofold/crypto';
-import { SEARCH_SEGMENT_DELETE_MAX } from '@twofold/types';
+import type { SpaceKeys } from '@arcafold/crypto';
+import { SEARCH_SEGMENT_DELETE_MAX } from '@arcafold/types';
 
 import { spaceApi } from '../lib/api';
 import type { SpaceApi } from '../lib/api';
@@ -59,7 +59,7 @@ export function remoteSearchStore(
   keys: SpaceKeys,
   makeApi: (token: string) => SpaceApi = spaceApi,
 ): SearchStore {
-  const loadCrypto = () => import('@twofold/crypto');
+  const loadCrypto = () => import('@arcafold/crypto');
   let apiPromise: Promise<SpaceApi> | null = null;
   const remote = () =>
     (apiPromise ??= loadCrypto().then((crypto) => makeApi(crypto.spaceToken(keys))));

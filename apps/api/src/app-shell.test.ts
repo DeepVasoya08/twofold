@@ -24,18 +24,18 @@ describe('serveAppShell', () => {
     'answers the app path %s with the shell',
     async (path) => {
       const { assets, requested } = fakeAssets();
-      const res = await serveAppShell(new Request(`https://twofold.test${path}`), assets);
+      const res = await serveAppShell(new Request(`https://arcafold.test${path}`), assets);
 
       expect(res.status).toBe(200);
       expect(await res.text()).toContain('id="root"');
-      expect(requested).toEqual(['https://twofold.test/app']);
+      expect(requested).toEqual(['https://arcafold.test/app']);
     },
   );
 
   it('answers HEAD too', async () => {
     const { assets } = fakeAssets();
     const res = await serveAppShell(
-      new Request('https://twofold.test/photos', { method: 'HEAD' }),
+      new Request('https://arcafold.test/photos', { method: 'HEAD' }),
       assets,
     );
 
@@ -44,7 +44,7 @@ describe('serveAppShell', () => {
 
   it('gives missing files a 404 instead of the shell', async () => {
     const { assets, requested } = fakeAssets();
-    const res = await serveAppShell(new Request('https://twofold.test/missing.js'), assets);
+    const res = await serveAppShell(new Request('https://arcafold.test/missing.js'), assets);
 
     expect(res.status).toBe(404);
     expect(requested).toEqual([]);
@@ -53,7 +53,7 @@ describe('serveAppShell', () => {
   it('refuses other methods', async () => {
     const { assets } = fakeAssets();
     const res = await serveAppShell(
-      new Request('https://twofold.test/photos', { method: 'POST' }),
+      new Request('https://arcafold.test/photos', { method: 'POST' }),
       assets,
     );
 

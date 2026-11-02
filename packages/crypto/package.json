@@ -1,5 +1,5 @@
 {
-  "name": "@twofold/crypto",
+  "name": "@arcafold/crypto",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@twofold/types": "workspace:*",
+    "@arcafold/types": "workspace:*",
     "libsodium-wrappers-sumo": "^0.8.4"
   },
   "devDependencies": {

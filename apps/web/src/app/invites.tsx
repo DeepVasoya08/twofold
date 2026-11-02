@@ -9,8 +9,8 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
-import type { SpaceKeys } from '@twofold/crypto';
-import type { MemberAccess } from '@twofold/types';
+import type { SpaceKeys } from '@arcafold/crypto';
+import type { MemberAccess } from '@arcafold/types';
 
 import { onVisibleAgain } from '../lib/when-visible';
 import { useAccount } from './account';

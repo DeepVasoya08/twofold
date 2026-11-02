@@ -1,5 +1,5 @@
 {
-  "name": "@twofold/web",
+  "name": "@arcafold/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,8 +13,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@twofold/crypto": "workspace:*",
-    "@twofold/types": "workspace:*",
+    "@arcafold/crypto": "workspace:*",
+    "@arcafold/types": "workspace:*",
     "libheif-js": "1.23.5",
     "onnxruntime-web": "1.31.1",
     "react": "^19.3.1",

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
-import { SMART_FEATURES_VERSION } from '@twofold/types';
-import type { SmartFeaturesChoice } from '@twofold/types';
+import { SMART_FEATURES_VERSION } from '@arcafold/types';
+import type { SmartFeaturesChoice } from '@arcafold/types';
 
 import { useAccount } from '../app/account';
 import { errorMessage } from '../app/account-ops';

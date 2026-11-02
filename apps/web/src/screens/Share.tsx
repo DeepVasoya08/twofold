@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { MemberAccess } from '@twofold/types';
+import type { MemberAccess } from '@arcafold/types';
 
 import { useMe } from '../app/account';
 import { errorMessage } from '../app/account-ops';

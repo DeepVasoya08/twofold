@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 
-import { STORAGE_SIZES } from '@twofold/types';
-import type { AccountStorage, DeviceList } from '@twofold/types';
+import { STORAGE_SIZES } from '@arcafold/types';
+import type { AccountStorage, DeviceList } from '@arcafold/types';
 
 import {
   deleteAccount,

@@ -1,6 +1,6 @@
 # Deployment
 
-One Cloudflare Worker, `twofold`, serves the whole app from one origin: the built web app
+One Cloudflare Worker, `arcafold`, serves the whole app from one origin: the built web app
 as static assets and the API under `/api` (see [architecture.md](architecture.md)).
 
 `.github/workflows/deploy.yml` runs after the CI workflow succeeds on a push to `main`.
@@ -15,7 +15,7 @@ It deploys the exact commit CI tested, in this order:
    ([README](../apps/web/scripts/search-resources/README.md)).
 4. Builds the web app into `apps/web/dist`. The build fails if any file is over the
    25 MiB static asset limit.
-5. Deploys the `twofold` Worker (`wrangler deploy` in `apps/api`), which uploads the web
+5. Deploys the `arcafold` Worker (`wrangler deploy` in `apps/api`), which uploads the web
    app's assets and the API code together. One deploy updates both, so the web app and
    the API can never be out of step.
 
@@ -40,14 +40,14 @@ permission to create resources:
 pnpm install
 cd apps/api
 pnpm exec wrangler login
-pnpm exec wrangler d1 create twofold
-pnpm exec wrangler r2 bucket create twofold-blobs
+pnpm exec wrangler d1 create arcafold
+pnpm exec wrangler r2 bucket create arcafold-blobs
 ```
 
-| Resource    | Name            | Must match                                   |
-| ----------- | --------------- | -------------------------------------------- |
-| D1 database | `twofold`       | `database_name` in `apps/api/wrangler.jsonc` |
-| R2 bucket   | `twofold-blobs` | `bucket_name` in `apps/api/wrangler.jsonc`   |
+| Resource    | Name             | Must match                                   |
+| ----------- | ---------------- | -------------------------------------------- |
+| D1 database | `arcafold`       | `database_name` in `apps/api/wrangler.jsonc` |
+| R2 bucket   | `arcafold-blobs` | `bucket_name` in `apps/api/wrangler.jsonc`   |
 
 Keep the ID that `wrangler d1 create` prints (`database_id = "…"`); step 3 needs it.
 `wrangler d1 list` shows it again later.
@@ -77,13 +77,13 @@ or in the output of `pnpm exec wrangler whoami`.
 
 In the repository, open **Settings → Secrets and variables → Actions**:
 
-| Kind     | Tab           | Name                          | Value                                             |
-| -------- | ------------- | ----------------------------- | ------------------------------------------------- |
-| Secret   | **Secrets**   | `CLOUDFLARE_API_TOKEN`        | the token from step 2                             |
-| Secret   | **Secrets**   | `CLOUDFLARE_ACCOUNT_ID`       | your Cloudflare account ID                        |
-| Variable | **Variables** | `D1_DATABASE_ID`              | the ID from `wrangler d1 create`                  |
-| Variable | **Variables** | `SITE_URL` (optional)         | the public origin, e.g. `https://twofold.example` |
-| Variable | **Variables** | `GOOGLE_CLIENT_ID` (optional) | the OAuth client ID from step 6                   |
+| Kind     | Tab           | Name                          | Value                                              |
+| -------- | ------------- | ----------------------------- | -------------------------------------------------- |
+| Secret   | **Secrets**   | `CLOUDFLARE_API_TOKEN`        | the token from step 2                              |
+| Secret   | **Secrets**   | `CLOUDFLARE_ACCOUNT_ID`       | your Cloudflare account ID                         |
+| Variable | **Variables** | `D1_DATABASE_ID`              | the ID from `wrangler d1 create`                   |
+| Variable | **Variables** | `SITE_URL` (optional)         | the public origin, e.g. `https://arcafold.example` |
+| Variable | **Variables** | `GOOGLE_CLIENT_ID` (optional) | the OAuth client ID from step 6                    |
 
 `D1_DATABASE_ID` must be a **variable**, not a secret: the workflow reads
 `vars.D1_DATABASE_ID`, so a secret with that name is invisible to it and the
@@ -110,19 +110,19 @@ of the same name, so keep them in one place only to avoid stale duplicates.
 
 ### 5. Custom domain (optional)
 
-To serve the app on your own domain, open **Workers & Pages → twofold → Settings →
+To serve the app on your own domain, open **Workers & Pages → arcafold → Settings →
 Domains & Routes** and add a **Custom Domain**. The domain must be a zone on the same
 Cloudflare account. The token from step 2 does not need zone permissions for this,
 because you add the domain in the dashboard, not from CI.
 
 Then set the `SITE_URL` repository variable (step 3) to the new origin and redeploy. The
 build writes it into the landing and legal pages' canonical links and link previews, the
-sitemap and robots.txt; without it they point at `https://twofold.deepvasoya08.workers.dev`.
+sitemap and robots.txt; without it they point at `https://arcafold.deepvasoya08.workers.dev`.
 
 The product's domain is `arcafold.com`. Moving to it, in order:
 
 1. Add `arcafold.com` to Cloudflare as a zone (change the nameservers at the registrar to
-   the two Cloudflare shows), then add it as a Custom Domain on the `twofold` Worker as
+   the two Cloudflare shows), then add it as a Custom Domain on the `arcafold` Worker as
    above. Add `www.arcafold.com` too if you want it.
 2. Set `SITE_URL` to `https://arcafold.com` and redeploy.
 3. Google Photos (step 6): add `https://arcafold.com` as an Authorized JavaScript origin and
@@ -131,11 +131,6 @@ The product's domain is `arcafold.com`. Moving to it, in order:
    entries until nobody uses that address.
 4. Search Console: add a **Domain** property for `arcafold.com` (DNS verification works now)
    and re-request Google's branding review.
-
-The app was called Twofold before November 2026. Infrastructure names (the `twofold` Worker,
-D1 database and R2 buckets, the `@twofold/*` packages, cookies and browser storage keys,
-and the crypto context strings) keep the old name on purpose: renaming them would mean
-moving data, signing everyone out, or making existing encrypted data unreadable.
 
 ### 6. Google Photos connection (optional)
 
@@ -152,7 +147,7 @@ instead.
    add test users: until Google verifies the app, at most 100 test users can connect.
 4. In **Clients**, create an OAuth client of type **Web application** with:
    - Authorized JavaScript origin: the app's origin, e.g.
-     `https://twofold.deepvasoya08.workers.dev`
+     `https://arcafold.deepvasoya08.workers.dev`
    - Authorized redirect URI: the origin plus `/import/google/done`
 5. Set the client ID as the `GOOGLE_CLIENT_ID` repository variable (step 3) and redeploy.
    The client ID is public (it is in the built app); there is no client secret, because the
@@ -175,7 +170,7 @@ Google's branding check needs two things from the site:
 ## Checking a deploy
 
 The Deploy run's "Deploy Worker" step prints the Worker URL
-(`https://twofold.<your-subdomain>.workers.dev`). That one address serves the web app at
+(`https://arcafold.<your-subdomain>.workers.dev`). That one address serves the web app at
 `/` and the API at `/api` (for example `/api/health`).
 
 | Error in the Deploy run                                                    | Fix                                                                                             |
@@ -189,6 +184,8 @@ After fixing any of these, re-run the failed Deploy run; no new commit is needed
 
 ## Moving off Cloudflare Pages
 
+This happened before the rename below, so it uses the old `twofold` names.
+
 Earlier versions deployed the web app to a Pages project (`twofold-web`) and the API to a
 separate Worker (`twofold-api`). The D1 database and R2 bucket stay the same; the new
 Worker binds to them. After the first deploy of the `twofold` Worker succeeds:
@@ -200,3 +197,27 @@ Worker binds to them. After the first deploy of the `twofold` Worker succeeds:
 3. Delete the old deployments: `pnpm exec wrangler pages project delete twofold-web` and
    `pnpm exec wrangler delete --name twofold-api` (from `apps/api`, logged in as yourself).
 4. Edit the CI token and remove its **Cloudflare Pages** permission; nothing uses it now.
+
+## Moving from Twofold to Arcafold
+
+The app was called Twofold until November 2026. Every name changed with it: the Workers
+(`arcafold`, `arcafold-backup`, `arcafold-staging`), the D1 databases, the R2 buckets, the
+`@arcafold/*` packages, the session cookie, browser storage keys and the crypto context
+strings. Because the context strings changed, data encrypted under the old names can't be
+read, so the move starts from empty resources. Do it once, **before merging** the rename
+(a deploy against missing resources fails):
+
+1. From `apps/api`, logged in as yourself, create the new resources:
+   `wrangler d1 create arcafold`, `wrangler r2 bucket create arcafold-blobs` and
+   `wrangler r2 bucket create arcafold-backups`, then add the backup bucket's locks and
+   lifecycle rules ([backups.md](backups.md)).
+2. Set the `D1_DATABASE_ID` variable to the new database's ID.
+3. Merge. The deploy creates the `arcafold` Worker at
+   `https://arcafold.<your-subdomain>.workers.dev`, and every account starts fresh.
+4. Point Google's OAuth client and Search Console at the new address (or at
+   `arcafold.com`, step 5), and move any custom domain from the `twofold` Worker.
+5. Staging creates its own new database and buckets on its next run.
+6. When the new address works, delete the old ones: `wrangler delete --name twofold`,
+   `wrangler delete --name twofold-backup`, `wrangler delete --name twofold-staging`, the
+   `twofold` and `twofold-staging` databases and the `twofold-*` buckets. The old backup
+   bucket's locks keep its files for up to 30 days before it can be emptied.

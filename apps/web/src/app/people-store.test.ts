@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { newSpace, openOwnerRecord, spaceToken } from '@twofold/crypto';
+import { newSpace, openOwnerRecord, spaceToken } from '@arcafold/crypto';
 
 import { FakeServer } from '../test/fake-server';
 import { face, photoId, unitVector } from '../lib/people/test-faces';

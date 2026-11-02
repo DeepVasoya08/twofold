@@ -1,4 +1,4 @@
-import { SPACE_HEADER, ThumbBatchParser } from '@twofold/types';
+import { SPACE_HEADER, ThumbBatchParser } from '@arcafold/types';
 import type {
   AccountResponse,
   AccountStorage,
@@ -39,7 +39,7 @@ import type {
   TrashResponse,
   UpdateKeyringRequest,
   UpdateNameRequest,
-} from '@twofold/types';
+} from '@arcafold/types';
 
 /** A failed API call. `message` is written for people and safe to show. */
 export class ApiError extends Error {

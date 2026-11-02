@@ -5,7 +5,7 @@ import type {
   StoredJoined,
   StoredMember,
   StoredPendingInvite,
-} from '@twofold/types';
+} from '@arcafold/types';
 
 /**
  * Sharing queries. Members, joined libraries and pending invites are scoped to a space tag,

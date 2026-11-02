@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { newSpace, spaceToken } from '@twofold/crypto';
+import { newSpace, spaceToken } from '@arcafold/crypto';
 
 import { photoId } from '../lib/people/test-faces';
 import { VECTOR_LENGTH } from '../lib/search/segment';

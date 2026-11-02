@@ -1,4 +1,4 @@
-import { randomBytes, toBase64Url } from '@twofold/crypto/webcrypto';
+import { randomBytes, toBase64Url } from '@arcafold/crypto/webcrypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -10,8 +10,8 @@ import {
   SEARCH_SIZES,
   SPACE_HEADER,
   STORAGE_SIZES,
-} from '@twofold/types';
-import type { SearchSegmentPage, SmartAlbumList, WordList } from '@twofold/types';
+} from '@arcafold/types';
+import type { SearchSegmentPage, SmartAlbumList, WordList } from '@arcafold/types';
 
 import type { Env } from './env';
 import { createTestDb } from './test/d1';

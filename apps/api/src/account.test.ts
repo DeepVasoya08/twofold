@@ -1,8 +1,8 @@
-import { randomBytes, toBase64Url } from '@twofold/crypto/webcrypto';
+import { randomBytes, toBase64Url } from '@arcafold/crypto/webcrypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { KEY_SIZES, SMART_FEATURES_VERSION } from '@twofold/types';
-import type { AccountResponse, Keyring } from '@twofold/types';
+import { KEY_SIZES, SMART_FEATURES_VERSION } from '@arcafold/types';
+import type { AccountResponse, Keyring } from '@arcafold/types';
 
 import type { Env } from './env';
 import { createTestDb } from './test/d1';

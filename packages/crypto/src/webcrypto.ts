@@ -1,6 +1,6 @@
 /**
  * Hashing and encoding helpers built on Web Crypto only, so the API Worker can use them
- * without loading libsodium's WebAssembly. Exposed as `@twofold/crypto/webcrypto`.
+ * without loading libsodium's WebAssembly. Exposed as `@arcafold/crypto/webcrypto`.
  */
 
 export function toBase64Url(bytes: Uint8Array): string {

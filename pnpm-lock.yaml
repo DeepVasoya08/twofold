@@ -44,10 +44,10 @@ importers:
 
   apps/api:
     dependencies:
-      '@twofold/crypto':
+      '@arcafold/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
-      '@twofold/types':
+      '@arcafold/types':
         specifier: workspace:*
         version: link:../../packages/types
       hono:
@@ -60,7 +60,7 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^5.20261027.1
         version: 5.20261027.1
-      '@twofold/web':
+      '@arcafold/web':
         specifier: workspace:*
         version: link:../web
       wrangler:
@@ -69,10 +69,10 @@ importers:
 
   apps/web:
     dependencies:
-      '@twofold/crypto':
+      '@arcafold/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
-      '@twofold/types':
+      '@arcafold/types':
         specifier: workspace:*
         version: link:../../packages/types
       libheif-js:
@@ -106,7 +106,7 @@ importers:
 
   packages/crypto:
     dependencies:
-      '@twofold/types':
+      '@arcafold/types':
         specifier: workspace:*
         version: link:../types
       libsodium-wrappers-sumo:

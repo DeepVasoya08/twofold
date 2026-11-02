@@ -4,7 +4,7 @@
  * the average of its photos' search vectors; it's kept with the word too, so the word still
  * works after its photos are deleted.
  */
-import { fromBase64Url, toBase64Url } from '@twofold/crypto/webcrypto';
+import { fromBase64Url, toBase64Url } from '@arcafold/crypto/webcrypto';
 
 import { queryWords } from './query';
 import { SEARCH_MODEL, VECTOR_LENGTH, packVector, unpackVector } from './segment';

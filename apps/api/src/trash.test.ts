@@ -1,9 +1,9 @@
-import { randomBytes, toBase64Url } from '@twofold/crypto/webcrypto';
+import { randomBytes, toBase64Url } from '@arcafold/crypto/webcrypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { SPACE_HEADER, TRASH_BATCH_MAX } from '@twofold/types';
-import type { MemberAccess, PhotoPage, StoredPhoto, TrashResponse } from '@twofold/types';
+import { SPACE_HEADER, TRASH_BATCH_MAX } from '@arcafold/types';
+import type { MemberAccess, PhotoPage, StoredPhoto, TrashResponse } from '@arcafold/types';
 
 import type { Env } from './env';
 import { PAGE_SIZE } from './routes/space';

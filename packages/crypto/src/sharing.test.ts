@@ -114,8 +114,8 @@ describe('safetyPhrase', () => {
     const keys = new Uint8Array(64);
     keys.set(fromBase64Url(inviter.publicKey) ?? new Uint8Array(), 0);
     keys.set(fromBase64Url(joiner.publicKey) ?? new Uint8Array(), 32);
-    const transcript = sodium.crypto_generichash(32, keys, text('twofold:safety-phrase:v2'));
-    const salt = sodium.crypto_generichash(16, transcript, text('twofold:safety-phrase-salt:v2'));
+    const transcript = sodium.crypto_generichash(32, keys, text('arcafold:safety-phrase:v2'));
+    const salt = sodium.crypto_generichash(16, transcript, text('arcafold:safety-phrase-salt:v2'));
     const derived = sodium.crypto_pwhash(
       32,
       toBase64Url(transcript),

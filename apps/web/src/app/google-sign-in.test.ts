@@ -9,7 +9,7 @@ import {
 } from './google-sign-in';
 import type { SignInDeps } from './google-sign-in';
 
-const ORIGIN = 'https://twofold.example';
+const ORIGIN = 'https://arcafold.example';
 
 /** A BroadcastChannel stand-in that hands messages to the page listening. */
 function fakeChannel() {

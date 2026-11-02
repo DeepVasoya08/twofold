@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { STORAGE_SIZES } from '@twofold/types';
+import { STORAGE_SIZES } from '@arcafold/types';
 
 import {
   DOWNLOAD_MAX_BYTES,
