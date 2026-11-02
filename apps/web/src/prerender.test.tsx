@@ -36,4 +36,10 @@ describe('prerender', () => {
     expect(file('terms.html').content).toContain('<h1 class="legal__title">Terms of Use</h1>');
     expect(file('terms.html').content).toContain('[jurisdiction]');
   });
+
+  it('spells out Google data use in the served HTML, where Google’s reviewers read it', () => {
+    const { content } = file('privacy.html');
+    expect(content).toContain('Importing from Google Photos');
+    expect(content).toContain('including the Limited Use requirements');
+  });
 });
