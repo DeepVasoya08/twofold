@@ -119,6 +119,24 @@ Then set the `SITE_URL` repository variable (step 3) to the new origin and redep
 build writes it into the landing and legal pages' canonical links and link previews, the
 sitemap and robots.txt; without it they point at `https://twofold.deepvasoya08.workers.dev`.
 
+The product's domain is `arcafold.com`. Moving to it, in order:
+
+1. Add `arcafold.com` to Cloudflare as a zone (change the nameservers at the registrar to
+   the two Cloudflare shows), then add it as a Custom Domain on the `twofold` Worker as
+   above. Add `www.arcafold.com` too if you want it.
+2. Set `SITE_URL` to `https://arcafold.com` and redeploy.
+3. Google Photos (step 6): add `https://arcafold.com` as an Authorized JavaScript origin and
+   `https://arcafold.com/import/google/done` as a redirect URI, and set the home page and
+   privacy policy links on the consent screen to the new domain. Keep the workers.dev
+   entries until nobody uses that address.
+4. Search Console: add a **Domain** property for `arcafold.com` (DNS verification works now)
+   and re-request Google's branding review.
+
+The app was called Twofold before November 2026. Infrastructure names (the `twofold` Worker,
+D1 database and R2 buckets, the `@twofold/*` packages, cookies and browser storage keys,
+and the crypto context strings) keep the old name on purpose: renaming them would mean
+moving data, signing everyone out, or making existing encrypted data unreadable.
+
 ### 6. Google Photos connection (optional)
 
 "Connect Google Photos" on the import screen signs people in to Google in their browser and
@@ -138,7 +156,7 @@ instead.
    - Authorized redirect URI: the origin plus `/import/google/done`
 5. Set the client ID as the `GOOGLE_CLIENT_ID` repository variable (step 3) and redeploy.
    The client ID is public (it is in the built app); there is no client secret, because the
-   browser signs in directly and Twofold's server never takes part.
+   browser signs in directly and Arcafold's server never takes part.
 
 To let anyone connect, publish the app and ask Google to verify it from **Google Auth
 Platform → Verification center**; Google reviews the scope's use, which can take weeks.

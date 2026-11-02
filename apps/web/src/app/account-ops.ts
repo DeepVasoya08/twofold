@@ -71,7 +71,7 @@ export function spaceOf(opened: OpenedSlot): Space {
 
 const WRONG_LOGIN = 'That email and password don’t match.';
 const WRONG_PASSWORD = 'That password isn’t right.';
-const PASSWORD_IN_USE = 'Choose a password you don’t already use for Twofold.';
+const PASSWORD_IN_USE = 'Choose a password you don’t already use for Arcafold.';
 
 /**
  * Lets the browser paint a busy state first, for when Argon2id has to run on the main thread

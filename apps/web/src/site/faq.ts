@@ -1,7 +1,7 @@
 /** Questions on the landing page, also published as FAQPage structured data. */
 export const faq: readonly { question: string; answer: string }[] = [
   {
-    question: 'Can Twofold see my photos?',
+    question: 'Can Arcafold see my photos?',
     answer:
       'No. Photos, previews, albums, dates and places are encrypted on your device before they’re uploaded, with keys made from your password. Our servers store files they can’t open.',
   },
@@ -23,7 +23,7 @@ export const faq: readonly { question: string; answer: string }[] = [
   {
     question: 'Do I need to install anything?',
     answer:
-      'No. Twofold runs in your browser on your phone or computer. Encryption happens right there in the browser.',
+      'No. Arcafold runs in your browser on your phone or computer. Encryption happens right there in the browser.',
   },
   {
     question: 'Are there ads or tracking?',

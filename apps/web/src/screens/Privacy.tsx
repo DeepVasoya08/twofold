@@ -31,15 +31,15 @@ export function Privacy() {
     >
       <h2>Who we are</h2>
       <p>
-        Twofold is run by <Fill field="operator" label="legal name of the operator" /> (“we”, “us”).
-        This policy explains what information Twofold handles when you use the website and app, and
+        Arcafold is run by <Fill field="operator" label="legal name of the operator" /> (“we”, “us”).
+        This policy explains what information Arcafold handles when you use the website and app, and
         what we do with it. If anything here is unclear, write to{' '}
         <Fill field="contactEmail" label="contact email" />.
       </p>
 
       <h2>What we can’t see</h2>
       <p>
-        Twofold is end-to-end encrypted. Your password is turned into encryption keys on your
+        Arcafold is end-to-end encrypted. Your password is turned into encryption keys on your
         device, and your password itself is never sent to us. The following are encrypted on your
         device before they are uploaded, and we have no way to decrypt them:
       </p>
@@ -105,7 +105,7 @@ export function Privacy() {
       <h3 id="google-photos">Importing from Google Photos</h3>
       <p>
         If you choose <strong>Connect Google Photos</strong>, you sign in to Google and Google asks
-        whether Twofold may see the photos you pick. Twofold asks for one permission only:{' '}
+        whether Arcafold may see the photos you pick. Arcafold asks for one permission only:{' '}
         <strong>to view the photos and videos you select in Google Photos</strong> (the Google
         Photos Picker API). It can’t see anything you don’t pick, and it can’t change or delete
         anything in your Google account.
@@ -116,7 +116,7 @@ export function Privacy() {
           file name, file type and the date it was taken.
         </li>
         <li>
-          <strong>How it’s used:</strong> only to copy those photos into your Twofold library or
+          <strong>How it’s used:</strong> only to copy those photos into your Arcafold library or
           private space, at your request. Your device downloads each photo straight from Google,
           encrypts it, and uploads it like any other photo, so we can’t see the photos or their
           details. Google’s sign-in token stays in your device’s memory for the import only; it is
@@ -133,15 +133,15 @@ export function Privacy() {
           them, like any other photo.
         </li>
         <li>
-          <strong>Removing access:</strong> you can remove Twofold’s access at any time in your{' '}
+          <strong>Removing access:</strong> you can remove Arcafold’s access at any time in your{' '}
           <a href="https://myaccount.google.com/connections" rel="noreferrer noopener">
             Google account settings
           </a>
-          . Photos you already imported stay in Twofold until you delete them.
+          . Photos you already imported stay in Arcafold until you delete them.
         </li>
       </ul>
       <p>
-        Twofold’s use and transfer to any other app of information received from Google APIs will
+        Arcafold’s use and transfer to any other app of information received from Google APIs will
         adhere to the{' '}
         <a
           href="https://developers.google.com/terms/api-services-user-data-policy"
@@ -179,9 +179,9 @@ export function Privacy() {
 
       <h2>Cookies and storage in your browser</h2>
       <p>
-        Twofold uses one essential cookie to keep you signed in. It is only sent to Twofold and
+        Arcafold uses one essential cookie to keep you signed in. It is only sent to Arcafold and
         can’t be read by scripts. Your browser also remembers a few preferences, such as when
-        Twofold should lock itself. Decrypted photos and keys are kept in memory only and are never
+        Arcafold should lock itself. Decrypted photos and keys are kept in memory only and are never
         saved in your browser’s storage.
       </p>
 
@@ -202,7 +202,7 @@ export function Privacy() {
 
       <h2>Who processes your information</h2>
       <p>
-        Twofold runs on <strong>Cloudflare</strong>, which hosts the app, its database and the
+        Arcafold runs on <strong>Cloudflare</strong>, which hosts the app, its database and the
         encrypted file storage. The database and encrypted files are currently stored in{' '}
         {serviceFacts.dataRegion}. Cloudflare processes your IP address and request details to
         deliver and protect the service, under its own privacy policy. We don’t use any other
@@ -242,7 +242,7 @@ export function Privacy() {
 
       <h2>Children</h2>
       <p>
-        Twofold has no minimum age. If you are under the age at which you can agree to this policy
+        Arcafold has no minimum age. If you are under the age at which you can agree to this policy
         where you live, a parent or guardian must agree to it for you.
       </p>
 

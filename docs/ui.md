@@ -7,7 +7,7 @@ decrypts the open space; locking or reloading drops everything decrypted. The mo
 "photos" drawn as SVG data URIs) now only decorates the welcome and sign-in screens and
 feeds unit tests. Sharing and invite codes are real too, and so is auto-lock.
 
-Twofold presents itself as a private, end-to-end encrypted photo library for anyone. Sharing
+Arcafold presents itself as a private, end-to-end encrypted photo library for anyone. Sharing
 exists but is low-key (Settings → Sharing).
 
 ![Library](screenshots/desktop-gallery.png)
@@ -25,7 +25,7 @@ exists but is low-key (Settings → Sharing).
 - Inside the private space the app is re-tinted violet (`data-space="private"` on `<html>`,
   tokens in `styles/base.css`) and shows a small "Private" label, so you know where you are.
 - **Move to private space** (photo viewer, main library) asks for the private password the
-  first time after unlocking, then moves straight in until Twofold locks. Right after
+  first time after unlocking, then moves straight in until Arcafold locks. Right after
   setting up a private space it doesn't ask at all.
   **Move to library** (private space) works the same way with the main password. Albums
   belong to one space, so a moved photo arrives unfiled. A move re-encrypts the photo
@@ -45,7 +45,7 @@ exists but is low-key (Settings → Sharing).
 - Opening a link (`/join/<token>`) asks to sign in, sign up or unlock first, then comes back
   to it. It doesn't say who sent it until they reveal it: **Accept** sends this side's key,
   and the page says what's happening next, with **Don't join**. Either person can leave at
-  any point; each step is taken the next time their side opens Twofold (on load, when the
+  any point; each step is taken the next time their side opens Arcafold (on load, when the
   app comes back into view after at least half a minute, and every few seconds while
   someone is partway through).
 - When someone has accepted, the inviter sees "<name> wants to join <your library or the
@@ -92,7 +92,7 @@ exists but is low-key (Settings → Sharing).
   (once per unlock, same answer for a wrong password as for no private space). Photos from
   a library shared with you are left out of a move, and can only go in that library's
   albums: the album picker only offers albums at least one selected photo can go in.
-- **Share** means sharing with people inside Twofold, always through an album: inside one of
+- **Share** means sharing with people inside Arcafold, always through an album: inside one of
   your albums it opens the invite for that album; elsewhere it asks which of your albums to
   put the photos in (albums already shared come first, or make a new one), then opens that
   album's invite. Everyone invited to an album sees the same album, so sharing with more
@@ -100,7 +100,7 @@ exists but is low-key (Settings → Sharing).
 - **Download** saves copies to the device. It downloads and decrypts the originals four at
   a time (up to 1 GB in all) and shows "Downloading 12 of 19" with a progress bar; then the
   button saves them. One photo is saved as it is. Several download as one zip
-  (`Twofold <yyyy-mm-dd>.zip`, stored without compression), except on a touch device that
+  (`Arcafold <yyyy-mm-dd>.zip`, stored without compression), except on a touch device that
   can share files, where **Save to device** opens the share sheet so they can go straight
   to the photo gallery. Copies are named by when they were taken (`2026-10-19 14.32.05.jpg`,
   with ` (2)` for photos from the same second), never after the space or album. The
@@ -359,7 +359,7 @@ imported. A photo in an album is also in its year folder, so photos are matched 
 size and imported once, into every album they were in. Where Google kept an "-edited" copy,
 that copy is imported instead of the original. Each photo's JSON "sidecar" is found even when
 Google cut its name short or moved a "(1)", and says whether the photo was a favorite.
-Videos are counted and skipped, since Twofold can't store videos yet. In either kind of export
+Videos are counted and skipped, since Arcafold can't store videos yet. In either kind of export
 a clip next to a photo of the same name (a Live Photo's IMG_0001.MOV beside IMG_0001.HEIC) is
 the photo's moving part: the still comes in and the clip is left out without being counted.
 
@@ -421,7 +421,7 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
 ## Landing page, legal pages and SEO
 
 - The landing page (`screens/Welcome.tsx`) leads with privacy without overselling, and
-  never presents Twofold as a couples app. Its illustrations are small static copies of
+  never presents Arcafold as a couples app. Its illustrations are small static copies of
   real screens drawn with the mock landscape art: the unlock box opening either the library
   or the private space, and an album shared with "Estrella" with the four-word check. Its
   FAQ (`site/faq.ts`) is honest about the trade-offs: no password reset, no recovery for the

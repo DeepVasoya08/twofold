@@ -51,7 +51,7 @@ async function prepareImport(
   original: Uint8Array<ArrayBuffer>,
 ): Promise<NewPhoto> {
   const thumbnail = await (await loadThumbnailer())(new Blob([original], { type: item.type }));
-  if (!thumbnail) throw new FormError('Twofold can’t read this image.');
+  if (!thumbnail) throw new FormError('Arcafold can’t read this image.');
   const sidecar = await readSidecar(item);
   const fallback = item.takenAt ?? sidecar.takenAt ?? item.source.lastModified ?? 0;
   const photo: NewPhoto = {

@@ -6,7 +6,7 @@ test.describe('without JavaScript, as a crawler sees it', () => {
   test('the landing page is prerendered with its tags', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page).toHaveTitle('Twofold · End-to-end encrypted photo library');
+    await expect(page).toHaveTitle('Arcafold · End-to-end encrypted photo library');
     await expect(page.getByRole('heading', { level: 1, name: /Your photos/ })).toBeVisible();
     await expect(
       page.getByRole('heading', { level: 2, name: 'One unlock screen. Two separate spaces.' }),
@@ -23,11 +23,11 @@ test.describe('without JavaScript, as a crawler sees it', () => {
 
   test('the legal pages are prerendered at their own paths', async ({ page }) => {
     await page.goto('/privacy');
-    await expect(page).toHaveTitle('Privacy Policy · Twofold');
+    await expect(page).toHaveTitle('Privacy Policy · Arcafold');
     await expect(page.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeVisible();
 
     await page.goto('/terms');
-    await expect(page).toHaveTitle('Terms of Use · Twofold');
+    await expect(page).toHaveTitle('Terms of Use · Arcafold');
     await expect(page.getByRole('heading', { level: 1, name: 'Terms of Use' })).toBeVisible();
   });
 
@@ -81,12 +81,12 @@ test('the landing page links to the legal pages and sign-up', async ({ page }) =
   await page.getByRole('contentinfo').getByRole('link', { name: 'Privacy Policy' }).click();
   await expect(page).toHaveURL('/privacy');
   await expect(page.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeVisible();
-  await expect(page).toHaveTitle('Privacy Policy · Twofold');
+  await expect(page).toHaveTitle('Privacy Policy · Arcafold');
 
   await page.getByRole('link', { name: 'Terms of Use' }).first().click();
   await expect(page.getByRole('heading', { level: 1, name: 'Terms of Use' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Twofold home' }).click();
+  await page.getByRole('link', { name: 'Arcafold home' }).click();
   await expect(page).toHaveURL('/');
   await page.getByRole('link', { name: 'Get started' }).first().click();
   await expect(page).toHaveURL('/signup');

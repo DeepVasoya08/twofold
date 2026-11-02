@@ -1,6 +1,6 @@
 # Backups and restore
 
-What protects Twofold's data, how to set it up, and how to bring things back.
+What protects Arcafold's data, how to set it up, and how to bring things back.
 
 | Store                | Protection                                                     | Kept                                  |
 | -------------------- | -------------------------------------------------------------- | ------------------------------------- |

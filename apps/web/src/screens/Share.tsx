@@ -177,7 +177,7 @@ function InvitePanel({ where, album }: { where: string; album: SharedAlbum | nul
   const onShareLink = () => {
     if (!link) return;
     navigator
-      .share({ title: 'Twofold invite', text: `${me.name} invited you to Twofold`, url: link })
+      .share({ title: 'Arcafold invite', text: `${me.name} invited you to Arcafold`, url: link })
       .catch(() => undefined);
   };
 
@@ -262,7 +262,7 @@ function InvitePanel({ where, album }: { where: string; album: SharedAlbum | nul
           {stage === 'waiting'
             ? 'You can leave this screen. The invite stays open.'
             : stage === 'accepted'
-              ? 'They accepted. Waiting for them to come back to Twofold…'
+              ? 'They accepted. Waiting for them to come back to Arcafold…'
               : 'They’re waiting for you to check the words above.'}
         </p>
       </div>

@@ -1,6 +1,6 @@
 # Staging and restore drills
 
-Staging is a second copy of Twofold at `https://twofold-staging.<your-subdomain>.workers.dev`.
+Staging is a second copy of Arcafold at `https://twofold-staging.<your-subdomain>.workers.dev`.
 It shares nothing with production: it has its own Worker (`twofold-staging`), its own
 database (`twofold-staging`) and its own bucket (`twofold-staging-blobs`). It's used for
 restore drills and for trying a branch before it reaches production. Accounts made there

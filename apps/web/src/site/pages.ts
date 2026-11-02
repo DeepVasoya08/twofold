@@ -19,7 +19,7 @@ export const publicPages: readonly PublicPage[] = [
   {
     route: 'welcome',
     path: paths.welcome,
-    title: 'Twofold · End-to-end encrypted photo library',
+    title: 'Arcafold · End-to-end encrypted photo library',
     description:
       'Back up and organize your photos with end-to-end encryption. A second password opens a separate private space, and sharing is on your terms.',
     file: 'index.html',
@@ -27,17 +27,17 @@ export const publicPages: readonly PublicPage[] = [
   {
     route: 'privacy',
     path: paths.privacy,
-    title: 'Privacy Policy · Twofold',
+    title: 'Privacy Policy · Arcafold',
     description:
-      'What Twofold can and can’t see, what we store to run your account, and how to delete it. Your photos are encrypted on your device before upload.',
+      'What Arcafold can and can’t see, what we store to run your account, and how to delete it. Your photos are encrypted on your device before upload.',
     file: 'privacy.html',
   },
   {
     route: 'terms',
     path: paths.terms,
-    title: 'Terms of Use · Twofold',
+    title: 'Terms of Use · Arcafold',
     description:
-      'The terms for using Twofold, including how your encryption keys, recovery key and storage work, and what you agree not to use it for.',
+      'The terms for using Arcafold, including how your encryption keys, recovery key and storage work, and what you agree not to use it for.',
     file: 'terms.html',
   },
 ];

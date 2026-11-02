@@ -4,7 +4,7 @@
  * draft notice stays up until every value is filled in.
  */
 export interface LegalDetails {
-  /** The person or company that runs Twofold, as it should appear in a contract. */
+  /** The person or company that runs Arcafold, as it should appear in a contract. */
   operator: string | null;
   /** Where people write about privacy requests, legal notices and abuse reports. */
   contactEmail: string | null;

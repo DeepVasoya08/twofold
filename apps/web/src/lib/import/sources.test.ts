@@ -34,6 +34,6 @@ describe('collectSources', () => {
   it('names the zip it couldn’t read', async () => {
     await expect(
       collectSources([new File([bytes('not a zip')], 'takeout-002.zip')]),
-    ).rejects.toThrow(new ZipError('takeout-002.zip: This isn’t a zip file Twofold can read.'));
+    ).rejects.toThrow(new ZipError('takeout-002.zip: This isn’t a zip file Arcafold can read.'));
   });
 });

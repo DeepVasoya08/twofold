@@ -41,7 +41,7 @@ export interface ImportItem {
 
 export interface ImportPlan {
   items: ImportItem[];
-  /** Videos found, which Twofold can't store yet (Live Photos' clips aren't counted). */
+  /** Videos found, which Arcafold can't store yet (Live Photos' clips aren't counted). */
   videos: number;
   /** Album titles, in the order found. */
   albums: string[];

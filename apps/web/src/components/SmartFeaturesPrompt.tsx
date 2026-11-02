@@ -58,7 +58,7 @@ export function SmartFeaturesPrompt() {
     >
       <div className="smart-features">
         <p>
-          Twofold can find the faces in your photos and group photos of the same person, so you can
+          Arcafold can find the faces in your photos and group photos of the same person, so you can
           see everyone in a tap.
         </p>
         <ul className="smart-features__points">

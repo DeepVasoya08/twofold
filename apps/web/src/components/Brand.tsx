@@ -26,7 +26,7 @@ export function Logo({ size = 32 }: { size?: number }) {
   return (
     <span className="logo">
       <LogoMark size={size} />
-      <span className="logo__word">Twofold</span>
+      <span className="logo__word">Arcafold</span>
     </span>
   );
 }

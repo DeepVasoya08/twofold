@@ -92,7 +92,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
       </a>
       <aside className="shell__sidebar">
         <div className="shell__brand-row">
-          <Link to={paths.gallery} className="shell__brand" aria-label="Twofold photos">
+          <Link to={paths.gallery} className="shell__brand" aria-label="Arcafold photos">
             <Logo size={30} />
           </Link>
           {isPrivate && <PrivatePill />}
@@ -126,7 +126,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
             <span className="shell__account-name">{me.name}</span>
             <LockBadge label="Encrypted" />
           </div>
-          <button type="button" className="icon-btn" onClick={lock} aria-label="Lock Twofold">
+          <button type="button" className="icon-btn" onClick={lock} aria-label="Lock Arcafold">
             <Icon name="lock" size={18} />
           </button>
         </div>
@@ -134,7 +134,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
 
       <header className="shell__topbar">
         <div className="shell__brand-row">
-          <Link to={paths.gallery} className="shell__brand" aria-label="Twofold photos">
+          <Link to={paths.gallery} className="shell__brand" aria-label="Arcafold photos">
             <Logo size={26} />
           </Link>
           {isPrivate && <PrivatePill />}
@@ -151,7 +151,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
           >
             <Icon name="search" />
           </button>
-          <button type="button" className="icon-btn" onClick={lock} aria-label="Lock Twofold">
+          <button type="button" className="icon-btn" onClick={lock} aria-label="Lock Arcafold">
             <Icon name="lock" />
           </button>
           <button

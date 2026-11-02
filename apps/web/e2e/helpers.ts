@@ -106,7 +106,7 @@ export async function goTo(
 
 export async function lock(page: Page): Promise<void> {
   await page
-    .getByRole('button', { name: 'Lock Twofold' })
+    .getByRole('button', { name: 'Lock Arcafold' })
     .filter({ visible: true })
     .first()
     .click();

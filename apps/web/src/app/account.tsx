@@ -66,7 +66,7 @@ interface AccountValue {
   deleteAccount: (password: string) => Promise<void>;
 }
 
-const SIGNED_OUT_MEANWHILE = 'You signed out before Twofold finished opening. Try again.';
+const SIGNED_OUT_MEANWHILE = 'You signed out before Arcafold finished opening. Try again.';
 
 const AccountContext = createContext<AccountValue | null>(null);
 
@@ -198,7 +198,7 @@ export function AccountProvider({
     const session = state.status === 'unlocked' ? state.session : null;
     const account = accountOf(state);
     const requireSession = (): Session => {
-      if (!session) throw new ops.FormError('Unlock Twofold first.');
+      if (!session) throw new ops.FormError('Unlock Arcafold first.');
       return session;
     };
     /** Keeps an operation's new session, unless the keys were dropped while it ran. */

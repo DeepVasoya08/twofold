@@ -99,7 +99,7 @@ export function googleSignIn(
       finish(() => {
         reject(
           new GoogleSignInError(
-            'Your browser blocked the Google sign-in window. Allow pop-ups for Twofold and try again.',
+            'Your browser blocked the Google sign-in window. Allow pop-ups for Arcafold and try again.',
           ),
         );
       });

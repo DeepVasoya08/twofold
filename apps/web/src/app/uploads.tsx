@@ -45,7 +45,7 @@ const UploadsContext = createContext<UploadsValue | null>(null);
 /** Reads a file into what the vault stores: the original bytes and a JPEG preview. */
 async function preparePhoto(file: File): Promise<NewPhoto> {
   const thumbnail = await (await loadThumbnailer())(file);
-  if (!thumbnail) throw new FormError('Twofold can’t read this image.');
+  if (!thumbnail) throw new FormError('Arcafold can’t read this image.');
   const full = new Uint8Array(await file.arrayBuffer());
   return {
     thumb: thumbnail.bytes,

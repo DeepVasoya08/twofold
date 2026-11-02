@@ -28,7 +28,7 @@ describe('prerender', () => {
     expect(content).toContain('Shared with Estrella');
     expect(content).toContain('href="/privacy"');
     expect(content).toContain('href="/terms"');
-    expect(head).toContain('<title>Twofold · End-to-end encrypted photo library</title>');
+    expect(head).toContain('<title>Arcafold · End-to-end encrypted photo library</title>');
   });
 
   it('renders the legal pages, with a placeholder for the missing jurisdiction', () => {

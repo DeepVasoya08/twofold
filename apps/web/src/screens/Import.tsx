@@ -317,7 +317,7 @@ function ReviewPlan({ plan, onCancel }: { plan: ImportPlan; onCancel: () => void
         {plan.videos > 0 && (
           <>
             {' '}
-            {pluralize(plan.videos, 'video')} will be skipped, as Twofold can’t store videos yet.
+            {pluralize(plan.videos, 'video')} will be skipped, as Arcafold can’t store videos yet.
           </>
         )}
         {hidden > 0 && (
@@ -410,7 +410,7 @@ function ImportStatus({ onAgain }: { onAgain: () => void }) {
         </span>
         <p className="share__note">
           <Icon name="info" size={16} />
-          You can keep using Twofold while this runs. Keep this tab open: closing it stops the
+          You can keep using Arcafold while this runs. Keep this tab open: closing it stops the
           import, and starting again later skips photos already brought in.
         </p>
         <div className="import__choose">
@@ -489,7 +489,7 @@ export function Import() {
         if (found.items.length === 0) {
           setError(
             found.videos > 0
-              ? 'This export only has videos, which Twofold can’t store yet.'
+              ? 'This export only has videos, which Arcafold can’t store yet.'
               : 'No photos were found. Choose every zip of your export, or the folder it was saved or unzipped into.',
           );
           return;

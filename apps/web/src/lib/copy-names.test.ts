@@ -40,6 +40,6 @@ describe('copyNames', () => {
 
 describe('zipName', () => {
   it('names the zip after today, never after a space', () => {
-    expect(zipName(new Date(2026, 9, 21, 23, 59))).toBe('Twofold 2026-10-21.zip');
+    expect(zipName(new Date(2026, 9, 21, 23, 59))).toBe('Arcafold 2026-10-21.zip');
   });
 });

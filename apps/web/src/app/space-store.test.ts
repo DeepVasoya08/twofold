@@ -80,7 +80,7 @@ describe('remoteStore', () => {
     const { server, space } = await setUp();
     const store = remoteStore(space, server.api);
     await expect(store.add({ ...PHOTO, type: 'image/svg+xml' }, [])).rejects.toThrow(
-      'Twofold can’t store this kind of file.',
+      'Arcafold can’t store this kind of file.',
     );
     const added = await store.add(PHOTO, []);
     const entry = server.photos.get(added.id);

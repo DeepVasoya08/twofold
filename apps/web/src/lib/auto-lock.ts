@@ -3,7 +3,7 @@
  * localStorage; nothing secret or decrypted is stored with it.
  */
 
-/** Minutes without use before Twofold locks; 0 means only when the tab closes. */
+/** Minutes without use before Arcafold locks; 0 means only when the tab closes. */
 export type AutoLockMinutes = 0 | 1 | 5 | 15;
 
 export const AUTO_LOCK_CHOICES: readonly { minutes: AutoLockMinutes; label: string }[] = [

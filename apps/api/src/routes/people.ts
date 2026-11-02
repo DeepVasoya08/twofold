@@ -108,7 +108,7 @@ people.put('/people/:id', async (c) => {
   // Only a new person can go over the limit.
   const full = (await countPeople(c.env.DB, tag)) >= MAX_PEOPLE;
   if (full && !(await hasPerson(c.env.DB, tag, id.data))) {
-    return c.json({ error: 'You have the most people Twofold keeps.' }, 409);
+    return c.json({ error: 'You have the most people Arcafold keeps.' }, 409);
   }
   await putPerson(c.env.DB, tag, { id: id.data, meta: body.meta });
   return c.body(null, 204);

@@ -25,7 +25,7 @@ export function downloadTitle(count: number): string {
  * Saves copies of photos to this device. Their originals are downloaded and decrypted into
  * memory first, a few at a time, so saving starts straight from a tap (the share sheet only
  * opens for one). One photo is saved as is; several go to the share sheet on phones, or
- * download as one zip. The copies are saved without Twofold's encryption, and the dialog says
+ * download as one zip. The copies are saved without Arcafold's encryption, and the dialog says
  * so. Closing the dialog doesn't stop the download: a card shows how it's going, and opening
  * the dialog again (from the card, or by downloading the same photos) carries on from there.
  * Start one with `useDownloads().start`; this is mounted once, in the app shell.
@@ -46,7 +46,7 @@ function Busy({ job }: { job: DownloadJob }) {
   return (
     <section className="download">
       <p className="download__note">
-        Twofold is still getting {pluralize(job.photoIds.length, 'other photo')} ready. Stop that
+        Arcafold is still getting {pluralize(job.photoIds.length, 'other photo')} ready. Stop that
         download to start this one, or close this and let it finish.
       </p>
       {job.stage.state === 'downloading' && <DownloadStatus progress={job.stage.progress} />}
@@ -67,7 +67,7 @@ function DownloadCopies({ job }: { job: DownloadJob }) {
   if (stage.state === 'too-large') {
     return (
       <p className="download__note">
-        Twofold downloads up to {formatBytes(DOWNLOAD_MAX_BYTES)} at a time, and these photos come
+        Arcafold downloads up to {formatBytes(DOWNLOAD_MAX_BYTES)} at a time, and these photos come
         to {formatBytes(stage.bytes)}. Pick fewer, then try again.
       </p>
     );
@@ -103,7 +103,7 @@ function DownloadCopies({ job }: { job: DownloadJob }) {
       {stage.state === 'downloading' && (
         <>
           <DownloadStatus progress={stage.progress} />
-          <p className="download__note">You can close this and keep using Twofold.</p>
+          <p className="download__note">You can close this and keep using Arcafold.</p>
           <button type="button" className="btn btn--ghost btn--block" onClick={cancel}>
             Cancel download
           </button>

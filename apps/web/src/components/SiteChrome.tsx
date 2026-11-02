@@ -16,7 +16,7 @@ const sections = [
 export function SiteHeader() {
   return (
     <header className="site-header">
-      <Link to={paths.welcome} className="site-header__home" aria-label="Twofold home">
+      <Link to={paths.welcome} className="site-header__home" aria-label="Arcafold home">
         <Logo />
       </Link>
       <nav className="site-header__nav" aria-label="Main">
@@ -49,7 +49,7 @@ export function SiteFooter() {
         </div>
         <nav className="site-footer__columns" aria-label="Footer">
           <div className="site-footer__column">
-            <h2 className="site-footer__heading">Twofold</h2>
+            <h2 className="site-footer__heading">Arcafold</h2>
             {sections.map((section) => (
               <a key={section.href} href={section.href}>
                 {section.label}
@@ -69,7 +69,7 @@ export function SiteFooter() {
           </div>
         </nav>
       </div>
-      <p className="site-footer__fine">© {new Date().getFullYear()} Twofold</p>
+      <p className="site-footer__fine">© {new Date().getFullYear()} Arcafold</p>
     </footer>
   );
 }

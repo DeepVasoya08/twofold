@@ -26,7 +26,7 @@ export function progressLine(status: PeopleStatus, done: number, total: number):
     case 'scanning':
       return `Finding faces on this device · ${counted}`;
     case 'waiting':
-      return `Paused while photos upload or Twofold is in the background · ${counted}`;
+      return `Paused while photos upload or Arcafold is in the background · ${counted}`;
     case 'failed':
       return counted;
     case 'ready':
@@ -69,7 +69,7 @@ export function TurnOnPeople({ onTurnOn }: { onTurnOn: () => void }) {
         </button>
       }
     >
-      Twofold can find faces and group photos of the same person. It all happens on this device:
+      Arcafold can find faces and group photos of the same person. It all happens on this device:
       your photos and the faces in them never leave it unencrypted. The first time, this device
       downloads some resources (about {MODEL_DOWNLOAD_MB} MB).
     </EmptyState>

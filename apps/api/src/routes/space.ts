@@ -217,7 +217,7 @@ async function deletePhotos(c: Context<AppEnv>, tag: string, photos: PhotoSize[]
   await releaseStorage(c.env.DB, c.get('account').id, bytes);
 }
 
-const storageFull = `Your storage is full. Twofold keeps up to ${String(
+const storageFull = `Your storage is full. Arcafold keeps up to ${String(
   STORAGE_SIZES.accountQuota / (1024 * 1024 * 1024),
 )} GB per account; delete some photos to make room.`;
 
@@ -500,7 +500,7 @@ space.post('/albums', async (c) => {
   if (!body) return c.json({ error: messages.badRequest }, 400);
   const tag = c.get('space');
   if ((await countAlbums(c.env.DB, tag)) >= MAX_ALBUMS) {
-    return c.json({ error: 'You have the most albums Twofold allows.' }, 409);
+    return c.json({ error: 'You have the most albums Arcafold allows.' }, 409);
   }
   if (!(await insertAlbum(c.env.DB, tag, body))) {
     return c.json({ error: messages.badRequest }, 409);
@@ -666,7 +666,7 @@ space.post('/members', requireOwner, async (c) => {
   if (album === null) {
     if ((await countMembers(c.env.DB, tag)) >= MAX_MEMBERS) {
       return c.json(
-        { error: 'This library is shared with as many people as Twofold allows.' },
+        { error: 'This library is shared with as many people as Arcafold allows.' },
         409,
       );
     }
@@ -675,7 +675,7 @@ space.post('/members', requireOwner, async (c) => {
       return c.json({ error: albumNotFound }, 404);
     }
     if ((await countAlbumMembers(c.env.DB, tag, album)) >= MAX_ALBUM_MEMBERS) {
-      return c.json({ error: 'This album is shared with as many people as Twofold allows.' }, 409);
+      return c.json({ error: 'This album is shared with as many people as Arcafold allows.' }, 409);
     }
   }
   const tokenHash = toBase64Url(await sha256(token));
@@ -739,7 +739,7 @@ space.post('/joined', requireOwner, async (c) => {
   if (!body) return c.json({ error: messages.badRequest }, 400);
   const tag = c.get('space');
   if ((await countJoined(c.env.DB, tag)) >= MAX_JOINED) {
-    return c.json({ error: 'You’ve joined as many libraries as Twofold allows.' }, 409);
+    return c.json({ error: 'You’ve joined as many libraries as Arcafold allows.' }, 409);
   }
   if (!(await insertJoined(c.env.DB, tag, body))) {
     return c.json({ error: messages.badRequest }, 409);
@@ -772,7 +772,7 @@ space.post('/pending-invites', requireOwner, async (c) => {
   const tag = c.get('space');
   if ((await countPendingInvites(c.env.DB, tag)) >= MAX_PENDING_INVITES) {
     return c.json(
-      { error: 'You have as many invites waiting as Twofold allows. Cancel one first.' },
+      { error: 'You have as many invites waiting as Arcafold allows. Cancel one first.' },
       409,
     );
   }

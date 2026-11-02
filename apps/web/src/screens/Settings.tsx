@@ -676,7 +676,7 @@ export function Settings() {
         <Row
           icon="lock"
           title="Auto-lock"
-          description="Lock Twofold after a while without use."
+          description="Lock Arcafold after a while without use."
           action={
             <select
               className="select"
@@ -789,7 +789,7 @@ export function Settings() {
         description={
           isPrivate
             ? undefined
-            : 'Choose a second password. Open Twofold with it to see a separate space with its own photos and albums. Your main password will never show that it exists. If you set one up before, this replaces it, and your recovery key cannot open it.'
+            : 'Choose a second password. Open Arcafold with it to see a separate space with its own photos and albums. Your main password will never show that it exists. If you set one up before, this replaces it, and your recovery key cannot open it.'
         }
       >
         <form className="form" onSubmit={onSetPrivate} noValidate>

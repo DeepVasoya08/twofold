@@ -90,7 +90,7 @@ export function Gallery() {
 
       {status === 'failed' ? (
         <EmptyState icon="lock" title="Couldn’t open your photos">
-          Check your connection, then lock Twofold and unlock it again to try again.
+          Check your connection, then lock Arcafold and unlock it again to try again.
         </EmptyState>
       ) : status === 'loading' ? (
         <p className="gallery__status" role="status">
@@ -106,7 +106,7 @@ export function Gallery() {
         isPrivate ? (
           <EmptyState icon="eye-off" title="Your private space is empty">
             Move photos here from your library, or upload straight in. They only appear when you
-            open Twofold with your private password.
+            open Arcafold with your private password.
           </EmptyState>
         ) : (
           <EmptyState

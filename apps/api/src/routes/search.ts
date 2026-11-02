@@ -148,7 +148,7 @@ recordRoutes(
   'smart_albums',
   MAX_SMART_ALBUMS,
   {
-    full: 'You have the most smart albums Twofold keeps.',
+    full: 'You have the most smart albums Arcafold keeps.',
     gone: 'That smart album isn’t here anymore.',
   },
   (albums): SmartAlbumList => ({ albums }),

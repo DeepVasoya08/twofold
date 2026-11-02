@@ -38,7 +38,7 @@ export function LogIn() {
       subtitle="Log in to open your photos."
       footer={
         <>
-          New to Twofold? <Link to={withNext(paths.signup, next)}>Create a vault</Link>
+          New to Arcafold? <Link to={withNext(paths.signup, next)}>Create a vault</Link>
         </>
       }
     >

@@ -1,5 +1,5 @@
 /**
- * The photo formats Twofold stores. Only raster formats: an SVG is a document that can carry
+ * The photo formats Arcafold stores. Only raster formats: an SVG is a document that can carry
  * script, so it is never stored or turned into an object URL.
  */
 export const PHOTO_TYPES: readonly string[] = [

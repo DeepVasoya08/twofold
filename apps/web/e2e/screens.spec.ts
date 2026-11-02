@@ -165,7 +165,7 @@ test('refuses an SVG with a message and stores only the real photo', async ({ pa
     mimeType: 'image/svg+xml',
     buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
   });
-  await expect(dialog.getByText(/Twofold takes JPEG, PNG, GIF, WebP, HEIC and AVIF/)).toBeVisible();
+  await expect(dialog.getByText(/Arcafold takes JPEG, PNG, GIF, WebP, HEIC and AVIF/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Done' }).click();
   await expect(page.locator('.photo-tile')).toHaveCount(1);
 });

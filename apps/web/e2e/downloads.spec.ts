@@ -51,7 +51,7 @@ test('downloading several photos saves one zip of the original files', async ({ 
   const download = page.waitForEvent('download');
   await save.click();
   const zip = await download;
-  expect(zip.suggestedFilename()).toMatch(/^Twofold \d{4}-\d{2}-\d{2}\.zip$/);
+  expect(zip.suggestedFilename()).toMatch(/^Arcafold \d{4}-\d{2}-\d{2}\.zip$/);
   await expect(dialog).toBeHidden();
 
   const entries = readZip(await readFile(await zip.path()));

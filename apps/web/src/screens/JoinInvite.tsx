@@ -76,7 +76,7 @@ export function JoinInvite({ token }: { token: string }) {
     return (
       <div className="share">
         <p className="share__lead">
-          Someone invited you to see photos they share on Twofold. You&apos;ll see who once you
+          Someone invited you to see photos they share on Arcafold. You&apos;ll see who once you
           accept, and you&apos;ll both check four words before anything is shared.
         </p>
         <p className="share__note">

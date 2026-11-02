@@ -52,7 +52,7 @@ export class ApiError extends Error {
   }
 }
 
-const OFFLINE = "Couldn't reach Twofold. Check your connection and try again.";
+const OFFLINE = "Couldn't reach Arcafold. Check your connection and try again.";
 
 let sessionEndedListener: (() => void) | null = null;
 
@@ -130,7 +130,7 @@ async function download(
   }
 }
 
-/** Typed calls to the Twofold API. Bodies carry derived keys, never passwords. */
+/** Typed calls to the Arcafold API. Bodies carry derived keys, never passwords. */
 export const api = {
   account: () => call<AccountResponse>('GET', '/account'),
   signUp: (body: SignUpRequest) => call<AccountResponse>('POST', '/auth/signup', body),

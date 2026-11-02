@@ -130,7 +130,7 @@ describe('buildZip', () => {
   it.skipIf(!hasUnzip())('passes a real unzip’s test and extracts identical files', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'twofold-zip-'));
     dirs.push(dir);
-    const path = join(dir, 'Twofold 2026-10-21.zip');
+    const path = join(dir, 'Arcafold 2026-10-21.zip');
     const entries = files.map((file) => zipEntry(file.name, file.data, taken));
     writeFileSync(path, new Uint8Array(await buildZip(entries).arrayBuffer()));
 

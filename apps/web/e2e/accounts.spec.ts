@@ -12,7 +12,7 @@ import {
   uploadPhotos,
 } from './helpers';
 
-test('reloading locks Twofold; the password opens it again', async ({ page }) => {
+test('reloading locks Arcafold; the password opens it again', async ({ page }) => {
   await signUp(page);
   await page.reload();
   await expect(page).toHaveURL('/unlock');

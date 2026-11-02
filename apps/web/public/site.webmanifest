@@ -1,6 +1,6 @@
 {
-  "name": "Twofold",
-  "short_name": "Twofold",
+  "name": "Arcafold",
+  "short_name": "Arcafold",
   "description": "An end-to-end encrypted photo library.",
   "start_url": "/photos",
   "scope": "/",

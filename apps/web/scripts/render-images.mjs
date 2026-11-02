@@ -40,7 +40,7 @@ function photo(seed, palette, width, height, style) {
 const card = `
   <div style="position:relative;width:1200px;height:630px;overflow:hidden;background:${background};color:#f6eee8;font-family:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif">
     <div style="position:absolute;left:84px;top:84px;display:flex;align-items:center;gap:18px">
-      ${mark(64)}<span style="font-size:46px;font-weight:600">Twofold</span>
+      ${mark(64)}<span style="font-size:46px;font-weight:600">Arcafold</span>
     </div>
     <h1 style="position:absolute;left:84px;top:210px;margin:0;font-size:84px;line-height:1.02;font-weight:600;letter-spacing:-0.02em">Your photos.<br />Truly private.</h1>
     <p style="position:absolute;left:84px;top:430px;margin:0;width:520px;font:500 28px/1.4 system-ui,sans-serif;color:#c0b2c2">An end-to-end encrypted photo library. Encrypted on your device before it's uploaded.</p>

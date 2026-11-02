@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('home page loads', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page).toHaveTitle('Twofold · End-to-end encrypted photo library');
+  await expect(page).toHaveTitle('Arcafold · End-to-end encrypted photo library');
   await expect(page.getByRole('heading', { level: 1, name: /Your photos/ })).toBeVisible();
 });
 

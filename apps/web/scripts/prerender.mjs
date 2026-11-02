@@ -18,7 +18,7 @@ const { prerender, defaultSiteUrl } = await import(
 );
 
 const shell = await readFile(join(dist, 'index.html'), 'utf8');
-const TITLE = '<title>Twofold</title>';
+const TITLE = '<title>Arcafold</title>';
 const ROOT = '<div id="root"></div>';
 if (!shell.includes(TITLE) || !shell.includes(ROOT)) {
   throw new Error('dist/index.html is missing the <title> or #root this script fills in');

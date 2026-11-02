@@ -16,7 +16,7 @@ export function moveLabel(space: Space): string {
 /**
  * Asks for the other space's password before the first move out of this one. A space can't
  * reach the other on its own; once opened, the other space's keys stay in memory until
- * Twofold locks, so later moves go straight through. From the main library, a wrong password
+ * Arcafold locks, so later moves go straight through. From the main library, a wrong password
  * gets the same answer as no private space at all.
  */
 export function MoveSpaceDialog({
@@ -81,8 +81,8 @@ export function MoveSpaceDialog({
       title={moveLabel(space)}
       description={
         isPrivate
-          ? `Enter your main password. ${photos} will leave your private space and appear in your library. You won't be asked again until Twofold locks.`
-          : `Enter your private password. ${photos} will leave your library and only appear when you open Twofold with that password. You won't be asked again until Twofold locks.`
+          ? `Enter your main password. ${photos} will leave your private space and appear in your library. You won't be asked again until Arcafold locks.`
+          : `Enter your private password. ${photos} will leave your library and only appear when you open Arcafold with that password. You won't be asked again until Arcafold locks.`
       }
     >
       <form className="form" onSubmit={onSubmit} noValidate>

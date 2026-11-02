@@ -1,6 +1,6 @@
 # Security model
 
-Twofold is end-to-end encrypted. The rules in [CLAUDE.md](../CLAUDE.md) are
+Arcafold is end-to-end encrypted. The rules in [CLAUDE.md](../CLAUDE.md) are
 non-negotiable; this document is the threat model and key design as they stand.
 
 ## Baseline
@@ -79,7 +79,7 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   having no private space.
 - **Moving photos in** from the main library needs the private space's key. The first move
   after unlocking asks for the private password once and keeps that key in memory
-  (`Session.otherSpace`) until Twofold locks, so later moves don't ask. Setting up a
+  (`Session.otherSpace`) until Arcafold locks, so later moves don't ask. Setting up a
   private space keeps its fresh key the same way. Nothing about this reaches the server.
   Skipping the prompt entirely would mean the main library holding something that opens or
   addresses the private space at rest, which is exactly what deniability rules out.
@@ -189,13 +189,13 @@ other accounts; see [Sharing](#sharing).
   and members who can edit. Moving a photo to the other space, wiping a space and
   deleting the account still delete at once.
 - **Connect Google Photos.** The browser signs in to Google itself (OAuth's token flow, in a
-  window of its own, asking only for `photospicker.mediaitems.readonly`, so Twofold can see
+  window of its own, asking only for `photospicker.mediaitems.readonly`, so Arcafold can see
   only the photos the person picks). Google sends the access token back in the URL fragment
   of `/import/google/done`, which never reaches a server; that page passes it to the app over
   a same-origin `BroadcastChannel`, checked against a random `state`, wipes it from the
   address bar and closes. The token is kept in memory only, never logged or stored, and
   forgotten when the import ends or the vault locks. Each picked photo downloads from Google
-  straight into the browser and goes through the same encryption as an upload; Twofold's
+  straight into the browser and goes through the same encryption as an upload; Arcafold's
   server never sees the photos or the Google account.
 - **Fingerprints.** Each new photo's sealed record also holds `fp`, a keyed BLAKE2b hash
   (`crypto_generichash`, 32 bytes) of its original, under a key derived from the space's
@@ -268,7 +268,7 @@ under). It never gets the space key or the space id.
   decrypted files, never written to localStorage, IndexedDB or caches), or, on a touch
   device that can share files, through the system share sheet. Those copies are not
   encrypted, and the dialog says so before anything is saved. File names come from when
-  each photo was taken and the zip is called `Twofold <date>.zip`, so neither names the
+  each photo was taken and the zip is called `Arcafold <date>.zip`, so neither names the
   space or album. Download links are temporary object URLs, revoked after a few seconds.
   Closing the download dialog keeps the download (and its decrypted copies) in memory so
   it can finish in the background; they're dropped once saved, when the download is
@@ -472,7 +472,7 @@ server stores only what it stores for photos: ciphertext it can't read.
   Either way it applies to whichever space is open.
 - **On the device.** The models are YuNet (face detection, MIT) and SFace (face
   fingerprints, Apache 2.0), run by ONNX Runtime Web (WebAssembly) in a Web Worker
-  (`apps/web/src/lib/people`). They are served from Twofold's own origin, and each file is
+  (`apps/web/src/lib/people`). They are served from Arcafold's own origin, and each file is
   checked against a pinned SHA-256 before it is loaded, so a changed model is refused. The
   worker reads the 640px preview the grid already downloads and decrypts; nothing is kept
   after a photo is looked at: no pixels, no object URLs, nothing in storage or caches.
@@ -508,7 +508,7 @@ so photos can later be found by describing them. The server stores only cipherte
   is open, so the setting and the download look the same with or without a private space.
 - **On the device.** The photo half of OpenCLIP ViT-B/32 (LAION-2B weights, MIT), stored
   with 8-bit weights, runs in ONNX Runtime Web (WebAssembly) in a Web Worker
-  (`apps/web/src/lib/search`). It's served in chunks from Twofold's own origin and checked
+  (`apps/web/src/lib/search`). It's served in chunks from Arcafold's own origin and checked
   against a pinned SHA-256 before it's loaded. Nothing is downloaded until there's a photo
   to look at. Like face grouping, the worker reads the decrypted 640px preview and keeps
   nothing after looking at it.

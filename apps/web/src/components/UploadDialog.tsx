@@ -164,7 +164,7 @@ export function UploadDialog({ albumId }: UploadDialogProps) {
 
       {running && (
         <p className="upload-note">
-          You can close this and keep using Twofold. Keep this tab open until uploads finish.
+          You can close this and keep using Arcafold. Keep this tab open until uploads finish.
         </p>
       )}
 

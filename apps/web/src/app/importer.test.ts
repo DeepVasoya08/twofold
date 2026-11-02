@@ -114,7 +114,7 @@ describe('Importer', () => {
 
   it('lists photos it couldn’t import and carries on', async () => {
     const { importer } = setup({
-      prepare: (item) => Promise.reject(new FormError(`Twofold can’t read ${item.name}.`)),
+      prepare: (item) => Promise.reject(new FormError(`Arcafold can’t read ${item.name}.`)),
     });
     importer.start([job('broken.jpg'), job('also.jpg')]);
     await finish(importer);
@@ -122,8 +122,8 @@ describe('Importer', () => {
       phase: 'done',
       imported: 0,
       failures: [
-        { name: 'broken.jpg', error: 'Twofold can’t read broken.jpg.' },
-        { name: 'also.jpg', error: 'Twofold can’t read also.jpg.' },
+        { name: 'broken.jpg', error: 'Arcafold can’t read broken.jpg.' },
+        { name: 'also.jpg', error: 'Arcafold can’t read also.jpg.' },
       ],
     });
   });

@@ -37,7 +37,7 @@ export function copyNames(photos: readonly { takenAt: string; type: string }[]):
   });
 }
 
-/** The name of a zip of photos saved on `today`: `Twofold 2026-10-21.zip`. */
+/** The name of a zip of photos saved on `today`: `Arcafold 2026-10-21.zip`. */
 export function zipName(today: Date = new Date()): string {
-  return `Twofold ${localDate(today)}.zip`;
+  return `Arcafold ${localDate(today)}.zip`;
 }
