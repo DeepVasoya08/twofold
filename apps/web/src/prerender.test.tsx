@@ -37,9 +37,23 @@ describe('prerender', () => {
     expect(file('terms.html').content).toContain('[jurisdiction]');
   });
 
+  it('marks only the page with a missing detail as a draft', () => {
+    expect(file('terms.html').content).toContain('legal__draft');
+    expect(file('privacy.html').content).not.toContain('legal__draft');
+  });
+
   it('spells out Google data use in the served HTML, where Google’s reviewers read it', () => {
     const { content } = file('privacy.html');
-    expect(content).toContain('Importing from Google Photos');
+    for (const heading of [
+      'Google user data',
+      'Data accessed',
+      'Data usage',
+      'Data sharing',
+      'Data storage and protection',
+      'Data retention and deletion',
+    ]) {
+      expect(content).toContain(`>${heading}</h`);
+    }
     expect(content).toContain('including the Limited Use requirements');
   });
 });

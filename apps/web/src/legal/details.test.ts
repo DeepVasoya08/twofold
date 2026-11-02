@@ -17,4 +17,10 @@ describe('isDraft', () => {
   it('is final once every detail is filled in', () => {
     expect(isDraft(complete)).toBe(false);
   });
+
+  it('looks only at the details a page uses, when given them', () => {
+    const noJurisdiction = { ...complete, jurisdiction: null };
+    expect(isDraft(noJurisdiction, ['operator', 'contactEmail'])).toBe(false);
+    expect(isDraft(noJurisdiction, ['contactEmail', 'jurisdiction'])).toBe(true);
+  });
 });

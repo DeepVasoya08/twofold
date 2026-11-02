@@ -7,6 +7,7 @@ export function Terms() {
   return (
     <LegalPage
       title="Terms of Use"
+      uses={['operator', 'contactEmail', 'jurisdiction']}
       summary={
         <>
           <strong>The short version.</strong>
