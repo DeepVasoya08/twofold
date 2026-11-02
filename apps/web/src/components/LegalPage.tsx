@@ -16,10 +16,13 @@ export function Fill({ field, label }: { field: keyof LegalDetails; label: strin
 export function LegalPage({
   title,
   summary,
+  uses,
   children,
 }: {
   title: string;
   summary: ReactNode;
+  /** The details this page shows: it is a draft only while one of them is missing. */
+  uses: readonly (keyof LegalDetails)[];
   children: ReactNode;
 }) {
   return (
@@ -31,7 +34,7 @@ export function LegalPage({
           <p className="legal__date">
             Effective <Fill field="effectiveDate" label="effective date" />
           </p>
-          {isDraft(legalDetails) && (
+          {isDraft(legalDetails, ['effectiveDate', ...uses]) && (
             <p className="legal__draft" role="note">
               Draft. Highlighted details are still to be filled in, and this page is waiting on a
               legal review.

@@ -7,6 +7,7 @@ export function Privacy() {
   return (
     <LegalPage
       title="Privacy Policy"
+      uses={['operator', 'contactEmail']}
       summary={
         <>
           <strong>The short version.</strong>
@@ -102,55 +103,6 @@ export function Privacy() {
         on unless you turn it off on a device in Settings, where you can also delete all search data
         for a space.
       </p>
-      <h3 id="google-photos">Importing from Google Photos</h3>
-      <p>
-        If you choose <strong>Connect Google Photos</strong>, you sign in to Google and Google asks
-        whether Arcafold may see the photos you pick. Arcafold asks for one permission only:{' '}
-        <strong>to view the photos and videos you select in Google Photos</strong> (the Google
-        Photos Picker API). It can’t see anything you don’t pick, and it can’t change or delete
-        anything in your Google account.
-      </p>
-      <ul>
-        <li>
-          <strong>What your device reads from Google:</strong> the photos you pick, with each one’s
-          file name, file type and the date it was taken.
-        </li>
-        <li>
-          <strong>How it’s used:</strong> only to copy those photos into your Arcafold library or
-          private space, at your request. Your device downloads each photo straight from Google,
-          encrypts it, and uploads it like any other photo, so we can’t see the photos or their
-          details. Google’s sign-in token stays in your device’s memory for the import only; it is
-          never sent to our servers or saved, and the picking session is ended when the import
-          finishes.
-        </li>
-        <li>
-          <strong>What we keep:</strong> nothing from your Google account. We never receive your
-          Google email address, profile, contacts or any other Google data.
-        </li>
-        <li>
-          <strong>Sharing:</strong> we don’t share, sell or transfer Google data to anyone, use it
-          for ads, or use it to train AI models. People can only see imported photos if you share
-          them, like any other photo.
-        </li>
-        <li>
-          <strong>Removing access:</strong> you can remove Arcafold’s access at any time in your{' '}
-          <a href="https://myaccount.google.com/connections" rel="noreferrer noopener">
-            Google account settings
-          </a>
-          . Photos you already imported stay in Arcafold until you delete them.
-        </li>
-      </ul>
-      <p>
-        Arcafold’s use and transfer to any other app of information received from Google APIs will
-        adhere to the{' '}
-        <a
-          href="https://developers.google.com/terms/api-services-user-data-policy"
-          rel="noreferrer noopener"
-        >
-          Google API Services User Data Policy
-        </a>
-        , including the Limited Use requirements.
-      </p>
       <h3>Security</h3>
       <p>
         To stop people guessing passwords, we count failed sign-in attempts for each email address
@@ -161,6 +113,67 @@ export function Privacy() {
       <p>
         When you invite someone, we hold the encrypted invite until it’s accepted or cancelled, or
         for up to {String(serviceFacts.inviteExpiryDays)} days.
+      </p>
+
+      <h2 id="google-user-data">Google user data</h2>
+      <p>
+        This section covers the information Arcafold gets from Google when you choose{' '}
+        <strong>Connect Google Photos</strong> to import photos. You sign in to Google, Google asks
+        whether Arcafold may see the photos you pick, and you then pick photos in Google Photos.
+      </p>
+      <h3>Data accessed</h3>
+      <p>
+        Arcafold asks for one permission (OAuth scope) only,{' '}
+        <code>photospicker.mediaitems.readonly</code>: to view the photos and videos you select in
+        Google Photos, through the Google Photos Picker API. With it, Arcafold reads only the items
+        you pick: each photo’s file, file name, file type and the date it was taken. It can’t see
+        anything you don’t pick, and it can’t change or delete anything in your Google account. We
+        don’t ask for your Google email address, profile, contacts or any other Google data.
+      </p>
+      <h3>Data usage</h3>
+      <p>
+        The photos you pick are used for one purpose: copying them into your Arcafold library or
+        private space, because you asked to. Arcafold doesn’t use Google user data for ads, doesn’t
+        sell it, doesn’t use it to build profiles, and doesn’t use it to train AI or machine
+        learning models.
+      </p>
+      <h3>Data sharing</h3>
+      <p>
+        We don’t share, sell or transfer Google user data to anyone. Your device downloads each
+        picked photo straight from Google; it never passes through our servers unencrypted, and no
+        other service receives it. People can see an imported photo only if you share it with them
+        in Arcafold, like any other photo.
+      </p>
+      <h3>Data storage and protection</h3>
+      <p>
+        Each imported photo is encrypted on your device before it’s uploaded, so we store it but
+        can’t read it, the same as photos you upload yourself. Google’s sign-in (access) token is
+        kept only in your device’s memory while the import runs. It is never sent to our servers,
+        never written to your browser’s storage, and is forgotten when the import ends or you close
+        the page.
+      </p>
+      <h3>Data retention and deletion</h3>
+      <p>
+        We keep no Google user data apart from the photos you chose to import, which stay in your
+        account until you delete them (deleted photos are removed as described under “How long we
+        keep information” below). The picking session with Google is ended as soon as the import
+        finishes. You can remove Arcafold’s access to your Google account at any time at{' '}
+        <a href="https://myaccount.google.com/connections" rel="noreferrer noopener">
+          myaccount.google.com/connections
+        </a>
+        , and ask us to delete your data at <Fill field="contactEmail" label="contact email" />.
+      </p>
+      <h3>Limited Use</h3>
+      <p>
+        Arcafold’s use and transfer to any other app of information received from Google APIs will
+        adhere to the{' '}
+        <a
+          href="https://developers.google.com/terms/api-services-user-data-policy"
+          rel="noreferrer noopener"
+        >
+          Google API Services User Data Policy
+        </a>
+        , including the Limited Use requirements.
       </p>
 
       <h2>What we don’t do</h2>

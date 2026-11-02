@@ -1,7 +1,7 @@
 /**
  * Facts the Privacy Policy and Terms of Use depend on that only the operator can supply.
- * While a value is null the pages show a highlighted placeholder in its place, and the
- * draft notice stays up until every value is filled in.
+ * While a value is null the pages show a highlighted placeholder in its place, and a page
+ * that uses it keeps its draft notice until it is filled in.
  */
 export interface LegalDetails {
   /** The person or company that runs Arcafold, as it should appear in a contract. */
@@ -29,6 +29,10 @@ export const serviceFacts = {
   dataRegion: 'Cloudflare’s Asia-Pacific region',
 } as const;
 
-export function isDraft(details: LegalDetails): boolean {
-  return Object.values(details).some((value) => value === null);
+/** Whether any of `fields` (every detail, by default) is still missing. */
+export function isDraft(
+  details: LegalDetails,
+  fields: readonly (keyof LegalDetails)[] = Object.keys(details) as (keyof LegalDetails)[],
+): boolean {
+  return fields.some((field) => details[field] === null);
 }
