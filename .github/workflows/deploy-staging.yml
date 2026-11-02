@@ -90,6 +90,7 @@ jobs:
         env:
           # Connect Google Photos' OAuth client (public; unset hides the button).
           VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
 
       # Staging is for testing, so search engines are asked to stay away.
       - name: Keep staging out of search engines

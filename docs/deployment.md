@@ -142,6 +142,17 @@ instead.
 
 To let anyone connect, publish the app and ask Google to verify it from **Google Auth
 Platform → Verification center**; Google reviews the scope's use, which can take weeks.
+Google's branding check needs two things from the site:
+
+- **Proof you own the home page.** In [Google Search Console](https://search.google.com/search-console),
+  add a **URL prefix** property for the app's origin (a `workers.dev` address can't use the
+  Domain option, which needs DNS). Pick the **HTML tag** method, copy only the `content`
+  value from the tag it shows, set it as the `GOOGLE_SITE_VERIFICATION` repository variable,
+  redeploy, then press **Verify** in Search Console. The build adds the tag to every page.
+  Use the same Google account that owns the Cloud project, and wait a day before asking
+  Google to re-check the branding.
+- **A privacy policy that covers Google data.** `/privacy` has an "Importing from Google
+  Photos" section, including the Limited Use statement Google asks for.
 
 ## Checking a deploy
 
