@@ -1,9 +1,9 @@
-import { fromBase64Url, randomBytes, sha256, toBase64Url } from '@twofold/crypto/webcrypto';
+import { fromBase64Url, randomBytes, sha256, toBase64Url } from '@arcafold/crypto/webcrypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { INVITE_TTL_MS, MAX_MEMBERS, SPACE_HEADER } from '@twofold/types';
-import { MAX_PENDING_INVITES } from '@twofold/types';
+import { INVITE_TTL_MS, MAX_MEMBERS, SPACE_HEADER } from '@arcafold/types';
+import { MAX_PENDING_INVITES } from '@arcafold/types';
 import type {
   InviterView,
   JoinedList,
@@ -11,7 +11,7 @@ import type {
   MemberList,
   PendingInviteList,
   PhotoPage,
-} from '@twofold/types';
+} from '@arcafold/types';
 
 import type { Env } from './env';
 import { MAX_FAILURES } from './proof';

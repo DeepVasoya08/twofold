@@ -4,7 +4,7 @@ import type { ImportItem } from './takeout';
 /**
  * Brings photos over from Google Photos with Google's Photos Picker API: the person picks
  * photos in Google Photos itself, and this browser downloads each one and encrypts it before
- * it goes anywhere. Twofold's server never sees the photos or the Google sign-in; the access
+ * it goes anywhere. Arcafold's server never sees the photos or the Google sign-in; the access
  * token lives in memory only, for as long as the import runs.
  *
  * Google gives each picked photo's file name, media type and creation time, but not its
@@ -51,7 +51,7 @@ export interface PickedPhoto {
 
 export interface PickedItems {
   photos: PickedPhoto[];
-  /** Videos picked, which Twofold can't store yet. */
+  /** Videos picked, which Arcafold can't store yet. */
   videos: number;
 }
 

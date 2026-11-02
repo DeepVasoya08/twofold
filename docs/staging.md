@@ -1,8 +1,8 @@
 # Staging and restore drills
 
-Staging is a second copy of Twofold at `https://twofold-staging.<your-subdomain>.workers.dev`.
-It shares nothing with production: it has its own Worker (`twofold-staging`), its own
-database (`twofold-staging`) and its own bucket (`twofold-staging-blobs`). It's used for
+Staging is a second copy of Arcafold at `https://arcafold-staging.<your-subdomain>.workers.dev`.
+It shares nothing with production: it has its own Worker (`arcafold-staging`), its own
+database (`arcafold-staging`) and its own bucket (`arcafold-staging-blobs`). It's used for
 restore drills and for trying a branch before it reaches production. Accounts made there
 are separate from production accounts.
 
@@ -18,13 +18,13 @@ stops at that step. Create them once by hand and run it again:
 
 ```sh
 cd apps/api
-pnpm exec wrangler d1 create twofold-staging
-pnpm exec wrangler r2 bucket create twofold-staging-blobs
-pnpm exec wrangler r2 bucket create twofold-staging-backups
+pnpm exec wrangler d1 create arcafold-staging
+pnpm exec wrangler r2 bucket create arcafold-staging-blobs
+pnpm exec wrangler r2 bucket create arcafold-staging-backups
 ```
 
 Staging's `robots.txt` blocks search engines. Staging has its own photo backup Worker
-(`twofold-staging-backup`) copying into `twofold-staging-backups`, so changes to the backup
+(`arcafold-staging-backup`) copying into `arcafold-staging-backups`, so changes to the backup
 can be tried there first.
 
 ## Restore drill (every quarter)
@@ -38,14 +38,14 @@ because only that computer holds the backup's secret key.
 
    ```sh
    pnpm install
-   pnpm --filter @twofold/api drill d1/2026-10-29T0912Z.sealed "$HOME/twofold-backup.key"
+   pnpm --filter @arcafold/api drill d1/2026-10-29T0912Z.sealed "$HOME/arcafold-backup.key"
    ```
 
    The command downloads the export and opens it with the key. It then empties the staging
    database and imports the export. Last, it prints how many rows each table has. It
    deletes the downloaded and opened files when it finishes, even if it fails. With the
    wrong key or a damaged file, it stops before staging is touched. It only ever writes to
-   `twofold-staging`.
+   `arcafold-staging`.
 
 3. Check that the counts look like production's. For example, `accounts` should match the
    number of people who have signed up.
@@ -59,7 +59,7 @@ Sign in only with your own account. Staging now holds a copy of everyone's (encr
 records, so when you've checked, empty it again:
 
 ```sh
-pnpm --filter @twofold/api drill wipe
+pnpm --filter @arcafold/api drill wipe
 ```
 
 ## Restore log

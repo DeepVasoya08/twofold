@@ -5,9 +5,9 @@
  * main library can't show that face grouping was turned on in another space, because the
  * setting and the downloaded resources look the same either way.
  */
-import type { SmartFeaturesChoice } from '@twofold/types';
+import type { SmartFeaturesChoice } from '@arcafold/types';
 
-export const FACE_SETTING_KEY = 'twofold.faceGrouping';
+export const FACE_SETTING_KEY = 'arcafold.faceGrouping';
 
 /** What this device chose, or null if it never chose (or storage is missing or blocked). */
 export type FacePreference = 'on' | 'off' | null;

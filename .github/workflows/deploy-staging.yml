@@ -1,6 +1,6 @@
 name: Deploy staging
 
-# Deploys a branch to the staging copy (twofold-staging), which has its own database and
+# Deploys a branch to the staging copy (arcafold-staging), which has its own database and
 # bucket (docs/staging.md). Run by hand from the Actions tab. The first run creates the
 # database and bucket.
 on:
@@ -19,9 +19,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  STAGING_DATABASE: twofold-staging
-  STAGING_BUCKET: twofold-staging-blobs
-  STAGING_BACKUP_BUCKET: twofold-staging-backups
+  STAGING_DATABASE: arcafold-staging
+  STAGING_BUCKET: arcafold-staging-blobs
+  STAGING_BACKUP_BUCKET: arcafold-staging-backups
 
 jobs:
   deploy:
@@ -86,7 +86,7 @@ jobs:
           .venv/bin/python scripts/search-resources/build.py public/resources/search "$RUNNER_TEMP/search-resources"
 
       - name: Build web app
-        run: pnpm --filter @twofold/web run build
+        run: pnpm --filter @arcafold/web run build
         env:
           # Connect Google Photos' OAuth client (public; unset hides the button).
           VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}

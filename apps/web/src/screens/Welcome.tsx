@@ -83,7 +83,7 @@ const features: { icon: IconName; title: string; text: string }[] = [
   {
     icon: 'eye-off',
     title: 'Locks itself',
-    text: 'Twofold locks when you’ve been away for a while, so an open tab stays private.',
+    text: 'Arcafold locks when you’ve been away for a while, so an open tab stays private.',
   },
   {
     icon: 'laptop',
@@ -108,7 +108,7 @@ function Hero() {
           Truly private.
         </h1>
         <p className="welcome__lede">
-          Twofold is a photo library that encrypts every photo on your device before it’s uploaded.
+          Arcafold is a photo library that encrypts every photo on your device before it’s uploaded.
           No ads, no scanning, no one looking through your memories but you.
         </p>
         <div className="welcome__cta">

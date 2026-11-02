@@ -1,10 +1,10 @@
 import { resolveObjectURL } from 'node:buffer';
 import { describe, expect, it, vi } from 'vitest';
 
-import { newSpace, openRecord, ownerAccess, sealRecord } from '@twofold/crypto';
-import type { SpaceKeys } from '@twofold/crypto';
-import { fromBase64Url } from '@twofold/crypto/webcrypto';
-import { STORAGE_SIZES, THUMB_BATCH_MAX } from '@twofold/types';
+import { newSpace, openRecord, ownerAccess, sealRecord } from '@arcafold/crypto';
+import type { SpaceKeys } from '@arcafold/crypto';
+import { fromBase64Url } from '@arcafold/crypto/webcrypto';
+import { STORAGE_SIZES, THUMB_BATCH_MAX } from '@arcafold/types';
 
 import { FakeServer } from '../test/fake-server';
 import { combinedStore, memoryStore, remoteStore } from './space-store';
@@ -80,7 +80,7 @@ describe('remoteStore', () => {
     const { server, space } = await setUp();
     const store = remoteStore(space, server.api);
     await expect(store.add({ ...PHOTO, type: 'image/svg+xml' }, [])).rejects.toThrow(
-      'Twofold can’t store this kind of file.',
+      'Arcafold can’t store this kind of file.',
     );
     const added = await store.add(PHOTO, []);
     const entry = server.photos.get(added.id);

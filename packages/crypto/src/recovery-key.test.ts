@@ -61,6 +61,6 @@ describe('recovery key words', () => {
 
   it('recognises wordlist words', () => {
     expect(isRecoveryWord('Garden')).toBe(true);
-    expect(isRecoveryWord('twofold')).toBe(false);
+    expect(isRecoveryWord('arcafold')).toBe(false);
   });
 });

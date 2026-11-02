@@ -48,7 +48,7 @@ jobs:
         run: pnpm build
 
       - name: Install Playwright browser
-        run: pnpm --filter @twofold/web exec playwright install --with-deps chromium
+        run: pnpm --filter @arcafold/web exec playwright install --with-deps chromium
 
       - name: Playwright smoke test
         run: pnpm test:e2e

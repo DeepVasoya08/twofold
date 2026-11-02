@@ -25,7 +25,7 @@ test('the auto-lock choice is kept after leaving Settings and reloading', async 
   await expect(autoLockSelect(page)).toHaveValue('1');
 });
 
-test('Twofold locks after the chosen time without use', async ({ page }) => {
+test('Arcafold locks after the chosen time without use', async ({ page }) => {
   await page.clock.install();
   await signUp(page);
   await chooseAutoLock(page, '1 minute');
@@ -40,7 +40,7 @@ test('Twofold locks after the chosen time without use', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
 });
 
-test('using Twofold keeps it unlocked', async ({ page }) => {
+test('using Arcafold keeps it unlocked', async ({ page }) => {
   await page.clock.install();
   await signUp(page);
   await chooseAutoLock(page, '1 minute');

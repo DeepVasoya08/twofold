@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { STORAGE_SIZES } from '@twofold/types';
+import { STORAGE_SIZES } from '@arcafold/types';
 
 import type { Photo } from '../mock/data';
 import { formatBytes, shownUsage, spaceBytes, usageLabel, usedFraction } from './storage-usage';

@@ -10,7 +10,7 @@ import { PICKER_SCOPE } from '../lib/import/google-picker';
  */
 
 export const GOOGLE_REDIRECT_PATH = '/import/google/done';
-const CHANNEL = 'twofold-google-sign-in';
+const CHANNEL = 'arcafold-google-sign-in';
 /** How long to wait for the sign-in window before giving up. */
 const SIGN_IN_TIMEOUT_MS = 10 * 60_000;
 
@@ -99,7 +99,7 @@ export function googleSignIn(
       finish(() => {
         reject(
           new GoogleSignInError(
-            'Your browser blocked the Google sign-in window. Allow pop-ups for Twofold and try again.',
+            'Your browser blocked the Google sign-in window. Allow pop-ups for Arcafold and try again.',
           ),
         );
       });

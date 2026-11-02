@@ -7,7 +7,7 @@ import type {
   StoredPendingInvite,
   StoredPhoto,
   StoredProfilePhoto,
-} from '@twofold/types';
+} from '@arcafold/types';
 
 import { ApiError } from '../lib/api';
 import type { InviteApi, SpaceApi } from '../lib/api';

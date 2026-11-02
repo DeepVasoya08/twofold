@@ -1,4 +1,4 @@
-import type { StoredAlbum, StoredPhoto } from '@twofold/types';
+import type { StoredAlbum, StoredPhoto } from '@arcafold/types';
 
 /**
  * Shared album queries. A shared album's title (`albums.shared_meta`) and its photos' details

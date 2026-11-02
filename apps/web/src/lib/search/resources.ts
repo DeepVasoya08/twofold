@@ -2,10 +2,10 @@
  * Smart search's resources: the photo and text halves of OpenCLIP ViT-B/32 (LAION-2B
  * weights, MIT licence), stored as 8-bit weights, and the text half's word list. They're too big for one static asset
  * (the limit is 25 MiB), so scripts/search-resources/build.py splits each into chunks that
- * are served from Twofold's own origin like the rest of the app. The whole file is checked
+ * are served from Arcafold's own origin like the rest of the app. The whole file is checked
  * against the SHA-256 pinned here before it's used, so a changed chunk is never run.
  */
-import { sha256, toBase64Url } from '@twofold/crypto/webcrypto';
+import { sha256, toBase64Url } from '@arcafold/crypto/webcrypto';
 
 export interface SearchResource {
   /** File name prefix of the chunks. */
@@ -116,4 +116,4 @@ export async function resourceCached(
   return true;
 }
 
-const MISMATCH = 'A downloaded resource didn’t match the one Twofold was built with.';
+const MISMATCH = 'A downloaded resource didn’t match the one Arcafold was built with.';

@@ -1,9 +1,9 @@
 /**
- * The face model files. They're served from Twofold's own origin like the rest of the app
+ * The face model files. They're served from Arcafold's own origin like the rest of the app
  * (the CSP allows nothing else), and each is checked against the SHA-256 it was released
  * with before it's used, so a changed file is never run. See scripts/face-models/README.md.
  */
-import { sha256, toBase64Url } from '@twofold/crypto/webcrypto';
+import { sha256, toBase64Url } from '@arcafold/crypto/webcrypto';
 
 import recognizerUrl from './models/sface-2021dec-w8.onnx?url';
 import detectorUrl from './models/yunet-2023mar.onnx?url';
@@ -45,7 +45,7 @@ async function fetchChecked(file: ModelFile, load: typeof fetch): Promise<Uint8A
   if (!response?.ok) throw new ModelError();
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (toBase64Url(await sha256(bytes)) !== file.sha256) {
-    throw new ModelError('A downloaded resource didn’t match the one Twofold was built with.');
+    throw new ModelError('A downloaded resource didn’t match the one Arcafold was built with.');
   }
   return bytes;
 }

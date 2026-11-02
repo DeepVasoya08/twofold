@@ -42,7 +42,7 @@ export function AuthLayout({ title, subtitle, children, footer, step }: AuthLayo
       </aside>
       <main className="auth__main">
         <header className="auth__top">
-          <Link to={paths.welcome} className="auth__logo" aria-label="Twofold home">
+          <Link to={paths.welcome} className="auth__logo" aria-label="Arcafold home">
             <Logo size={28} />
           </Link>
           {step && (

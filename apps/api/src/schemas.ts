@@ -11,7 +11,7 @@ import {
   SMART_FEATURES_VERSION,
   STORAGE_SIZES,
   TRASH_BATCH_MAX,
-} from '@twofold/types';
+} from '@arcafold/types';
 
 /** Length of an unpadded base64url string encoding `bytes` bytes. */
 function base64UrlLength(bytes: number): number {

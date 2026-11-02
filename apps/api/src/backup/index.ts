@@ -8,7 +8,7 @@ export interface BackupEnv {
 }
 
 /**
- * The twofold-backup Worker: no routes, only a schedule. It runs apart from the app so the
+ * The arcafold-backup Worker: no routes, only a schedule. It runs apart from the app so the
  * app's Worker never holds the backup bucket. Logs only counts, never file names.
  */
 export default {

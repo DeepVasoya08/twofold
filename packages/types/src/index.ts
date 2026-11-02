@@ -139,7 +139,7 @@ export interface DeviceList {
  * key slot), sent in this header. The server keeps only the token's SHA-256 and never links
  * a space to an account, so it cannot tell whose space it is or how many an account has.
  */
-export const SPACE_HEADER = 'x-twofold-space';
+export const SPACE_HEADER = 'x-arcafold-space';
 
 export const STORAGE_SIZES = {
   /** The space access token: the space id from the key slot. */

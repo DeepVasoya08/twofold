@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { sha256, toBase64Url } from '@twofold/crypto/webcrypto';
+import { sha256, toBase64Url } from '@arcafold/crypto/webcrypto';
 
 import { ModelError, loadModelBytes } from './models';
 

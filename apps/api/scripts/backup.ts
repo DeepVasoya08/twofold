@@ -1,5 +1,5 @@
 /**
- * Database backup tool. Run with `pnpm --filter @twofold/api backup <command>`.
+ * Database backup tool. Run with `pnpm --filter @arcafold/api backup <command>`.
  *
  *   keygen <secret-key-file>              Makes a backup key pair. Writes the secret key to
  *                                         the file (never printed) and prints the public key.
@@ -12,7 +12,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-import { newBackupKeyPair, openBackup, sealBackup } from '@twofold/crypto/backup';
+import { newBackupKeyPair, openBackup, sealBackup } from '@arcafold/crypto/backup';
 
 const USAGE = `Usage:
   backup keygen <secret-key-file>

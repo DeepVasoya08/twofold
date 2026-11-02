@@ -1,14 +1,14 @@
 import { Hono } from 'hono';
 
-import { fromBase64Url } from '@twofold/crypto/webcrypto';
+import { fromBase64Url } from '@arcafold/crypto/webcrypto';
 import {
   MAX_SEARCH_SEGMENTS,
   MAX_SMART_ALBUMS,
   MAX_WORDS,
   SEARCH_SEGMENT_PAGE,
   STORAGE_SIZES,
-} from '@twofold/types';
-import type { SearchSegmentPage, SmartAlbumList, StoredWord, WordList } from '@twofold/types';
+} from '@arcafold/types';
+import type { SearchSegmentPage, SmartAlbumList, StoredWord, WordList } from '@arcafold/types';
 
 import { releaseStorage, reserveStorage } from '../db';
 import { messages, readBody } from '../respond';
@@ -148,7 +148,7 @@ recordRoutes(
   'smart_albums',
   MAX_SMART_ALBUMS,
   {
-    full: 'You have the most smart albums Twofold keeps.',
+    full: 'You have the most smart albums Arcafold keeps.',
     gone: 'That smart album isn’t here anymore.',
   },
   (albums): SmartAlbumList => ({ albums }),

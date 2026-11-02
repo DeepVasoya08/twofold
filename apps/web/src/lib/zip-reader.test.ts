@@ -136,7 +136,7 @@ describe('listZip / readZipEntry', () => {
     expect((await readAll(zip))[files[2]?.name ?? '']).toEqual(PHOTO);
   });
 
-  it('reads what Twofold’s own zip writer makes', async () => {
+  it('reads what Arcafold’s own zip writer makes', async () => {
     const zip = buildZip([zipEntry('2019-03-08 12.00.00.jpg', PHOTO, new Date())]);
     expect(Object.values(await readAll(zip))).toEqual([PHOTO]);
   });

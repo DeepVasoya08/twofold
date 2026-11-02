@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 
-import { fromBase64Url } from '@twofold/crypto/webcrypto';
-import { FACE_SEGMENT_PAGE, MAX_FACE_SEGMENTS, MAX_PEOPLE, STORAGE_SIZES } from '@twofold/types';
-import type { FaceSegmentPage, PersonList } from '@twofold/types';
+import { fromBase64Url } from '@arcafold/crypto/webcrypto';
+import { FACE_SEGMENT_PAGE, MAX_FACE_SEGMENTS, MAX_PEOPLE, STORAGE_SIZES } from '@arcafold/types';
+import type { FaceSegmentPage, PersonList } from '@arcafold/types';
 
 import { releaseStorage, reserveStorage } from '../db';
 import {
@@ -108,7 +108,7 @@ people.put('/people/:id', async (c) => {
   // Only a new person can go over the limit.
   const full = (await countPeople(c.env.DB, tag)) >= MAX_PEOPLE;
   if (full && !(await hasPerson(c.env.DB, tag, id.data))) {
-    return c.json({ error: 'You have the most people Twofold keeps.' }, 409);
+    return c.json({ error: 'You have the most people Arcafold keeps.' }, 409);
   }
   await putPerson(c.env.DB, tag, { id: id.data, meta: body.meta });
   return c.body(null, 204);

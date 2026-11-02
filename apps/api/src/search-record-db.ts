@@ -1,4 +1,4 @@
-import type { StoredWord } from '@twofold/types';
+import type { StoredWord } from '@arcafold/types';
 
 /**
  * Queries for search's sealed records: words taught to it and smart albums. Every query is

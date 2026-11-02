@@ -1,6 +1,6 @@
 /**
  * Works out when a photo was taken, from the photo itself. Cameras and phones write the moment
- * of capture into the photo's EXIF block (DateTimeOriginal), which every format Twofold stores
+ * of capture into the photo's EXIF block (DateTimeOriginal), which every format Arcafold stores
  * can carry: JPEG in an APP1 segment, HEIC and AVIF as an "Exif" item, WebP and PNG as a chunk.
  * Only the bytes in memory are read; nothing leaves the device.
  */

@@ -1,5 +1,5 @@
-import { SMART_FEATURES_VERSION } from '@twofold/types';
-import type { AccountResponse } from '@twofold/types';
+import { SMART_FEATURES_VERSION } from '@arcafold/types';
+import type { AccountResponse } from '@arcafold/types';
 
 import type { AccountState } from '../app/account';
 

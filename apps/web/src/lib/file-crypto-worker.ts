@@ -1,4 +1,4 @@
-import FileCryptoWorker from '@twofold/crypto/file-crypto-worker?worker';
+import FileCryptoWorker from '@arcafold/crypto/file-crypto-worker?worker';
 
 /** Starts a Web Worker that encrypts and decrypts photo files off the main thread. */
 export function spawnFileCryptoWorker(): Worker {

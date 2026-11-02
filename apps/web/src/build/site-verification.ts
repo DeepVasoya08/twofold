@@ -1,6 +1,6 @@
 /**
  * Google Search Console's ownership check: a `google-site-verification` meta tag on the home
- * page, which Google needs before it shows Twofold's name and logo on the "Connect Google
+ * page, which Google needs before it shows Arcafold's name and logo on the "Connect Google
  * Photos" sign-in screen. The token comes from the GOOGLE_SITE_VERIFICATION Actions variable at
  * build time (docs/deployment.md); it is public by design, since anyone can read the page.
  */

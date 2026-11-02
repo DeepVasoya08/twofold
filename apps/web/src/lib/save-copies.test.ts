@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { STORAGE_SIZES } from '@twofold/types';
+import { STORAGE_SIZES } from '@arcafold/types';
 
 import {
   DOWNLOAD_MAX_BYTES,
@@ -53,7 +53,7 @@ describe('prepareCopies', () => {
     const prepared = await prepareCopies(copies, { coarsePointer: false, canShare }, today);
     expect(canShare).not.toHaveBeenCalled();
     expect(prepared.method).toBe('zip');
-    expect(prepared.files.map((file) => file.name)).toEqual(['Twofold 2026-10-21.zip']);
+    expect(prepared.files.map((file) => file.name)).toEqual(['Arcafold 2026-10-21.zip']);
     expect(prepared.files[0]?.type).toBe('application/zip');
     const [zip] = prepared.files;
     if (!zip) throw new Error('no zip');
@@ -117,7 +117,7 @@ describe('savePrepared', () => {
 describe('zipFiles', () => {
   it('zips files prepared for sharing, for when the share sheet fails', async () => {
     const zip = await zipFiles(copies.map(copyFile), today);
-    expect(zip.name).toBe('Twofold 2026-10-21.zip');
+    expect(zip.name).toBe('Arcafold 2026-10-21.zip');
     expect(await zipContents(zip)).toEqual({ 'a.jpg': 'first', 'b.jpg': 'second' });
   });
 });

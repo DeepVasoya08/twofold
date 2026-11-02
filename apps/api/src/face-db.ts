@@ -1,4 +1,4 @@
-import type { StoredFaceSegment, StoredPerson } from '@twofold/types';
+import type { StoredFaceSegment, StoredPerson } from '@arcafold/types';
 
 import { countSegments, deleteSegments, insertSegment, listSegments } from './segment-db';
 

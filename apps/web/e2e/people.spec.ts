@@ -51,7 +51,7 @@ test('faces are found on the device, grouped, named, merged and forgotten', asyn
   await expect(page.getByRole('heading', { level: 1, name: 'Ada' })).toBeVisible();
   await expect(page.locator('.photo-tile')).toHaveCount(3);
 
-  // Say Ada is the person using Twofold, and family.
+  // Say Ada is the person using Arcafold, and family.
   await page.getByRole('button', { name: 'Person actions' }).click();
   await page.getByRole('menuitem', { name: 'This is me' }).click();
   await expect(page.getByText('Marked as you')).toBeVisible();

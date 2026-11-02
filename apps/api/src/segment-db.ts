@@ -1,4 +1,4 @@
-import type { StoredFaceSegment } from '@twofold/types';
+import type { StoredFaceSegment } from '@arcafold/types';
 
 /**
  * Segment queries shared by face results and search vectors: sealed batches of results,

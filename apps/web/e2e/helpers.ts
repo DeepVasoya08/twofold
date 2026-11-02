@@ -61,7 +61,7 @@ const PNG = Buffer.from(
  */
 export function distinctPhotos(count: number): Buffer[] {
   return Array.from({ length: count }, (_, index) =>
-    Buffer.concat([PNG, Buffer.from(`twofold-e2e-${String(index)}`)]),
+    Buffer.concat([PNG, Buffer.from(`arcafold-e2e-${String(index)}`)]),
   );
 }
 
@@ -106,7 +106,7 @@ export async function goTo(
 
 export async function lock(page: Page): Promise<void> {
   await page
-    .getByRole('button', { name: 'Lock Twofold' })
+    .getByRole('button', { name: 'Lock Arcafold' })
     .filter({ visible: true })
     .first()
     .click();

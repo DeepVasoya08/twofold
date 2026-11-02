@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { downloadFiles } from './download-files';
 
-const files = [new File([new Uint8Array([1, 2])], 'twofold-1.png', { type: 'image/png' })];
+const files = [new File([new Uint8Array([1, 2])], 'arcafold-1.png', { type: 'image/png' })];
 
 afterEach(() => {
   vi.useRealTimers();
@@ -30,7 +30,7 @@ describe('downloadFiles', () => {
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     downloadFiles(files, doc);
     expect(create).toHaveBeenCalledWith(files[0]);
-    expect(clicked).toEqual([{ href: 'blob:copy', download: 'twofold-1.png' }]);
+    expect(clicked).toEqual([{ href: 'blob:copy', download: 'arcafold-1.png' }]);
     expect(link.remove).toHaveBeenCalled();
     expect(revoke).not.toHaveBeenCalled();
     vi.runAllTimers();

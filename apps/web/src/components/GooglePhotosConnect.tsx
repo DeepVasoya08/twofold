@@ -84,7 +84,7 @@ export function GooglePhotosConnect({ clientId }: { clientId: string }) {
         if (photos.length === 0) {
           reset(
             skipped > 0
-              ? 'You only picked videos, which Twofold can’t store yet.'
+              ? 'You only picked videos, which Arcafold can’t store yet.'
               : 'No photos were picked.',
           );
           void client.deleteSession(session.id).catch(() => undefined);
@@ -171,7 +171,7 @@ export function GooglePhotosConnect({ clientId }: { clientId: string }) {
       )}
       <p className="share__note">
         <Icon name="shield" size={16} />
-        Photos come straight from Google to this device and are encrypted here. Twofold never sees
+        Photos come straight from Google to this device and are encrypted here. Arcafold never sees
         them or your Google account, and forgets the sign-in once the import ends.
       </p>
     </div>

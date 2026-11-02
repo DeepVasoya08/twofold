@@ -10,8 +10,8 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
-import type { SpaceKeys } from '@twofold/crypto';
-import type { PhotoPart } from '@twofold/types';
+import type { SpaceKeys } from '@arcafold/crypto';
+import type { PhotoPart } from '@arcafold/types';
 
 import { copyNames } from '../lib/copy-names';
 import { downloadAll } from '../lib/download-progress';

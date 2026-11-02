@@ -14,7 +14,7 @@ interface ProfileValue {
 
 const ProfileContext = createContext<ProfileValue | null>(null);
 
-const CANT_READ = 'Twofold couldn’t read that photo. Try a JPEG or PNG.';
+const CANT_READ = 'Arcafold couldn’t read that photo. Try a JPEG or PNG.';
 
 /**
  * The open space's profile photo, decrypted in memory. Mounted with the vault, so locking
@@ -74,7 +74,7 @@ export function ProfileProvider({
 
 const noProfile: ProfileValue = {
   photo: null,
-  setPhoto: () => Promise.reject(new FormError('Unlock Twofold first.')),
+  setPhoto: () => Promise.reject(new FormError('Unlock Arcafold first.')),
 };
 
 /** The open space's profile photo; none outside a vault (as on the unlock screen). */

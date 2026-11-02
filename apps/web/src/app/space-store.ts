@@ -1,6 +1,6 @@
-import type { SpaceAccess, SpaceKeys } from '@twofold/crypto';
-import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@twofold/types';
-import type { PhotoPage, PhotoPart } from '@twofold/types';
+import type { SpaceAccess, SpaceKeys } from '@arcafold/crypto';
+import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@arcafold/types';
+import type { PhotoPage, PhotoPart } from '@arcafold/types';
 
 import { spaceApi } from '../lib/api';
 import { isPhotoType } from '../lib/photo-types';
@@ -19,7 +19,7 @@ import { PartialThumbs } from './thumb-loader';
 let fileCryptoChosen = false;
 
 const loadCrypto = async () => {
-  const crypto = await import('@twofold/crypto');
+  const crypto = await import('@arcafold/crypto');
   // Originals encrypt and decrypt in a Web Worker so a large one doesn't freeze the page.
   if (!fileCryptoChosen && typeof Worker !== 'undefined') {
     fileCryptoChosen = true;
@@ -148,7 +148,7 @@ export interface SpaceStore {
 }
 
 const THUMB_TYPE = 'image/jpeg';
-const TOO_LARGE = `That photo is too large. Twofold takes photos up to ${String(
+const TOO_LARGE = `That photo is too large. Arcafold takes photos up to ${String(
   Math.floor(STORAGE_SIZES.maxFull / (1024 * 1024)) - 1,
 )} MB.`;
 
@@ -572,7 +572,7 @@ export function remoteStore(
 
     add: async (photo, albumIds, onStage) => {
       const crypto = await loadCrypto();
-      if (!isPhotoType(photo.type)) throw new FormError('Twofold can’t store this kind of file.');
+      if (!isPhotoType(photo.type)) throw new FormError('Arcafold can’t store this kind of file.');
       if (crypto.encryptedFileSize(photo.full.length) > STORAGE_SIZES.maxFull) {
         throw new FormError(TOO_LARGE);
       }

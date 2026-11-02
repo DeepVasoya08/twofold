@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { KEY_SIZES } from '@twofold/types';
-import type { Keyring } from '@twofold/types';
+import { KEY_SIZES } from '@arcafold/types';
+import type { Keyring } from '@arcafold/types';
 
 import {
   DEFAULT_KDF,

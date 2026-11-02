@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { newSpace } from '@twofold/crypto';
-import { fromBase64Url, toBase64Url } from '@twofold/crypto/webcrypto';
-import { STORAGE_SIZES } from '@twofold/types';
-import type { StoredProfilePhoto } from '@twofold/types';
+import { newSpace } from '@arcafold/crypto';
+import { fromBase64Url, toBase64Url } from '@arcafold/crypto/webcrypto';
+import { STORAGE_SIZES } from '@arcafold/types';
+import type { StoredProfilePhoto } from '@arcafold/types';
 
 import { FakeServer } from '../test/fake-server';
 import { FormError } from './account-ops';

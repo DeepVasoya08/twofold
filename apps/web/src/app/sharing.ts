@@ -1,6 +1,6 @@
-import type { InviteKeys, SpaceKeys } from '@twofold/crypto';
-import { INVITE_TTL_MS } from '@twofold/types';
-import type { InviterView, JoinerView, MemberAccess } from '@twofold/types';
+import type { InviteKeys, SpaceKeys } from '@arcafold/crypto';
+import { INVITE_TTL_MS } from '@arcafold/types';
+import type { InviterView, JoinerView, MemberAccess } from '@arcafold/types';
 
 import { ApiError, inviteApi, spaceApi } from '../lib/api';
 import type { InviteApi, SpaceApi } from '../lib/api';
@@ -25,7 +25,7 @@ import type { SharedSource, SpaceStore } from './space-store';
  * takes its next step whenever it's next opened, on any device.
  */
 
-const loadCrypto = () => import('@twofold/crypto');
+const loadCrypto = () => import('@arcafold/crypto');
 
 /** How often each side checks whether the other has taken the next step, on a sharing screen. */
 export const POLL_MS = 1500;

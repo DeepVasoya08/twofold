@@ -1,4 +1,4 @@
-# Twofold
+# Arcafold
 
 An end-to-end encrypted private photo library. Photos are encrypted on your device before
 upload; the server only ever stores ciphertext. A second password can open a separate,
@@ -27,8 +27,8 @@ pinned version).
 
 ```sh
 pnpm install
-pnpm --filter @twofold/api dev   # Worker on http://localhost:8787 (local D1/R2 via wrangler)
-pnpm --filter @twofold/web dev   # web app with hot reload on http://localhost:5173, /api proxied to :8787
+pnpm --filter @arcafold/api dev   # Worker on http://localhost:8787 (local D1/R2 via wrangler)
+pnpm --filter @arcafold/web dev   # web app with hot reload on http://localhost:5173, /api proxied to :8787
 ```
 
 In production one Cloudflare Worker serves the web app and the API from the same origin;
@@ -47,7 +47,7 @@ pnpm format          # Prettier
 ```
 
 Before the first `pnpm test:e2e`, install a browser with
-`pnpm --filter @twofold/web exec playwright install chromium`, or point
+`pnpm --filter @arcafold/web exec playwright install chromium`, or point
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` at an existing Chromium.
 
 See [CLAUDE.md](CLAUDE.md) for the security rules and engineering standards every change

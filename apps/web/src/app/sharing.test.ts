@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { albumAccess, newInviteKeys, newSpace, openRecord, ownerAccess } from '@twofold/crypto';
-import type { SpaceKeys } from '@twofold/crypto';
-import type { MemberAccess } from '@twofold/types';
+import { albumAccess, newInviteKeys, newSpace, openRecord, ownerAccess } from '@arcafold/crypto';
+import type { SpaceKeys } from '@arcafold/crypto';
+import type { MemberAccess } from '@arcafold/types';
 
 import { FakeInvites, FakeServer } from '../test/fake-server';
 import { FormError } from './account-ops';

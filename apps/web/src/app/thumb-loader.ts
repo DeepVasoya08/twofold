@@ -1,4 +1,4 @@
-import { THUMB_BATCH_MAX } from '@twofold/types';
+import { THUMB_BATCH_MAX } from '@arcafold/types';
 
 /**
  * Thumbnails download only once their photo is near the screen, many per request. Requests

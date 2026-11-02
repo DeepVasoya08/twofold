@@ -1,9 +1,9 @@
 /**
  * Restore drill. Run on your own computer with
- * `pnpm --filter @twofold/api drill <export> <secret-key-file>`.
+ * `pnpm --filter @arcafold/api drill <export> <secret-key-file>`.
  *
  * Downloads a sealed D1 export from the backup bucket, opens it with the offline key, and
- * loads it into the staging database (twofold-staging), replacing what's there.
+ * loads it into the staging database (arcafold-staging), replacing what's there.
  * `drill wipe` empties staging again afterwards. It only ever writes to staging. The opened export is deleted when it finishes. See docs/staging.md.
  */
 import { spawn } from 'node:child_process';
@@ -17,8 +17,8 @@ import { z } from 'zod';
 
 import { open, UsageError } from './backup';
 
-export const STAGING_DATABASE = 'twofold-staging';
-export const BACKUP_BUCKET = 'twofold-backups';
+export const STAGING_DATABASE = 'arcafold-staging';
+export const BACKUP_BUCKET = 'arcafold-backups';
 
 const USAGE = `Usage:
   drill <export> <secret-key-file>   Loads a backup into staging.
@@ -198,7 +198,7 @@ export async function run(args: readonly string[], wrangler: Wrangler): Promise<
   if (args.length === 1 && args[0] === 'wipe') return wipe(wrangler);
   const [name, secretKeyFile] = args;
   if (args.length !== 2 || !name || !secretKeyFile) throw new UsageError(USAGE);
-  const workDir = await mkdtemp(join(tmpdir(), 'twofold-drill-'));
+  const workDir = await mkdtemp(join(tmpdir(), 'arcafold-drill-'));
   try {
     return await drill(name, secretKeyFile, wrangler, workDir);
   } finally {

@@ -1,6 +1,6 @@
-# Twofold — rules for every task
+# Arcafold — rules for every task
 
-Twofold is an end-to-end encrypted private photo vault for couples. pnpm monorepo:
+Arcafold is an end-to-end encrypted private photo vault for couples. pnpm monorepo:
 `apps/web` (Vite + React, Cloudflare Pages), `apps/api` (Hono on Cloudflare Workers, R2 + D1),
 `packages/crypto` (libsodium), `packages/types` (shared types), `docs/`.
 

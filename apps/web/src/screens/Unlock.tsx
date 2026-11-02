@@ -43,7 +43,7 @@ export function Unlock() {
   return (
     <AuthLayout
       title={`Welcome back, ${me.name}`}
-      subtitle="Twofold locked itself to keep your photos safe. Enter your password to open it."
+      subtitle="Arcafold locked itself to keep your photos safe. Enter your password to open it."
       footer={
         <>
           Not {me.name}?{' '}

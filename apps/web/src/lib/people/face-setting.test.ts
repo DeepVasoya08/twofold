@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SMART_FEATURES_VERSION } from '@twofold/types';
+import { SMART_FEATURES_VERSION } from '@arcafold/types';
 
 import { FACE_SETTING_KEY, faceGroupingOn, loadFaceSetting, saveFaceSetting } from './face-setting';
 

@@ -9,8 +9,8 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
-import type { SpaceKeys } from '@twofold/crypto';
-import type { MemberAccess } from '@twofold/types';
+import type { SpaceKeys } from '@arcafold/crypto';
+import type { MemberAccess } from '@arcafold/types';
 
 import { onVisibleAgain } from '../lib/when-visible';
 import { useAccount } from './account';
@@ -39,7 +39,7 @@ import { useToast } from './toast';
 import { useVault } from './vault';
 
 /**
- * Invites the open space has in progress, on either side, moved along whenever Twofold is
+ * Invites the open space has in progress, on either side, moved along whenever Arcafold is
  * open: when the vault loads, when the app comes back into view, and every few seconds while
  * it's in view and something is waiting (faster on a sharing screen). Each step only needs
  * the state sealed in the space's own records, so it doesn't matter which device, or which
@@ -88,7 +88,7 @@ interface PendingInvitesValue {
   watch: () => () => void;
 }
 
-const NO_SESSION = 'Unlock Twofold first.';
+const NO_SESSION = 'Unlock Arcafold first.';
 
 const inert: PendingInvitesValue = {
   ready: false,

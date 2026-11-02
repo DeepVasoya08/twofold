@@ -1,4 +1,4 @@
-import type { Device, DeviceKind, Keyring, SmartFeaturesChoice } from '@twofold/types';
+import type { Device, DeviceKind, Keyring, SmartFeaturesChoice } from '@arcafold/types';
 
 import type { DeviceLabel } from './device';
 import { keyringSchema } from './schemas';

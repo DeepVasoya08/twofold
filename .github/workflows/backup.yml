@@ -29,7 +29,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID }}
       BACKUP_PUBLIC_KEY: ${{ vars.BACKUP_PUBLIC_KEY }}
-      BACKUP_BUCKET: twofold-backups
+      BACKUP_BUCKET: arcafold-backups
     steps:
       - name: Check setup
         run: |

@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { KEY_SIZES } from '@twofold/types';
+import { KEY_SIZES } from '@arcafold/types';
 
 import { answerHashRequest, workerHasher } from './hash-worker';
 import type { HashWorker } from './hash-worker';

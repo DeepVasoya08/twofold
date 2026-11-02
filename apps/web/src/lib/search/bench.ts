@@ -83,7 +83,7 @@ export function formatReport(
   failure: string | null,
 ): string {
   const lines = [
-    `Twofold speed test (${mode})`,
+    `Arcafold speed test (${mode})`,
     `Device: ${device.userAgent}`,
     `Cores: ${device.cores === null ? 'unknown' : String(device.cores)} · Memory: ${
       device.memoryGb === null ? 'unknown' : `${String(device.memoryGb)} GB`

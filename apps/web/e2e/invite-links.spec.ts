@@ -44,7 +44,7 @@ test('an invite link works without both people online at once', async ({ browser
   const link = (await linkText.textContent()) ?? '';
   const code = (await alice.getByTestId('invite-code').textContent()) ?? '';
 
-  // She leaves, and reloads: Twofold locks, and the invite is still there afterwards.
+  // She leaves, and reloads: Arcafold locks, and the invite is still there afterwards.
   await alice.reload();
   await expect(alice).toHaveURL(/\/unlock/);
   await unlockWith(alice, MAIN_PASSWORD);
@@ -54,7 +54,7 @@ test('an invite link works without both people online at once', async ({ browser
   const waiting = alice.getByRole('region', { name: 'Invites waiting' });
   await expect(waiting.getByText(code)).toBeVisible();
   await expect(waiting.getByText(/“Porto”/)).toBeVisible();
-  // Then she locks Twofold and goes away.
+  // Then she locks Arcafold and goes away.
   await alice.reload();
   await expect(alice).toHaveURL(/\/unlock/);
 
@@ -104,7 +104,7 @@ test('an invite link works without both people online at once', async ({ browser
   await expect(bob.getByText('Shared with you by Alice')).toBeVisible();
   await expect(bob.locator('.photo-tile img')).toHaveCount(2);
 
-  // The link worked once. (Opening it reloads the page, so Twofold asks to unlock first.)
+  // The link worked once. (Opening it reloads the page, so Arcafold asks to unlock first.)
   await bob.goto(new URL(link).pathname);
   await expect(bob).toHaveURL(/\/unlock\?next=/);
   await unlockWith(bob, MAIN_PASSWORD);

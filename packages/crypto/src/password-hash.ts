@@ -1,4 +1,4 @@
-import type { KdfParams } from '@twofold/types';
+import type { KdfParams } from '@arcafold/types';
 
 import { getSodium } from './sodium';
 

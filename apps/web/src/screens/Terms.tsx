@@ -16,7 +16,7 @@ export function Terms() {
               Only you hold your keys. If you lose your password and your recovery key, we can’t get
               your photos back.
             </li>
-            <li>Don’t use Twofold for anything illegal or to harm other people.</li>
+            <li>Don’t use Arcafold for anything illegal or to harm other people.</li>
             <li>Keep your own copies of anything you can’t afford to lose.</li>
           </ul>
         </>
@@ -26,16 +26,16 @@ export function Terms() {
       <p>
         These terms are an agreement between you and{' '}
         <Fill field="operator" label="legal name of the operator" /> (“we”, “us”), which runs
-        Twofold. By creating an account or using Twofold, you agree to them and to our{' '}
+        Arcafold. By creating an account or using Arcafold, you agree to them and to our{' '}
         <Link to={paths.privacy}>Privacy Policy</Link>. If you don’t agree, please don’t use
-        Twofold.
+        Arcafold.
       </p>
 
       <h2>Your account</h2>
       <ul>
         <li>
-          Twofold has no minimum age. If you are under the age at which you can agree to these terms
-          where you live, a parent or guardian must agree to them for you.
+          Arcafold has no minimum age. If you are under the age at which you can agree to these
+          terms where you live, a parent or guardian must agree to them for you.
         </li>
         <li>Give a real email address you control, and keep your passwords to yourself.</li>
         <li>You’re responsible for what happens in your account.</li>
@@ -43,8 +43,8 @@ export function Terms() {
 
       <h2>Your keys and your recovery key</h2>
       <p>
-        Twofold is end-to-end encrypted: your passwords and keys never reach us, so we can’t reset a
-        password or open your photos for you.
+        Arcafold is end-to-end encrypted: your passwords and keys never reach us, so we can’t reset
+        a password or open your photos for you.
       </p>
       <ul>
         <li>
@@ -70,10 +70,10 @@ export function Terms() {
 
       <h2>Your content</h2>
       <p>
-        You keep all rights to the photos and other content you put in Twofold. You give us only the
-        permission we need to store your encrypted content, make copies of it to keep it safe, and
-        deliver it to you and the people you share it with. Because it’s encrypted, we can’t see it,
-        and we don’t use it for anything else.
+        You keep all rights to the photos and other content you put in Arcafold. You give us only
+        the permission we need to store your encrypted content, make copies of it to keep it safe,
+        and deliver it to you and the people you share it with. Because it’s encrypted, we can’t see
+        it, and we don’t use it for anything else.
       </p>
       <p>
         You’re responsible for having the right to store and share what you upload, including photos
@@ -88,7 +88,7 @@ export function Terms() {
       </p>
 
       <h2>Acceptable use</h2>
-      <p>You agree not to use Twofold to:</p>
+      <p>You agree not to use Arcafold to:</p>
       <ul>
         <li>store or share anything illegal, including child sexual abuse material;</li>
         <li>
@@ -110,7 +110,7 @@ export function Terms() {
 
       <h2>The service</h2>
       <p>
-        We work hard to keep Twofold available and your data safe, but Twofold is provided “as is”
+        We work hard to keep Arcafold available and your data safe, but Arcafold is provided “as is”
         and “as available”. Features may change, and the service may sometimes be interrupted. Keep
         your own copies of photos you can’t afford to lose; you can download your originals at any
         time.
@@ -118,9 +118,9 @@ export function Terms() {
 
       <h2>Ending your use</h2>
       <p>
-        You can stop using Twofold and delete your account in Settings at any time. We may suspend
+        You can stop using Arcafold and delete your account in Settings at any time. We may suspend
         or close an account that breaks these terms or puts the service or others at risk. If we
-        ever shut Twofold down, we’ll give reasonable notice so you can download your photos first.
+        ever shut Arcafold down, we’ll give reasonable notice so you can download your photos first.
       </p>
 
       <h2>Liability</h2>
@@ -140,8 +140,8 @@ export function Terms() {
       <h2>Changes to these terms</h2>
       <p>
         If we change these terms, we’ll update the date at the top, and tell you in the app or by
-        email before significant changes take effect. Continuing to use Twofold after that means you
-        accept the new terms.
+        email before significant changes take effect. Continuing to use Arcafold after that means
+        you accept the new terms.
       </p>
 
       <h2>Contact</h2>

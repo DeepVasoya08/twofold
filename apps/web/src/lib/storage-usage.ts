@@ -1,4 +1,4 @@
-import { STORAGE_SIZES } from '@twofold/types';
+import { STORAGE_SIZES } from '@arcafold/types';
 
 import type { Photo } from '../mock/data';
 

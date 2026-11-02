@@ -46,7 +46,7 @@ export function useAutoLock(): AutoLockValue {
   return autoLock;
 }
 
-/** What counts as using Twofold. A hidden tab sees none of these, so its time counts as idle. */
+/** What counts as using Arcafold. A hidden tab sees none of these, so its time counts as idle. */
 const ACTIVITY = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll'];
 
 /**

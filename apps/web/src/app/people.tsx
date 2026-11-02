@@ -49,7 +49,7 @@ interface PeopleValue {
   /** Puts `from`'s faces into `into` and returns the id of the person they make. */
   merge: (from: Group, into: Group) => Promise<string>;
   setHidden: (group: Group, hidden: boolean) => Promise<string>;
-  /** Says this is (or isn't) the person using Twofold; anyone else marked so stops being. */
+  /** Says this is (or isn't) the person using Arcafold; anyone else marked so stops being. */
   setMe: (group: Group, me: boolean) => Promise<string>;
   setLabels: (group: Group, labels: readonly PersonLabel[]) => Promise<string>;
   /** Says these photos aren't this person. */

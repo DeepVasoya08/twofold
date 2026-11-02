@@ -1,5 +1,5 @@
-import { KEY_SIZES, SLOT_COUNT } from '@twofold/types';
-import type { KdfParams, Keyring, Slots } from '@twofold/types';
+import { KEY_SIZES, SLOT_COUNT } from '@arcafold/types';
+import type { KdfParams, Keyring, Slots } from '@arcafold/types';
 
 import { hashPassword } from './password-hash';
 import { getSodium } from './sodium';
@@ -27,7 +27,8 @@ export const MAX_KDF: KdfParams = { opsLimit: 10, memLimit: 1024 * 1024 * 1024 }
 
 const SPACE_KEY_BYTES = 32;
 const SPACE_ID_BYTES = 16;
-const KDF_CONTEXT = 'twofold1';
+// libsodium's crypto_kdf context is exactly 8 bytes.
+const KDF_CONTEXT = 'arcafold';
 const SUBKEY = { wrap: 1, login: 2 } as const;
 
 /** The keys of one space: what a slot protects. */

@@ -263,7 +263,7 @@ test('uploads keep going with the dialog closed and the tab in the background', 
   });
 
   const dialog = await choosePhotos(page, 6);
-  await expect(dialog.getByText('You can close this and keep using Twofold.')).toBeVisible();
+  await expect(dialog.getByText('You can close this and keep using Arcafold.')).toBeVisible();
   // A click on the backdrop closes the dialog.
   await page.mouse.click(5, 5);
   await expect(dialog).toBeHidden();

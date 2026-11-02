@@ -24,9 +24,9 @@ describe('invite codes', () => {
     expect(parseInviteInput(' two-7kq4-m9xd ')).toBe('TWO-7KQ4-M9XD');
     // A plain pattern, so it isn't mistaken for a secret.
     const token = 'A'.repeat(22);
-    expect(parseInviteInput(`https://twofold.example/join/${token}`)).toBe(token);
-    expect(parseInviteInput(`twofold.example/join/${token}?x=1`)).toBe(token);
-    expect(parseInviteInput('https://twofold.example/join/short')).toBeNull();
+    expect(parseInviteInput(`https://arcafold.example/join/${token}`)).toBe(token);
+    expect(parseInviteInput(`arcafold.example/join/${token}?x=1`)).toBe(token);
+    expect(parseInviteInput('https://arcafold.example/join/short')).toBeNull();
     expect(parseInviteInput('TWO-7KQ4')).toBeNull();
     expect(parseInviteInput('')).toBeNull();
   });

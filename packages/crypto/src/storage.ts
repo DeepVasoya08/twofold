@@ -1,4 +1,4 @@
-import { FACE_SIZES, SEARCH_SIZES, STORAGE_SIZES } from '@twofold/types';
+import { FACE_SIZES, SEARCH_SIZES, STORAGE_SIZES } from '@arcafold/types';
 
 import type { SpaceKeys } from './keyring';
 import { getSodium } from './sodium';
@@ -19,7 +19,7 @@ import { fromBase64Url, toBase64Url } from './webcrypto';
  *   key, so records only the owner should read (sharing details) use a second subkey.
  */
 
-const KDF_CONTEXT = 'twfspace';
+const KDF_CONTEXT = 'arcspace';
 const SUBKEY = { records: 1, owner: 2, faces: 3, search: 4 } as const;
 const CHUNK_BYTES = 64 * 1024;
 const PAD_BLOCK = 256;
@@ -127,7 +127,7 @@ export async function newRecordId(): Promise<string> {
   return toBase64Url(sodium.randombytes_buf(STORAGE_SIZES.recordId));
 }
 
-const FINGERPRINT_CONTEXT = 'twfprint';
+const FINGERPRINT_CONTEXT = 'arcprint';
 const FINGERPRINT_BYTES = 32;
 
 /**
@@ -154,7 +154,7 @@ export async function photoFingerprint(access: SpaceAccess, original: Uint8Array
 }
 
 function associatedData(kind: SealedKind, id: string): Uint8Array {
-  return new TextEncoder().encode(`twofold:${kind}:${id}`);
+  return new TextEncoder().encode(`arcafold:${kind}:${id}`);
 }
 
 async function sealWith(

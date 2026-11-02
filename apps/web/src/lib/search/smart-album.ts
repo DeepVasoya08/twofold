@@ -5,7 +5,7 @@
  * text half. Each time it's opened, the search runs again over the photos looked at so far,
  * so it fills itself as new photos come in.
  */
-import { fromBase64Url, toBase64Url } from '@twofold/crypto/webcrypto';
+import { fromBase64Url, toBase64Url } from '@arcafold/crypto/webcrypto';
 
 import { SEARCH_MODEL, packVector, unpackVector } from './segment';
 

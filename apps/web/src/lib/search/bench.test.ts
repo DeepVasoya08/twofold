@@ -52,7 +52,7 @@ describe('formatReport', () => {
     );
     expect(report).toBe(
       [
-        'Twofold speed test (fast)',
+        'Arcafold speed test (fast)',
         'Device: Phone',
         'Cores: 8 · Memory: unknown · WebGPU: yes',
         'Photo: download 4000 ms, load 1200 ms, first 900 ms, then 611 ms each',

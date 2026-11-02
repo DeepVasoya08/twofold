@@ -6,8 +6,8 @@ import {
   loginVerifier,
   sha256,
   toBase64Url,
-} from '@twofold/crypto/webcrypto';
-import type { Keyring } from '@twofold/types';
+} from '@arcafold/crypto/webcrypto';
+import type { Keyring } from '@arcafold/types';
 
 import { attemptCount, attemptQuery, clearFailures, finishedWindowsQuery } from './db';
 

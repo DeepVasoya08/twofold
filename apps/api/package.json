@@ -1,5 +1,5 @@
 {
-  "name": "@twofold/api",
+  "name": "@arcafold/api",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,14 +14,14 @@
     "drill": "node --experimental-transform-types --no-warnings --import ./scripts/register.mjs scripts/drill.ts"
   },
   "dependencies": {
-    "@twofold/crypto": "workspace:*",
-    "@twofold/types": "workspace:*",
+    "@arcafold/crypto": "workspace:*",
+    "@arcafold/types": "workspace:*",
     "hono": "^4.13.14",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261027.1",
-    "@twofold/web": "workspace:*",
+    "@arcafold/web": "workspace:*",
     "wrangler": "^4.153.0"
   }
 }

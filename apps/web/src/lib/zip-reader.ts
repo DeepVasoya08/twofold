@@ -45,10 +45,10 @@ const ENCRYPTED_FLAG = 0x0001;
 
 /** Directories bigger than this aren't real exports: about two million files. */
 const MAX_DIRECTORY_BYTES = 256 * 1024 * 1024;
-/** The biggest file read out of an archive: more than any photo Twofold can store. */
+/** The biggest file read out of an archive: more than any photo Arcafold can store. */
 export const ZIP_ENTRY_MAX_BYTES = 512 * 1024 * 1024;
 
-const NOT_A_ZIP = 'This isn’t a zip file Twofold can read.';
+const NOT_A_ZIP = 'This isn’t a zip file Arcafold can read.';
 const DAMAGED = 'This zip file is damaged.';
 
 async function readBytes(file: Blob, start: number, end: number): Promise<DataView> {
@@ -208,7 +208,7 @@ export async function readZipEntry(
 ): Promise<Uint8Array<ArrayBuffer>> {
   if (entry.encrypted) throw new ZipError('Password-protected zip files can’t be read.');
   if (entry.method !== 0 && entry.method !== 8) {
-    throw new ZipError('This zip file is compressed in a way Twofold can’t read.');
+    throw new ZipError('This zip file is compressed in a way Arcafold can’t read.');
   }
   if (entry.size > maxBytes) throw new ZipError('This file is too large.');
   const header = await readBytes(file, entry.headerOffset, entry.headerOffset + LOCAL_BYTES);

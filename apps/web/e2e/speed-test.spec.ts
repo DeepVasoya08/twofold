@@ -14,7 +14,7 @@ test('the hidden speed test page runs without an account and reports what happen
   await page.getByLabel('Low memory').check();
   await page.getByRole('button', { name: 'Start test' }).click();
   const results = page.getByRole('region', { name: 'Results' });
-  await expect(results).toContainText('Twofold speed test (low-memory)');
+  await expect(results).toContainText('Arcafold speed test (low-memory)');
   await expect(results).toContainText(
     'Stopped: Some resources Smart search needs couldn’t be downloaded.',
   );

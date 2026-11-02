@@ -17,7 +17,7 @@ interface RouterValue {
 
 const RouterContext = createContext<RouterValue | null>(null);
 
-const NAVIGATE_EVENT = 'twofold:navigate';
+const NAVIGATE_EVENT = 'arcafold:navigate';
 
 function subscribe(onChange: () => void): () => void {
   window.addEventListener('popstate', onChange);

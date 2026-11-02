@@ -1,4 +1,4 @@
-import type { DeviceKind } from '@twofold/types';
+import type { DeviceKind } from '@arcafold/types';
 
 /**
  * A coarse label for a session's device, made from its User-Agent: browser and system

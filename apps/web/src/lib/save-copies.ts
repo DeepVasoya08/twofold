@@ -1,4 +1,4 @@
-import { STORAGE_SIZES } from '@twofold/types';
+import { STORAGE_SIZES } from '@arcafold/types';
 
 import { zipName } from './copy-names';
 import { buildZip, zipEntry } from './zip';

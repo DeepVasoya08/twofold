@@ -2,7 +2,7 @@ import { faq } from './faq';
 import type { PublicPage } from './pages';
 
 /** Where the site is served when SITE_URL isn't set at build time. */
-export const defaultSiteUrl = 'https://twofold.deepvasoya08.workers.dev';
+export const defaultSiteUrl = 'https://arcafold.deepvasoya08.workers.dev';
 
 /** The social preview card in public/, rendered by scripts/render-images.mjs. */
 export const ogImage = { path: '/og-image.png', width: 1200, height: 630 };
@@ -38,13 +38,13 @@ function structuredData(page: PublicPage, origin: string): unknown[] {
     {
       '@context': 'https://schema.org',
       '@type': 'WebSite',
-      name: 'Twofold',
+      name: 'Arcafold',
       url,
     },
     {
       '@context': 'https://schema.org',
       '@type': 'WebApplication',
-      name: 'Twofold',
+      name: 'Arcafold',
       url,
       description: page.description,
       applicationCategory: 'MultimediaApplication',
@@ -75,14 +75,14 @@ export function headTags(page: PublicPage, siteUrl: string): string {
     meta('name', 'description', page.description),
     `<link rel="canonical" href="${escapeAttribute(url)}" />`,
     meta('property', 'og:type', 'website'),
-    meta('property', 'og:site_name', 'Twofold'),
+    meta('property', 'og:site_name', 'Arcafold'),
     meta('property', 'og:title', page.title),
     meta('property', 'og:description', page.description),
     meta('property', 'og:url', url),
     meta('property', 'og:image', image),
     meta('property', 'og:image:width', String(ogImage.width)),
     meta('property', 'og:image:height', String(ogImage.height)),
-    meta('property', 'og:image:alt', 'Twofold: your photos, truly private.'),
+    meta('property', 'og:image:alt', 'Arcafold: your photos, truly private.'),
     meta('name', 'twitter:card', 'summary_large_image'),
     meta('name', 'twitter:title', page.title),
     meta('name', 'twitter:description', page.description),

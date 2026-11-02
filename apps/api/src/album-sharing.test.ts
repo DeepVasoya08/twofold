@@ -1,8 +1,8 @@
-import { randomBytes, toBase64Url } from '@twofold/crypto/webcrypto';
+import { randomBytes, toBase64Url } from '@arcafold/crypto/webcrypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { MAX_ALBUM_MEMBERS, SPACE_HEADER, readThumbBatch } from '@twofold/types';
-import type { AlbumItemList, AlbumList, MemberList, PhotoPage } from '@twofold/types';
+import { MAX_ALBUM_MEMBERS, SPACE_HEADER, readThumbBatch } from '@arcafold/types';
+import type { AlbumItemList, AlbumList, MemberList, PhotoPage } from '@arcafold/types';
 
 import type { Env } from './env';
 import { createTestDb } from './test/d1';

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { DecryptionError } from '@twofold/crypto';
+import { DecryptionError } from '@arcafold/crypto';
 
 import { run, UsageError } from './backup';
 
@@ -12,7 +12,7 @@ let dir: string;
 const path = (name: string) => join(dir, name);
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'twofold-backup-'));
+  dir = await mkdtemp(join(tmpdir(), 'arcafold-backup-'));
 });
 
 afterEach(async () => {

@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // The photo backup Worker (src/backup, docs/backups.md). Separate from the app's Worker,
   // so the app never holds the backup bucket. No routes: it only runs on its schedule.
-  "name": "twofold-backup",
+  "name": "arcafold-backup",
   "main": "src/backup/index.ts",
   "compatibility_date": "2026-10-01",
   "workers_dev": false,
@@ -14,16 +14,16 @@
     "traces": { "enabled": false },
   },
   "r2_buckets": [
-    { "binding": "SOURCE", "bucket_name": "twofold-blobs" },
-    { "binding": "BACKUP", "bucket_name": "twofold-backups" },
+    { "binding": "SOURCE", "bucket_name": "arcafold-blobs" },
+    { "binding": "BACKUP", "bucket_name": "arcafold-backups" },
   ],
   "env": {
     // Backs up staging's photos into its own bucket (docs/staging.md).
     "staging": {
-      "name": "twofold-staging-backup",
+      "name": "arcafold-staging-backup",
       "r2_buckets": [
-        { "binding": "SOURCE", "bucket_name": "twofold-staging-blobs" },
-        { "binding": "BACKUP", "bucket_name": "twofold-staging-backups" },
+        { "binding": "SOURCE", "bucket_name": "arcafold-staging-blobs" },
+        { "binding": "BACKUP", "bucket_name": "arcafold-staging-backups" },
       ],
     },
   },

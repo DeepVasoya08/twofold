@@ -112,7 +112,7 @@ export class Uploader {
           name: file.name,
           url: '',
           status: 'failed',
-          error: `Twofold takes ${PHOTO_TYPES_TEXT} photos.`,
+          error: `Arcafold takes ${PHOTO_TYPES_TEXT} photos.`,
         };
       }
       this.queue.push({ id, file, albumId });
