@@ -52,6 +52,21 @@ describe('pickerClient', () => {
     expect(JSON.parse(init?.body as string)).toEqual({ pickingConfig: { maxItemCount: '2000' } });
   });
 
+  it('keeps the picking link and timings when a finished session leaves them out', async () => {
+    const client = pickerClient('t', () =>
+      Promise.resolve(
+        json({
+          id: 'session-1',
+          mediaItemsSet: true,
+          expireTime: '2026-11-02T10:00:00Z',
+          pickingConfig: { maxItemCount: '2000' },
+        }),
+      ),
+    );
+    const started = await pickerClient('t', () => Promise.resolve(json(SESSION))).createSession();
+    expect(await client.getSession(started)).toEqual({ ...started, mediaItemsSet: true });
+  });
+
   it('lists every page of picks, counting videos and leaving out what it can’t read', async () => {
     const pages = [
       json({ mediaItems: [photo('a'), { ...photo('v'), type: 'VIDEO' }], nextPageToken: 'p2' }),
@@ -100,7 +115,9 @@ describe('pickerClient', () => {
 
   it('says when the sign-in has ended or Google can’t be reached', async () => {
     const signedOut = pickerClient('t', () => Promise.resolve(json({}, 401)));
-    await expect(signedOut.getSession('s')).rejects.toThrow('Your Google sign-in has ended');
+    await expect(
+      signedOut.getSession({ ...SESSION, pollIntervalMs: 2000, timeoutMs: 1 }),
+    ).rejects.toThrow('Your Google sign-in has ended');
     const offline = pickerClient('t', () => Promise.reject(new TypeError('Failed to fetch')));
     await expect(offline.createSession()).rejects.toThrow(PickerError);
     const broken = pickerClient('t', () => Promise.resolve(json({ id: 1 })));

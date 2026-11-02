@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { errorMessage } from '../app/account-ops';
-import { googleSignIn } from '../app/google-sign-in';
+import { GoogleSignInError, googleSignIn } from '../app/google-sign-in';
 import { useImports } from '../app/imports';
 import { useVault } from '../app/vault';
 import { pluralize } from '../lib/format';
 import {
   PICKER_MAX_ITEMS,
+  PickerError,
   pickedItems,
   pickerClient,
   waitForPicks,
@@ -14,6 +15,12 @@ import {
 import type { PickerSession } from '../lib/import/google-picker';
 import { FormAlert } from './FormAlert';
 import { Icon } from './Icon';
+
+/** Google's own errors are written for people; anything else gets the usual message. */
+const connectError = (error: unknown): string =>
+  error instanceof PickerError || error instanceof GoogleSignInError
+    ? error.message
+    : errorMessage(error);
 
 type Step =
   | { kind: 'idle' }
@@ -91,7 +98,7 @@ export function GooglePhotosConnect({ clientId }: { clientId: string }) {
           },
         );
       } catch (caught) {
-        if (!stopped()) reset(errorMessage(caught));
+        if (!stopped()) reset(connectError(caught));
       }
     })();
   };
