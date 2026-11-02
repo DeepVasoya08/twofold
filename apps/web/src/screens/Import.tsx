@@ -1,5 +1,6 @@
 import { STORAGE_SIZES } from '@twofold/types';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import { errorMessage } from '../app/account-ops';
 import { useImports } from '../app/imports';
@@ -7,9 +8,11 @@ import type { ImportJob } from '../app/importer';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useStorageUsage } from '../app/storage';
+import { useUploads } from '../app/uploads';
 import { useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { FormAlert } from '../components/FormAlert';
+import { GooglePhotosConnect } from '../components/GooglePhotosConnect';
 import { Icon } from '../components/Icon';
 import { pluralize } from '../lib/format';
 import type { Album } from '../mock/data';
@@ -30,6 +33,8 @@ import '../components/upload-dialog.css';
 import './import.css';
 
 const TAKEOUT_URL = 'https://takeout.google.com/';
+/** Connect Google Photos needs this deployment's Google OAuth client; without one it's hidden. */
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
 const APPLE_DATA_URL = 'https://privacy.apple.com/';
 
 /** Where the photos come from, which decides the steps shown. */
@@ -92,15 +97,7 @@ function AppleSteps() {
 }
 
 /** Picks an export's zips, or the folder it was unzipped or saved into. */
-function ChooseExport({
-  from,
-  onFrom,
-  onChosen,
-}: {
-  from: ImportFrom;
-  onFrom: (from: ImportFrom) => void;
-  onChosen: (files: File[]) => void;
-}) {
+function ExportFiles({ onChosen }: { onChosen: (files: File[]) => void }) {
   const zipInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   // React doesn't know the folder picker's attribute, so it's set here.
@@ -109,29 +106,7 @@ function ChooseExport({
   }, []);
 
   return (
-    <div className="import">
-      <div className="segmented" role="tablist" aria-label="Import from">
-        {(
-          [
-            ['google', 'Google Photos'],
-            ['apple', 'Apple Photos'],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            className="segmented__option"
-            aria-selected={from === value}
-            onClick={() => {
-              onFrom(value);
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {from === 'google' ? <GoogleSteps /> : <AppleSteps />}
+    <>
       <p className="share__note">
         <Icon name="shield" size={16} />
         Your export is opened on this device. Each photo is encrypted here before it’s uploaded, and
@@ -140,7 +115,7 @@ function ChooseExport({
       <div className="import__choose">
         <button
           type="button"
-          className="btn btn--primary btn--lg"
+          className="btn btn--secondary btn--lg"
           onClick={() => zipInput.current?.click()}
         >
           Choose zip files
@@ -178,6 +153,97 @@ function ChooseExport({
           event.currentTarget.value = '';
         }}
       />
+    </>
+  );
+}
+
+/** The quick way from an iPhone or iPad: its own photo picker, through Upload. */
+function ApplePhotosPicker() {
+  const { openDialog } = useUploads();
+  return (
+    <div className="import__connect">
+      <p className="import__connect-text">
+        On an iPhone or iPad, tap <strong>Upload photos</strong>, then{' '}
+        <strong>Photo Library</strong>, and select the photos to bring over. Their dates come along.
+        On a Mac, drag photos from Photos into the upload window.
+      </p>
+      <button type="button" className="btn btn--primary btn--lg" onClick={openDialog}>
+        <Icon name="upload" size={18} />
+        Upload photos
+      </button>
+    </div>
+  );
+}
+
+/** A whole-library export, the slower way that keeps albums. */
+function MoveEverything({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <details className="import__more">
+      <summary>{summary}</summary>
+      <div className="import__more-body">{children}</div>
+    </details>
+  );
+}
+
+/** Where the photos come from, with the quickest way first. */
+function ChooseSource({
+  from,
+  onFrom,
+  onChosen,
+  googleClientId,
+}: {
+  from: ImportFrom;
+  onFrom: (from: ImportFrom) => void;
+  onChosen: (files: File[]) => void;
+  googleClientId: string | null;
+}) {
+  return (
+    <div className="import">
+      <div className="segmented" role="tablist" aria-label="Import from">
+        {(
+          [
+            ['google', 'Google Photos'],
+            ['apple', 'Apple Photos'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            className="segmented__option"
+            aria-selected={from === value}
+            onClick={() => {
+              onFrom(value);
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {from === 'google' ? (
+        googleClientId ? (
+          <>
+            <GooglePhotosConnect clientId={googleClientId} />
+            <MoveEverything summary="Moving everything, with albums? Use a Google Takeout export">
+              <GoogleSteps />
+              <ExportFiles onChosen={onChosen} />
+            </MoveEverything>
+          </>
+        ) : (
+          <>
+            <GoogleSteps />
+            <ExportFiles onChosen={onChosen} />
+          </>
+        )
+      ) : (
+        <>
+          <ApplePhotosPicker />
+          <MoveEverything summary="Moving everything, with albums? Use a copy of your iCloud Photos">
+            <AppleSteps />
+            <ExportFiles onChosen={onChosen} />
+          </MoveEverything>
+        </>
+      )}
     </div>
   );
 }
@@ -468,7 +534,12 @@ export function Import() {
     body = (
       <>
         <FormAlert message={error} />
-        <ChooseExport from={from} onFrom={setFrom} onChosen={onChosen} />
+        <ChooseSource
+          from={from}
+          onFrom={setFrom}
+          onChosen={onChosen}
+          googleClientId={GOOGLE_CLIENT_ID === '' ? null : GOOGLE_CLIENT_ID}
+        />
       </>
     );
   }

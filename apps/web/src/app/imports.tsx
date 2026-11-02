@@ -22,7 +22,8 @@ import { useVault } from './vault';
 interface ImportsValue extends ImporterState {
   /** Whether an import is going. */
   running: boolean;
-  start: (jobs: readonly ImportJob[]) => void;
+  /** Starts an import; `onDone` is called when it ends. */
+  start: (jobs: readonly ImportJob[], onDone?: () => void) => void;
   stop: () => void;
   /** Clears a finished import, for another. */
   reset: () => void;

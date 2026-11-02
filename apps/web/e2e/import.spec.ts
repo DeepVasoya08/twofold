@@ -147,6 +147,7 @@ test('imports a copy of iCloud Photos with dates, albums and favorites', async (
     'aria-selected',
     'true',
   );
+  await page.getByText('Moving everything, with albums? Use a copy of your iCloud Photos').click();
   await expect(page.getByText('Export Unmodified Originals')).toBeVisible();
 
   await page.getByLabel('Choose export zip files').setInputFiles({
@@ -167,4 +168,118 @@ test('imports a copy of iCloud Photos with dates, albums and favorites', async (
   await goTo(page, 'Albums');
   await page.getByRole('link', { name: /Porto/ }).click();
   await expect(page.getByRole('link', { name: /^Photo from May 3, 2017/ })).toBeVisible();
+});
+
+test('connects Google Photos and imports the picked photos, straight from Google', async ({
+  page,
+  context,
+}) => {
+  // Google's sign-in, Picker API and photo host, played by the test.
+  let polls = 0;
+  let deleted = false;
+  await context.route('https://accounts.google.com/**', async (route) => {
+    const url = new URL(route.request().url());
+    expect(url.searchParams.get('scope')).toBe(
+      'https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
+    );
+    const back = new URL(url.searchParams.get('redirect_uri') ?? '');
+    back.hash = new URLSearchParams({
+      state: url.searchParams.get('state') ?? '',
+      access_token: 'e2e-token',
+      token_type: 'Bearer',
+    }).toString();
+    await route.fulfill({ status: 302, headers: { Location: back.toString() } });
+  });
+  const cors = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization,content-type',
+    'Access-Control-Allow-Methods': 'GET,POST,DELETE',
+  };
+  const session = (mediaItemsSet: boolean) => ({
+    id: 's1',
+    pickerUri: 'https://photos.google.com/picker/s1',
+    mediaItemsSet,
+    pollingConfig: { pollInterval: '1s', timeoutIn: '600s' },
+  });
+  await context.route('https://photospicker.googleapis.com/**', async (route) => {
+    const request = route.request();
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers: cors });
+      return;
+    }
+    expect(request.headers().authorization).toBe('Bearer e2e-token');
+    const { pathname } = new URL(request.url());
+    let body: unknown = {};
+    if (request.method() === 'POST') body = session(false);
+    else if (request.method() === 'DELETE') deleted = true;
+    else if (pathname === '/v1/sessions/s1') body = session((polls += 1) >= 2);
+    else if (pathname === '/v1/mediaItems') {
+      body = {
+        mediaItems: [
+          {
+            id: 'p1',
+            createTime: '2015-06-01T10:00:00Z',
+            type: 'PHOTO',
+            mediaFile: {
+              baseUrl: 'https://lh3.googleusercontent.com/ppa/p1',
+              mimeType: 'image/png',
+              filename: 'lake.png',
+            },
+          },
+          {
+            id: 'v1',
+            type: 'VIDEO',
+            mediaFile: {
+              baseUrl: 'https://lh3.googleusercontent.com/ppa/v1',
+              mimeType: 'video/mp4',
+            },
+          },
+        ],
+      };
+    }
+    await route.fulfill({ status: 200, headers: cors, json: body });
+  });
+  await context.route('https://lh3.googleusercontent.com/**', async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers: cors });
+      return;
+    }
+    expect(route.request().url()).toBe('https://lh3.googleusercontent.com/ppa/p1=d');
+    expect(route.request().headers().authorization).toBe('Bearer e2e-token');
+    await route.fulfill({ status: 200, headers: cors, body: SECRET, contentType: 'image/png' });
+  });
+
+  await signUp(page);
+  await goTo(page, 'Settings');
+  await page.getByRole('button', { name: 'Import from Google Photos' }).click();
+  const signInWindow = context.waitForEvent('page');
+  await page.getByRole('button', { name: 'Connect Google Photos' }).click();
+  // The sign-in window hands the token back and closes itself.
+  await (await signInWindow).waitForEvent('close');
+  await expect(page.getByRole('link', { name: 'Choose photos in Google Photos' })).toHaveAttribute(
+    'href',
+    'https://photos.google.com/picker/s1/autoclose',
+  );
+  await expect(page.getByText('Import finished. 1 photo imported.')).toBeVisible();
+  // The finished session is ended at Google.
+  await expect.poll(() => deleted).toBe(true);
+
+  await goTo(page, 'Photos');
+  await expect(page.getByRole('link', { name: /^Photo from Jun 1, 2015/ })).toBeVisible();
+});
+
+test('the Apple tab offers the phone’s own photo picker first', async ({ page }) => {
+  await signUp(page);
+  await page
+    .getByRole('button', { name: /^Upload/ })
+    .filter({ visible: true })
+    .first()
+    .click();
+  await page
+    .getByRole('dialog', { name: 'Add photos' })
+    .getByRole('button', { name: /Moving from Google or Apple Photos/ })
+    .click();
+  await page.getByRole('tab', { name: 'Apple Photos' }).click();
+  await page.getByRole('button', { name: 'Upload photos' }).click();
+  await expect(page.getByRole('dialog', { name: 'Add photos' })).toBeVisible();
 });

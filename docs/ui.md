@@ -326,13 +326,25 @@ space). It is reached from three places, so it's easy to find on phones and comp
 a "Moving from Google or Apple Photos?" card under the drop area of the upload dialog (which
 every screen opens, and which shows the import's progress while one runs), an "Import from
 Google or Apple" button on the empty library, and Settings > Import (a row each for Google
-Photos and Apple Photos; the Apple one opens `?from=apple`). Two tabs show how to get each
-export:
+Photos and Apple Photos; the Apple one opens `?from=apple`). Each of its two tabs puts the
+quickest way first, and keeps a whole-library export, which also brings albums, behind a
+"Moving everything, with albums?" fold:
 
-- Google Photos: ask Google Takeout for Google Photos only, as .zip files.
-- Apple Photos: ask privacy.apple.com for a copy of iCloud Photos (zips with Apple's
-  records), or on a Mac, use Photos' File › Export › Export Unmodified Originals into a
-  folder. A zip of photos downloaded from iCloud.com works too.
+- Google Photos: "Connect Google Photos" (`components/GooglePhotosConnect.tsx`). The person
+  signs in with Google in a window of its own (`app/google-sign-in.ts`), taps "Choose photos
+  in Google Photos" to pick up to 2,000 photos in Google Photos (its app on phones), and
+  comes back; the page has been asking Google whether the picking is done
+  (`lib/import/google-picker.ts`). The picked photos then go through the import below, each
+  downloaded from Google straight into the browser, dated by Google's `createTime`. Albums
+  don't come over this way, and videos are skipped. The finished pick is ended at Google.
+  The button only shows when the deployment has a Google OAuth client
+  (`VITE_GOOGLE_CLIENT_ID`, docs/deployment.md); without one the export steps show instead.
+  The export: ask Google Takeout for Google Photos only, as .zip files.
+- Apple Photos: Apple has no way in for other apps, so the quickest way is the phone's own
+  photo picker: "Upload photos" opens the upload dialog, whose file picker on an iPhone or
+  iPad offers the Photo Library. The export: ask privacy.apple.com for a copy of iCloud
+  Photos (zips with Apple's records), or on a Mac, use Photos' File › Export › Export
+  Unmodified Originals into a folder. A zip of photos downloaded from iCloud.com works too.
 
 The person then picks every zip ("Choose zip files") or the folder ("Choose a folder").
 Which kind of export it is comes from its files, not the tab (`lib/import/plan.ts`). The

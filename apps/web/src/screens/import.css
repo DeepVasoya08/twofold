@@ -114,3 +114,36 @@
   font-family: inherit;
   font-size: 13px;
 }
+
+.import__connect {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+}
+
+.import__connect-text {
+  margin: 0;
+  font-size: 15px;
+}
+
+.import__connect .share__note {
+  justify-self: stretch;
+}
+
+.import__more {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+.import__more summary {
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.import__more-body {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}

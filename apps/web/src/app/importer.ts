@@ -73,6 +73,8 @@ export class Importer {
   private seen = new Map<string, string>();
   /** Bumped by dispose, so work from before it is dropped. */
   private run = 0;
+  /** Called once when the running import ends (not when it's dropped). */
+  private onDone: (() => void) | undefined;
 
   constructor(private deps: ImporterDeps) {}
 
@@ -94,9 +96,10 @@ export class Importer {
     return this.state.phase === 'running';
   }
 
-  /** Starts importing. Does nothing while an import runs. */
-  start = (jobs: readonly ImportJob[]): void => {
+  /** Starts importing; `onDone` is called when it ends. Does nothing while one runs. */
+  start = (jobs: readonly ImportJob[], onDone?: () => void): void => {
     if (this.running) return;
+    this.onDone = onDone;
     this.queue = [...jobs];
     this.seen = new Map();
     this.set({ ...IDLE, phase: 'running', total: jobs.length });
@@ -123,6 +126,7 @@ export class Importer {
     this.queue = [];
     this.stored = [];
     this.inFlight = { count: 0, bytes: 0 };
+    this.onDone = undefined;
     this.set(IDLE);
   }
 
@@ -191,5 +195,8 @@ export class Importer {
     if (!this.running || this.inFlight.count > 0 || this.queue.length > 0) return;
     this.show();
     this.set({ phase: 'done' });
+    const onDone = this.onDone;
+    this.onDone = undefined;
+    onDone?.();
   }
 }
