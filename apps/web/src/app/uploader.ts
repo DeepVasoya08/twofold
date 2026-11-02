@@ -1,4 +1,4 @@
-import { PHOTO_TYPES_TEXT, isPhotoType } from '../lib/photo-types';
+import { isVideoFile } from '../lib/file-types';
 import { isUploadRunning } from '../lib/upload-progress';
 import type { UploadStatus } from '../lib/upload-progress';
 import { canStartUpload } from '../lib/upload-queue';
@@ -16,6 +16,9 @@ import type { NewPhoto, UploadStage } from './space-store';
  * library (and the storage figure worked out from it) changes once, not after every photo.
  */
 
+/** Why a video is turned away. */
+export const VIDEO_REFUSED = 'Videos can’t be added yet.';
+
 export interface UploadItem {
   id: number;
   name: string;
@@ -24,6 +27,8 @@ export interface UploadItem {
    * to storage. Originals are never shown, so dropping hundreds of photos stays light.
    */
   url: string;
+  /** Whether it's a file that isn't a photo, shown with a file icon instead of a preview. */
+  file?: boolean;
   status: UploadStatus;
   error?: string;
 }
@@ -36,7 +41,10 @@ export interface UploaderState {
 }
 
 export interface UploaderDeps {
-  /** Reads a file into the original bytes and a small preview. */
+  /**
+   * Reads a file into what is stored: a photo's original bytes and a small preview, or any
+   * other file's bytes and its name.
+   */
   prepare: (file: File) => Promise<NewPhoto>;
   /** Encrypts and stores a photo in the open space, without showing it yet. */
   upload: (
@@ -98,22 +106,17 @@ export class Uploader {
     if (!this.running) this.clear();
   };
 
-  /** Queues photos; `albumId` adds them to that album as well as the timeline. */
+  /**
+   * Queues photos and files; `albumId` adds photos to that album as well as the timeline.
+   * Videos are shown as refused and never read.
+   */
   add = (files: readonly File[], albumId: string | undefined): void => {
-    const images = files.filter((file) => file.type.startsWith('image/'));
-    if (images.length === 0) return;
-    const added = images.map((file): UploadItem => {
+    if (files.length === 0) return;
+    const added = files.map((file): UploadItem => {
       this.nextId += 1;
       const id = this.nextId;
-      // Other image formats (SVG, for one) are shown as refused and never read.
-      if (!isPhotoType(file.type)) {
-        return {
-          id,
-          name: file.name,
-          url: '',
-          status: 'failed',
-          error: `Arcafold takes ${PHOTO_TYPES_TEXT} photos.`,
-        };
+      if (isVideoFile(file)) {
+        return { id, name: file.name, url: '', status: 'failed', error: VIDEO_REFUSED };
       }
       this.queue.push({ id, file, albumId });
       return { id, name: file.name, url: '', status: 'waiting' };
@@ -166,9 +169,14 @@ export class Uploader {
       this.update(id, { status: 'encrypting' });
       const photo = await prepare(file);
       if (!this.listed(id)) return;
-      const url = preview.make(photo.thumb);
-      this.previews.add(url);
-      this.update(id, { url });
+      if (photo.file) {
+        // A file's preview is a stand-in: show its icon, never the bytes.
+        this.update(id, { file: true });
+      } else {
+        const url = preview.make(photo.thumb);
+        this.previews.add(url);
+        this.update(id, { url });
+      }
       const stored = await upload(photo, albumId, (stage) => {
         this.update(id, { status: stage });
       });

@@ -55,6 +55,18 @@ export interface Photo {
    * deleted for good 30 days later.
    */
   deletedAt?: string;
+  /**
+   * Set when this is a file rather than a photo (a PDF, a document, anything but a video):
+   * its name and media type. Files live in Files, never in the timeline, and `takenAt` is
+   * when they were added. Stored like photos, so the server can't tell the two apart.
+   */
+  file?: FileDetails;
+}
+
+/** A file's own name and media type, kept only in its sealed metadata. */
+export interface FileDetails {
+  name: string;
+  type: string;
 }
 
 export interface Album {

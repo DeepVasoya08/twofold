@@ -39,8 +39,34 @@ import type { Album, Photo } from '../mock/data';
 export interface VaultState {
   photos: Photo[];
   albums: Album[];
-  /** Photos in Recently deleted, newest deletion first, once they have loaded. */
+  /**
+   * Files that aren't photos (PDFs, documents and the rest), newest first. They never show in
+   * the timeline, albums, search or People. Left out where a space has none.
+   */
+  files?: Photo[];
+  /** Photos and files in Recently deleted, newest deletion first, once they have loaded. */
   trash?: Photo[];
+}
+
+/** Whether an item is a file rather than a photo. */
+export function isFile(item: Pick<Photo, 'file'>): boolean {
+  return item.file !== undefined;
+}
+
+/** A state with `items` sorted into photos and files, in the order they came. */
+function sortedIn(state: VaultState, items: readonly Photo[], where: 'start' | 'end'): VaultState {
+  const photos = items.filter((item) => !isFile(item));
+  const files = items.filter(isFile);
+  const place = (list: Photo[], added: Photo[]) =>
+    where === 'start' ? [...added, ...list] : [...list, ...added];
+  const next: VaultState = { ...state, photos: place(state.photos, photos) };
+  if (files.length > 0 || state.files) next.files = place(state.files ?? [], files);
+  return next;
+}
+
+/** Every photo and file of the open space, wherever it shows. */
+export function allItems(state: VaultState): Photo[] {
+  return [...state.photos, ...(state.files ?? [])];
 }
 
 /** How long a photo stays in Recently deleted before it is deleted for good. */
@@ -118,8 +144,11 @@ export function withDetails(photo: Photo, change: PhotoDetails): Photo {
 
 export function vaultReducer(state: VaultState, action: VaultAction): VaultState {
   switch (action.type) {
-    case 'loaded':
-      return action.state;
+    case 'loaded': {
+      // Stores hand back photos and files together; files go to their own list.
+      const { photos, ...rest } = action.state;
+      return sortedIn({ ...rest, photos: [] }, photos, 'end');
+    }
     case 'set-image': {
       const update = (photo: Photo): Photo => {
         if (action.part === 'thumb') {
@@ -167,18 +196,20 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
       return {
         ...state,
         photos: state.photos.filter((photo) => !gone.has(photo.id)),
+        ...(state.files && { files: state.files.filter((file) => !gone.has(file.id)) }),
         albums: withoutCovers(state.albums, gone),
         ...(state.trash && { trash: state.trash.filter((photo) => !gone.has(photo.id)) }),
       };
     }
     case 'trash-photos': {
       const gone = new Set(action.photoIds);
-      const moved = state.photos
+      const moved = allItems(state)
         .filter((photo) => gone.has(photo.id))
         .map((photo) => ({ ...photo, deletedAt: action.deletedAt }));
       return {
         ...state,
         photos: state.photos.filter((photo) => !gone.has(photo.id)),
+        ...(state.files && { files: state.files.filter((file) => !gone.has(file.id)) }),
         albums: withoutCovers(state.albums, gone),
         trash: [...moved, ...(state.trash ?? [])],
       };
@@ -186,12 +217,9 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
     case 'restore-photos': {
       const back = new Set(action.photoIds);
       const trash = state.trash ?? [];
+      const restored = trash.filter((photo) => back.has(photo.id)).map(withoutDeletedAt);
       return {
-        ...state,
-        photos: [
-          ...trash.filter((photo) => back.has(photo.id)).map(withoutDeletedAt),
-          ...state.photos,
-        ],
+        ...sortedIn(state, restored, 'start'),
         trash: trash.filter((photo) => !back.has(photo.id)),
       };
     }
@@ -207,7 +235,7 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
       };
     }
     case 'add-photos':
-      return { ...state, photos: [...action.photos, ...state.photos] };
+      return sortedIn(state, action.photos, 'start');
     case 'create-album':
       return { ...state, albums: [action.album, ...state.albums] };
     case 'rename-album':
@@ -530,7 +558,9 @@ export function VaultProvider({
 
   const value = useMemo<VaultValue>(() => {
     const find = (photoId: string): Photo => {
-      const photo = state.photos.find((candidate) => candidate.id === photoId);
+      const photo =
+        state.photos.find((candidate) => candidate.id === photoId) ??
+        state.files?.find((candidate) => candidate.id === photoId);
       if (!photo) throw new FormError('That photo isn’t in your vault anymore.');
       return photo;
     };
@@ -558,7 +588,9 @@ export function VaultProvider({
       state,
       status,
       space,
-      upload: (photo, albumId, onStage) => store.add(photo, albumId ? [albumId] : [], onStage),
+      // Files stay out of albums for now: they live in Files.
+      upload: (photo, albumId, onStage) =>
+        store.add(photo, albumId && !photo.file ? [albumId] : [], onStage),
       showUploaded,
       importPhoto: (photo, albumIds) => store.add(photo, albumIds),
       fingerprint: (original) => store.fingerprint(original),

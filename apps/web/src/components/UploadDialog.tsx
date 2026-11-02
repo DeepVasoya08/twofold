@@ -9,6 +9,7 @@ import type { UploadItem } from '../app/uploads';
 import { PHOTO_TYPES } from '../lib/photo-types';
 import { STATUS_PROGRESS } from '../lib/upload-progress';
 import { Dialog } from './Dialog';
+import { FileIcon } from './FileIcon';
 import { Icon } from './Icon';
 
 import './upload-dialog.css';
@@ -24,7 +25,7 @@ function phase(item: UploadItem): string {
     case 'done':
       return 'Done';
     case 'failed':
-      return item.error ?? 'Couldn’t upload this photo';
+      return item.error ?? 'Couldn’t upload this';
   }
 }
 
@@ -41,6 +42,7 @@ export function UploadDialog({ albumId }: UploadDialogProps) {
   const { items, running, dialogOpen, closeDialog, addFiles, cancelWaiting } = useUploads();
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const filesRef = useRef<HTMLInputElement>(null);
   const finished = items.length > 0 && !running;
   const waiting = items.some((item) => item.status === 'waiting');
   const imports = useImports();
@@ -57,8 +59,8 @@ export function UploadDialog({ albumId }: UploadDialogProps) {
     <Dialog
       open={dialogOpen}
       onClose={closeDialog}
-      title="Add photos"
-      description="Photos are encrypted on this device before they're uploaded. No one can see them unless you share them."
+      title="Add photos and files"
+      description="Everything is encrypted on this device before it's uploaded. No one can see it unless you share it."
       size="md"
     >
       <div
@@ -75,15 +77,26 @@ export function UploadDialog({ albumId }: UploadDialogProps) {
         <span className="dropzone__icon">
           <Icon name="image-plus" size={28} />
         </span>
-        <p className="dropzone__title">Drop photos here</p>
-        <p className="dropzone__text">or</p>
-        <button
-          type="button"
-          className="btn btn--secondary"
-          onClick={() => inputRef.current?.click()}
-        >
-          Choose from this device
-        </button>
+        <p className="dropzone__title">Drop photos or files here</p>
+        <p className="dropzone__text">
+          PDFs, documents and other files go to Files. Videos can’t be added yet.
+        </p>
+        <div className="dropzone__buttons">
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={() => inputRef.current?.click()}
+          >
+            Choose photos
+          </button>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={() => filesRef.current?.click()}
+          >
+            Choose files
+          </button>
+        </div>
         <input
           ref={inputRef}
           className="visually-hidden"
@@ -92,6 +105,18 @@ export function UploadDialog({ albumId }: UploadDialogProps) {
           multiple
           tabIndex={-1}
           aria-label="Choose photos"
+          onChange={(event) => {
+            addFiles(event.currentTarget.files, albumId);
+            event.currentTarget.value = '';
+          }}
+        />
+        <input
+          ref={filesRef}
+          className="visually-hidden"
+          type="file"
+          multiple
+          tabIndex={-1}
+          aria-label="Choose files"
           onChange={(event) => {
             addFiles(event.currentTarget.files, albumId);
             event.currentTarget.value = '';
@@ -125,7 +150,11 @@ export function UploadDialog({ albumId }: UploadDialogProps) {
         <ul className="upload-list" aria-label="Uploads">
           {items.map((item) => (
             <li key={item.id} className="upload-item">
-              {item.url ? (
+              {item.file ? (
+                <span className="upload-item__thumb upload-item__thumb--file">
+                  <FileIcon file={{ name: item.name, type: '' }} />
+                </span>
+              ) : item.url ? (
                 <img className="upload-item__thumb" src={item.url} alt="" loading="lazy" />
               ) : (
                 <span className="upload-item__thumb" aria-hidden="true" />

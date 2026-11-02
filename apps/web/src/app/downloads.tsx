@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
 import { browserEnvironment, prepareCopies } from '../lib/save-copies';
 import { Downloader } from './downloader';
 import type { DownloadJob, DownloaderDeps } from './downloader';
-import { useVault } from './vault';
+import { allItems, useVault } from './vault';
 
 export type { DownloadJob, DownloadStage } from './downloader';
 
@@ -43,14 +43,14 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
     () => ({
       totalBytes: (photoIds) => {
         const wanted = new Set(photoIds);
-        return state.photos
+        return allItems(state)
           .filter((photo) => wanted.has(photo.id))
           .reduce((sum, photo) => sum + (photo.size ?? 0), 0);
       },
       prepare: async (photoIds, options) =>
         prepareCopies(await originals(photoIds, options), browserEnvironment()),
     }),
-    [originals, state.photos],
+    [originals, state],
   );
   const [downloader] = useState(() => new Downloader(deps));
 
@@ -108,4 +108,11 @@ export function useDownloads(): DownloadsValue {
   const downloads = useContext(DownloadsContext);
   if (!downloads) throw new Error('useDownloads must be used inside DownloadsProvider');
   return downloads;
+}
+
+/** What a download is of, for its wording: files when every item is one, else photos. */
+export function useDownloadNoun(ids: readonly string[]): 'photo' | 'file' {
+  const { state } = useVault();
+  const files = new Set((state.files ?? []).map((file) => file.id));
+  return ids.length > 0 && ids.every((id) => files.has(id)) ? 'file' : 'photo';
 }

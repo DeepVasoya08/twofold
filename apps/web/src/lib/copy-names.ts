@@ -1,3 +1,4 @@
+import { fileExtension } from './file-types';
 import { extensionOf } from './photo-types';
 
 /**
@@ -19,18 +20,31 @@ export function takenName(takenAt: string): string {
   return `${localDate(date)} ${time}`;
 }
 
+/** A file's own name split into its base and extension (without the dot). */
+function splitName(name: string): { base: string; extension: string } {
+  const length = fileExtension(name).length;
+  if (length === 0) return { base: name, extension: '' };
+  return { base: name.slice(0, name.length - length - 1), extension: name.slice(-length) };
+}
+
 /**
- * Names a batch of photos by when they were taken, with the extension of their type. Photos
- * taken in the same second get ` (2)`, ` (3)` and so on, so every name is different.
+ * Names a batch of photos by when they were taken, with the extension of their type; a file
+ * (not a photo) keeps its own `name`. Names that would clash get ` (2)`, ` (3)` and so on,
+ * so every name is different.
  */
-export function copyNames(photos: readonly { takenAt: string; type: string }[]): string[] {
+export function copyNames(
+  photos: readonly { takenAt: string; type: string; name?: string }[],
+): string[] {
   const used = new Set<string>();
-  return photos.map(({ takenAt, type }) => {
-    const base = takenName(takenAt);
-    const extension = extensionOf(type);
-    let name = `${base}.${extension}`;
+  return photos.map(({ takenAt, type, name: own }) => {
+    const { base, extension } =
+      own === undefined
+        ? { base: takenName(takenAt), extension: extensionOf(type) }
+        : splitName(own);
+    const join = (stem: string) => (extension === '' ? stem : `${stem}.${extension}`);
+    let name = join(base);
     for (let n = 2; used.has(name.toLowerCase()); n += 1) {
-      name = `${base} (${String(n)}).${extension}`;
+      name = join(`${base} (${String(n)})`);
     }
     used.add(name.toLowerCase());
     return name;

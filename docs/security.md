@@ -207,6 +207,15 @@ other accounts; see [Sharing](#sharing).
   Members who can add photos have the records key and compute the same fingerprints; they
   can already see every photo, so this tells them nothing new. Photos stored before
   fingerprints have none.
+- **Files** that aren't photos (PDFs, documents, anything but video) are stored exactly
+  like photos: a random id, a sealed record, a preview and the original under the file's
+  own key, in the same table and R2 layout. The sealed record adds `kind: "file"` and the
+  file's `name` (folders and control characters stripped, at most 120 characters); its
+  `type` is any well-formed media type. The server can't tell a file from a photo: it sees
+  the same record sizes and the same two files. A file has no real preview yet, so it stores
+  a stand-in of 16 to 48 KiB (zeros, encrypted like any preview) and never a missing or tiny
+  one, which would single files out. Apps from before files existed leave these records
+  out, since their type isn't a photo format.
 - **Moving** a photo to the other space downloads and decrypts it, adds it to the other
   space under a new id and key, then deletes the original. The two copies share nothing
   the server can match.
@@ -594,9 +603,13 @@ so photos can later be found by describing them. The server stores only cipherte
 - Nothing secret is written to `localStorage`, IndexedDB or caches. `localStorage` holds
   only this device's settings: the auto-lock time, and whether face grouping and Smart
   search were turned on or off here.
-- Only raster photo formats are stored or shown (JPEG, PNG, GIF, WebP, HEIC, AVIF;
+- Only raster photo formats are stored or shown as photos (JPEG, PNG, GIF, WebP, HEIC, AVIF;
   `apps/web/src/lib/photo-types.ts`). An SVG is a document that can carry script, so it is
-  refused on upload and left out if a record names it.
+  never a photo: it is kept as a file, and a photo record naming it is left out.
+- Files are never shown inside the app. The store refuses to turn a file into an object
+  URL or hand out its preview (an HTML or SVG file opened from a same-origin object URL
+  could run script in the app), so the only way out is a download, saved under the file's
+  own name.
 
 ## Still to design
 

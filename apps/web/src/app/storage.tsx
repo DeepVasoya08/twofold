@@ -29,10 +29,10 @@ export function StorageProvider({
   fetchTotal?: () => Promise<number>;
 }) {
   const { state, status } = useVault();
-  // Photos in Recently deleted still take up storage until they're deleted for good.
+  // Files count like photos. Photos in Recently deleted still take up storage until they're deleted for good.
   const own = useMemo(
-    () => spaceBytes([...state.photos, ...(state.trash ?? [])]),
-    [state.photos, state.trash],
+    () => spaceBytes([...state.photos, ...(state.files ?? []), ...(state.trash ?? [])]),
+    [state.photos, state.files, state.trash],
   );
   const wantsTotal = remote && status === 'ready';
   const [total, setTotal] = useState<number | null>(null);

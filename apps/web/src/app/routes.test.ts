@@ -18,6 +18,7 @@ describe('matchRoute', () => {
     ['/photos/', 'gallery'],
     ['/albums', 'albums'],
     ['/favorites', 'favorites'],
+    ['/files', 'files'],
     ['/search', 'search'],
     ['/people', 'people'],
     ['/settings', 'settings'],

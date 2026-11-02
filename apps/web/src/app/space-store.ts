@@ -3,10 +3,11 @@ import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@arcafold/types
 import type { PhotoPage, PhotoPart } from '@arcafold/types';
 
 import { spaceApi } from '../lib/api';
+import { MAX_FILE_NAME, cleanFileType } from '../lib/file-types';
 import { isPhotoType } from '../lib/photo-types';
 import { viewableCopy } from '../lib/thumbnail-service';
 import type { SpaceApi } from '../lib/api';
-import type { Album, Photo } from '../mock/data';
+import type { Album, FileDetails, Photo } from '../mock/data';
 import { FormError } from './account-ops';
 import { PartialThumbs } from './thumb-loader';
 
@@ -36,6 +37,8 @@ export interface Original {
   /** The original's media type. */
   type: string;
   takenAt: string;
+  /** For a file (not a photo): its own name, to save it under. */
+  name?: string;
 }
 
 /** The decrypted files and details of a photo, for adding it to a space. */
@@ -51,6 +54,11 @@ export interface NewPhoto {
   takenAt: string;
   /** Whether it starts as a favorite, as when an import brings one over. */
   favorite?: boolean;
+  /**
+   * Set for a file that isn't a photo: its name. `type` is then any media type but video,
+   * `thumb` a stand-in preview the app never shows, and width and height are 0.
+   */
+  file?: { name: string };
 }
 
 /** Where an upload is: encrypting on this device, then sending ciphertext. */
@@ -148,9 +156,9 @@ export interface SpaceStore {
 }
 
 const THUMB_TYPE = 'image/jpeg';
-const TOO_LARGE = `That photo is too large. Arcafold takes photos up to ${String(
-  Math.floor(STORAGE_SIZES.maxFull / (1024 * 1024)) - 1,
-)} MB.`;
+const LARGEST_MB = String(Math.floor(STORAGE_SIZES.maxFull / (1024 * 1024)) - 1);
+const TOO_LARGE = `That photo is too large. Arcafold takes photos up to ${LARGEST_MB} MB.`;
+const FILE_TOO_LARGE = `That file is too large. Arcafold takes files up to ${LARGEST_MB} MB.`;
 
 /** Who added a photo to someone else's library: their member id and name. */
 interface AddedBy {
@@ -177,6 +185,12 @@ interface PhotoMeta {
    * photos already here. Photos stored before fingerprints existed have none.
    */
   fp?: string;
+  /**
+   * Set for a file that isn't a photo, with its name. Apps from before files existed refuse
+   * these records (their type isn't a photo's), so they never show a file as a broken photo.
+   */
+  kind?: 'file';
+  name?: string;
 }
 
 /** How this device reaches a library someone shared with it. */
@@ -217,7 +231,7 @@ function parsePhotoMeta(value: unknown): PhotoMeta | null {
     v === 1 &&
     typeof key === 'string' &&
     typeof type === 'string' &&
-    isPhotoType(type) &&
+    typeKnown(value.kind, value.name, type) &&
     typeof width === 'number' &&
     typeof height === 'number' &&
     typeof takenAt === 'string' &&
@@ -235,7 +249,30 @@ function parsePhotoMeta(value: unknown): PhotoMeta | null {
   if (by) meta.by = by;
   if (deletedAt !== undefined) meta.deletedAt = deletedAt;
   if (fp !== undefined) meta.fp = fp;
+  if (value.kind === 'file' && typeof value.name === 'string') {
+    meta.kind = 'file';
+    meta.name = value.name;
+  }
   return meta;
+}
+
+/** A photo's type must be a photo format; a file's may be any type, with a usable name. */
+function typeKnown(kind: unknown, name: unknown, type: string): boolean {
+  if (kind === undefined) return isPhotoType(type);
+  return (
+    kind === 'file' &&
+    typeof name === 'string' &&
+    name.length > 0 &&
+    Array.from(name).length <= MAX_FILE_NAME &&
+    cleanFileType(type) === type
+  );
+}
+
+/** A file's name and type, if the record is a file's. */
+function fileOf(meta: PhotoMeta): FileDetails | undefined {
+  return meta.kind === 'file' && meta.name !== undefined
+    ? { name: meta.name, type: meta.type }
+    : undefined;
 }
 
 function parseAlbumMeta(value: unknown): AlbumMeta | null {
@@ -245,6 +282,8 @@ function parseAlbumMeta(value: unknown): AlbumMeta | null {
   else if (value.shareKey !== undefined) return null;
   return meta;
 }
+
+const NOT_A_PHOTO = 'That’s a file, not a photo. Download it to open it.';
 
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
 
@@ -275,7 +314,7 @@ function toPhoto(
   size: number,
   src = '',
 ): Photo {
-  return {
+  const photo: Photo = {
     id,
     src,
     size,
@@ -287,6 +326,8 @@ function toPhoto(
     albumIds: meta.albumIds,
     ...(meta.deletedAt !== undefined && { deletedAt: meta.deletedAt }),
   };
+  const file = fileOf(meta);
+  return file ? { ...photo, file } : photo;
 }
 
 /** What the store keeps per photo: its file key and type, which the UI never needs. */
@@ -427,8 +468,9 @@ export function remoteStore(
     const open = async (photoId: string | undefined, sealed: Uint8Array | null) => {
       if (photoId === undefined) return;
       const entry = known.get(photoId);
-      const plain =
-        sealed && entry ? await crypto.decryptFile(entry.key, sealed).catch(() => null) : null;
+      // A file's preview is a stand-in, not an image: never handed out as one.
+      const usable = sealed && entry && entry.meta.kind !== 'file';
+      const plain = usable ? await crypto.decryptFile(entry.key, sealed).catch(() => null) : null;
       deliver(photoId, plain && new Uint8Array(plain));
     };
     for (let start = 0; start < photoIds.length; start += THUMB_BATCH_MAX) {
@@ -519,6 +561,9 @@ export function remoteStore(
     image: async (photoId, part) => {
       const cached = urls.get(`${photoId}/${part}`);
       if (cached) return cached;
+      // A file is never shown as an image: an HTML or SVG file opened from an object URL
+      // could run its script inside the app.
+      if (lookup(photoId).meta.kind === 'file') throw new FormError(NOT_A_PHOTO);
       const { plain, entry } = await decrypt(photoId, part);
       if (part === 'full') {
         // Originals can be large, so only the latest one stays decrypted in memory.
@@ -572,16 +617,20 @@ export function remoteStore(
 
     add: async (photo, albumIds, onStage) => {
       const crypto = await loadCrypto();
-      if (!isPhotoType(photo.type)) throw new FormError('Arcafold can’t store this kind of file.');
+      const file = photo.file;
+      if (file ? cleanFileType(photo.type) !== photo.type : !isPhotoType(photo.type)) {
+        throw new FormError('Arcafold can’t store this kind of file.');
+      }
+      const tooLarge = file ? FILE_TOO_LARGE : TOO_LARGE;
       if (crypto.encryptedFileSize(photo.full.length) > STORAGE_SIZES.maxFull) {
-        throw new FormError(TOO_LARGE);
+        throw new FormError(tooLarge);
       }
       onStage?.('encrypting');
       const id = await crypto.newRecordId();
       const key = await crypto.newFileKey();
       const thumb = new Uint8Array(await crypto.encryptFile(key, photo.thumb));
       const full = new Uint8Array(await crypto.encryptLargeFile(key, photo.full));
-      if (thumb.length > STORAGE_SIZES.maxThumb) throw new FormError(TOO_LARGE);
+      if (thumb.length > STORAGE_SIZES.maxThumb) throw new FormError(tooLarge);
       const meta: PhotoMeta = {
         v: 1,
         key: crypto.toBase64Url(key),
@@ -593,6 +642,10 @@ export function remoteStore(
         albumIds,
         fp: await crypto.photoFingerprint(await access(), photo.full),
       };
+      if (file) {
+        meta.kind = 'file';
+        meta.name = file.name;
+      }
       if (membership) meta.by = { id: membership.memberId, name: membership.myName };
       const api = await remote();
       onStage?.('uploading');
@@ -626,7 +679,8 @@ export function remoteStore(
         meta,
         membership,
         thumb.length + full.length,
-        track(id, 'thumb', photo.thumb, THUMB_TYPE),
+        // A file's preview is a stand-in, never shown.
+        file ? '' : track(id, 'thumb', photo.thumb, THUMB_TYPE),
       );
     },
 
@@ -745,12 +799,27 @@ export function remoteStore(
       const { plain: full, entry } = await decrypt(photoId, 'full');
       const { plain: thumb } = await decrypt(photoId, 'thumb');
       const { type, width, height, takenAt } = entry.meta;
-      return { thumb, full, type, width, height, takenAt };
+      const file = fileOf(entry.meta);
+      return {
+        thumb,
+        full,
+        type,
+        width,
+        height,
+        takenAt,
+        ...(file && { file: { name: file.name } }),
+      };
     },
 
     original: async (photoId) => {
       const { plain: full, entry } = await decrypt(photoId, 'full');
-      return { full, type: entry.meta.type, takenAt: entry.meta.takenAt };
+      const file = fileOf(entry.meta);
+      return {
+        full,
+        type: entry.meta.type,
+        takenAt: entry.meta.takenAt,
+        ...(file && { name: file.name }),
+      };
     },
 
     fingerprint: async (original) => {

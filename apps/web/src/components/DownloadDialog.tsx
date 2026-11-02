@@ -1,4 +1,4 @@
-import { useDownloads } from '../app/downloads';
+import { useDownloadNoun, useDownloads } from '../app/downloads';
 import type { DownloadJob } from '../app/downloads';
 import { downloadFiles } from '../lib/download-files';
 import { progressPercent } from '../lib/download-progress';
@@ -16,9 +16,9 @@ import './upload-dialog.css';
 
 const SHARE_FAILED = 'The share sheet didn’t open, so the photos will download as a zip instead.';
 
-/** "Download this photo" or "Download 17 photos". */
-export function downloadTitle(count: number): string {
-  return count === 1 ? 'Download this photo' : `Download ${pluralize(count, 'photo')}`;
+/** "Download this photo", "Download 17 photos", or the same for files. */
+export function downloadTitle(count: number, noun: 'photo' | 'file' = 'photo'): string {
+  return count === 1 ? `Download this ${noun}` : `Download ${pluralize(count, noun)}`;
 }
 
 /**
@@ -32,9 +32,14 @@ export function downloadTitle(count: number): string {
  */
 export function DownloadDialog() {
   const { job, waiting, dialogOpen, closeDialog } = useDownloads();
-  const count = waiting?.length ?? job?.photoIds.length ?? 0;
+  const ids = waiting ?? job?.photoIds ?? [];
+  const noun = useDownloadNoun(ids);
   return (
-    <Dialog open={dialogOpen && job !== null} onClose={closeDialog} title={downloadTitle(count)}>
+    <Dialog
+      open={dialogOpen && job !== null}
+      onClose={closeDialog}
+      title={downloadTitle(ids.length, noun)}
+    >
       {job && (waiting ? <Busy job={job} /> : <DownloadCopies job={job} />)}
     </Dialog>
   );

@@ -14,6 +14,8 @@ export type Route =
   /** A search saved as an album. */
   | { name: 'smart-album'; albumId: string }
   | { name: 'favorites' }
+  /** Files that aren't photos: PDFs, documents and the rest. */
+  | { name: 'files' }
   /** Photos deleted in the last 30 days, which can still be restored. */
   | { name: 'trash' }
   /** The query is never in the URL, so it can't end up in the browser's history. */
@@ -48,6 +50,7 @@ export const paths = {
   album: (albumId: string) => `/albums/${encodeURIComponent(albumId)}`,
   smartAlbum: (albumId: string) => `/albums/smart/${encodeURIComponent(albumId)}`,
   favorites: '/favorites',
+  files: '/files',
   trash: '/recently-deleted',
   search: '/search',
   people: '/people',
@@ -108,6 +111,7 @@ const staticRoutes: Record<string, Route> = {
   '/photos': { name: 'gallery' },
   '/albums': { name: 'albums' },
   '/favorites': { name: 'favorites' },
+  '/files': { name: 'files' },
   '/recently-deleted': { name: 'trash' },
   '/search': { name: 'search' },
   '/people': { name: 'people' },

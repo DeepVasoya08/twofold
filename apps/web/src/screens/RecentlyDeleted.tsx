@@ -9,7 +9,7 @@ import { Dialog } from '../components/Dialog';
 import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
-import { pluralize } from '../lib/format';
+import { photosAndFiles } from '../lib/format';
 import type { Settled } from '../lib/settle-each';
 import type { Photo } from '../mock/data';
 
@@ -64,7 +64,7 @@ export function RecentlyDeleted() {
     <div className="page">
       <PageHeader
         title="Recently deleted"
-        subtitle={`Photos stay here for ${String(TRASH_DAYS)} days, then they’re deleted for good.`}
+        subtitle={`Photos and files stay here for ${String(TRASH_DAYS)} days, then they’re deleted for good.`}
         actions={
           trash.length > 0 && (
             <button
@@ -93,7 +93,7 @@ export function RecentlyDeleted() {
             <Icon name="x" />
           </button>
           <span className="selection-bar__count" aria-live="polite">
-            {pluralize(selected.length, 'photo')} selected
+            {photosAndFiles(trash.filter((photo) => selection.selected.has(photo.id)))} selected
           </span>
           <button
             type="button"
@@ -141,7 +141,7 @@ export function RecentlyDeleted() {
         <EmptyState icon="trash" title="Nothing here">
           {state.trash === undefined
             ? 'Loading…'
-            : `Photos you delete stay here for ${String(TRASH_DAYS)} days, so you can get them back.`}
+            : `Photos and files you delete stay here for ${String(TRASH_DAYS)} days, so you can get them back.`}
         </EmptyState>
       ) : (
         <PhotoGrid
@@ -160,7 +160,7 @@ export function RecentlyDeleted() {
         title={
           confirm === 'all'
             ? 'Empty Recently deleted?'
-            : `Delete ${pluralize(forever.length, 'photo')} for good?`
+            : `Delete ${photosAndFiles(trash.filter((photo) => forever.includes(photo.id)))} for good?`
         }
         description="They’ll be deleted for everyone, with their files. This can’t be undone."
       >

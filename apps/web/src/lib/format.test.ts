@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Photo } from '../mock/data';
-import { formatDateRange, formatLastActive, groupByMonth, initials, pluralize } from './format';
+import {
+  formatDateRange,
+  formatLastActive,
+  groupByMonth,
+  initials,
+  photosAndFiles,
+  pluralize,
+} from './format';
 
 function photo(id: string, takenAt: string, location?: string): Photo {
   return {
@@ -74,5 +81,13 @@ describe('formatLastActive', () => {
     expect(formatLastActive(now - 30 * hour, now)).toBe('Active yesterday');
     expect(formatLastActive(now - 4 * 24 * hour, now)).toBe('Active 4 days ago');
     expect(formatLastActive(Date.UTC(2026, 6, 2), now)).toBe('Active Jul 2, 2026');
+  });
+});
+
+describe('photosAndFiles', () => {
+  it('counts photos and files apart', () => {
+    expect(photosAndFiles([{}, {}])).toBe('2 photos');
+    expect(photosAndFiles([{ file: {} }])).toBe('1 file');
+    expect(photosAndFiles([{}, { file: {} }, { file: {} }])).toBe('1 photo and 2 files');
   });
 });

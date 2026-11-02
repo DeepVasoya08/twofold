@@ -1,4 +1,4 @@
-import { useDownloads } from '../app/downloads';
+import { useDownloadNoun, useDownloads } from '../app/downloads';
 import { progressPercent } from '../lib/download-progress';
 import { pluralize } from '../lib/format';
 import { Icon } from './Icon';
@@ -14,6 +14,7 @@ import './upload-progress.css';
  */
 export function DownloadProgress() {
   const { job, dialogOpen, openDialog } = useDownloads();
+  const noun = useDownloadNoun(job?.photoIds ?? []);
   if (dialogOpen || !job) return null;
   const { stage } = job;
   if (stage.state !== 'downloading' && stage.state !== 'ready') return null;
@@ -22,7 +23,7 @@ export function DownloadProgress() {
   const downloading = stage.state === 'downloading';
   const label = downloading
     ? `Downloading ${String(Math.min(stage.progress.done + 1, total))} of ${String(total)}`
-    : `${pluralize(total, 'photo')} ready to save`;
+    : `${pluralize(total, noun)} ready to save`;
   const percent = downloading ? progressPercent(stage.progress) : 100;
 
   return (
