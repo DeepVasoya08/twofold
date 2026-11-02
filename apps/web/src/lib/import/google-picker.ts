@@ -67,19 +67,27 @@ export function parseDuration(value: unknown, fallbackMs: number): number {
   return match ? Math.round(Number(match[1]) * 1000) : fallbackMs;
 }
 
-function parseSession(json: unknown): PickerSession {
-  if (!isRecord(json) || typeof json.id !== 'string' || typeof json.pickerUri !== 'string') {
+/**
+ * Reads a session. Once picking is done, Google leaves `pickerUri` and `pollingConfig` out, so
+ * when checking on a session already started (`previous`), those come from it instead.
+ */
+function parseSession(json: unknown, previous?: PickerSession): PickerSession {
+  if (!isRecord(json) || typeof json.id !== 'string') throw new PickerError(UNREACHABLE);
+  const pickerUri = typeof json.pickerUri === 'string' ? json.pickerUri : previous?.pickerUri;
+  if (!pickerUri?.startsWith('https://')) {
     throw new PickerError(UNREACHABLE);
   }
-  if (!json.pickerUri.startsWith('https://')) throw new PickerError(UNREACHABLE);
   const polling = isRecord(json.pollingConfig) ? json.pollingConfig : {};
   return {
     id: json.id,
-    pickerUri: json.pickerUri,
+    pickerUri,
     mediaItemsSet: json.mediaItemsSet === true,
     // Never faster than once a second, whatever the session says.
-    pollIntervalMs: Math.max(1000, parseDuration(polling.pollInterval, 3000)),
-    timeoutMs: parseDuration(polling.timeoutIn, 30 * 60_000),
+    pollIntervalMs: Math.max(
+      1000,
+      parseDuration(polling.pollInterval, previous?.pollIntervalMs ?? 3000),
+    ),
+    timeoutMs: parseDuration(polling.timeoutIn, previous?.timeoutMs ?? 30 * 60_000),
   };
 }
 
@@ -127,8 +135,9 @@ export function pickerClient(token: string, fetcher: Fetcher = fetch.bind(global
         }),
       ),
 
-    getSession: async (id: string): Promise<PickerSession> =>
-      parseSession(await call(`/sessions/${encodeURIComponent(id)}`)),
+    /** Checks on a session started earlier. */
+    getSession: async (session: PickerSession): Promise<PickerSession> =>
+      parseSession(await call(`/sessions/${encodeURIComponent(session.id)}`), session),
 
     /** Everything picked in a session, a page at a time. */
     listPicked: async (sessionId: string): Promise<PickedItems> => {
@@ -200,7 +209,7 @@ export async function waitForPicks(
     await sleep(current.pollIntervalMs);
     if (stopped()) return null;
     waited += current.pollIntervalMs;
-    current = await client.getSession(session.id);
+    current = await client.getSession(current);
     if (stopped()) return null;
   }
   return current;

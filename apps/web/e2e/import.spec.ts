@@ -195,12 +195,16 @@ test('connects Google Photos and imports the picked photos, straight from Google
     'Access-Control-Allow-Headers': 'authorization,content-type',
     'Access-Control-Allow-Methods': 'GET,POST,DELETE',
   };
-  const session = (mediaItemsSet: boolean) => ({
-    id: 's1',
-    pickerUri: 'https://photos.google.com/picker/s1',
-    mediaItemsSet,
-    pollingConfig: { pollInterval: '1s', timeoutIn: '600s' },
-  });
+  const session = (mediaItemsSet: boolean) =>
+    mediaItemsSet
+      ? // As Google answers once picking is done: no picking link or polling settings.
+        { id: 's1', mediaItemsSet, pickingConfig: { maxItemCount: '2000' } }
+      : {
+          id: 's1',
+          pickerUri: 'https://photos.google.com/picker/s1',
+          mediaItemsSet,
+          pollingConfig: { pollInterval: '1s', timeoutIn: '600s' },
+        };
   await context.route('https://photospicker.googleapis.com/**', async (route) => {
     const request = route.request();
     if (request.method() === 'OPTIONS') {
