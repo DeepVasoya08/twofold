@@ -31,9 +31,9 @@ export function Privacy() {
     >
       <h2>Who we are</h2>
       <p>
-        Arcafold is run by <Fill field="operator" label="legal name of the operator" /> (“we”, “us”).
-        This policy explains what information Arcafold handles when you use the website and app, and
-        what we do with it. If anything here is unclear, write to{' '}
+        Arcafold is run by <Fill field="operator" label="legal name of the operator" /> (“we”,
+        “us”). This policy explains what information Arcafold handles when you use the website and
+        app, and what we do with it. If anything here is unclear, write to{' '}
         <Fill field="contactEmail" label="contact email" />.
       </p>
 

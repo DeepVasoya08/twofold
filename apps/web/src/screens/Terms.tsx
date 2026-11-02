@@ -34,8 +34,8 @@ export function Terms() {
       <h2>Your account</h2>
       <ul>
         <li>
-          Arcafold has no minimum age. If you are under the age at which you can agree to these terms
-          where you live, a parent or guardian must agree to them for you.
+          Arcafold has no minimum age. If you are under the age at which you can agree to these
+          terms where you live, a parent or guardian must agree to them for you.
         </li>
         <li>Give a real email address you control, and keep your passwords to yourself.</li>
         <li>You’re responsible for what happens in your account.</li>
@@ -43,8 +43,8 @@ export function Terms() {
 
       <h2>Your keys and your recovery key</h2>
       <p>
-        Arcafold is end-to-end encrypted: your passwords and keys never reach us, so we can’t reset a
-        password or open your photos for you.
+        Arcafold is end-to-end encrypted: your passwords and keys never reach us, so we can’t reset
+        a password or open your photos for you.
       </p>
       <ul>
         <li>
@@ -70,10 +70,10 @@ export function Terms() {
 
       <h2>Your content</h2>
       <p>
-        You keep all rights to the photos and other content you put in Arcafold. You give us only the
-        permission we need to store your encrypted content, make copies of it to keep it safe, and
-        deliver it to you and the people you share it with. Because it’s encrypted, we can’t see it,
-        and we don’t use it for anything else.
+        You keep all rights to the photos and other content you put in Arcafold. You give us only
+        the permission we need to store your encrypted content, make copies of it to keep it safe,
+        and deliver it to you and the people you share it with. Because it’s encrypted, we can’t see
+        it, and we don’t use it for anything else.
       </p>
       <p>
         You’re responsible for having the right to store and share what you upload, including photos
@@ -140,8 +140,8 @@ export function Terms() {
       <h2>Changes to these terms</h2>
       <p>
         If we change these terms, we’ll update the date at the top, and tell you in the app or by
-        email before significant changes take effect. Continuing to use Arcafold after that means you
-        accept the new terms.
+        email before significant changes take effect. Continuing to use Arcafold after that means
+        you accept the new terms.
       </p>
 
       <h2>Contact</h2>
