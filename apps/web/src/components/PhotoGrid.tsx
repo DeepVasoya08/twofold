@@ -1,10 +1,13 @@
 import { memo } from 'react';
+import type { CSSProperties } from 'react';
 
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
 import type { PhotoContext } from '../app/routes';
 import type { Selection } from '../app/selection';
+import { usePhotoView } from '../app/views';
 import { formatShortDay } from '../lib/format';
+import { aspectOf } from '../lib/views';
 import type { Photo } from '../mock/data';
 import { FileThumb } from './FileIcon';
 import { Icon } from './Icon';
@@ -23,8 +26,14 @@ interface PhotoGridProps {
 
 export function PhotoGrid({ photos, context, selection, note }: PhotoGridProps) {
   const selecting = selection?.selecting ?? false;
+  // Laid out as chosen with the View buttons: square tiles, smaller ones, or each photo
+  // in its own shape.
+  const [view] = usePhotoView();
   return (
-    <ul className={`photo-grid${selecting ? ' is-selecting' : ''}`}>
+    <ul
+      className={`photo-grid photo-grid--${view}${selecting ? ' is-selecting' : ''}`}
+      data-view={view}
+    >
       {photos.map((photo) => (
         <PhotoTile
           key={photo.id}
@@ -72,7 +81,10 @@ const PhotoTile = memo(function PhotoTile({
     ? `File ${photo.file.name}${shared}`
     : `Photo from ${formatShortDay(photo.takenAt)}${photo.location ? `, ${photo.location}` : ''}${shared}`;
   return (
-    <li className={`photo-grid__item${selected ? ' is-selected' : ''}`}>
+    <li
+      className={`photo-grid__item${selected ? ' is-selected' : ''}`}
+      style={{ '--aspect': aspectOf(photo.width, photo.height) } as CSSProperties}
+    >
       <Link
         to={href}
         className="photo-tile"

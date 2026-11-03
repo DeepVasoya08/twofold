@@ -112,3 +112,89 @@
 .category-choices .checkbox {
   margin: 0;
 }
+
+.file-months .month + .month {
+  margin-top: 28px;
+}
+
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 16px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file-tile {
+  position: relative;
+  min-width: 0;
+}
+
+.file-tile__main {
+  display: grid;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.file-tile__picture {
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  margin-bottom: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.file-tile__picture img {
+  object-position: top;
+}
+
+.file-tile__main:hover .file-tile__picture {
+  border-color: var(--border-strong);
+}
+
+.file-tile__main:focus-visible {
+  outline: none;
+}
+
+.file-tile__main:focus-visible .file-tile__picture {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.file-tile__name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tile__meta {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tile__menu {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.file-tile__menu .menu__button {
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 560px) {
+  .file-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px 10px;
+  }
+}

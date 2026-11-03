@@ -76,6 +76,18 @@ exists but is low-key (Settings → Sharing).
   favorites.
 - The lock button (sidebar, or top bar on phones) forgets which space was open.
 
+## Views
+
+- Screens of photos (timeline, albums, Favorites, a person) have **View** buttons in the
+  page header: **Grid** (square tiles, the default), **Compact grid** (smaller squares, five
+  to a row on phones) and **Uncropped** (rows of even height with each photo in its own
+  shape, kept between 1:3 and 3:1). One choice applies to every photo grid, including
+  search results and Recently deleted.
+- Files is grouped by month like the timeline, and has **List** (rows, the default) and
+  **Grid** (tiles with a PDF's first page or the file's icon, the name and details below,
+  and the menu in the corner).
+- Each choice is kept per device, so a phone and a computer can each use their own.
+
 ## Selecting photos and album actions
 
 - Every photo grid (timeline, album, favorites) lets photos be picked. With a mouse, each

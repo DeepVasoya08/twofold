@@ -9,6 +9,7 @@ import { Link } from '../app/router';
 import { paths } from '../app/routes';
 import { useToast } from '../app/toast';
 import { useUploads } from '../app/uploads';
+import { useFileView } from '../app/views';
 import { isViewOnly, trashNote, useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
@@ -18,14 +19,16 @@ import { Icon } from '../components/Icon';
 import { Menu } from '../components/Menu';
 import type { MenuItem } from '../components/Menu';
 import { MoveSpaceDialog, moveLabel } from '../components/MoveSpaceDialog';
+import { FILE_VIEW_CHOICES, ViewPicker } from '../components/ViewPicker';
 import { CATEGORIES, categoryLabel } from '../lib/file-sort/categories';
 import type { Category } from '../lib/file-sort/categories';
 import { fileKindLabel, fileKindOf } from '../lib/file-types';
-import { formatShortDay, pluralize } from '../lib/format';
+import { formatShortDay, groupByMonth, pluralize } from '../lib/format';
 import { formatBytes } from '../lib/storage-usage';
 import type { Photo } from '../mock/data';
 
 import './files.css';
+import './gallery.css';
 
 /** A file's category: the one it was sorted into, or Other until it is. */
 export function categoryOf(item: Photo): Category {
@@ -71,6 +74,7 @@ export function Files() {
   const [sorting, setSorting] = useState<Photo | null>(null);
   const [shown, setShown] = useState<Category | 'all'>('all');
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useFileView();
 
   const files = useMemo(
     () =>
@@ -165,7 +169,14 @@ export function Files() {
             ? `${pluralize(files.length, 'file')} · ${formatBytes(total)}`
             : 'PDFs, documents and other files, encrypted like your photos'
         }
-        actions={files.length > 0 && upload}
+        actions={
+          files.length > 0 && (
+            <>
+              <ViewPicker choices={FILE_VIEW_CHOICES} value={view} onChange={setView} />
+              {upload}
+            </>
+          )
+        }
       />
 
       {files.length === 0 ? (
@@ -193,32 +204,40 @@ export function Files() {
               ))}
             </div>
           )}
-          <ul className="file-list" aria-label="Files">
-            {listed.map((item) => {
-              const name = item.file?.name ?? 'File';
-              return (
-                <li key={item.id} className="file-row">
-                  <Link
-                    to={paths.file(item.id)}
-                    className="file-row__main"
-                    aria-label={`Open ${name}`}
-                  >
-                    <FileThumb item={item} />
-                    <span className="file-row__text">
-                      <span className="file-row__name">{name}</span>
-                      <span className="file-row__meta">{detailsOf(item, filter === 'all')}</span>
-                    </span>
-                  </Link>
-                  <Menu
-                    label={`More for ${name}`}
-                    items={menuFor(item)}
-                    className="file-row__menu"
-                    icon="more-vertical"
-                  />
-                </li>
-              );
-            })}
-          </ul>
+          <div className="file-months" role="region" aria-label="Files">
+            {groupByMonth(listed).map((month) => (
+              <section
+                key={month.key}
+                className="month"
+                aria-labelledby={`files-month-${month.key}`}
+              >
+                <header className="month__header">
+                  <h2 className="month__title" id={`files-month-${month.key}`}>
+                    {month.label}
+                  </h2>
+                </header>
+                <ul className={view === 'grid' ? 'file-grid' : 'file-list'}>
+                  {month.photos.map((item) =>
+                    view === 'grid' ? (
+                      <FileTile
+                        key={item.id}
+                        item={item}
+                        details={detailsOf(item, false)}
+                        menu={menuFor(item)}
+                      />
+                    ) : (
+                      <FileRow
+                        key={item.id}
+                        item={item}
+                        details={detailsOf(item, filter === 'all')}
+                        menu={menuFor(item)}
+                      />
+                    ),
+                  )}
+                </ul>
+              </section>
+            ))}
+          </div>
         </>
       )}
 
@@ -338,5 +357,44 @@ function CategoryDialog({
         </div>
       </form>
     </Dialog>
+  );
+}
+
+/** A file as a row: its picture, name and details, and its menu. */
+function FileRow({ item, details, menu }: { item: Photo; details: string; menu: MenuItem[] }) {
+  const name = item.file?.name ?? 'File';
+  return (
+    <li className="file-row">
+      <Link to={paths.file(item.id)} className="file-row__main" aria-label={`Open ${name}`}>
+        <FileThumb item={item} />
+        <span className="file-row__text">
+          <span className="file-row__name">{name}</span>
+          <span className="file-row__meta">{details}</span>
+        </span>
+      </Link>
+      <Menu
+        label={`More for ${name}`}
+        items={menu}
+        className="file-row__menu"
+        icon="more-vertical"
+      />
+    </li>
+  );
+}
+
+/** A file as a tile: a big picture (a PDF's first page, or its icon) with its name below. */
+function FileTile({ item, details, menu }: { item: Photo; details: string; menu: MenuItem[] }) {
+  const name = item.file?.name ?? 'File';
+  return (
+    <li className="file-tile">
+      <Link to={paths.file(item.id)} className="file-tile__main" aria-label={`Open ${name}`}>
+        <span className="file-tile__picture">
+          <FileThumb item={item} size="lg" />
+        </span>
+        <span className="file-tile__name">{name}</span>
+        <span className="file-tile__meta">{details}</span>
+      </Link>
+      <Menu label={`More for ${name}`} items={menu} className="file-tile__menu" icon="more" />
+    </li>
   );
 }

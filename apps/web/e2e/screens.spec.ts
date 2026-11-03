@@ -174,7 +174,7 @@ test('keeps an SVG as a file, never as a photo, and never opens it', async ({ pa
   await expect(page.locator('.photo-tile')).toHaveCount(1);
 
   await goTo(page, 'Files');
-  await expect(page.getByRole('list', { name: 'Files' }).getByText('drawing.svg')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Files' }).getByText('drawing.svg')).toBeVisible();
   // Shown as an icon from its name only: no image or frame ever loads it.
   await expect(page.locator('.file-list img, .file-list iframe')).toHaveCount(0);
   expect(dialogs).toEqual([]);

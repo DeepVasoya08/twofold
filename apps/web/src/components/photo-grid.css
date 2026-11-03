@@ -190,3 +190,57 @@
     pointer-events: none;
   }
 }
+
+/* Compact: smaller squares, about twice as many to a row. */
+.photo-grid--compact {
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 3px;
+}
+
+.photo-grid--compact .photo-tile {
+  border-radius: 6px;
+}
+
+/*
+ * Uncropped: rows of even height, each photo in its own shape. A tile grows in proportion
+ * to its width over its height, so every tile in a row ends up the same height; the filler
+ * after the last tile keeps a short last row from stretching.
+ */
+.photo-grid--uncropped {
+  --row: 220px;
+
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.photo-grid--uncropped::after {
+  content: '';
+  flex-grow: 999;
+}
+
+.photo-grid--uncropped .photo-grid__item {
+  flex: var(--aspect) 1 calc(var(--aspect) * var(--row));
+  min-width: 0;
+}
+
+.photo-grid--uncropped .photo-tile {
+  aspect-ratio: var(--aspect);
+}
+
+@media (max-width: 860px) {
+  .photo-grid--compact {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2px;
+  }
+
+  .photo-grid--compact .photo-tile {
+    border-radius: 3px;
+  }
+
+  .photo-grid--uncropped {
+    --row: 120px;
+
+    gap: 3px;
+  }
+}

@@ -11,6 +11,7 @@ import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { PhotoImage } from '../components/PhotoImage';
 import { SelectButton } from '../components/SelectButton';
+import { PhotoViewPicker } from '../components/ViewPicker';
 import { SelectionBar } from '../components/SelectionBar';
 import { formatDateRange, groupByMonth, pluralize } from '../lib/format';
 import type { Photo } from '../mock/data';
@@ -67,7 +68,14 @@ export function Gallery() {
             <LockBadge label={isPrivate ? 'Opens only with your private password' : undefined} />
           </>
         }
-        actions={hasPhotos && <SelectButton selection={selection} />}
+        actions={
+          hasPhotos && (
+            <>
+              <PhotoViewPicker />
+              <SelectButton selection={selection} />
+            </>
+          )
+        }
       />
       <SelectionBar selection={selection} allIds={photos.map((photo) => photo.id)} />
       {hasShared && status === 'ready' && (
