@@ -76,6 +76,17 @@ exists but is low-key (Settings → Sharing).
   favorites.
 - The lock button (sidebar, or top bar on phones) forgets which space was open.
 
+## Finding files
+
+- The search box finds files as well as photos. A file matches when every word typed
+  (leaving out filler like "the", "my" or "files") starts one of its words: its name's, its
+  type's ("pdf", "document"), its category's ("receipts", "medical") or the up to 16 words
+  kept from inside it when it was sorted. A plural finds the singular ("bills" finds
+  "bill"). With a time typed too ("scans in October"), files added then that match the rest
+  also show. Matching files show above the photo results, newest first, and open in the
+  viewer. This runs on the device with nothing to download, so it works with Smart search
+  off.
+
 ## Views
 
 - Screens of photos (timeline, albums, Favorites, a person) have **View** buttons in the

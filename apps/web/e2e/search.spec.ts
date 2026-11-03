@@ -12,7 +12,7 @@ import {
   uploadPhotos,
 } from './helpers';
 
-const box = (page: Page) => page.getByRole('searchbox', { name: 'Search your photos' });
+const box = (page: Page) => page.getByRole('searchbox', { name: 'Search your photos and files' });
 const chips = (page: Page) => page.getByRole('list', { name: 'What the search looked for' });
 const tiles = (page: Page) => page.locator('.photo-tile');
 

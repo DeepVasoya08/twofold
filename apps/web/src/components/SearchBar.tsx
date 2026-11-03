@@ -52,7 +52,7 @@ export function SearchBar({ inputRef }: { inputRef: RefObject<HTMLInputElement |
         ref={inputRef}
         type="search"
         className="search-box__input"
-        aria-label="Search your photos"
+        aria-label="Search your photos and files"
         placeholder="Try “beach”, “Estrella last year” or “us in December”"
         value={find.text}
         maxLength={300}
