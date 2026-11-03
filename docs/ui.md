@@ -122,9 +122,12 @@ exists but is low-key (Settings → Sharing).
 - **Files** holds everything that isn't a photo or a video (PDFs, documents,
   spreadsheets, text). The upload dialog has **Choose photos** and **Choose files**, and
   anything dropped or picked that isn't a photo goes to Files; videos are refused ("Videos
-  can't be added yet"). Files is a list, newest first, with an icon for the kind of file
-  (from its name and type only; files are never opened in the app), its size and when it was
-  added. Tapping a file downloads it under its own name; its menu has **Download**, **Move
+  can't be added yet"). Files is a list, newest first, with a PDF's first page as its
+  picture (or an icon for the kind of file, from its name and type), its size and when it
+  was added. Tapping a file opens it at `/files/:id`: a PDF page by page (a page at a time,
+  with Previous and Next, on light phones), text and HTML as plain text, a Word document as
+  its paragraphs, and anything else as "No preview for this kind of file" with a
+  **Download** button, which every file has. Its menu has **Download**, **Move
   to private space** (or **Move to library**) and **Delete**, which sends it to Recently
   deleted like a photo. Files never appear in the timeline, albums, search or People, and
   count against the same 1 GB. The phone tab bar is Photos, Albums, Files, People and
@@ -289,6 +292,7 @@ Routes are the same in both spaces; the content depends on which space is open.
 | `/albums/:id`          | One album, with Download and its menu                              |
 | `/favorites`           | Favorites                                                          |
 | `/files`               | Files that aren't photos: download, move, delete                   |
+| `/files/:id`           | One file: PDF, text or Word shown in the app, and Download         |
 | `/recently-deleted`    | Recently deleted: restore, delete now, or empty                    |
 | `/people`              | People found in photos (or turning face grouping on)               |
 | `/people/:id`          | One person's photos: name, merge, hide, "Not this person"          |

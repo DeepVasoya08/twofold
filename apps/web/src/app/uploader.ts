@@ -169,13 +169,13 @@ export class Uploader {
       this.update(id, { status: 'encrypting' });
       const photo = await prepare(file);
       if (!this.listed(id)) return;
-      if (photo.file) {
-        // A file's preview is a stand-in: show its icon, never the bytes.
+      if (photo.file && !photo.file.preview) {
+        // A file's stand-in preview isn't an image: show its icon, never the bytes.
         this.update(id, { file: true });
       } else {
         const url = preview.make(photo.thumb);
         this.previews.add(url);
-        this.update(id, { url });
+        this.update(id, { url, ...(photo.file && { file: true }) });
       }
       const stored = await upload(photo, albumId, (stage) => {
         this.update(id, { status: stage });

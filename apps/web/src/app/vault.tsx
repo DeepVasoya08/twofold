@@ -21,7 +21,7 @@ import { settleEach } from '../lib/settle-each';
 import type { Settled } from '../lib/settle-each';
 import { FormError } from './account-ops';
 import type { Space } from './account-ops';
-import type { NewPhoto, SpaceStore, UploadStage } from './space-store';
+import type { NewPhoto, Original, SpaceStore, UploadStage } from './space-store';
 import { createThumbLoader } from './thumb-loader';
 import {
   initialAlbums,
@@ -181,6 +181,7 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
       return {
         ...state,
         photos: state.photos.map(update),
+        ...(state.files && { files: state.files.map(update) }),
         ...(state.trash && { trash: state.trash.map(update) }),
       };
     }
@@ -458,6 +459,11 @@ interface VaultValue {
    */
   movePhoto: (photoId: string, otherKeys?: SpaceKeys) => Promise<void>;
   movePhotos: (photoIds: readonly string[], otherKeys?: SpaceKeys) => Promise<Settled<string>>;
+  /**
+   * Downloads and decrypts a file's original into memory, to show it in the app. Nothing is
+   * kept: the bytes are the caller's, dropped when it lets them go.
+   */
+  openFile: (fileId: string) => Promise<Original>;
   /** Starts decrypting a photo's original; `fullSrc` is set when it's ready. */
   loadFull: (photoId: string) => void;
   /**
@@ -707,6 +713,10 @@ export function VaultProvider({
         otherStore.dispose();
         dispatch({ type: 'delete-photos', photoIds: result.done });
         return result;
+      },
+      openFile: async (fileId) => {
+        if (!find(fileId).file) throw new FormError('That isn’t a file.');
+        return store.original(fileId);
       },
       loadFull: (photoId) => {
         void store.image(photoId, 'full').then(

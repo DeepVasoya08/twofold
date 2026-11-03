@@ -31,10 +31,12 @@ describe('matchRoute', () => {
   it('extracts album and photo ids', () => {
     expect(matchRoute('/albums/kyoto')).toEqual({ name: 'album', albumId: 'kyoto' });
     expect(matchRoute('/photos/p001')).toEqual({ name: 'photo', photoId: 'p001' });
+    expect(matchRoute('/files/f001')).toEqual({ name: 'file', fileId: 'f001' });
   });
 
   it('round-trips ids through paths', () => {
     expect(matchRoute(paths.album('a b'))).toEqual({ name: 'album', albumId: 'a b' });
+    expect(matchRoute(paths.file('a b'))).toEqual({ name: 'file', fileId: 'a b' });
     expect(matchRoute(paths.person('group:abc#2'))).toEqual({
       name: 'person',
       groupId: 'group:abc#2',

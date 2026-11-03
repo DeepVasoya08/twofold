@@ -16,6 +16,8 @@ export type Route =
   | { name: 'favorites' }
   /** Files that aren't photos: PDFs, documents and the rest. */
   | { name: 'files' }
+  /** One file, shown inside the app where it can be (PDFs, text, Word). */
+  | { name: 'file'; fileId: string }
   /** Photos deleted in the last 30 days, which can still be restored. */
   | { name: 'trash' }
   /** The query is never in the URL, so it can't end up in the browser's history. */
@@ -51,6 +53,7 @@ export const paths = {
   smartAlbum: (albumId: string) => `/albums/smart/${encodeURIComponent(albumId)}`,
   favorites: '/favorites',
   files: '/files',
+  file: (fileId: string) => `/files/${encodeURIComponent(fileId)}`,
   trash: '/recently-deleted',
   search: '/search',
   people: '/people',
@@ -150,6 +153,10 @@ export function matchRoute(pathname: string): Route {
 
   const join = /^\/join\/([^/]+)$/.exec(path);
   if (join?.[1] !== undefined && LINK_TOKEN.test(join[1])) return { name: 'join', token: join[1] };
+
+  const file = /^\/files\/([^/]+)$/.exec(path);
+  const fileId = file?.[1] === undefined ? null : decodeSegment(file[1]);
+  if (fileId) return { name: 'file', fileId };
 
   const photo = /^\/photos\/([^/]+)$/.exec(path);
   const photoId = photo?.[1] === undefined ? null : decodeSegment(photo[1]);

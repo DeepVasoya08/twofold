@@ -157,6 +157,31 @@ describe('remoteStore', () => {
     expect(seen).toEqual([null]);
   });
 
+  it('shows a file’s drawn preview, but only when it is a JPEG', async () => {
+    const { server, space } = await setUp();
+    const store = remoteStore(space, server.api);
+    const jpeg = new Uint8Array(20_000);
+    jpeg.set([0xff, 0xd8, 0xff, 0xe0]);
+    const drawn = await store.add(
+      { ...FILE, thumb: jpeg, file: { name: 'bill.pdf', preview: true } },
+      [],
+    );
+    expect(drawn.file).toMatchObject({ name: 'bill.pdf', preview: true });
+    const later = remoteStore(space, server.api);
+    expect((await later.list()).photos[0]?.file?.preview).toBe(true);
+    expect(await objectUrlBytes(await later.image(drawn.id, 'thumb'))).toEqual(jpeg);
+    expect((await later.thumbs([drawn.id])).size).toBe(1);
+    await expect(later.image(drawn.id, 'full')).rejects.toThrow('That’s a file, not a photo.');
+
+    // A preview claimed for bytes that aren't a JPEG (an SVG, say) is never shown.
+    const fake = await store.add(
+      { ...FILE, thumb: bytes('<svg onload="alert(1)"/>'), file: { name: 'x.pdf', preview: true } },
+      [],
+    );
+    await expect(later.image(fake.id, 'thumb')).rejects.toThrow();
+    expect((await later.thumbs([fake.id])).size).toBe(0);
+  });
+
   it('refuses a file with a malformed type, and leaves out records claiming one', async () => {
     const { server, space } = await setUp();
     const store = remoteStore(space, server.api);

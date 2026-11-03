@@ -8,7 +8,14 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
-import { cleanFileName, cleanFileType, photoTypeOf, placeholderPreview } from '../lib/file-types';
+import { pdfPreview } from '../lib/file-preview';
+import {
+  cleanFileName,
+  cleanFileType,
+  fileKindOf,
+  photoTypeOf,
+  placeholderPreview,
+} from '../lib/file-types';
 import { photosAndFiles } from '../lib/format';
 import { photoTakenAt } from '../lib/photo-date';
 import { loadThumbnailer } from '../lib/thumbnail-service';
@@ -64,15 +71,23 @@ export async function prepareUpload(file: File): Promise<NewPhoto> {
 }
 
 /** A file that isn't a photo: kept as it is, under its own name. */
-export async function prepareFile(file: File): Promise<NewPhoto> {
+export async function prepareFile(
+  file: File,
+  drawPdf: (bytes: Uint8Array) => Promise<Uint8Array<ArrayBuffer> | null> = pdfPreview,
+): Promise<NewPhoto> {
+  const name = cleanFileName(file.name);
+  const type = cleanFileType(file.type);
+  const full = new Uint8Array(await file.arrayBuffer());
+  // A PDF's first page becomes its preview, as far as this device can manage in time.
+  const drawn = fileKindOf(type, name) === 'pdf' ? await drawPdf(full) : null;
   return {
-    thumb: placeholderPreview(),
-    full: new Uint8Array(await file.arrayBuffer()),
-    type: cleanFileType(file.type),
+    thumb: drawn ?? placeholderPreview(),
+    full,
+    type,
     width: 0,
     height: 0,
     takenAt: new Date().toISOString(),
-    file: { name: cleanFileName(file.name) },
+    file: drawn ? { name, preview: true } : { name },
   };
 }
 

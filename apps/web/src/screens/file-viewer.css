@@ -1,0 +1,70 @@
+.file-viewer .page-header__title {
+  overflow-wrap: anywhere;
+}
+
+.file-viewer__note {
+  color: var(--text-2);
+}
+
+.file-viewer__pages {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.file-viewer__page {
+  width: 100%;
+  min-height: 240px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.file-viewer__page.is-drawn {
+  min-height: 0;
+  background: #fff;
+}
+
+.file-viewer__canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.file-viewer__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.file-viewer__text,
+.file-viewer__doc {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.file-viewer__text {
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.file-viewer__doc p {
+  margin: 0 0 10px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
