@@ -48,3 +48,6 @@ index c362e6ad71bbe11265efd6beaab614af0632a70f..80f153ff891c968bf6292ee3db092090
        nativeInstall(jsContext.get(), jsCallInvokerHolder);
        return true;
      } catch (Exception e) {
+diff --git a/unimodule.json b/unimodule.json
+deleted file mode 100644
+index c2bd3c0f071c0cd1ee9ccc88c7491906aed289d4..0000000000000000000000000000000000000000

@@ -1,6 +1,6 @@
 /**
- * Grid test data: the ten sample photos, each encrypted once with @arcafold/crypto (as an
- * upload would), then repeated to fill 5,000 tiles. Every tile decrypts its photo when it
+ * Grid test data: ten grid-sized thumbnails (fixtures/grid, about 10 KB each), each
+ * encrypted once with @arcafold/crypto (as an upload would), then repeated to fill 5,000 tiles. Every tile decrypts its photo when it
  * appears, so scrolling does the real per-tile work: decrypt, then hand the bytes to the
  * image view from memory.
  */
@@ -8,20 +8,20 @@ import { decryptFile, encryptFile, newFileKey } from '@arcafold/crypto';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
 
-import obama1 from '../../web/e2e/fixtures/faces/obama-1.jpg';
-import obama2 from '../../web/e2e/fixtures/faces/obama-2.jpg';
-import obama3 from '../../web/e2e/fixtures/faces/obama-3.jpg';
-import harris1 from '../../web/e2e/fixtures/faces/harris-1.jpg';
-import harris2 from '../../web/e2e/fixtures/faces/harris-2.jpg';
-import harris3 from '../../web/e2e/fixtures/faces/harris-3.jpg';
-import biden1 from '../../web/e2e/fixtures/faces/biden-1.jpg';
-import biden2 from '../../web/e2e/fixtures/faces/biden-2.jpg';
-import biden3 from '../../web/e2e/fixtures/faces/biden-3.jpg';
-import dated from '../../web/e2e/fixtures/dated.jpg';
+import thumb0 from '../fixtures/grid/thumb-0.jpg';
+import thumb1 from '../fixtures/grid/thumb-1.jpg';
+import thumb2 from '../fixtures/grid/thumb-2.jpg';
+import thumb3 from '../fixtures/grid/thumb-3.jpg';
+import thumb4 from '../fixtures/grid/thumb-4.jpg';
+import thumb5 from '../fixtures/grid/thumb-5.jpg';
+import thumb6 from '../fixtures/grid/thumb-6.jpg';
+import thumb7 from '../fixtures/grid/thumb-7.jpg';
+import thumb8 from '../fixtures/grid/thumb-8.jpg';
+import thumb9 from '../fixtures/grid/thumb-9.jpg';
 
 import { toBase64 } from './encoding';
 
-const SAMPLES = [obama1, obama2, obama3, harris1, harris2, harris3, biden1, biden2, biden3, dated];
+const SAMPLES = [thumb0, thumb1, thumb2, thumb3, thumb4, thumb5, thumb6, thumb7, thumb8, thumb9];
 
 export const TILE_COUNT = 5000;
 

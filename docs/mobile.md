@@ -27,14 +27,16 @@ Hermes, React Native's JavaScript engine, has no WebAssembly, so the web build o
 can't run there. `packages/crypto/src/sodium.native.ts` adapts react-native-libsodium (the
 same C library, called through JSI) to the `Sodium` interface. react-native-libsodium 1.7.0
 doesn't bind secretstream, `crypto_scalarmult_base`, `crypto_hash_sha256`, `sodium_pad`,
-`sodium_unpad` or `sodium_memcmp`, so `patches/react-native-libsodium@1.7.0.patch` adds them
+`sodium_unpad` or `sodium_memcmp`, and its XChaCha20-Poly1305 binding only takes the
+associated data as a string (Arcafold binds records to binary associated data), so `patches/react-native-libsodium@1.7.0.patch` adds them
 as direct calls into libsodium (no cryptography is implemented there). SHA-256 for login
 verifiers goes through libsodium on phones (`digest.native.ts`) because Hermes has no Web
 Crypto either.
 
 `patches/onnxruntime-react-native@1.24.3.patch` makes the package's Android module start in
 React Native's bridgeless mode (it called the removed `getCatalystInstance()`, so the app
-closed at launch), fixes its Android build for Gradle 9, pins ONNX Runtime 1.24.3 instead of `latest.integration`, and stops it shipping
+closed at launch), removes its `unimodule.json` (with it, Expo's autolinking treated the package as an Expo
+module and never registered its React Native package), fixes its Android build for Gradle 9, pins ONNX Runtime 1.24.3 instead of `latest.integration`, and stops it shipping
 mockito and junit inside the app.
 
 ### Building the Android test app

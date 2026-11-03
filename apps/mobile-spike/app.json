@@ -23,6 +23,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["expo-image", "expo-asset", "onnxruntime-react-native", "expo-sharing"]
+    "plugins": ["expo-image", "expo-asset", "expo-sharing"]
   }
 }

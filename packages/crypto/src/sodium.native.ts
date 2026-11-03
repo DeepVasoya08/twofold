@@ -4,8 +4,9 @@
  * Metro resolves `./sodium` to this file on iOS and Android; everything else uses sodium.ts.
  *
  * react-native-libsodium 1.7.0 does not bind secretstream, scalarmult_base, sha256, pad,
- * unpad or memcmp. patches/react-native-libsodium@1.7.0.patch adds them as direct calls into
- * the same C library (the `jsi_arcafold_*` globals below). This file only adapts types.
+ * unpad or memcmp, and its AEAD binding only takes associated data as a string.
+ * patches/react-native-libsodium@1.7.0.patch adds these as direct calls into the same C
+ * library (the `jsi_arcafold_*` globals below). This file only adapts types.
  */
 import * as native from 'react-native-libsodium';
 
@@ -30,6 +31,18 @@ declare global {
     state: ArrayBuffer,
     ciphertext: ArrayBuffer,
   ): { message: ArrayBuffer; tag: number } | null;
+  function jsi_arcafold_aead_encrypt(
+    message: ArrayBuffer,
+    additionalData: ArrayBuffer,
+    publicNonce: ArrayBuffer,
+    key: ArrayBuffer,
+  ): ArrayBuffer;
+  function jsi_arcafold_aead_decrypt(
+    ciphertext: ArrayBuffer,
+    additionalData: ArrayBuffer,
+    publicNonce: ArrayBuffer,
+    key: ArrayBuffer,
+  ): ArrayBuffer | null;
   function jsi_arcafold_scalarmult_base(secretKey: ArrayBuffer): ArrayBuffer;
   function jsi_arcafold_hash_sha256(message: ArrayBuffer): ArrayBuffer;
   function jsi_arcafold_pad(data: ArrayBuffer, blockSize: number): ArrayBuffer;
@@ -58,28 +71,32 @@ const sodium: Sodium = {
   crypto_aead_xchacha20poly1305_ietf_ABYTES:
     globalThis.jsi_arcafold_aead_xchacha20poly1305_ietf_ABYTES,
   crypto_aead_xchacha20poly1305_ietf_NPUBBYTES: native.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES,
-  crypto_aead_xchacha20poly1305_ietf_encrypt: (message, additionalData, secretNonce, nonce, key) =>
-    native.crypto_aead_xchacha20poly1305_ietf_encrypt(
-      message,
-      additionalData,
-      secretNonce,
-      nonce,
-      key,
+  crypto_aead_xchacha20poly1305_ietf_encrypt: (message, additionalData, _secretNonce, nonce, key) =>
+    new Uint8Array(
+      globalThis.jsi_arcafold_aead_encrypt(
+        buffer(message),
+        buffer(additionalData ?? new Uint8Array(0)),
+        buffer(nonce),
+        buffer(key),
+      ),
     ),
   crypto_aead_xchacha20poly1305_ietf_decrypt: (
-    secretNonce,
+    _secretNonce,
     ciphertext,
     additionalData,
     nonce,
     key,
-  ) =>
-    native.crypto_aead_xchacha20poly1305_ietf_decrypt(
-      secretNonce,
-      ciphertext,
-      additionalData,
-      nonce,
-      key,
-    ),
+  ) => {
+    const plain = globalThis.jsi_arcafold_aead_decrypt(
+      buffer(ciphertext),
+      buffer(additionalData ?? new Uint8Array(0)),
+      buffer(nonce),
+      buffer(key),
+    );
+    // libsodium-wrappers throws when a ciphertext doesn't authenticate; so does this.
+    if (!plain) throw new Error('crypto_aead_xchacha20poly1305_ietf_decrypt failed');
+    return new Uint8Array(plain);
+  },
 
   crypto_box_MACBYTES: globalThis.jsi_arcafold_box_MACBYTES,
   crypto_box_NONCEBYTES: native.crypto_box_NONCEBYTES,

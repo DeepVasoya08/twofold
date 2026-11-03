@@ -1,8 +1,8 @@
 diff --git a/cpp/react-native-libsodium.cpp b/cpp/react-native-libsodium.cpp
-index a97e74b23936377c8279bf99defe4389d8e0ff8e..c5257575e9e42d67c8eddadba1e81b71f5033951 100644
+index a97e74b23936377c8279bf99defe4389d8e0ff8e..6822586ac27997858b111ecf638d3011c0efdac0 100644
 --- a/cpp/react-native-libsodium.cpp
 +++ b/cpp/react-native-libsodium.cpp
-@@ -183,8 +183,196 @@ namespace ReactNativeLibsodium
+@@ -183,8 +183,248 @@ namespace ReactNativeLibsodium
          }
      }
  
@@ -190,6 +190,58 @@ index a97e74b23936377c8279bf99defe4389d8e0ff8e..c5257575e9e42d67c8eddadba1e81b71
 +                throw jsi::JSError(runtime, "[react-native-libsodium][" + fn + "] arguments must be of the same length");
 +            }
 +            return jsi::Value(sodium_memcmp(a.data(runtime), b.data(runtime), a.size(runtime)) == 0);
++        });
++
++        // react-native-libsodium's own binding takes the associated data only as a string;
++        // Arcafold binds every sealed record to binary associated data.
++        arcafoldSetFunction(jsiRuntime, "jsi_arcafold_aead_encrypt", 4, [](jsi::Runtime &runtime, const jsi::Value &, const jsi::Value *arguments, size_t count) -> jsi::Value
++        {
++            const std::string fn = "crypto_aead_xchacha20poly1305_ietf_encrypt";
++            auto message = arcafoldBuffer(fn, runtime, arguments, count, 0, "message");
++            auto ad = arcafoldBuffer(fn, runtime, arguments, count, 1, "additionalData");
++            auto nonce = arcafoldBuffer(fn, runtime, arguments, count, 2, "publicNonce");
++            arcafoldRequireSize(fn, runtime, nonce, crypto_aead_xchacha20poly1305_ietf_NPUBBYTES, "publicNonce");
++            auto key = arcafoldBuffer(fn, runtime, arguments, count, 3, "key");
++            arcafoldRequireSize(fn, runtime, key, crypto_aead_xchacha20poly1305_ietf_KEYBYTES, "key");
++            size_t messageLength = message.size(runtime);
++            std::vector<uint8_t> ciphertext(messageLength + crypto_aead_xchacha20poly1305_ietf_ABYTES);
++            unsigned long long ciphertextLength = 0;
++            int result = crypto_aead_xchacha20poly1305_ietf_encrypt(
++                ciphertext.data(), &ciphertextLength, message.data(runtime), messageLength,
++                ad.data(runtime), ad.size(runtime), nullptr, nonce.data(runtime), key.data(runtime));
++            throwOnBadResult(fn, runtime, result);
++            ciphertext.resize(static_cast<size_t>(ciphertextLength));
++            return arrayBufferAsObject(runtime, ciphertext);
++        });
++
++        // Returns null when the ciphertext does not authenticate.
++        arcafoldSetFunction(jsiRuntime, "jsi_arcafold_aead_decrypt", 4, [](jsi::Runtime &runtime, const jsi::Value &, const jsi::Value *arguments, size_t count) -> jsi::Value
++        {
++            const std::string fn = "crypto_aead_xchacha20poly1305_ietf_decrypt";
++            auto ciphertext = arcafoldBuffer(fn, runtime, arguments, count, 0, "ciphertext");
++            auto ad = arcafoldBuffer(fn, runtime, arguments, count, 1, "additionalData");
++            auto nonce = arcafoldBuffer(fn, runtime, arguments, count, 2, "publicNonce");
++            arcafoldRequireSize(fn, runtime, nonce, crypto_aead_xchacha20poly1305_ietf_NPUBBYTES, "publicNonce");
++            auto key = arcafoldBuffer(fn, runtime, arguments, count, 3, "key");
++            arcafoldRequireSize(fn, runtime, key, crypto_aead_xchacha20poly1305_ietf_KEYBYTES, "key");
++            size_t ciphertextLength = ciphertext.size(runtime);
++            if (ciphertextLength < crypto_aead_xchacha20poly1305_ietf_ABYTES)
++            {
++                return jsi::Value::null();
++            }
++            std::vector<uint8_t> message(ciphertextLength - crypto_aead_xchacha20poly1305_ietf_ABYTES);
++            unsigned long long messageLength = 0;
++            int result = crypto_aead_xchacha20poly1305_ietf_decrypt(
++                message.data(), &messageLength, nullptr, ciphertext.data(runtime), ciphertextLength,
++                ad.data(runtime), ad.size(runtime), nonce.data(runtime), key.data(runtime));
++            if (result != 0)
++            {
++                return jsi::Value::null();
++            }
++            message.resize(static_cast<size_t>(messageLength));
++            jsi::Object out = arrayBufferAsObject(runtime, message);
++            sodium_memzero(message.data(), message.size());
++            return out;
 +        });
 +    }
 +

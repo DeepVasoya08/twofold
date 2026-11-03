@@ -6,10 +6,10 @@ settings:
 
 patchedDependencies:
   onnxruntime-react-native@1.24.3:
-    hash: 06d63cdea679384accf9648d0fcada9d2304b78293c2d68d1b0de50ddd656747
+    hash: f6336925c34993cb112a40fa4f89ef5368e625cebf8cbd1a1c65e2fae34911cc
     path: patches/onnxruntime-react-native@1.24.3.patch
   react-native-libsodium@1.7.0:
-    hash: 3e8495edaf72fdc7b245b52be70891c6c01ff8a0b8091626df8a60d4aa6b2a97
+    hash: 8c3e602a1291b45050cca208b2322054654f3b690eaaa2086c99bcd8798b2e1a
     path: patches/react-native-libsodium@1.7.0.patch
 
 importers:
@@ -106,7 +106,7 @@ importers:
         version: 58.0.4(expo@58.0.22)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       onnxruntime-react-native:
         specifier: ^1.24.3
-        version: 1.24.3(patch_hash=06d63cdea679384accf9648d0fcada9d2304b78293c2d68d1b0de50ddd656747)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+        version: 1.24.3(patch_hash=f6336925c34993cb112a40fa4f89ef5368e625cebf8cbd1a1c65e2fae34911cc)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -115,7 +115,7 @@ importers:
         version: 0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0)
       react-native-libsodium:
         specifier: 1.7.0
-        version: 1.7.0(patch_hash=3e8495edaf72fdc7b245b52be70891c6c01ff8a0b8091626df8a60d4aa6b2a97)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+        version: 1.7.0(patch_hash=8c3e602a1291b45050cca208b2322054654f3b690eaaa2086c99bcd8798b2e1a)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
     devDependencies:
       '@types/react':
         specifier: ~19.3.0
@@ -178,7 +178,7 @@ importers:
         version: 0.8.2
       react-native-libsodium:
         specifier: 1.7.0
-        version: 1.7.0(patch_hash=3e8495edaf72fdc7b245b52be70891c6c01ff8a0b8091626df8a60d4aa6b2a97)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
+        version: 1.7.0(patch_hash=8c3e602a1291b45050cca208b2322054654f3b690eaaa2086c99bcd8798b2e1a)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
 
   packages/types: {}
 
@@ -6727,7 +6727,7 @@ snapshots:
 
   onnxruntime-common@1.31.1: {}
 
-  onnxruntime-react-native@1.24.3(patch_hash=06d63cdea679384accf9648d0fcada9d2304b78293c2d68d1b0de50ddd656747)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):
+  onnxruntime-react-native@1.24.3(patch_hash=f6336925c34993cb112a40fa4f89ef5368e625cebf8cbd1a1c65e2fae34911cc)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):
     dependencies:
       onnxruntime-common: 1.24.3
       react: 19.3.0
@@ -6893,7 +6893,7 @@ snapshots:
 
   react-is@18.3.1: {}
 
-  react-native-libsodium@1.7.0(patch_hash=3e8495edaf72fdc7b245b52be70891c6c01ff8a0b8091626df8a60d4aa6b2a97)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):
+  react-native-libsodium@1.7.0(patch_hash=8c3e602a1291b45050cca208b2322054654f3b690eaaa2086c99bcd8798b2e1a)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):
     dependencies:
       '@noble/hashes': 1.8.0
       libsodium-wrappers: 0.8.4
@@ -6901,7 +6901,7 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0)
 
-  react-native-libsodium@1.7.0(patch_hash=3e8495edaf72fdc7b245b52be70891c6c01ff8a0b8091626df8a60d4aa6b2a97)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.1))(react@19.3.1):
+  react-native-libsodium@1.7.0(patch_hash=8c3e602a1291b45050cca208b2322054654f3b690eaaa2086c99bcd8798b2e1a)(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.1))(react@19.3.1):
     dependencies:
       '@noble/hashes': 1.8.0
       libsodium-wrappers: 0.8.4
