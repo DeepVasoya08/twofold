@@ -102,3 +102,29 @@ test.describe('on a phone', () => {
     expect(asked.length).toBeGreaterThan(before);
   });
 });
+
+test('document photos can be hidden from Photos on this device, while Smart search is on', async ({
+  page,
+}) => {
+  await serveNoResources(page);
+  await signUp(page);
+  await goTo(page, 'Settings');
+  const search = page.getByRole('region', { name: 'Search', exact: true });
+  const hide = search.getByRole('button', { name: 'Hide document photos from Photos' });
+  await expect(hide).toHaveAttribute('aria-pressed', 'false');
+  await expect(search).toContainText('show in Photos and in Files');
+
+  await hide.click();
+  await expect(hide).toHaveAttribute('aria-pressed', 'true');
+  await expect(search).toContainText('show only in Files');
+
+  // The choice stays with this device.
+  await lock(page);
+  await unlockWith(page, MAIN_PASSWORD);
+  await goTo(page, 'Settings');
+  await expect(hide).toHaveAttribute('aria-pressed', 'true');
+
+  // It needs Smart search, which tells document photos apart.
+  await search.getByRole('button', { name: 'Turn off' }).click();
+  await expect(hide).toHaveCount(0);
+});

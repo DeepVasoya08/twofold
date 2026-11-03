@@ -24,6 +24,7 @@ import { photoOrder, usePeople } from './people';
 import type { SearchStore } from './search-store';
 import { useUploads } from './uploads';
 import { useVault } from './vault';
+import type { VaultState } from './vault';
 
 /**
  * Smart search's index for the open space: what each photo shows, worked out on this device
@@ -97,6 +98,18 @@ interface NetworkInformationLike extends EventTarget {
 const networkInfo = (): NetworkInformationLike | undefined =>
   (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
 
+/**
+ * What Smart search looks at, in order: every photo, then files with a drawn first page (a
+ * PDF's), so scans with no text can be sorted by how they look (app/document-photos.ts).
+ */
+export function lookOrder(state: VaultState): string[] {
+  const files = (state.files ?? [])
+    .filter((item) => item.file?.preview && !item.sharedAlbum)
+    .sort((a, b) => b.takenAt.localeCompare(a.takenAt))
+    .map((item) => item.id);
+  return [...photoOrder(state), ...files];
+}
+
 /** Progress is shown at most this often while downloading. */
 const SHOW_EVERY_MS = 250;
 
@@ -150,7 +163,7 @@ export function SearchProvider({
     [phone],
   );
   useEffect(() => {
-    order.current = photoOrder(vault.state);
+    order.current = lookOrder(vault.state);
     uploadedNow.current = uploadedHere;
     setDone(order.current.filter((id) => live.current.has(id)).length);
     if (finished.current && pending().length > 0) {

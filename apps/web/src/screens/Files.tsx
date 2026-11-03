@@ -9,7 +9,8 @@ import { Link } from '../app/router';
 import { paths } from '../app/routes';
 import { useToast } from '../app/toast';
 import { useUploads } from '../app/uploads';
-import { useFileView } from '../app/views';
+import { documentPhotos, useDocumentLooks } from '../app/document-photos';
+import { useDocumentPhotosView, useFileView } from '../app/views';
 import { isViewOnly, trashNote, useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
@@ -19,9 +20,12 @@ import { Icon } from '../components/Icon';
 import { Menu } from '../components/Menu';
 import type { MenuItem } from '../components/Menu';
 import { MoveSpaceDialog, moveLabel } from '../components/MoveSpaceDialog';
+import { PhotoGrid } from '../components/PhotoGrid';
 import { FILE_VIEW_CHOICES, ViewPicker } from '../components/ViewPicker';
 import { CATEGORIES, categoryLabel } from '../lib/file-sort/categories';
 import type { Category } from '../lib/file-sort/categories';
+import { lookCategory } from '../lib/file-sort/looks';
+import type { DocumentLook } from '../lib/file-sort/looks';
 import { fileKindLabel, fileKindOf } from '../lib/file-types';
 import { formatShortDay, groupByMonth, pluralize } from '../lib/format';
 import { formatBytes } from '../lib/storage-usage';
@@ -30,29 +34,51 @@ import type { Photo } from '../mock/data';
 import './files.css';
 import './gallery.css';
 
-/** A file's category: the one it was sorted into, or Other until it is. */
-export function categoryOf(item: Photo): Category {
-  return item.file?.category ?? 'other';
+/**
+ * A file's category: the one it was sorted into, or Other until it is. A scan whose text
+ * didn't say (sorted as Other, not by you) goes where its look says, when that's clear.
+ */
+export function categoryOf(item: Photo, look?: DocumentLook): Category {
+  const file = item.file;
+  const sorted = file?.category ?? 'other';
+  if (sorted !== 'other' || file?.sortedByYou || !look) return sorted;
+  return lookCategory(look) ?? 'other';
 }
 
 /** Which categories to offer as filters: those with files, in the fixed order. */
-export function categoryCounts(files: readonly Photo[]): [Category, number][] {
+export function categoryCounts(
+  files: readonly Photo[],
+  looks: ReadonlyMap<string, DocumentLook> = new Map(),
+): [Category, number][] {
   const counts = new Map<Category, number>();
-  for (const item of files) counts.set(categoryOf(item), (counts.get(categoryOf(item)) ?? 0) + 1);
+  for (const item of files) {
+    const category = categoryOf(item, looks.get(item.id));
+    counts.set(category, (counts.get(category) ?? 0) + 1);
+  }
   return CATEGORIES.flatMap((category) => {
     const count = counts.get(category);
     return count ? [[category, count] as [Category, number]] : [];
   });
 }
 
+/** The Document photos choice among the category filters. */
+const DOCUMENT_PHOTOS = 'document-photos';
+type Shown = Category | 'all' | typeof DOCUMENT_PHOTOS;
+
+function shownLabel(shown: Shown): string {
+  if (shown === 'all') return 'All';
+  if (shown === DOCUMENT_PHOTOS) return 'Document photos';
+  return categoryLabel(shown);
+}
+
 /** A file's details line: "PDF · 1.2 MB · 2 Nov", with its category and whose library. */
-function detailsOf(item: Photo, withCategory: boolean): string {
+function detailsOf(item: Photo, category: Category | null): string {
   const file = item.file;
   const parts = [
     file ? fileKindLabel(fileKindOf(file.type, file.name)) : 'File',
     ...(file?.bytes === undefined ? [] : [formatBytes(file.bytes)]),
     formatShortDay(item.takenAt),
-    ...(withCategory && file?.category ? [categoryLabel(file.category)] : []),
+    ...(category && (file?.category || category !== 'other') ? [categoryLabel(category)] : []),
     ...(item.library === undefined ? [] : [`Shared by ${item.library}`]),
   ];
   return parts.join(' · ');
@@ -72,9 +98,10 @@ export function Files() {
   const [deleting, setDeleting] = useState<Photo | null>(null);
   const [moving, setMoving] = useState<Photo | null>(null);
   const [sorting, setSorting] = useState<Photo | null>(null);
-  const [shown, setShown] = useState<Category | 'all'>('all');
+  const [shown, setShown] = useState<Shown>('all');
   const [busy, setBusy] = useState(false);
   const [view, setView] = useFileView();
+  const [hidden] = useDocumentPhotosView();
 
   const files = useMemo(
     () =>
@@ -84,10 +111,21 @@ export function Files() {
     [state.files],
   );
   const total = files.reduce((sum, item) => sum + (item.size ?? 0), 0);
-  const counts = useMemo(() => categoryCounts(files), [files]);
-  // A category emptied (its last file moved or deleted) falls back to All.
-  const filter = counts.some(([category]) => category === shown) ? shown : 'all';
-  const listed = filter === 'all' ? files : files.filter((item) => categoryOf(item) === filter);
+  const looks = useDocumentLooks();
+  const counts = useMemo(() => categoryCounts(files, looks), [files, looks]);
+  const pictures = useMemo(() => documentPhotos(state, looks), [state, looks]);
+  const choices: [Shown, number][] = [
+    ['all', files.length],
+    ...(pictures.length > 0 ? [[DOCUMENT_PHOTOS, pictures.length] as [Shown, number]] : []),
+    ...counts,
+  ];
+  // A choice emptied (its last file moved or deleted) falls back to All.
+  const filter = choices.some(([choice]) => choice === shown) ? shown : 'all';
+  const listed =
+    filter === 'all' || filter === DOCUMENT_PHOTOS
+      ? files
+      : files.filter((item) => categoryOf(item, looks.get(item.id)) === filter);
+  const label = (item: Photo) => categoryOf(item, looks.get(item.id));
 
   const run = (work: () => Promise<void>, done: string) => {
     if (busy) return;
@@ -170,7 +208,7 @@ export function Files() {
             : 'PDFs, documents and other files, encrypted like your photos'
         }
         actions={
-          files.length > 0 && (
+          (files.length > 0 || pictures.length > 0) && (
             <>
               <ViewPicker choices={FILE_VIEW_CHOICES} value={view} onChange={setView} />
               {upload}
@@ -179,16 +217,16 @@ export function Files() {
         }
       />
 
-      {files.length === 0 ? (
+      {files.length === 0 && pictures.length === 0 ? (
         <EmptyState icon="file" title="No files yet" action={upload}>
           Add PDFs, documents, spreadsheets and other files. They’re encrypted on this device before
           they’re uploaded. Videos can’t be added yet.
         </EmptyState>
       ) : (
         <>
-          {counts.length > 1 && (
+          {choices.length > 2 && (
             <div className="file-categories" role="group" aria-label="Show category">
-              {[['all', files.length] as const, ...counts].map(([category, count]) => (
+              {choices.map(([category, count]) => (
                 <button
                   key={category}
                   type="button"
@@ -198,51 +236,75 @@ export function Files() {
                     setShown(category);
                   }}
                 >
-                  {category === 'all' ? 'All' : categoryLabel(category)}
+                  {shownLabel(category)}
                   <span className="file-categories__count">{count}</span>
                 </button>
               ))}
             </div>
           )}
-          <div className="file-months" role="region" aria-label="Files">
-            {groupByMonth(listed).map((month) => (
-              <section
-                key={month.key}
-                className="month"
-                aria-labelledby={`files-month-${month.key}`}
-              >
-                <header className="month__header">
-                  <h2 className="month__title" id={`files-month-${month.key}`}>
-                    {month.label}
-                  </h2>
-                </header>
-                <ul className={view === 'grid' ? 'file-grid' : 'file-list'}>
-                  {month.photos.map((item) =>
-                    view === 'grid' ? (
-                      <FileTile
-                        key={item.id}
-                        item={item}
-                        details={detailsOf(item, false)}
-                        menu={menuFor(item)}
-                      />
-                    ) : (
-                      <FileRow
-                        key={item.id}
-                        item={item}
-                        details={detailsOf(item, filter === 'all')}
-                        menu={menuFor(item)}
-                      />
-                    ),
-                  )}
-                </ul>
-              </section>
-            ))}
-          </div>
+          {filter === DOCUMENT_PHOTOS ? (
+            <div className="file-months" role="region" aria-label="Document photos">
+              <p className="file-photos__note">
+                Photos that look like receipts, documents, screenshots or notes. They’re still in
+                Photos{hidden === 'hide' ? ', but hidden from the timeline' : ''}.
+              </p>
+              {groupByMonth(pictures).map((month) => (
+                <section
+                  key={month.key}
+                  className="month"
+                  aria-labelledby={`document-photos-${month.key}`}
+                >
+                  <header className="month__header">
+                    <h2 className="month__title" id={`document-photos-${month.key}`}>
+                      {month.label}
+                    </h2>
+                  </header>
+                  <PhotoGrid photos={month.photos} context={{ kind: 'documents' }} />
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className="file-months" role="region" aria-label="Files">
+              {groupByMonth(listed).map((month) => (
+                <section
+                  key={month.key}
+                  className="month"
+                  aria-labelledby={`files-month-${month.key}`}
+                >
+                  <header className="month__header">
+                    <h2 className="month__title" id={`files-month-${month.key}`}>
+                      {month.label}
+                    </h2>
+                  </header>
+                  <ul className={view === 'grid' ? 'file-grid' : 'file-list'}>
+                    {month.photos.map((item) =>
+                      view === 'grid' ? (
+                        <FileTile
+                          key={item.id}
+                          item={item}
+                          details={detailsOf(item, null)}
+                          menu={menuFor(item)}
+                        />
+                      ) : (
+                        <FileRow
+                          key={item.id}
+                          item={item}
+                          details={detailsOf(item, filter === 'all' ? label(item) : null)}
+                          menu={menuFor(item)}
+                        />
+                      ),
+                    )}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          )}
         </>
       )}
 
       <CategoryDialog
         file={sorting}
+        current={sorting ? label(sorting) : 'other'}
         busy={busy}
         onClose={() => {
           setSorting(null);
@@ -305,17 +367,18 @@ export function Files() {
 /** Picks a file's category. Your choice also teaches the sorting for files like it. */
 function CategoryDialog({
   file,
+  current,
   busy,
   onClose,
   onChoose,
 }: {
   file: Photo | null;
+  current: Category;
   busy: boolean;
   onClose: () => void;
   onChoose: (category: Category) => void;
 }) {
   const [picked, setPicked] = useState<{ fileId: string; category: Category } | null>(null);
-  const current = file ? categoryOf(file) : 'other';
   const chosen = picked && picked.fileId === file?.id ? picked.category : current;
   return (
     <Dialog

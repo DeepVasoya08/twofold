@@ -87,6 +87,25 @@ exists but is low-key (Settings → Sharing).
   viewer. This runs on the device with nothing to download, so it works with Smart search
   off.
 
+## Document photos
+
+- Photos that look like documents (receipts, ID cards, printed or scanned paper, forms,
+  screenshots, handwritten notes and whiteboards) show up in Files under a **Document
+  photos** filter, grouped by month, and open in the photo viewer, which steps through them
+  and closes back to Files. It's worked out from the search vectors Smart search already
+  has on this device (`lib/file-sort/looks.ts`, `app/document-photos.ts`): nothing extra is
+  downloaded, stored or sent, and it needs Smart search on.
+- They stay in Photos too. Settings → Search → **Hide document photos from Photos** (per
+  device, `arcafold.documentPhotos`) leaves them out of the timeline and the viewer's
+  steps through it; albums, Favorites and search still show them.
+- Smart search also looks at a PDF's drawn first page. A PDF its text couldn't sort (in
+  Other, and not moved there by you) goes to Receipts and invoices, IDs and travel or Notes
+  when its first page clearly looks like one. This isn't saved: moving it yourself is.
+- How a picture is told apart: its vector is compared with 37 short descriptions (16 of
+  documents, 21 of everyday photos, shipped as vectors in `lib/file-sort/look-prompts.ts`),
+  CLIP-style, and the document ones need 80% of the share. Tuning and results are in
+  `apps/web/scripts/document-looks/README.md`.
+
 ## Views
 
 - Screens of photos (timeline, albums, Favorites, a person) have **View** buttons in the

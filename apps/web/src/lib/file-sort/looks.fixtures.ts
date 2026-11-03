@@ -1,0 +1,45 @@
+/**
+ * Real search vectors (OpenCLIP ViT-B/32, packed like search segments) of pictures from
+ * public datasets, used in scripts/document-looks to tune DOCUMENT_SHARE.
+ */
+import type { DocumentLook } from './looks';
+
+export const LOOK_SAMPLES: readonly { name: string; look: DocumentLook | null; vector: string }[] =
+  [
+    {
+      name: 'A receipt (CORD)',
+      look: 'receipt',
+      vector:
+        'OwKGkQfBFQzp_QUCE-Yk1__5EvUM8hgT4xQN8g__EgEcCyb58-3y8_i9IvkqAQkaEATb-vwFEfX0-gcM5AIUJALr9vzf5QAFBeHV-fYQBdb29hIKEPPy-wP72vzu6wIG-_MC7gvuCQoSDu8ID_IAGCQDEPXxFeT6__r2-AX27fXs5wDx9AUR3QsN8xHTEiH-Ewnz7ev8JAUBAg_-fxX9EfTkBSP19Af0Bin6BvELJwQDBwDgCfRG9gz_DPby__b-1voFNuvs-gImCAUBLhDhBAz6CvT4EAQe-OgO8w8RGwIKAicE8Pz-BAsO9Pbt_RDx-_357v2iRPUaBRQR6dnt8xLV8t8L6THsBffcCAnqAfTg9t328RYJChP0-eb0NuoWBuf_FP0RFxf_7gb-_QIE7NwQKgnWAPaB4fD7IOgCGBoN4vboIvz8FP0bFQMBDg4H9ggMCigK5wfYE_rmBgogGwbxCuvf-bv2-wn-AQ7W-_b8Evf15tTd_yX7Fzj-7Q4MDQXzChEcCPsABAztEQHaBzT2BQDk_wXfFhsb7Qz5Av0HD_8V8w367f_lCBgk_Q_5Fwn_D_z4-fgYD_4E_BMA_wrd-xADDA4GGRDz5-n4-fcFAw706P34EBL7GBQVAPkiB_wQ79Uf-QMIABHp6xFsDxsR_jgD9v32GQIEAQH05_Tt_iL9',
+    },
+    {
+      name: 'A scanned form (FUNSD)',
+      look: 'paper',
+      vector:
+        'OxHm7gzR-v74-t8C6PkSAPwfA_QB_Qn77xDzG-j3-QML-xgN7wEG8RDy_wMLCQ8RFObs-AYSCdn_DhXl6O0IEUD2FAzwCQbk9ffp6wooDRL1B_ICCvj88evsC9kCB_YI9Qb9BQLyAe7pCxgL8P7w_gMA-f73DQMF-AYB2P_4C_Td4fr1-gvwDQz8A_oMABf08QPqAvUDAOn8-fv4fhb7_wsP-hYJ_g0S7BELAvQUHPz0_fQUIhNH-Qrc9-kd_TkS3g72DO4IA_H5APXr5xT9DAQSAgr5EwgFAwQJAwsAEd0KAgr48_zsDAj7AAEN_wYB-gP-Ie3RCdwIB_M18wrk_wLpBfb-Aw_19-3xEPkO_vbr-BwO9BgNFPYI9RgPDf_1EvcL-wD7-RL1-vsFB_kK7P0i_BPVABWBAPr_3-n7Dh31C_b18RkDCOkS-Pj3AwcEA-USCxQR7wXyAAUdIeQH93D9-vL3AfDx7AcS_g_7EwsG-_ATFusX6_4MIREC8RsI-_z3Bfr39wII_OrwGe3r9CwIFd8K0hfwFvQI_gHu-u84EBkD8wPx7fMG_RAC9QzwABfKAvv58Q8KCe369_kP6wwD8SkD7vP3DRUC9-UM6xvj7RQP_hL4AfDxCPX4-vsNDBT9CeoD79YG6AX_GeFn6PUN-zQIBfUA8wMO9fT_Afz_Dfsg',
+    },
+    {
+      name: 'A phone screenshot (ScreenSpot)',
+      look: 'screen',
+      vector:
+        'OxwlC_6BCPriDfPa-Qj7AQr7-Pft6RPw3Qj5APz1FQHy-yIJDQTuD_jlBfT-8hgPF9sFBPT-B-4A_Onz7_0NBPfq7v0FCeYCAwbuEuvwB_T1Dh4J-_EO7PzlAfP8CuoSBfcV-QXfCxf8CCP3_hIF-SMFC_DmEA8EBvnyERLuAQkKFQES7QLu-g3p4hH09eECDAgE9AIW-R_3CQkBYwb4DwT6BCb7LvH5CQIRE-YGFgIFBe7-_PFE9PT0AALl9tkP-QAPDwIM7PkQ_Pf1Ke8aAfYH5v0NBAT99v_jCfkO-wgC_AT6_Ozw3REF9gr-_STl6QwKAQH5MPwL8_MaCO8SDfruBdwd8QgD_wAD_wXsBAjw_-np_fIA7foJ6gwX9w0YBPoA_gELDgIA8_76Ax8E8cAg_w7dC_yd6gsk8g4IFgwDDxDgBgQCEQj8DSrs6QELARMM--T4HfAH-PsNBQQFIb7o9e797AEADQfe8AMC7P31AvD48-4J9vQa6AgD_gYDABcNAhviCxn25g3m_hfkFf_xEAT04-0cCP7_FA8M8Akd9_IHBhIV-fDl_PsH5_vaEAT_DPPp7gb98wQECQb8EgID_goFDv8Z-AEK9wYB8QH2_SX67-_y2hP69-IIF_4q9gP6Bt0H9gjkEAnmA_wLCAAVCf3kCQIEDhL0B-kI7-r5EAfp',
+    },
+    {
+      name: 'People at a party (Flickr30k)',
+      look: null,
+      vector:
+        'OxhUuAD0s_sSBPn-AwYO-QHq-O3b9f_1BQ0B8-zU-wvqD8_7_Asa_voN_O4NDQv1Bf_6BAQB8u_0AhwM_Q0WAfT_-_j0Ag4XCtzsDQv1-gNE_fT-AvXy6vT_Hfr7AQ0O4_X9CPD--_X--gT5_gfmCPn93gbwBwHf_978IQT-3-sA9g8LAhcNCxEH-gX_9gYX-AP8_OIQ6-gL-BIMf_rx8_MCB_sCABr58CUPHfn__BH6-fwZEPtnCw0QEg0OCgX2-_8GEwX7CPwLGgLw5x8G7g0M7QkJ-PP1BQIKGAsJ6xLz5Q_qDvP9Dgn9BAwA9wL28_j4-A8TIfoK-ALa7QMPCAPsGfz_D7EKDAcM9gQC6f359-jp8QQK7wwHCCoNBRXz-gH59wAMBgz-CwL8ASL6DgQH_ASt_iyB_gEd8Q7uBBES_wnrAfb4zz3_zvsB8BDzCO_-AOYJCQcF9gEdAhUFCc_uNP0MAvgE7AgJB_kUBPkL9gDnCh_9DfkFBfzkCfr33RL79P8KAgUA_gUJ-vDhA-D9-gEZ-f8V6goa9gH5CBPxA_cEBwEG7QUY6hMCAQj88fj1Hgr-9vj_7goE_vfxAQb2-v7n7wAL__77BfoNIgr-AQ3s_PsG9fb8GggE-gr24vvhHfcEGg4Q-QoT3AU8__AUChUJ-P31Cfjw8AAICv_7ARfw',
+    },
+    {
+      name: 'A street scene (Flickr30k)',
+      look: null,
+      vector:
+        'Ow-1expaOfcC8BP8A-T57f_29fTR_u4H9vwCB_ni_fL0BPUF-wsQ8u4j_Pf7Dv0SBwf89QgGBPACAewX-ykHEx4YCAf5B_1GCPPqBwf4FhUFCOkBBvwZA_gD9QQA_xEOCwgDCg705w4R8gYNFP0Q5vzxCQD5_wYJ-wH-DP75BQYU_gIMBQXoAv0N8vYTCugU_P_pId_w9QcWAPn7fvT8FwDr_fEEDgDk_vLuIBT1_BQa8-NZCe5QGRYEABHzDFPzAOgQHgUI-_b8-A_5ERTp7-8JBAILDPDp9QEN-f0U--_29_0HFQQUBATgAfXo8Rj3AAb4ASEEBvYA_ffFAg_W--LqCgMXDuX__Cr29Qf5Cf4U_ib4-P4DA_X1C_r8B_zv_ff-_Pv7-fwM6AX_Dg___hMB_wDf7hCB__wa8fUKFuz6FfUOFwESAWogJvYADQIF8wf74_j1Af0KExIC_QkGDffjFPUV_PEVDv79BvYI-vwC9v3y7xsSDRIFBwfeBfsD_RX5CA0w-AID7wAE_wTOG_oOAfQf7hom_gcN8wAPAPkU-BAM_vcD8Afl8wcj9AQJBP0RL_IJDwz3-A4ABgXgCBoD6xfc8w_v_BfqPgoPBfMWC_z9A_b95PDy_-wDA_cvEfcHFdnTEAAN_vb6BA8FDwf6Axf36jTtCQj9_v8LGQ4H9_v0',
+    },
+    {
+      name: 'A street photo with signs (TextVQA)',
+      look: null,
+      vector:
+        'O0Pop_sCCQ7-7BcLA-YA_gb8-gjt7QQJ_f4DBgrf--rt-RkFBQ0IBer6ChH38vj2F_wK-w37_-YBBNwW8vIE_gftCf7q-gTe8wTwEAUMAvj-A_36AQD__QAL-ufx4fb77_kS9wj__gADEQUADPUOEvYMAQQHC_cB-f_8FfUE9_f28_Pv-vv_AhQDFvME_vUABAsHB-3u7vr9Cf7zfwv9Bwb8-QL7Cw4E-TLz8RwF8QENEvwu9_0sCfrwAwj6CfH5_QP2-QAGAAUMAwP7IPIOBQQCDP_-8vUS-PsE-RLzC_H7BP0L9_AHAAPzDvEI_uv8AQnvBez8BvoD-gnnEwESCwTwBf8I7iHr_QL_Bv0M_AL99uP1CAr4-_kGBeYA9QMf-fnzDfkHAvkNBO0B9AIDAAMLAPbh_hCB6fkJEgn_EfIF9AIE9g_79Sz0Hg8A9wUSFgPqCuwD9g4EBPj9Cfn5-_oTCuv6BOz2-RYAAgb_9_7_9BAKB_j6Bgj3CS8CCfYGBQv_Afka9wALAg35BBf9BgsI_QfxChAV-wf5ARL89RX1_f3-BQP39QP38RH5BvXtC-sC7_sD5gYIBQMHCxD9-_L--An0AAYCBOsH-vr7_O0F9wHzC_4E_wj07v3-__4i__oZ9hYE_Qj5-v0R__MAHPwD8yPz_vvwAfsD_AEGDgUCB__y',
+    },
+  ];

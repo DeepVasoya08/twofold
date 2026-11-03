@@ -198,3 +198,9 @@
     gap: 14px 10px;
   }
 }
+
+.file-photos__note {
+  margin: 0 0 16px;
+  color: var(--text-2);
+  font-size: 14px;
+}

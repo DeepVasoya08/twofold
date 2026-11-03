@@ -14,6 +14,7 @@ import { parsePhotoContext, paths } from '../app/routes';
 import type { PhotoContext } from '../app/routes';
 import { useToast } from '../app/toast';
 import type { ToastAction } from '../app/toast';
+import { documentPhotos, useDocumentLooks, useHiddenFromTimeline } from '../app/document-photos';
 import { albumPhotos, isViewOnly, timelinePhotos, trashNote, useVault } from '../app/vault';
 import type { VaultState } from '../app/vault';
 import { Avatar } from '../components/Brand';
@@ -22,6 +23,7 @@ import { Icon } from '../components/Icon';
 import { MoveSpaceDialog, moveLabel } from '../components/MoveSpaceDialog';
 import { PhotoImage } from '../components/PhotoImage';
 import { formatDay, formatTime, sortNewestFirst } from '../lib/format';
+import type { DocumentLook } from '../lib/file-sort/looks';
 import type { Person, Photo } from '../mock/data';
 
 import { useZoom } from './use-zoom';
@@ -30,14 +32,19 @@ import './photo-viewer.css';
 
 /**
  * The photos the viewer steps through. A person's come from `listedIds`, in order, and so
- * do a search's and a smart album's.
+ * do a search's and a smart album's. `looks` says which photos look like documents, and
+ * `hidden` which of them are left out of the timeline.
  */
 export function photosInContext(
   state: VaultState,
   context: PhotoContext,
   listedIds: readonly string[] | null = null,
+  looks: ReadonlyMap<string, DocumentLook> = new Map(),
+  hidden: ReadonlySet<string> = new Set(),
 ): Photo[] {
   switch (context.kind) {
+    case 'documents':
+      return documentPhotos(state, looks);
     case 'album':
       return albumPhotos(state, context.albumId);
     case 'person':
@@ -52,7 +59,7 @@ export function photosInContext(
     case 'favorites':
       return sortNewestFirst(timelinePhotos(state).filter((photo) => photo.favorite));
     case 'all':
-      return sortNewestFirst(timelinePhotos(state));
+      return sortNewestFirst(timelinePhotos(state).filter((photo) => !hidden.has(photo.id)));
   }
 }
 
@@ -68,6 +75,8 @@ function closeTarget(context: PhotoContext): string {
       return paths.search;
     case 'smart':
       return paths.smartAlbum(context.albumId);
+    case 'documents':
+      return paths.files;
     case 'all':
       return paths.gallery;
   }
@@ -91,6 +100,8 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
   const groupPhotoIds = useGroupPhotoIds(context.kind === 'person' ? context.groupId : null);
   const { shownIds, searchLike } = useFind();
   const smartSearch = useSearch();
+  const looks = useDocumentLooks();
+  const hidden = useHiddenFromTimeline();
   const smart = useSmartAlbum(
     context.kind === 'smart'
       ? smartSearch.smartAlbums.find((album) => album.id === context.albumId)
@@ -104,6 +115,8 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
       : context.kind === 'smart'
         ? [...(smart?.found?.best ?? []), ...(smart?.found?.more ?? [])]
         : groupPhotoIds,
+    looks,
+    hidden,
   );
   // A photo un-favorited from the favorites view is no longer in that list; keep showing it.
   const photo = state.photos.find((candidate) => candidate.id === photoId);
