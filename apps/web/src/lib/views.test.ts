@@ -5,6 +5,9 @@ import { aspectOf, loadView, parseView, saveView } from './views';
 describe('views', () => {
   it('falls back to the first view for anything unknown', () => {
     expect(parseView('photos', null)).toBe('grid');
+    expect(parseView('documents', null)).toBe('show');
+    expect(parseView('documents', 'hide')).toBe('hide');
+    expect(parseView('documents', 'grid')).toBe('show');
     expect(parseView('photos', 'compact')).toBe('compact');
     expect(parseView('photos', 'list')).toBe('grid');
     expect(parseView('files', 'grid')).toBe('grid');

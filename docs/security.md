@@ -609,8 +609,10 @@ so photos can later be found by describing them. The server stores only cipherte
   revokes its object URLs.
 - Nothing secret is written to `localStorage`, IndexedDB or caches. `localStorage` holds
   only this device's settings: the auto-lock time, whether face grouping and Smart search
-  were turned on or off here, and how photos and files are laid out (`arcafold.photoView`,
-  `arcafold.fileView`).
+  were turned on or off here, how photos and files are laid out (`arcafold.photoView`,
+  `arcafold.fileView`), and whether document photos are hidden from the timeline
+  (`arcafold.documentPhotos`). Which photos look like documents is worked out in memory
+  each unlock and never stored.
 - Only raster photo formats are stored or shown as photos (JPEG, PNG, GIF, WebP, HEIC, AVIF;
   `apps/web/src/lib/photo-types.ts`). An SVG is a document that can carry script, so it is
   never a photo: it is kept as a file, and a photo record naming it is left out.

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { albumsInTab } from './Albums';
+import { categoryOf, categoryCounts } from './Files';
 import { filterByOwner } from './Gallery';
+import { photosInContext } from './PhotoViewer';
 import { aboutPerson } from './People';
 import { sharedWithLine } from './Settings';
 import { isInviteCode, normalizeInviteCode, parseInviteInput } from './JoinCode';
@@ -142,5 +144,79 @@ describe('search notes', () => {
     expect(notLookedAtLine({ photo: false, words: ['Biscuit', 'Kite', 'the cabin'] })).toMatch(
       /taught “Biscuit”, “Kite” and “the cabin” with/,
     );
+  });
+});
+
+describe('categoryOf', () => {
+  const scan = {
+    id: 'scan',
+    src: '',
+    width: 0,
+    height: 0,
+    takenAt: '2026-10-01T00:00:00Z',
+    addedBy: 'me' as const,
+    favorite: false,
+    albumIds: [],
+    file: { name: 'scan.pdf', type: 'application/pdf', category: 'other' as const },
+  };
+
+  it('sorts a scan its text couldn’t sort by how it looks', () => {
+    expect(categoryOf(scan)).toBe('other');
+    expect(categoryOf(scan, 'receipt')).toBe('receipts');
+    expect(categoryOf(scan, 'id')).toBe('ids');
+    // A look with no category of its own leaves it in Other.
+    expect(categoryOf(scan, 'paper')).toBe('other');
+  });
+
+  it('keeps what the text said, and what you chose', () => {
+    const sorted = { ...scan, file: { ...scan.file, category: 'tax' as const } };
+    expect(categoryOf(sorted, 'receipt')).toBe('tax');
+    const yours = { ...scan, file: { ...scan.file, sortedByYou: true } };
+    expect(categoryOf(yours, 'receipt')).toBe('other');
+  });
+
+  it('counts scans where their look puts them', () => {
+    expect(categoryCounts([scan], new Map([['scan', 'receipt' as const]]))).toEqual([
+      ['receipts', 1],
+    ]);
+    expect(categoryCounts([scan])).toEqual([['other', 1]]);
+  });
+});
+
+describe('photosInContext', () => {
+  const at = (id: string, takenAt: string) => ({
+    id,
+    src: '',
+    width: 1,
+    height: 1,
+    takenAt,
+    addedBy: 'me' as const,
+    favorite: false,
+    albumIds: [],
+  });
+  const state = {
+    photos: [
+      at('beach', '2026-10-03T00:00:00Z'),
+      at('receipt', '2026-10-02T00:00:00Z'),
+      at('note', '2026-10-01T00:00:00Z'),
+    ],
+    albums: [],
+  };
+  const looks = new Map([
+    ['receipt', 'receipt' as const],
+    ['note', 'notes' as const],
+  ]);
+
+  it('steps through document photos from Files', () => {
+    const ids = photosInContext(state, { kind: 'documents' }, null, looks).map((p) => p.id);
+    expect(ids).toEqual(['receipt', 'note']);
+  });
+
+  it('leaves hidden document photos out of the timeline', () => {
+    const all = photosInContext(state, { kind: 'all' }, null, looks).map((p) => p.id);
+    expect(all).toEqual(['beach', 'receipt', 'note']);
+    const hidden = new Set(looks.keys());
+    const shown = photosInContext(state, { kind: 'all' }, null, looks, hidden).map((p) => p.id);
+    expect(shown).toEqual(['beach']);
   });
 });

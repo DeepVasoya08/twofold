@@ -91,6 +91,7 @@ describe('photo context', () => {
   });
 
   it('falls back to the timeline for anything else', () => {
+    expect(parsePhotoContext('?from=documents')).toEqual({ kind: 'documents' });
     expect(parsePhotoContext('')).toEqual({ kind: 'all' });
     expect(parsePhotoContext('?from=album:')).toEqual({ kind: 'all' });
     expect(parsePhotoContext('?from=person:')).toEqual({ kind: 'all' });

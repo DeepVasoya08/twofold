@@ -4,6 +4,7 @@ import { findPhotos } from '../lib/search/find';
 import type { Found, PeopleIndex } from '../lib/search/find';
 import { parseQuery } from '../lib/search/query';
 import type { NamedPerson, NamedWord, ParsedQuery } from '../lib/search/query';
+import type { SearchResults } from '../lib/search/segment';
 import type { SmartAlbum } from '../lib/search/smart-album';
 import { wordVector } from '../lib/search/taught';
 import { photoOrder, useGroups, usePeople } from './people';
@@ -86,7 +87,13 @@ export function useAnswer(): (
 
   return useCallback(
     (query, wordsVector) => {
-      const vectors = results();
+      // Only photos' vectors: files' (scans looked at for sorting) never show up as photos.
+      const all = results();
+      const vectors: SearchResults = new Map();
+      for (const photo of photos) {
+        const vector = all.get(photo.id);
+        if (vector !== undefined) vectors.set(photo.id, vector);
+      }
       const looksLike: Float32Array[] = [];
       const notLookedAt: NotLookedAt = { photo: false, words: [] };
       if (query?.like) {

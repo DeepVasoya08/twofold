@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { useHiddenFromTimeline } from '../app/document-photos';
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
 import { allSelected, useSelection } from '../app/selection';
@@ -43,7 +44,9 @@ export function filterByOwner(photos: readonly Photo[], filter: OwnerFilter): Ph
 export function Gallery() {
   const { state, space, status } = useVault();
   const isPrivate = space === 'private';
-  const timeline = timelinePhotos(state);
+  const hidden = useHiddenFromTimeline();
+  // Document photos stay in Files only, while they're hidden from the timeline.
+  const timeline = timelinePhotos(state).filter((photo) => !hidden.has(photo.id));
   // Only worth offering once something in the timeline is someone else's.
   const hasShared = timeline.some((photo) => photo.library !== undefined);
   const [chosen, setFilter] = useState<OwnerFilter>('all');

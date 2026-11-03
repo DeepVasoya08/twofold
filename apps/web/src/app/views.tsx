@@ -1,7 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react';
 
 import { loadView, saveView } from '../lib/views';
-import type { FileView, PhotoView, ViewKind } from '../lib/views';
+import type { DocumentPhotosView, FileView, PhotoView, ViewKind } from '../lib/views';
 
 /** Every screen showing photos (or files) follows one choice, and changes with it. */
 const listeners = new Set<() => void>();
@@ -51,4 +51,12 @@ export function usePhotoView(): [PhotoView, (view: PhotoView) => void] {
 /** How Files is laid out on this device, and a way to change it. */
 export function useFileView(): [FileView, (view: FileView) => void] {
   return useStoredView('files', readFiles);
+}
+
+const readDocuments = (value: string | undefined): DocumentPhotosView =>
+  (value as DocumentPhotosView | undefined) ?? loadView('documents', browserStorage());
+
+/** Whether document photos show in the Photos timeline on this device, and a way to change it. */
+export function useDocumentPhotosView(): [DocumentPhotosView, (view: DocumentPhotosView) => void] {
+  return useStoredView('documents', readDocuments);
 }

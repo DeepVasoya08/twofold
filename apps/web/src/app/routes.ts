@@ -169,6 +169,8 @@ export function matchRoute(pathname: string): Route {
 export type PhotoContext =
   | { kind: 'all' }
   | { kind: 'favorites' }
+  /** Photos that look like documents, from Files. */
+  | { kind: 'documents' }
   /** The last search's results, held in memory: the URL only says "search". */
   | { kind: 'search' }
   | { kind: 'album'; albumId: string }
@@ -193,6 +195,7 @@ export function parsePhotoContext(search: string): PhotoContext {
   const from = new URLSearchParams(search).get('from');
   if (from === 'favorites') return { kind: 'favorites' };
   if (from === 'search') return { kind: 'search' };
+  if (from === 'documents') return { kind: 'documents' };
   if (from?.startsWith('album:')) {
     const albumId = decodeSegment(from.slice('album:'.length));
     if (albumId) return { kind: 'album', albumId };

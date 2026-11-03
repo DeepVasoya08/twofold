@@ -4,6 +4,7 @@ import { errorMessage } from '../app/account-ops';
 import { useSearch } from '../app/search';
 import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
+import { useDocumentPhotosView } from '../app/views';
 import { pluralize } from '../lib/format';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
@@ -17,6 +18,7 @@ export function SearchSettings() {
   const search = useSearch();
   const { space } = useVault();
   const toast = useToast();
+  const [documents, setDocuments] = useDocumentPhotosView();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [forgetting, setForgetting] = useState<string | null>(null);
@@ -89,6 +91,34 @@ export function SearchSettings() {
           </button>
         </div>
       </div>
+      {search.enabled && (
+        <div className="settings-row">
+          <span className="settings-row__icon">
+            <Icon name="file" size={20} />
+          </span>
+          <div className="settings-row__text">
+            <span className="settings-row__title">Hide document photos from Photos</span>
+            <span className="settings-row__description">
+              {documents === 'hide'
+                ? 'On for this device. Photos of receipts, documents, screenshots and notes show only in Files.'
+                : 'Photos of receipts, documents, screenshots and notes show in Photos and in Files.'}
+            </span>
+          </div>
+          <div className="settings-row__action">
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              aria-pressed={documents === 'hide'}
+              aria-label="Hide document photos from Photos"
+              onClick={() => {
+                setDocuments(documents === 'hide' ? 'show' : 'hide');
+              }}
+            >
+              {documents === 'hide' ? 'Turn off' : 'Turn on'}
+            </button>
+          </div>
+        </div>
+      )}
       {search.enabled &&
         search.words.map((word) => (
           <div className="settings-row" key={word.id}>
