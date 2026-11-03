@@ -1,0 +1,63 @@
+/**
+ * How photos and files are laid out, chosen per device with the View buttons and kept in
+ * localStorage like the auto-lock time: a plain preference, nothing about the photos.
+ */
+
+export type PhotoView = 'grid' | 'compact' | 'uncropped';
+export type FileView = 'list' | 'grid';
+
+export const PHOTO_VIEWS: readonly PhotoView[] = ['grid', 'compact', 'uncropped'];
+export const FILE_VIEWS: readonly FileView[] = ['list', 'grid'];
+
+export const VIEW_STORAGE_KEYS = {
+  photos: 'arcafold.photoView',
+  files: 'arcafold.fileView',
+} as const;
+
+export type ViewKind = keyof typeof VIEW_STORAGE_KEYS;
+
+type ViewOf<K extends ViewKind> = K extends 'photos' ? PhotoView : FileView;
+
+const CHOICES: { [K in ViewKind]: readonly ViewOf<K>[] } = {
+  photos: PHOTO_VIEWS,
+  files: FILE_VIEWS,
+};
+
+/** A stored value, or the first (default) view for anything unknown. */
+export function parseView<K extends ViewKind>(kind: K, value: string | null): ViewOf<K> {
+  const choices = CHOICES[kind] as readonly string[];
+  return (value !== null && choices.includes(value) ? value : choices[0]) as ViewOf<K>;
+}
+
+export function loadView<K extends ViewKind>(
+  kind: K,
+  storage: Pick<Storage, 'getItem'> | undefined,
+): ViewOf<K> {
+  try {
+    return parseView(kind, storage?.getItem(VIEW_STORAGE_KEYS[kind]) ?? null);
+  } catch {
+    return parseView(kind, null);
+  }
+}
+
+export function saveView(
+  kind: ViewKind,
+  view: string,
+  storage: Pick<Storage, 'setItem'> | undefined,
+): void {
+  try {
+    storage?.setItem(VIEW_STORAGE_KEYS[kind], view);
+  } catch {
+    // Not kept: this visit still uses the choice.
+  }
+}
+
+/**
+ * Widths for the uncropped view: each photo keeps its shape, so a tile's share of its row
+ * is its width over its height (1 when the size isn't known). Kept within 1:3 and 3:1 so a
+ * panorama or a long screenshot doesn't take over a row.
+ */
+export function aspectOf(width: number, height: number): number {
+  if (!(width > 0) || !(height > 0)) return 1;
+  return Math.min(3, Math.max(1 / 3, width / height));
+}

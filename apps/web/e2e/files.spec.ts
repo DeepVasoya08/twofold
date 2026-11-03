@@ -38,7 +38,7 @@ test('adds files that aren’t photos, keeps them out of Photos, and saves them 
   await expect(dialog.getByRole('button', { name: 'Done' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Done' }).click();
 
-  const list = page.getByRole('list', { name: 'Files' });
+  const list = page.getByRole('region', { name: 'Files' });
   await expect(list.getByText('Electricity bill March.pdf')).toBeVisible();
   await expect(list.getByText('packing.txt')).toBeVisible();
   await expect(list.getByText(/^PDF · /)).toBeVisible();
@@ -107,7 +107,7 @@ test('moves a file into the private space', async ({ page }) => {
   await unlockWith(page, PRIVATE_PASSWORD);
   await goTo(page, 'Files');
   await expect(
-    page.getByRole('list', { name: 'Files' }).getByText('passport scan.pdf'),
+    page.getByRole('region', { name: 'Files' }).getByText('passport scan.pdf'),
   ).toBeVisible();
 });
 
@@ -129,7 +129,7 @@ test('shows a PDF, a text file and a Word document inside the app', async ({ pag
   await dialog.getByRole('button', { name: 'Done' }).click();
 
   // The PDF's first page was drawn as its preview, shown as an image in its row.
-  const list = page.getByRole('list', { name: 'Files' });
+  const list = page.getByRole('region', { name: 'Files' });
   await expect(list.getByRole('link', { name: 'Open two pages.pdf' }).locator('img')).toBeVisible();
   await expect(list.getByRole('link', { name: 'Open packing.txt' }).locator('img')).toHaveCount(0);
 

@@ -18,6 +18,7 @@ import { Menu } from '../components/Menu';
 import type { MenuItem } from '../components/Menu';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { SelectButton } from '../components/SelectButton';
+import { PhotoViewPicker } from '../components/ViewPicker';
 import { SelectionBar } from '../components/SelectionBar';
 import { pluralize } from '../lib/format';
 import { PERSON_LABELS } from '../lib/people/grouping';
@@ -169,6 +170,7 @@ export function Person({ groupId }: { groupId: string }) {
               <Icon name="pencil" size={16} />
               {group.person?.name ? 'Rename' : 'Add a name'}
             </button>
+            {photos.length > 0 && <PhotoViewPicker />}
             {photos.length > 0 && <SelectButton selection={selection} />}
             <Menu label="Person actions" items={items} />
           </>

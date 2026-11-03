@@ -206,6 +206,26 @@ const icons = {
       <path d="M14 3v5h5M9 13h6M9 17h4" />
     </>
   ),
+  grid: (
+    <>
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </>
+  ),
+  'grid-small': (
+    <path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM10 10h4v4h-4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z" />
+  ),
+  rows: (
+    <>
+      <rect x="3" y="4" width="11" height="7" rx="1.5" />
+      <rect x="16" y="4" width="5" height="7" rx="1.5" />
+      <rect x="3" y="13" width="6" height="7" rx="1.5" />
+      <rect x="11" y="13" width="10" height="7" rx="1.5" />
+    </>
+  ),
+  list: <path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />,
   folder: (
     <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.6l2 2.2h7.4A2.5 2.5 0 0 1 21 9.7v8.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5z" />
   ),

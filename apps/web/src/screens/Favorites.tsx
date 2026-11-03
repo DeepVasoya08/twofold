@@ -4,6 +4,7 @@ import { PageHeader } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { SelectButton } from '../components/SelectButton';
+import { PhotoViewPicker } from '../components/ViewPicker';
 import { SelectionBar } from '../components/SelectionBar';
 import { pluralize, sortNewestFirst } from '../lib/format';
 
@@ -21,7 +22,14 @@ export function Favorites() {
             ? `${pluralize(favorites.length, 'photo')} you keep coming back to`
             : undefined
         }
-        actions={favorites.length > 0 && <SelectButton selection={selection} />}
+        actions={
+          favorites.length > 0 && (
+            <>
+              <PhotoViewPicker />
+              <SelectButton selection={selection} />
+            </>
+          )
+        }
       />
       <SelectionBar selection={selection} allIds={favorites.map((photo) => photo.id)} />
       {favorites.length === 0 ? (

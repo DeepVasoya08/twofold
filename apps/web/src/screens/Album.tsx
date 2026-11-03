@@ -10,6 +10,7 @@ import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { PhotoImage } from '../components/PhotoImage';
 import { SelectButton } from '../components/SelectButton';
+import { PhotoViewPicker } from '../components/ViewPicker';
 import { SelectionBar } from '../components/SelectionBar';
 import { formatDateRange, pluralize } from '../lib/format';
 
@@ -83,6 +84,7 @@ export function Album({ albumId }: { albumId: string }) {
               <span className="album-toolbar__label">Download</span>
             </button>
           )}
+          {photos.length > 0 && <PhotoViewPicker />}
           {photos.length > 0 && <SelectButton selection={selection} />}
           {actions}
         </div>

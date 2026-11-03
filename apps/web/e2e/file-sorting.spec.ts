@@ -38,7 +38,7 @@ test('sorts files into categories on the device, and learns from a file you move
   await expect(filters.getByRole('button', { name: 'Medical 1' })).toBeVisible();
   await expect(filters.getByRole('button', { name: 'Notes 1' })).toBeVisible();
 
-  const list = page.getByRole('list', { name: 'Files' });
+  const list = page.getByRole('region', { name: 'Files' });
   await filters.getByRole('button', { name: 'Medical 1' }).click();
   await expect(list.getByRole('link')).toHaveCount(1);
   await expect(list.getByText('Lab report.txt')).toBeVisible();
@@ -76,7 +76,7 @@ test('leaves files unsorted while Smart search is off on this device', async ({ 
     .click();
   await goTo(page, 'Files');
   await addFiles(page, [BILL, LAB]);
-  const list = page.getByRole('list', { name: 'Files' });
+  const list = page.getByRole('region', { name: 'Files' });
   await expect(list.getByText('Lab report.txt')).toBeVisible();
   await expect(page.getByRole('group', { name: 'Show category' })).toBeHidden();
 
