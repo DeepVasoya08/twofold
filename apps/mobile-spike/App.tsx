@@ -124,7 +124,7 @@ export default function App() {
         const scan = scanDisk();
         record(
           '7',
-          `Disk: ${String(scan.files)} files, ${(scan.bytes / 1e6).toFixed(1)} MB, image files: ${String(scan.images.length)}${scan.images.length ? `\n  ${scan.images.slice(0, 5).join('\n  ')}` : ''}`,
+          `Disk: ${String(scan.files)} files, ${(scan.bytes / 1e6).toFixed(1)} MB, image files: ${String(scan.images.length)}, system files skipped: ${String(scan.unreadable.length)}${scan.images.length ? `\n  ${scan.images.slice(0, 5).join('\n  ')}` : ''}`,
         );
       },
     },

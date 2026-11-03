@@ -10,6 +10,8 @@ export interface DiskScan {
   bytes: number;
   /** Paths (relative to the app folders) of files that start with JPEG or PNG magic bytes. */
   images: string[];
+  /** Files the app may not open, such as Android's compiled code under cache/oat_primary. */
+  unreadable: string[];
 }
 
 const JPEG = [0xff, 0xd8, 0xff];
@@ -30,18 +32,24 @@ function walk(dir: Directory, base: string, out: DiskScan): void {
     out.files += 1;
     out.bytes += entry.size;
     if (entry.size < 4) continue;
-    const handle = entry.open();
+    let head: Uint8Array;
     try {
-      const head = handle.readBytesSync(4);
-      if (startsWith(head, JPEG) || startsWith(head, PNG)) out.images.push(name);
-    } finally {
-      handle.close();
+      const handle = entry.open();
+      try {
+        head = handle.readBytesSync(4);
+      } finally {
+        handle.close();
+      }
+    } catch {
+      out.unreadable.push(name);
+      continue;
     }
+    if (startsWith(head, JPEG) || startsWith(head, PNG)) out.images.push(name);
   }
 }
 
 export function scanDisk(): DiskScan {
-  const out: DiskScan = { files: 0, bytes: 0, images: [] };
+  const out: DiskScan = { files: 0, bytes: 0, images: [], unreadable: [] };
   walk(Paths.cache, 'cache', out);
   walk(Paths.document, 'documents', out);
   return out;
