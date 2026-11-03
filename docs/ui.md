@@ -119,6 +119,17 @@ exists but is low-key (Settings → Sharing).
 - Albums has three tabs: **All albums**, **Shared with me** (other people's albums, shared
   alone or with their library) and **Shared by me** (your albums shared with at least one
   person). Cards say who an album is from or shared with.
+- **Files** holds everything that isn't a photo or a video (PDFs, documents,
+  spreadsheets, text). The upload dialog has **Choose photos** and **Choose files**, and
+  anything dropped or picked that isn't a photo goes to Files; videos are refused ("Videos
+  can't be added yet"). Files is a list, newest first, with an icon for the kind of file
+  (from its name and type only; files are never opened in the app), its size and when it was
+  added. Tapping a file downloads it under its own name; its menu has **Download**, **Move
+  to private space** (or **Move to library**) and **Delete**, which sends it to Recently
+  deleted like a photo. Files never appear in the timeline, albums, search or People, and
+  count against the same 1 GB. The phone tab bar is Photos, Albums, Files, People and
+  Settings; Favorites stays in the desktop sidebar and is a link at the bottom of Albums on
+  phones.
 - **Delete** (in the selection bar or the viewer) moves photos to **Recently deleted**: the
   toast has **Undo** for 6 seconds, and the confirmation says they can be restored for 30
   days. Recently deleted is linked at the bottom of Albums (All albums tab) and lives at
@@ -277,6 +288,7 @@ Routes are the same in both spaces; the content depends on which space is open.
 | `/albums`              | Albums, with tabs and "New album"                                  |
 | `/albums/:id`          | One album, with Download and its menu                              |
 | `/favorites`           | Favorites                                                          |
+| `/files`               | Files that aren't photos: download, move, delete                   |
 | `/recently-deleted`    | Recently deleted: restore, delete now, or empty                    |
 | `/people`              | People found in photos (or turning face grouping on)               |
 | `/people/:id`          | One person's photos: name, merge, hide, "Not this person"          |

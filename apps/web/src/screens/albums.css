@@ -228,3 +228,18 @@
   color: var(--text-2);
   font-size: 14px;
 }
+
+/* Favorites has its own place in the sidebar; on phones it's reached from here. */
+.albums__favorites {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .albums__favorites {
+    display: flex;
+  }
+
+  .albums__favorites + .albums__trash {
+    margin-top: 10px;
+  }
+}

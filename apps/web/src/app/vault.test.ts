@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import type { Photo } from '../mock/data';
 import {
   albumCover,
+  allItems,
   albumPhotos,
   emptyVaults,
   fitsAlbum,
+  isFile,
   timelinePhotos,
   vaultReducer,
   withDetails,
@@ -232,11 +234,71 @@ describe('images', () => {
 
   it('replaces everything once the space has loaded', () => {
     const loaded = { photos: [photo('z', '2026-05-01T00:00:00Z')], albums: [] };
-    expect(vaultReducer(state, { type: 'loaded', state: loaded })).toBe(loaded);
+    expect(vaultReducer(state, { type: 'loaded', state: loaded })).toEqual(loaded);
   });
 
   it('starts a new session empty', () => {
     expect(emptyVaults.spaces.main.photos).toEqual([]);
     expect(emptyVaults.spaces.private.photos).toEqual([]);
+  });
+});
+
+describe('files', () => {
+  const file = (id: string, takenAt: string): Photo => ({
+    ...photo(id, takenAt),
+    width: 0,
+    height: 0,
+    file: { name: `${id}.pdf`, type: 'application/pdf' },
+  });
+  const empty: VaultState = { photos: [], albums: [] };
+
+  it('keeps files out of the photos when the space loads or uploads arrive', () => {
+    const loaded = vaultReducer(empty, {
+      type: 'loaded',
+      state: {
+        photos: [photo('a', '2026-01-01T00:00:00Z'), file('f', '2026-02-01T00:00:00Z')],
+        albums: [],
+      },
+    });
+    expect(loaded.photos.map((item) => item.id)).toEqual(['a']);
+    expect(loaded.files?.map((item) => item.id)).toEqual(['f']);
+    expect(allItems(loaded).map((item) => item.id)).toEqual(['a', 'f']);
+
+    const added = vaultReducer(loaded, {
+      type: 'add-photos',
+      photos: [file('g', '2026-03-01T00:00:00Z'), photo('b', '2026-03-01T00:00:00Z')],
+    });
+    expect(added.photos.map((item) => item.id)).toEqual(['b', 'a']);
+    expect(added.files?.map((item) => item.id)).toEqual(['g', 'f']);
+  });
+
+  it('moves files to Recently deleted and back to Files', () => {
+    const start: VaultState = {
+      photos: [photo('a', '2026-01-01T00:00:00Z')],
+      files: [file('f', '2026-01-02T00:00:00Z')],
+      albums: [],
+    };
+    const trashed = vaultReducer(start, {
+      type: 'trash-photos',
+      photoIds: ['f'],
+      deletedAt: '2026-11-02T00:00:00Z',
+    });
+    expect(trashed.files).toEqual([]);
+    expect(trashed.trash?.map((item) => item.id)).toEqual(['f']);
+    const back = vaultReducer(trashed, { type: 'restore-photos', photoIds: ['f'] });
+    expect(back.files?.map((item) => item.id)).toEqual(['f']);
+    expect(back.photos.map((item) => item.id)).toEqual(['a']);
+    expect(back.files?.[0]?.deletedAt).toBeUndefined();
+    const gone = vaultReducer(back, { type: 'delete-photos', photoIds: ['f'] });
+    expect(gone.files).toEqual([]);
+  });
+
+  it('leaves a space without files as it was', () => {
+    const loaded = vaultReducer(empty, {
+      type: 'loaded',
+      state: { photos: [photo('a', '2026-01-01T00:00:00Z')], albums: [] },
+    });
+    expect(loaded.files).toBeUndefined();
+    expect(isFile(file('f', '2026-01-01T00:00:00Z'))).toBe(true);
   });
 });

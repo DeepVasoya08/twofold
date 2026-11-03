@@ -23,6 +23,7 @@ export function MoveSpaceDialog({
   open,
   space,
   count,
+  noun = 'photo',
   busy,
   onClose,
   onUnlocked,
@@ -31,6 +32,8 @@ export function MoveSpaceDialog({
   space: Space;
   /** How many photos are moving. */
   count: number;
+  /** What is moving: photos, or files. */
+  noun?: 'photo' | 'file';
   /** The move itself is running. */
   busy: boolean;
   onClose: () => void;
@@ -41,7 +44,7 @@ export function MoveSpaceDialog({
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const isPrivate = space === 'private';
-  const photos = count === 1 ? 'The photo' : `These ${String(count)} photos`;
+  const photos = count === 1 ? `The ${noun}` : `These ${String(count)} ${noun}s`;
 
   const close = () => {
     setPassword('');

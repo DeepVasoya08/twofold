@@ -56,6 +56,7 @@ describe('App', () => {
     ['/albums/kyoto', 'Kyoto in autumn'],
     ['/albums/missing', 'Album not found'],
     ['/favorites', 'Favorites'],
+    ['/files', 'Files'],
     ['/search', 'Search'],
     ['/settings', 'Settings'],
     ['/settings/share', 'Share your library'],
@@ -142,6 +143,7 @@ describe('App', () => {
     const empty = emptyVaults;
     expect(render('/photos', mainSession(), empty)).toContain('Your library is ready');
     expect(render('/favorites', mainSession(), empty)).toContain('No favorites yet');
+    expect(render('/files', mainSession(), empty)).toContain('No files yet');
     expect(render('/photos/p001', mainSession(), empty)).toContain(
       'isn&#x27;t in your vault anymore',
     );

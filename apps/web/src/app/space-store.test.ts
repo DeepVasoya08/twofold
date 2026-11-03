@@ -25,6 +25,16 @@ const PHOTO: NewPhoto = {
   takenAt: '2026-10-16T09:30:00.000Z',
 };
 
+const FILE: NewPhoto = {
+  thumb: new Uint8Array(20_000),
+  full: bytes('%PDF-1.7 THE BILL, BYTE FOR BYTE'),
+  type: 'application/pdf',
+  width: 0,
+  height: 0,
+  takenAt: '2026-11-02T09:30:00.000Z',
+  file: { name: 'Electricity bill March.pdf' },
+};
+
 async function objectUrlBytes(url: string): Promise<Uint8Array> {
   const blob = resolveObjectURL(url);
   if (!blob) throw new Error('not an object URL');
@@ -100,6 +110,88 @@ describe('remoteStore', () => {
       );
     }
     expect((await remoteStore(space, server.api).list()).photos).toEqual([]);
+  });
+
+  it('stores a file that isn’t a photo, under its own name, sealed like a photo', async () => {
+    const { server, space } = await setUp();
+    const store = remoteStore(space, server.api);
+    const added = await store.add(FILE, []);
+    expect(added).toMatchObject({
+      src: '',
+      file: {
+        name: 'Electricity bill March.pdf',
+        type: 'application/pdf',
+        bytes: FILE.full.length,
+      },
+      albumIds: [],
+    });
+
+    // The server sees a record and two files, as for any photo: no name, no type.
+    const entry = server.photos.get(added.id);
+    const meta = fromBase64Url(entry?.photo.meta ?? '') ?? new Uint8Array();
+    expect(contains(meta, bytes('Electricity'))).toBe(false);
+    expect(contains(meta, bytes('application/pdf'))).toBe(false);
+    for (const file of server.files.values()) expect(contains(file, FILE.full)).toBe(false);
+
+    const later = remoteStore(space, server.api);
+    const { photos } = await later.list();
+    expect(photos).toEqual([added]);
+    expect(await later.original(added.id)).toMatchObject({
+      full: FILE.full,
+      type: 'application/pdf',
+      name: 'Electricity bill March.pdf',
+    });
+    // Moving it to the other space keeps it a file.
+    expect((await later.read(added.id)).file).toEqual({ name: 'Electricity bill March.pdf' });
+  });
+
+  it('never hands out a file as an image or a preview', async () => {
+    const { server, space } = await setUp();
+    const store = remoteStore(space, server.api);
+    const page = await store.add({ ...FILE, type: 'text/html', file: { name: 'page.html' } }, []);
+    await expect(store.image(page.id, 'full')).rejects.toThrow('That’s a file, not a photo.');
+    await expect(store.image(page.id, 'thumb')).rejects.toThrow('That’s a file, not a photo.');
+    expect((await store.thumbs([page.id])).size).toBe(0);
+    const seen: (Uint8Array | null)[] = [];
+    await store.previews([page.id], (_id, preview) => seen.push(preview));
+    expect(seen).toEqual([null]);
+  });
+
+  it('refuses a file with a malformed type, and leaves out records claiming one', async () => {
+    const { server, space } = await setUp();
+    const store = remoteStore(space, server.api);
+    await expect(store.add({ ...FILE, type: 'not a type' }, [])).rejects.toThrow(
+      'Arcafold can’t store this kind of file.',
+    );
+    const added = await store.add(FILE, []);
+    const entry = server.photos.get(added.id);
+    const access = await ownerAccess(space);
+    const opened = await openRecord(access, 'photo', added.id, entry?.photo.meta ?? '');
+    const meta = JSON.parse(new TextDecoder().decode(opened)) as Record<string, unknown>;
+    for (const bad of [
+      { name: '' },
+      { name: 'x'.repeat(500) },
+      { type: 'Text/HTML ' },
+      { kind: 'other' },
+    ]) {
+      if (entry) {
+        entry.photo.meta = await sealRecord(
+          access,
+          'photo',
+          added.id,
+          bytes(JSON.stringify({ ...meta, ...bad })),
+        );
+      }
+      expect((await remoteStore(space, server.api).list()).photos).toEqual([]);
+    }
+  });
+
+  it('says a file is too large as a file', async () => {
+    const { server, space } = await setUp();
+    const huge = { ...FILE, full: new Uint8Array(STORAGE_SIZES.maxFull) };
+    await expect(remoteStore(space, server.api).add(huge, [])).rejects.toThrow(
+      'That file is too large.',
+    );
   });
 
   it('sends both files together and skips the commit when the second one made it', async () => {

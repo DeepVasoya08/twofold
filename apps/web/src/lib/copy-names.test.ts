@@ -38,6 +38,20 @@ describe('copyNames', () => {
   });
 });
 
+describe('copyNames for files', () => {
+  it('keeps a file’s own name and numbers clashes before the extension', () => {
+    const takenAt = '2026-11-02T09:30:00Z';
+    expect(
+      copyNames([
+        { takenAt, type: 'application/pdf', name: 'Bill.pdf' },
+        { takenAt, type: 'application/pdf', name: 'bill.PDF' },
+        { takenAt, type: 'text/plain', name: 'README' },
+        { takenAt, type: 'text/plain', name: 'README' },
+      ]),
+    ).toEqual(['Bill.pdf', 'bill (2).PDF', 'README', 'README (2)']);
+  });
+});
+
 describe('zipName', () => {
   it('names the zip after today, never after a space', () => {
     expect(zipName(new Date(2026, 9, 21, 23, 59))).toBe('Arcafold 2026-10-21.zip');

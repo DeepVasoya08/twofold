@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { Photo } from '../mock/data';
 import type { NewPhoto } from './space-store';
-import { Uploader } from './uploader';
+import { Uploader, VIDEO_REFUSED } from './uploader';
 import type { UploaderDeps } from './uploader';
 
 const photo = (name: string, type = 'image/png'): File =>
@@ -154,14 +154,41 @@ describe('Uploader', () => {
     expect(statuses()).toEqual(['done', 'done', 'done']);
   });
 
-  it('refuses image formats it cannot store, without reading them', async () => {
+  it('refuses videos, without reading them', async () => {
     const prepare = vi.fn<UploaderDeps['prepare']>();
-    const { uploader, statuses } = setup({ prepare });
+    const { uploader } = setup({ prepare });
     uploader.openDialog();
-    uploader.add([photo('a.svg', 'image/svg+xml'), photo('notes.txt', 'text/plain')], undefined);
+    uploader.add([photo('clip.mov', ''), photo('clip.mp4', 'video/mp4')], undefined);
     await settle();
-    expect(statuses()).toEqual(['failed']);
+    const items = uploader.getState().items;
+    expect(items.map((item) => item.status)).toEqual(['failed', 'failed']);
+    expect(items.map((item) => item.error)).toEqual([VIDEO_REFUSED, VIDEO_REFUSED]);
     expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it('takes any other file, shown with its icon instead of a preview', async () => {
+    const make = vi.fn<(bytes: Uint8Array<ArrayBuffer>) => string>(() => 'blob:x');
+    const { uploader, pending, onStored } = setup({
+      prepare: (file) =>
+        Promise.resolve({
+          thumb: new Uint8Array(16),
+          full: new Uint8Array(1),
+          type: file.type,
+          width: 0,
+          height: 0,
+          takenAt: file.name,
+          file: { name: file.name },
+        }),
+      preview: { make, revoke: vi.fn() },
+    });
+    uploader.openDialog();
+    uploader.add([photo('notes.txt', 'text/plain'), photo('a.svg', 'image/svg+xml')], undefined);
+    await settle();
+    expect(uploader.getState().items.map((item) => item.file)).toEqual([true, true]);
+    expect(make).not.toHaveBeenCalled();
+    for (const upload of pending) upload.finish();
+    await settle();
+    expect(onStored).toHaveBeenCalledTimes(1);
   });
 
   it('passes the album along with each photo', async () => {

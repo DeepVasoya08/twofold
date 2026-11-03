@@ -27,6 +27,8 @@ const nav: {
   label: string;
   icon: IconName;
   match: (path: string) => boolean;
+  /** Left out of the phone tab bar, which has room for five; reached from Albums there. */
+  wideOnly?: boolean;
 }[] = [
   {
     to: paths.gallery,
@@ -41,6 +43,12 @@ const nav: {
     match: (path) => path.startsWith(paths.albums),
   },
   {
+    to: paths.files,
+    label: 'Files',
+    icon: 'file',
+    match: (path) => path.startsWith(paths.files),
+  },
+  {
     to: paths.people,
     label: 'People',
     icon: 'person',
@@ -51,6 +59,7 @@ const nav: {
     label: 'Favorites',
     icon: 'heart',
     match: (path) => path === paths.favorites,
+    wideOnly: true,
   },
   {
     to: paths.settings,
@@ -158,7 +167,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
             type="button"
             className="icon-btn icon-btn--accent"
             onClick={openUpload}
-            aria-label="Upload photos"
+            aria-label="Upload photos or files"
           >
             <Icon name="upload" />
           </button>
@@ -174,20 +183,22 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
       </main>
 
       <nav className="shell__tabs" aria-label="Main">
-        {nav.map((item) => {
-          const active = item.match(pathname);
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={`shell__tab${active ? ' is-active' : ''}`}
-              aria-current={active ? 'page' : undefined}
-            >
-              <Icon name={item.icon} size={22} filled={active && item.icon === 'heart'} />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+        {nav
+          .filter((item) => !item.wideOnly)
+          .map((item) => {
+            const active = item.match(pathname);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`shell__tab${active ? ' is-active' : ''}`}
+                aria-current={active ? 'page' : undefined}
+              >
+                <Icon name={item.icon} size={22} filled={active && item.icon === 'heart'} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
       </nav>
 
       <UploadDialog albumId={uploadTarget} />

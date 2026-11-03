@@ -6,6 +6,7 @@ import type { PhotoContext } from '../app/routes';
 import type { Selection } from '../app/selection';
 import { formatShortDay } from '../lib/format';
 import type { Photo } from '../mock/data';
+import { FileIcon } from './FileIcon';
 import { Icon } from './Icon';
 import { PhotoImage } from './PhotoImage';
 
@@ -28,7 +29,13 @@ export function PhotoGrid({ photos, context, selection, note }: PhotoGridProps) 
         <PhotoTile
           key={photo.id}
           photo={photo}
-          href={paths.photo(photo.id, context)}
+          href={
+            photo.file
+              ? photo.deletedAt
+                ? paths.trash
+                : paths.files
+              : paths.photo(photo.id, context)
+          }
           selected={selection?.selected.has(photo.id) ?? false}
           selecting={selecting}
           toggle={selection?.toggle}
@@ -61,7 +68,9 @@ const PhotoTile = memo(function PhotoTile({
   note,
 }: PhotoTileProps) {
   const shared = photo.library === undefined ? '' : `, shared by ${photo.library}`;
-  const label = `Photo from ${formatShortDay(photo.takenAt)}${photo.location ? `, ${photo.location}` : ''}${shared}`;
+  const label = photo.file
+    ? `File ${photo.file.name}${shared}`
+    : `Photo from ${formatShortDay(photo.takenAt)}${photo.location ? `, ${photo.location}` : ''}${shared}`;
   return (
     <li className={`photo-grid__item${selected ? ' is-selected' : ''}`}>
       <Link
@@ -74,14 +83,19 @@ const PhotoTile = memo(function PhotoTile({
           toggle(photo.id);
         }}
       >
-        <PhotoImage
-          photoId={photo.id}
-          src={photo.src}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-        />
+        {photo.file ? (
+          // A file shows its icon; its stored preview is a stand-in, never fetched.
+          <FileIcon file={photo.file} size="lg" />
+        ) : (
+          <PhotoImage
+            photoId={photo.id}
+            src={photo.src}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+          />
+        )}
         {photo.library !== undefined && (
           <span className="photo-tile__shared" aria-hidden="true" data-testid="shared-badge">
             <Icon name="users" size={12} />
