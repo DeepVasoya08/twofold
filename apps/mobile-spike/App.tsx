@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
+import { BackupPanel } from './src/BackupPanel';
 import { caughtErrors, onCaughtError } from './src/crash-guard';
 import { checkWebFixture, sharePhoneFixture, timeArgon2 } from './src/crypto-runner';
 import { scanDisk } from './src/disk-scan';
@@ -188,6 +189,7 @@ export default function App() {
         >
           <Text style={styles.buttonText}>6. Scroll 5,000 encrypted photos</Text>
         </Pressable>
+        <BackupPanel busy={busy !== null} setBusy={setBusy} record={record} />
         {busy ? <Text style={styles.busy}>Working: {busy}…</Text> : null}
         <View style={styles.results}>
           <Text selectable style={styles.mono}>

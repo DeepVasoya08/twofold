@@ -23,6 +23,21 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["expo-image", "expo-asset", "expo-sharing"]
+    "plugins": [
+      "expo-image",
+      "expo-asset",
+      "expo-sharing",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Arcafold Spike reads your newest photos to test encrypted backup.",
+          "savePhotosPermission": false,
+          "isAccessMediaLocationEnabled": true,
+          "granularPermissions": [
+            "photo"
+          ]
+        }
+      ]
+    ]
   }
 }

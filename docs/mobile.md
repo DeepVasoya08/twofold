@@ -7,19 +7,42 @@ TypeScript logic with the web app, with the slow or sensitive work in native cod
 ## Phase 0 spike (`apps/mobile-spike`)
 
 A throwaway app that checks the risky parts on real phones before the real app is built.
-It is not a product and holds no account data.
+It is not a product. Only test 8 touches an account, a throwaway one, and keeps its session
+cookie in memory.
 
-| Test                             | What it shows                                                                                                                                                                                                      |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1. Open web-made data            | The native libsodium build opens a keyring, an encrypted file, sealed records, a sealed backup and an invite message made by the web build (`fixtures/crypto/web.json`), and refuses tampered data and wrong keys. |
-| 2. Make data for the web to open | The phone makes the same kind of fixture and shares it as a file. Saved as `fixtures/crypto/phone-*.json`, it is opened by the web build in `pnpm test`.                                                           |
-| 3. Argon2id timing               | Unlock cost at the real settings (64 MiB, 3 passes) on the phone.                                                                                                                                                  |
-| 4–5. Models vs web               | SFace and CLIP's photo half on ONNX Runtime mobile (CPU, XNNPACK, NNAPI) give the same vectors as ONNX Runtime Web for the same inputs (`fixtures/ml`), and how long each run takes.                               |
-| 6. Grid                          | 5,000 encrypted tiles in a FlashList, each decrypted as it appears and shown from memory.                                                                                                                          |
-| 7. Photos on disk                | Scans the app's cache and documents folders for any file that starts like a JPEG or PNG. It should find none.                                                                                                      |
+| Test                             | What it shows                                                                                                                                                                                                                                                                                            |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Open web-made data            | The native libsodium build opens a keyring, an encrypted file, sealed records, a sealed backup and an invite message made by the web build (`fixtures/crypto/web.json`), and refuses tampered data and wrong keys.                                                                                       |
+| 2. Make data for the web to open | The phone makes the same kind of fixture and shares it as a file. Saved as `fixtures/crypto/phone-*.json`, it is opened by the web build in `pnpm test`.                                                                                                                                                 |
+| 3. Argon2id timing               | Unlock cost at the real settings (64 MiB, 3 passes) on the phone.                                                                                                                                                                                                                                        |
+| 4–5. Models vs web               | SFace and CLIP's photo half on ONNX Runtime mobile (CPU, XNNPACK, NNAPI) give the same vectors as ONNX Runtime Web for the same inputs (`fixtures/ml`), and how long each run takes.                                                                                                                     |
+| 6. Grid                          | 5,000 encrypted tiles in a FlashList, each decrypted as it appears and shown from memory.                                                                                                                                                                                                                |
+| 7. Photos on disk                | Scans the app's cache and documents folders for any file that starts like a JPEG or PNG. It should find none.                                                                                                                                                                                            |
+| 8. Background backup             | Signs in to a throwaway account on arcafold.com and uploads the newest 200 gallery photos exactly as the web app stores them (three at a time), inside an Android foreground service with a partial wake lock. It records which photos finished while the app was off screen, and can remove them again. |
 
-Not covered yet: background encrypt-and-upload (a second spike build), iOS, and image
-decoding and resizing on the phone (the model tests feed fixed tensors on purpose).
+Not covered yet: iOS, and on-device image decoding for the models (the model tests feed
+fixed tensors on purpose).
+
+### Background backup (test 8)
+
+- `modules/backup-service` is a small local Expo module: an Android foreground service of
+  type `dataSync` with a progress notification (counts only, never photo names) and a
+  partial wake lock, so the JavaScript upload loop keeps running with the app in the
+  background or the screen off. Android 15 and later limit `dataSync` services to six hours
+  a day; the service stops when told its time is up.
+- The upload loop uses promises only. React Native pauses JavaScript timers while the app
+  is in the background, so a `setTimeout` in that path would stall the backup.
+- Requests go through `expo/fetch`, which sends encrypted bytes as they are (React Native's
+  own `fetch` would turn them into base64 first). The session cookie is kept in memory, not
+  in the system cookie store.
+- The photo record format is copied from `apps/web/src/app/space-store.ts` until Phase 1
+  moves it into a shared package.
+- Known gap: expo-image-manipulator writes each thumbnail to the app's cache before we read
+  and delete it. That's a plaintext copy of a gallery photo on disk for a moment, which the
+  real app must avoid (a native in-memory resize), above all for photos headed to the
+  private space.
+- The app asks for media location access, so originals keep their GPS data, as the web
+  app's uploads do.
 
 ### How the crypto runs on phones
 
