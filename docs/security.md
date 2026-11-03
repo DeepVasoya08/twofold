@@ -212,7 +212,11 @@ other accounts; see [Sharing](#sharing).
   own key, in the same table and R2 layout. The sealed record adds `kind: "file"` and the
   file's `name` (folders and control characters stripped, at most 120 characters); its
   `type` is any well-formed media type. The server can't tell a file from a photo: it sees
-  the same record sizes and the same two files. A PDF's first page is drawn as its preview on
+  the same two files, and every photo record is padded to at least 1,000 bytes before
+  sealing (spaces in an ignored `pad` field), so a file's record, with its name, category
+  and words, is the same size as a photo's. A file's words are dropped rather than let its
+  record grow past that; records sealed before the padding stay at their old size until
+  they next change. A PDF's first page is drawn as its preview on
   the uploading device (pdf.js, see below), as a JPEG padded with zeros after its end to at
   least 16 KiB; any other file, or a PDF the device couldn't draw in time, stores a stand-in
   of 16 to 48 KiB (zeros, encrypted like any preview). Neither is ever missing or tiny, which
@@ -624,6 +628,16 @@ so photos can later be found by describing them. The server stores only cipherte
   shows its paragraphs as plain text, read from `word/document.xml` with the app's own zip
   reader. Nothing a file contains is ever rendered as markup. Any other kind of file can
   only be downloaded, saved under its own name.
+- **Sorting files** happens on the device that adds them, before they're encrypted, and
+  only while Smart search is on there (`apps/web/src/lib/file-sort`). It reads the file's
+  text (a PDF's first 20 pages, or 5 on a light device, through pdf.js; a Word document's
+  paragraphs; a text file), scores it against a fixed list of words per category, and
+  checks it against the files you sorted yourself. What's kept is the category and at most
+  16 words from the name and text, in the file's sealed record; the text itself is let go.
+  Moving a file to another category re-seals its record with `sorted: "you"`, and those
+  files' words are what later files are compared with, so learning needs nothing else
+  stored. A copy of a file listed in a shared album leaves out its words. Nothing about
+  sorting reaches the server or any outside service.
 - Previews adapt to the device (`apps/web/src/lib/file-preview.ts`). A phone with 4 GB of
   memory or less or 4 cores or fewer, data saver, or a preview that already ran out of time
   on this device makes the device "light": it draws a 240 px preview within 3 seconds

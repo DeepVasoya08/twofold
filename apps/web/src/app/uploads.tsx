@@ -8,7 +8,10 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
-import { pdfPreview } from '../lib/file-preview';
+import { currentPreviewTier, pdfPreview } from '../lib/file-preview';
+import type { SortExample } from '../lib/file-sort/learn';
+import { sortFile, textForSorting } from '../lib/file-sort/sort';
+import type { Sorted } from '../lib/file-sort/sort';
 import {
   cleanFileName,
   cleanFileType,
@@ -18,10 +21,12 @@ import {
 } from '../lib/file-types';
 import { photosAndFiles } from '../lib/format';
 import { photoTakenAt } from '../lib/photo-date';
+import { loadSearchSetting } from '../lib/search/search-setting';
 import { loadThumbnailer } from '../lib/thumbnail-service';
 import { summarizeUploads } from '../lib/upload-progress';
 import type { UploadSummary } from '../lib/upload-progress';
 import { FormError } from './account-ops';
+import type { Photo } from '../mock/data';
 import type { NewPhoto } from './space-store';
 import { useToast } from './toast';
 import { Uploader } from './uploader';
@@ -54,9 +59,9 @@ const UploadsContext = createContext<UploadsValue | null>(null);
  * Reads a file into what the vault stores. A photo: the original bytes and a JPEG preview.
  * Anything else: its bytes, its name and a stand-in preview (lib/file-types.ts).
  */
-export async function prepareUpload(file: File): Promise<NewPhoto> {
+export async function prepareUpload(file: File, sort?: SortFile): Promise<NewPhoto> {
   const type = photoTypeOf(file);
-  if (type === null) return prepareFile(file);
+  if (type === null) return prepareFile(file, pdfPreview, sort);
   const thumbnail = await (await loadThumbnailer())(file);
   if (!thumbnail) throw new FormError('Arcafold can’t read this image.');
   const full = new Uint8Array(await file.arrayBuffer());
@@ -70,16 +75,38 @@ export async function prepareUpload(file: File): Promise<NewPhoto> {
   };
 }
 
-/** A file that isn't a photo: kept as it is, under its own name. */
+/** Works out a file's category from its bytes, or null when sorting is off here. */
+export type SortFile = (
+  bytes: Uint8Array<ArrayBuffer>,
+  type: string,
+  name: string,
+) => Promise<Sorted | null>;
+
+/**
+ * Sorts files on this device while Smart search is on here, learning from `examples` (the
+ * files you've sorted yourself). Off, files are added unsorted and you sort them by hand.
+ */
+export function deviceSorter(examples: () => readonly SortExample[]): SortFile {
+  return async (bytes, type, name) => {
+    const storage = typeof localStorage === 'undefined' ? undefined : localStorage;
+    if (!loadSearchSetting(storage)) return null;
+    const text = await textForSorting(bytes, type, name, currentPreviewTier());
+    return sortFile(name, type, text, examples());
+  };
+}
+
+/** A file that isn't a photo: kept as it is, under its own name, sorted if `sort` can. */
 export async function prepareFile(
   file: File,
   drawPdf: (bytes: Uint8Array) => Promise<Uint8Array<ArrayBuffer> | null> = pdfPreview,
+  sort?: SortFile,
 ): Promise<NewPhoto> {
   const name = cleanFileName(file.name);
   const type = cleanFileType(file.type);
   const full = new Uint8Array(await file.arrayBuffer());
   // A PDF's first page becomes its preview, as far as this device can manage in time.
   const drawn = fileKindOf(type, name) === 'pdf' ? await drawPdf(full) : null;
+  const sorted = sort ? await sort(full, type, name).catch(() => null) : null;
   return {
     thumb: drawn ?? placeholderPreview(),
     full,
@@ -87,8 +114,22 @@ export async function prepareFile(
     width: 0,
     height: 0,
     takenAt: new Date().toISOString(),
-    file: drawn ? { name, preview: true } : { name },
+    file: {
+      name,
+      ...(drawn && { preview: true }),
+      ...(sorted && { category: sorted.category, words: sorted.words }),
+    },
   };
+}
+
+/** Files you sorted yourself, as examples to learn from. */
+export function sortExamples(files: readonly Photo[]): SortExample[] {
+  return files.flatMap((item) => {
+    const file = item.file;
+    return file?.sortedByYou && file.category && file.words
+      ? [{ category: file.category, words: file.words }]
+      : [];
+  });
 }
 
 const preview: UploaderDeps['preview'] = {
@@ -103,16 +144,23 @@ const preview: UploaderDeps['preview'] = {
  * Mounted inside the vault, so locking (which remounts the vault) drops the queue.
  */
 export function UploadsProvider({ children }: { children: ReactNode }) {
-  const { upload, showUploaded } = useVault();
+  const { upload, showUploaded, state } = useVault();
   const toast = useToast();
   const [uploadedHere, setUploadedHere] = useState<ReadonlySet<string>>(() => new Set());
+  // Files are sorted with the ones you've sorted yourself as examples, as they are now.
+  const files = state.files;
+  const prepare = useMemo(() => {
+    const examples = sortExamples(files ?? []);
+    const sort = deviceSorter(() => examples);
+    return (file: File) => prepareUpload(file, sort);
+  }, [files]);
   const [uploader] = useState(
-    () => new Uploader({ prepare: prepareUpload, upload, onStored: showUploaded, preview }),
+    () => new Uploader({ prepare, upload, onStored: showUploaded, preview }),
   );
 
   useEffect(() => {
     uploader.connect({
-      prepare: prepareUpload,
+      prepare,
       upload,
       onStored: (photos) => {
         showUploaded(photos);
@@ -121,7 +169,7 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
       },
       preview,
     });
-  }, [uploader, upload, showUploaded, toast]);
+  }, [uploader, prepare, upload, showUploaded, toast]);
 
   useEffect(
     () => () => {

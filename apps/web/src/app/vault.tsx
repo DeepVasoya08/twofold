@@ -14,6 +14,7 @@ import type { SpaceKeys } from '@arcafold/crypto';
 import type { PhotoPart } from '@arcafold/types';
 
 import { copyNames } from '../lib/copy-names';
+import type { Category } from '../lib/file-sort/categories';
 import { downloadAll } from '../lib/download-progress';
 import type { DownloadProgress } from '../lib/download-progress';
 import type { PhotoCopy } from '../lib/save-copies';
@@ -112,6 +113,7 @@ export type VaultAction =
   | { type: 'set-image'; photoId: string; part: PhotoPart; url: string; viewUrl?: string }
   | { type: 'set-thumbs'; urls: ReadonlyMap<string, string> }
   | { type: 'toggle-favorite'; photoId: string }
+  | { type: 'set-file'; file: Photo }
   | { type: 'delete-photos'; photoIds: readonly string[] }
   | { type: 'trash-photos'; photoIds: readonly string[]; deletedAt: string }
   | { type: 'restore-photos'; photoIds: readonly string[] }
@@ -192,6 +194,13 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
           photo.id === action.photoId ? { ...photo, favorite: !photo.favorite } : photo,
         ),
       };
+    case 'set-file':
+      return state.files
+        ? {
+            ...state,
+            files: state.files.map((item) => (item.id === action.file.id ? action.file : item)),
+          }
+        : state;
     case 'delete-photos': {
       const gone = new Set(action.photoIds);
       return {
@@ -418,6 +427,8 @@ interface VaultValue {
   /** Fingerprints of the photos this space has, with their ids. */
   knownFingerprints: SpaceStore['fingerprints'];
   toggleFavorite: (photoId: string) => Promise<void>;
+  /** Puts a file in a category you chose, which teaches the sorting (lib/file-sort). */
+  sortFile: (fileId: string, category: Category) => Promise<void>;
   /** Moves a photo to Recently deleted. */
   deletePhoto: (photoId: string) => Promise<void>;
   /** Moves photos to Recently deleted: each goes through or fails on its own. */
@@ -608,6 +619,21 @@ export function VaultProvider({
           await store.update({ ...photo, favorite: !photo.favorite });
         } catch (error) {
           dispatch({ type: 'toggle-favorite', photoId });
+          throw error;
+        }
+      },
+      sortFile: async (fileId, category) => {
+        const item = findChangeable(fileId);
+        if (!item.file) throw new FormError(GONE);
+        const sorted: Photo = {
+          ...item,
+          file: { ...item.file, category, sortedByYou: true },
+        };
+        dispatch({ type: 'set-file', file: sorted });
+        try {
+          await store.update(sorted);
+        } catch (error) {
+          dispatch({ type: 'set-file', file: item });
           throw error;
         }
       },

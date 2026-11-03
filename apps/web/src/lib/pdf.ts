@@ -86,3 +86,19 @@ export async function drawPage(
 export function closePdf(doc: PdfDocument): void {
   void doc.loadingTask.destroy();
 }
+
+/** The text of a PDF's first `maxPages` pages, as pdf.js reads it, one line per page. */
+export async function pdfText(doc: PdfDocument, maxPages: number): Promise<string> {
+  const pages: string[] = [];
+  const last = Math.min(doc.numPages, maxPages);
+  for (let number = 1; number <= last; number += 1) {
+    const page = await doc.getPage(number);
+    try {
+      const content = await page.getTextContent();
+      pages.push(content.items.map((item) => ('str' in item ? item.str : '')).join(' '));
+    } finally {
+      page.cleanup();
+    }
+  }
+  return pages.join('\n');
+}
