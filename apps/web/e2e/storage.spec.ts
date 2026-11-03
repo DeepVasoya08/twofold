@@ -214,7 +214,7 @@ test('the upload list shows each photo’s small preview, never the original', a
     .first()
     .click();
   const dialog = page.getByRole('dialog', { name: 'Add photos' });
-  await dialog.getByLabel('Choose photos').setInputFiles(
+  await dialog.getByLabel('Choose photos or files').setInputFiles(
     Array.from({ length: 3 }, (_, index) => ({
       name: `photo-${String(index)}.png`,
       mimeType: 'image/png',

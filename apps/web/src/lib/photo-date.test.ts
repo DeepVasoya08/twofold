@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { exifTakenAt, photoTakenAt } from './photo-date';
+import { exifTakenAt, fileDate, photoTakenAt } from './photo-date';
 
 const NOW = Date.UTC(2026, 9, 30, 12, 0, 0);
 
@@ -218,5 +218,18 @@ describe('photoTakenAt', () => {
     const now = new Date(NOW).toISOString();
     expect(photoTakenAt(new Uint8Array(), 0, NOW)).toBe(now);
     expect(photoTakenAt(new Uint8Array(), NOW + 10 * 24 * 60 * 60 * 1000, NOW)).toBe(now);
+  });
+});
+
+describe('fileDate', () => {
+  it("uses the file's own date", () => {
+    expect(fileDate(Date.UTC(2021, 4, 10), NOW)).toBe('2021-05-10T00:00:00.000Z');
+  });
+
+  it('uses now when the file date is missing or nonsense', () => {
+    const now = new Date(NOW).toISOString();
+    expect(fileDate(0, NOW)).toBe(now);
+    expect(fileDate(Number.NaN, NOW)).toBe(now);
+    expect(fileDate(NOW + 10 * 24 * 60 * 60 * 1000, NOW)).toBe(now);
   });
 });

@@ -17,7 +17,7 @@ test('uploads and shows a HEIC photo in a browser that can’t read HEIC', async
     .first()
     .click();
   const dialog = page.getByRole('dialog', { name: 'Add photos' });
-  await dialog.getByLabel('Choose photos').setInputFiles({
+  await dialog.getByLabel('Choose photos or files').setInputFiles({
     name: 'IMG_0001.HEIC',
     mimeType: 'image/heic',
     buffer: HEIC,

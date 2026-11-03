@@ -33,6 +33,14 @@ export function photoTakenAt(
   return new Date(taken).toISOString();
 }
 
+/**
+ * When a file (not a photo) was made, as an ISO 8601 UTC string: the date the device's file
+ * system gives it (its last change), when that's believable, otherwise now.
+ */
+export function fileDate(lastModified: number, now: number = Date.now()): string {
+  return new Date(believable(lastModified, now) ? lastModified : now).toISOString();
+}
+
 /** The EXIF capture time in milliseconds, or undefined if the photo has none worth trusting. */
 export function exifTakenAt(bytes: Uint8Array, now: number = Date.now()): number | undefined {
   const tiff = findTiff(bytes);

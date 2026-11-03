@@ -44,7 +44,7 @@ test('groups files by month, as a list or a grid', async ({ page }) => {
   await goTo(page, 'Files');
   await page.getByRole('button', { name: 'Add files' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add photos and files' });
-  await dialog.getByLabel('Choose files').setInputFiles([
+  await dialog.getByLabel('Choose photos or files').setInputFiles([
     { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Notes') },
     { name: 'plan.txt', mimeType: 'text/plain', buffer: Buffer.from('Plan') },
   ]);

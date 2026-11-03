@@ -143,11 +143,11 @@ exists but is low-key (Settings → Sharing).
   alone or with their library) and **Shared by me** (your albums shared with at least one
   person). Cards say who an album is from or shared with.
 - **Files** holds everything that isn't a photo or a video (PDFs, documents,
-  spreadsheets, text). The upload dialog has **Choose photos** and **Choose files**, and
-  anything dropped or picked that isn't a photo goes to Files; videos are refused ("Videos
+  spreadsheets, text). The upload dialog has one **Choose photos or files** button; photos and
+  files can be picked or dropped together, and anything that isn't a photo goes to Files; videos are refused ("Videos
   can't be added yet"). Files is a list, newest first, with a PDF's first page as its
-  picture (or an icon for the kind of file, from its name and type), its size and when it
-  was added. Tapping a file opens it at `/files/:id`: a PDF page by page (a page at a time,
+  picture (or an icon for the kind of file, from its name and type), its size and its date (the
+  file's own date from the device, or the upload time when the device gives none). Tapping a file opens it at `/files/:id`: a PDF page by page (a page at a time,
   with Previous and Next, on light phones), text and HTML as plain text, a Word document as
   its paragraphs, and anything else as "No preview for this kind of file" with a
   **Download** button, which every file has. Files are sorted on the device that adds them

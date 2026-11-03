@@ -165,7 +165,7 @@ test('keeps an SVG as a file, never as a photo, and never opens it', async ({ pa
     .first()
     .click();
   const dialog = page.getByRole('dialog', { name: 'Add photos' });
-  await dialog.getByLabel('Choose photos').setInputFiles({
+  await dialog.getByLabel('Choose photos or files').setInputFiles({
     name: 'drawing.svg',
     mimeType: 'image/svg+xml',
     buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
