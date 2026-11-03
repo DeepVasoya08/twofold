@@ -37,6 +37,16 @@ describe('matchRoute', () => {
   it('round-trips ids through paths', () => {
     expect(matchRoute(paths.album('a b'))).toEqual({ name: 'album', albumId: 'a b' });
     expect(matchRoute(paths.file('a b'))).toEqual({ name: 'file', fileId: 'a b' });
+    // Opened from an album, it says which, for the back link.
+    const fromAlbum = paths.file('f1', 'trip');
+    expect(matchRoute(fromAlbum.slice(0, fromAlbum.indexOf('?')))).toEqual({
+      name: 'file',
+      fileId: 'f1',
+    });
+    expect(parsePhotoContext(fromAlbum.slice(fromAlbum.indexOf('?')))).toEqual({
+      kind: 'album',
+      albumId: 'trip',
+    });
     expect(matchRoute(paths.person('group:abc#2'))).toEqual({
       name: 'person',
       groupId: 'group:abc#2',

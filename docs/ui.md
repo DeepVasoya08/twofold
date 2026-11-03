@@ -173,11 +173,20 @@ exists but is low-key (Settings → Sharing).
   (while Smart search is on there) into Receipts and invoices, Bank and finance, Tax, IDs
   and travel, Medical, Work and contracts, School, Notes and Other; once there's more than
   one category, a row of filters (All, then each category with its count) sits above the
-  list, and in All each row also says its category. Its menu has **Download**, **Move to
-  category** (nine choices; files like it go there from then on), **Move
+  list, and in All each row also says its category. Its menu has **Download**, **Add to album**,
+  **Move to category** (nine choices; files like it go there from then on), **Move
   to private space** (or **Move to library**) and **Delete**, which sends it to Recently
-  deleted like a photo. Files never appear in the timeline, albums, search or People, and
-  count against the same 1 GB. The phone tab bar is Photos, Albums, Files, People and
+  deleted like a photo. Files never appear in the timeline or People, and count against
+  the same 1 GB.
+- **Files in albums.** An album can hold files as well as photos (one "Lisbon" album with
+  the photos and the booking PDF). Its page lists them under **Files**, below the photos,
+  each with **Download** and **Remove from album**; a file opened there goes back to the
+  album. Album cards, the album picker and the delete confirmation count both ("3 photos
+  and 1 file"), and **Download** on an album includes its files. Uploading straight into an
+  album files whatever is picked there. Sharing an album shares its files too, with the same
+  rules as its photos: someone you shared it with sees them in the album only (never in their
+  own Files) and can only download them; a library shared with **Add and edit** lets the
+  other person put its files in its albums. The phone tab bar is Photos, Albums, Files, People and
   Settings; Favorites stays in the desktop sidebar and is a link at the bottom of Albums on
   phones.
 - **Delete** (in the selection bar or the viewer) moves photos to **Recently deleted**: the

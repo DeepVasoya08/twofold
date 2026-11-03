@@ -42,7 +42,7 @@ export interface VaultState {
   albums: Album[];
   /**
    * Files that aren't photos (PDFs, documents and the rest), newest first. They never show in
-   * the timeline, albums, search or People. Left out where a space has none.
+   * the timeline, search or People; they can go in albums. Left out where a space has none.
    */
   files?: Photo[];
   /** Photos and files in Recently deleted, newest deletion first, once they have loaded. */
@@ -237,11 +237,12 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
       return { ...state, trash: action.trash };
     case 'set-details': {
       const ids = new Set(action.photoIds);
+      const update = (photo: Photo) =>
+        ids.has(photo.id) ? withDetails(photo, action.change) : photo;
       return {
         ...state,
-        photos: state.photos.map((photo) =>
-          ids.has(photo.id) ? withDetails(photo, action.change) : photo,
-        ),
+        photos: state.photos.map(update),
+        ...(state.files && { files: state.files.map(update) }),
       };
     }
     case 'add-photos':
@@ -266,14 +267,16 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
           return rest;
         }),
       };
-    case 'delete-album':
+    case 'delete-album': {
+      const update = (photo: Photo) =>
+        withDetails(photo, { albumId: action.albumId, included: false });
       return {
         ...state,
-        photos: state.photos.map((photo) =>
-          withDetails(photo, { albumId: action.albumId, included: false }),
-        ),
+        photos: state.photos.map(update),
+        ...(state.files && { files: state.files.map(update) }),
         albums: state.albums.filter((album) => album.id !== action.albumId),
       };
+    }
   }
 }
 
@@ -283,6 +286,13 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
  */
 export function timelinePhotos(state: VaultState): Photo[] {
   return state.photos.filter((photo) => !photo.sharedAlbum);
+}
+
+/** Files in an album, newest first. */
+export function albumFiles(state: VaultState, albumId: string): Photo[] {
+  return (state.files ?? [])
+    .filter((item) => item.albumIds.includes(albumId))
+    .sort((a, b) => b.takenAt.localeCompare(a.takenAt));
 }
 
 /** Photos in an album, newest first. */
@@ -695,9 +705,9 @@ export function VaultProvider({
       },
       deleteAlbum: async (albumId) => {
         await store.removeAlbum(albumId);
-        // A photo that still names the deleted album shows nothing for it, so taking the
-        // album out of the photos' records is best effort.
-        const filed = state.photos.filter((photo) => photo.albumIds.includes(albumId));
+        // A photo or file that still names the deleted album shows nothing for it, so taking
+        // the album out of their records is best effort.
+        const filed = allItems(state).filter((photo) => photo.albumIds.includes(albumId));
         await settleEach(filed, SAVES_AT_ONCE, (photo) =>
           store.update(withDetails(photo, { albumId, included: false })),
         );

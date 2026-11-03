@@ -45,7 +45,6 @@ export function pluralize(count: number, one: string, many = `${one}s`): string 
   return `${count.toLocaleString('en-US')} ${count === 1 ? one : many}`;
 }
 
-/** "Jul 6 – 21, 2026", "Nov 2, 2025 – Feb 14, 2026", or a single day. */
 /** "3 photos and 2 files", "1 file": how many of each are in `items`. */
 export function photosAndFiles(items: readonly { file?: unknown }[]): string {
   const files = items.filter((item) => item.file !== undefined).length;
@@ -55,6 +54,7 @@ export function photosAndFiles(items: readonly { file?: unknown }[]): string {
   return `${pluralize(photos, 'photo')} and ${pluralize(files, 'file')}`;
 }
 
+/** "Jul 6 – 21, 2026", "Nov 2, 2025 – Feb 14, 2026", or a single day. */
 export function formatDateRange(isoDates: string[]): string | null {
   if (isoDates.length === 0) return null;
   const sorted = [...isoDates].sort();

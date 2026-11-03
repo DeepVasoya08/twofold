@@ -2,22 +2,28 @@ import { useDownloads } from '../app/downloads';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useSelection } from '../app/selection';
-import { albumCover, albumPhotos, isViewOnly, useVault } from '../app/vault';
+import { useToast } from '../app/toast';
+import { albumCover, albumFiles, albumPhotos, isViewOnly, useVault } from '../app/vault';
 import { AlbumActions } from '../components/AlbumActions';
 import { PageHeader } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
+import { FileRow, fileDetails } from '../components/FileRow';
+import type { MenuItem } from '../components/Menu';
 import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { PhotoImage } from '../components/PhotoImage';
 import { SelectButton } from '../components/SelectButton';
 import { PhotoViewPicker } from '../components/ViewPicker';
 import { SelectionBar } from '../components/SelectionBar';
-import { formatDateRange, pluralize } from '../lib/format';
+import { formatDateRange, photosAndFiles } from '../lib/format';
+import type { Album as AlbumData, Photo } from '../mock/data';
 
 import './album.css';
 
 export function Album({ albumId }: { albumId: string }) {
-  const { state } = useVault();
+  const vault = useVault();
+  const { state } = vault;
+  const toast = useToast();
   const { navigate } = useRouter();
   const selection = useSelection();
   const album = state.albums.find((candidate) => candidate.id === albumId);
@@ -43,6 +49,8 @@ export function Album({ albumId }: { albumId: string }) {
   }
 
   const photos = albumPhotos(state, album.id);
+  const files = albumFiles(state, album.id);
+  const items = [...photos, ...files];
   const cover = albumCover(state, album);
   const range = formatDateRange(photos.map((photo) => photo.takenAt));
   const places = [...new Set(photos.flatMap((photo) => (photo.location ? [photo.location] : [])))];
@@ -71,13 +79,13 @@ export function Album({ albumId }: { albumId: string }) {
           Albums
         </Link>
         <div className="album-toolbar__actions">
-          {photos.length > 0 && (
+          {items.length > 0 && (
             <button
               type="button"
               className="btn btn--secondary"
               aria-label="Download album"
               onClick={() => {
-                downloads.start(photos.map((photo) => photo.id));
+                downloads.start(items.map((item) => item.id));
               }}
             >
               <Icon name="download" size={18} />
@@ -107,7 +115,7 @@ export function Album({ albumId }: { albumId: string }) {
               </p>
             )}
             <p className="album-hero__meta">
-              {pluralize(photos.length, 'photo')}
+              {photosAndFiles(items)}
               {range && <> · {range}</>}
               {places.length > 0 && (
                 <>
@@ -119,22 +127,78 @@ export function Album({ albumId }: { albumId: string }) {
           </div>
         </header>
       ) : (
-        <PageHeader title={album.title} subtitle={sharing ?? 'No photos yet'} />
+        <PageHeader
+          title={album.title}
+          subtitle={sharing ?? (items.length > 0 ? photosAndFiles(items) : 'No photos yet')}
+        />
       )}
 
-      {photos.length === 0 ? (
+      {items.length === 0 ? (
         <EmptyState icon="image-plus" title="Nothing in here yet">
           {isViewOnly(album)
-            ? 'Photos added to this album will show up here.'
-            : 'Use Upload to add photos straight into this album.'}
+            ? 'Photos and files added to this album will show up here.'
+            : 'Use Upload to add photos and files straight into this album.'}
         </EmptyState>
       ) : (
-        <PhotoGrid
-          photos={photos}
-          context={{ kind: 'album', albumId: album.id }}
-          selection={selection}
-        />
+        <>
+          {photos.length > 0 && (
+            <PhotoGrid
+              photos={photos}
+              context={{ kind: 'album', albumId: album.id }}
+              selection={selection}
+            />
+          )}
+          {files.length > 0 && (
+            <section className="album-files" aria-labelledby="album-files-title">
+              <h2 className="album-files__title" id="album-files-title">
+                Files
+              </h2>
+              <ul className="file-list" aria-label="Files in this album">
+                {files.map((item) => (
+                  <FileRow
+                    key={item.id}
+                    item={item}
+                    albumId={album.id}
+                    details={fileDetails(item, null)}
+                    menu={fileMenu(item, album, {
+                      download: () => {
+                        downloads.start([item.id]);
+                      },
+                      remove: () => {
+                        vault.setDetails([item.id], { album, included: false }).then(
+                          (result) => {
+                            toast.show(
+                              result.done.length > 0
+                                ? `Removed from “${album.title}”`
+                                : 'Couldn’t remove it. Try again.',
+                            );
+                          },
+                          () => {
+                            toast.show('Couldn’t remove it. Try again.');
+                          },
+                        );
+                      },
+                    })}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
       )}
     </div>
   );
+}
+
+/** A file's menu inside an album: download it, and take it out unless that isn't yours to do. */
+export function fileMenu(
+  item: Photo,
+  album: AlbumData,
+  actions: { download: () => void; remove: () => void },
+): MenuItem[] {
+  const items: MenuItem[] = [{ label: 'Download', icon: 'download', onSelect: actions.download }];
+  if (!isViewOnly(album) && !isViewOnly(item)) {
+    items.push({ label: 'Remove from album', icon: 'x', onSelect: actions.remove });
+  }
+  return items;
 }

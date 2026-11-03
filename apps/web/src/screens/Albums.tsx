@@ -7,7 +7,7 @@ import { paths } from '../app/routes';
 import { useSmartAlbum } from '../app/answer';
 import { useSearch } from '../app/search';
 import { useToast } from '../app/toast';
-import { albumCover, albumPhotos, isViewOnly, useVault } from '../app/vault';
+import { albumCover, albumFiles, albumPhotos, isViewOnly, useVault } from '../app/vault';
 import { AlbumActions } from '../components/AlbumActions';
 import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
@@ -145,6 +145,7 @@ export function Albums() {
         <ul className="album-grid">
           {shown.map((album) => {
             const photos = albumPhotos(state, album.id);
+            const files = albumFiles(state, album.id);
             const cover = albumCover(state, album);
             const range = formatDateRange(photos.map((photo) => photo.takenAt));
             return (
@@ -182,9 +183,9 @@ export function Albums() {
                   </span>
                   <span className="album-card__title">{album.title}</span>
                   <span className="album-card__meta">
-                    {photos.length === 0
+                    {photos.length + files.length === 0
                       ? 'Empty'
-                      : `${pluralize(photos.length, 'photo')}${range ? ` · ${range}` : ''}`}
+                      : `${photosAndFiles([...photos, ...files])}${range ? ` · ${range}` : ''}`}
                   </span>
                   {sharedLine(album) && (
                     <span className="album-card__shared">

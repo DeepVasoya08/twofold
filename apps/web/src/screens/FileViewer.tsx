@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import { errorMessage } from '../app/account-ops';
 import { useDownloads } from '../app/downloads';
-import { paths } from '../app/routes';
+import { useRouter } from '../app/router';
+import { parsePhotoContext, paths } from '../app/routes';
 import { useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
@@ -38,6 +39,14 @@ const MAX_WIDTH = 880;
 export function FileViewer({ fileId }: { fileId: string }) {
   const { state, status, openFile } = useVault();
   const downloads = useDownloads();
+  const { search } = useRouter();
+  // Opened from an album: back goes there.
+  const from = parsePhotoContext(search);
+  const album =
+    from.kind === 'album' ? state.albums.find((each) => each.id === from.albumId) : undefined;
+  const back = album
+    ? { to: paths.album(album.id), label: album.title }
+    : { to: paths.files, label: 'Files' };
   const item = state.files?.find((candidate) => candidate.id === fileId);
   const file = item?.file;
   const view: FileView = file ? fileViewOf(file.type, file.name) : 'none';
@@ -72,7 +81,7 @@ export function FileViewer({ fileId }: { fileId: string }) {
   if (!item || !file) {
     return (
       <div className="page">
-        <PageHeader title="File" back={{ to: paths.files, label: 'Files' }} />
+        <PageHeader title="File" back={back} />
         <EmptyState icon="file" title={status === 'loading' ? 'Loading…' : 'File not found'}>
           {status === 'loading'
             ? 'Decrypting your files.'
@@ -93,7 +102,7 @@ export function FileViewer({ fileId }: { fileId: string }) {
       <PageHeader
         title={file.name}
         subtitle={details}
-        back={{ to: paths.files, label: 'Files' }}
+        back={back}
         actions={
           <button
             type="button"

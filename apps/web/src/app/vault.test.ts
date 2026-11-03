@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Photo } from '../mock/data';
 import {
   albumCover,
+  albumFiles,
   allItems,
   albumPhotos,
   emptyVaults,
@@ -35,6 +36,45 @@ const state: VaultState = {
   ],
   albums: [{ id: 'trip', title: 'Trip', coverPhotoId: 'a' }],
 };
+
+describe('files in albums', () => {
+  const booking: Photo = {
+    ...photo('booking', '2026-02-10T00:00:00Z'),
+    file: { name: 'booking.pdf', type: 'application/pdf' },
+  };
+  const withFile: VaultState = { ...state, files: [booking] };
+
+  it('puts a file in an album and takes it out', () => {
+    const added = vaultReducer(withFile, {
+      type: 'set-details',
+      photoIds: ['booking'],
+      change: { albumId: 'trip', included: true },
+    });
+    expect(albumFiles(added, 'trip').map((item) => item.id)).toEqual(['booking']);
+    // It's a file: the album's photos are unchanged.
+    expect(added.photos).toEqual(withFile.photos);
+    const removed = vaultReducer(added, {
+      type: 'set-details',
+      photoIds: ['booking'],
+      change: { albumId: 'trip', included: false },
+    });
+    expect(albumFiles(removed, 'trip')).toEqual([]);
+  });
+
+  it('takes a deleted album out of its files', () => {
+    const filed = { ...withFile, files: [{ ...booking, albumIds: ['trip'] }] };
+    const next = vaultReducer(filed, { type: 'delete-album', albumId: 'trip' });
+    expect(next.files?.[0]?.albumIds).toEqual([]);
+  });
+
+  it('lists an album’s files newest first', () => {
+    const older = { ...booking, id: 'older', takenAt: '2026-01-01T00:00:00Z', albumIds: ['trip'] };
+    const newer = { ...booking, id: 'newer', takenAt: '2026-03-01T00:00:00Z', albumIds: ['trip'] };
+    const other = { ...booking, id: 'other', albumIds: [] };
+    const listed = albumFiles({ ...state, files: [older, other, newer] }, 'trip');
+    expect(listed.map((item) => item.id)).toEqual(['newer', 'older']);
+  });
+});
 
 describe('vaultReducer', () => {
   it('toggles a favorite', () => {

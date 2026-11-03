@@ -5,8 +5,6 @@ import type { SpaceKeys } from '@arcafold/crypto';
 import { useAccount } from '../app/account';
 import { errorMessage } from '../app/account-ops';
 import { useDownloads } from '../app/downloads';
-import { Link } from '../app/router';
-import { paths } from '../app/routes';
 import { useToast } from '../app/toast';
 import { useUploads } from '../app/uploads';
 import { documentPhotos, useDocumentLooks } from '../app/document-photos';
@@ -14,11 +12,12 @@ import { useDocumentPhotosView, useFileView } from '../app/views';
 import { isViewOnly, trashNote, useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
+import { AlbumPicker } from '../components/AlbumPicker';
 import { EmptyState } from '../components/EmptyState';
-import { FileThumb } from '../components/FileIcon';
+import { FileRow, FileTile, fileDetails } from '../components/FileRow';
 import { Icon } from '../components/Icon';
-import { Menu } from '../components/Menu';
 import type { MenuItem } from '../components/Menu';
+import { albumChoices } from '../components/AlbumPicker';
 import { MoveSpaceDialog, moveLabel } from '../components/MoveSpaceDialog';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { FILE_VIEW_CHOICES, ViewPicker } from '../components/ViewPicker';
@@ -26,8 +25,7 @@ import { CATEGORIES, categoryLabel } from '../lib/file-sort/categories';
 import type { Category } from '../lib/file-sort/categories';
 import { lookCategory } from '../lib/file-sort/looks';
 import type { DocumentLook } from '../lib/file-sort/looks';
-import { fileKindLabel, fileKindOf } from '../lib/file-types';
-import { formatShortDay, groupByMonth, pluralize } from '../lib/format';
+import { groupByMonth, pluralize } from '../lib/format';
 import { formatBytes } from '../lib/storage-usage';
 import type { Photo } from '../mock/data';
 
@@ -71,19 +69,6 @@ function shownLabel(shown: Shown): string {
   return categoryLabel(shown);
 }
 
-/** A file's details line: "PDF · 1.2 MB · 2 Nov", with its category and whose library. */
-function detailsOf(item: Photo, category: Category | null): string {
-  const file = item.file;
-  const parts = [
-    file ? fileKindLabel(fileKindOf(file.type, file.name)) : 'File',
-    ...(file?.bytes === undefined ? [] : [formatBytes(file.bytes)]),
-    formatShortDay(item.takenAt),
-    ...(category && (file?.category || category !== 'other') ? [categoryLabel(category)] : []),
-    ...(item.library === undefined ? [] : [`Shared by ${item.library}`]),
-  ];
-  return parts.join(' · ');
-}
-
 /**
  * Files that aren't photos: PDFs, documents and anything else but videos, encrypted on this
  * device like photos, and sorted into categories on the device that added them.
@@ -98,6 +83,7 @@ export function Files() {
   const [deleting, setDeleting] = useState<Photo | null>(null);
   const [moving, setMoving] = useState<Photo | null>(null);
   const [sorting, setSorting] = useState<Photo | null>(null);
+  const [filing, setFiling] = useState<Photo | null>(null);
   const [shown, setShown] = useState<Shown>('all');
   const [busy, setBusy] = useState(false);
   const [view, setView] = useFileView();
@@ -136,6 +122,7 @@ export function Files() {
         setDeleting(null);
         setMoving(null);
         setSorting(null);
+        setFiling(null);
         toast.show(done);
       },
       (error: unknown) => {
@@ -163,6 +150,15 @@ export function Files() {
       },
     ];
     if (isViewOnly(item)) return items;
+    if (albumChoices(state.albums, [item]).length > 0 || item.library === undefined) {
+      items.push({
+        label: 'Add to album',
+        icon: 'albums',
+        onSelect: () => {
+          setFiling(item);
+        },
+      });
+    }
     items.push({
       label: 'Move to category',
       icon: 'folder',
@@ -282,14 +278,14 @@ export function Files() {
                         <FileTile
                           key={item.id}
                           item={item}
-                          details={detailsOf(item, null)}
+                          details={fileDetails(item, null)}
                           menu={menuFor(item)}
                         />
                       ) : (
                         <FileRow
                           key={item.id}
                           item={item}
-                          details={detailsOf(item, filter === 'all' ? label(item) : null)}
+                          details={fileDetails(item, filter === 'all' ? label(item) : null)}
                           menu={menuFor(item)}
                         />
                       ),
@@ -301,6 +297,23 @@ export function Files() {
           )}
         </>
       )}
+
+      <AlbumPicker
+        open={filing !== null}
+        photos={filing ? [filing] : []}
+        busy={busy}
+        onClose={() => {
+          setFiling(null);
+        }}
+        onPick={(album) => {
+          if (filing) {
+            run(async () => {
+              const result = await vault.setDetails([filing.id], { album, included: true });
+              if (result.failed.length > 0) throw result.error;
+            }, `Added to “${album.title}”`);
+          }
+        }}
+      />
 
       <CategoryDialog
         file={sorting}
@@ -420,44 +433,5 @@ function CategoryDialog({
         </div>
       </form>
     </Dialog>
-  );
-}
-
-/** A file as a row: its picture, name and details, and its menu. */
-function FileRow({ item, details, menu }: { item: Photo; details: string; menu: MenuItem[] }) {
-  const name = item.file?.name ?? 'File';
-  return (
-    <li className="file-row">
-      <Link to={paths.file(item.id)} className="file-row__main" aria-label={`Open ${name}`}>
-        <FileThumb item={item} />
-        <span className="file-row__text">
-          <span className="file-row__name">{name}</span>
-          <span className="file-row__meta">{details}</span>
-        </span>
-      </Link>
-      <Menu
-        label={`More for ${name}`}
-        items={menu}
-        className="file-row__menu"
-        icon="more-vertical"
-      />
-    </li>
-  );
-}
-
-/** A file as a tile: a big picture (a PDF's first page, or its icon) with its name below. */
-function FileTile({ item, details, menu }: { item: Photo; details: string; menu: MenuItem[] }) {
-  const name = item.file?.name ?? 'File';
-  return (
-    <li className="file-tile">
-      <Link to={paths.file(item.id)} className="file-tile__main" aria-label={`Open ${name}`}>
-        <span className="file-tile__picture">
-          <FileThumb item={item} size="lg" />
-        </span>
-        <span className="file-tile__name">{name}</span>
-        <span className="file-tile__meta">{details}</span>
-      </Link>
-      <Menu label={`More for ${name}`} items={menu} className="file-tile__menu" icon="more" />
-    </li>
   );
 }
