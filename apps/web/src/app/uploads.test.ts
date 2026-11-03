@@ -32,6 +32,12 @@ describe('prepareFile', () => {
     expect(draw).not.toHaveBeenCalled();
     expect(prepared.file).toEqual({ name: 'notes.txt' });
   });
+
+  it('dates a file by its own date, not the upload', async () => {
+    const lastModified = Date.UTC(2021, 4, 10);
+    const text = new File(['hello'], 'notes.txt', { type: 'text/plain', lastModified });
+    expect((await prepareFile(text, vi.fn())).takenAt).toBe(new Date(lastModified).toISOString());
+  });
 });
 
 describe('sorting files as they’re added', () => {

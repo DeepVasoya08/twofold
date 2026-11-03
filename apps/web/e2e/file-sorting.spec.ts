@@ -20,7 +20,7 @@ const BOOSTER = text('Bruno vet booster.txt', 'Bruno the pet is due a booster at
 async function addFiles(page: Page, files: ReturnType<typeof text>[]) {
   await page.getByRole('button', { name: 'Add files' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add photos and files' });
-  await dialog.getByLabel('Choose files').setInputFiles(files);
+  await dialog.getByLabel('Choose photos or files').setInputFiles(files);
   await dialog.getByRole('button', { name: 'Done' }).click();
 }
 

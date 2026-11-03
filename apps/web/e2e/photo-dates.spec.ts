@@ -16,7 +16,7 @@ test('dates an uploaded photo by when it was taken, not when it was uploaded', a
     .first()
     .click();
   const dialog = page.getByRole('dialog', { name: 'Add photos' });
-  await dialog.getByLabel('Choose photos').setInputFiles({
+  await dialog.getByLabel('Choose photos or files').setInputFiles({
     name: 'holiday.jpg',
     mimeType: 'image/jpeg',
     buffer: DATED,

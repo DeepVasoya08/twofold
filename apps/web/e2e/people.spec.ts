@@ -21,7 +21,7 @@ async function uploadPortraits(page: Page): Promise<void> {
     .first()
     .click();
   const dialog = page.getByRole('dialog', { name: 'Add photos' });
-  await dialog.getByLabel('Choose photos').setInputFiles(files);
+  await dialog.getByLabel('Choose photos or files').setInputFiles(files);
   await dialog.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByText('9 photos added to your vault')).toBeVisible();
 }

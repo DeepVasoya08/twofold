@@ -20,7 +20,7 @@ import {
   placeholderPreview,
 } from '../lib/file-types';
 import { photosAndFiles } from '../lib/format';
-import { photoTakenAt } from '../lib/photo-date';
+import { fileDate, photoTakenAt } from '../lib/photo-date';
 import { loadSearchSetting } from '../lib/search/search-setting';
 import { loadThumbnailer } from '../lib/thumbnail-service';
 import { summarizeUploads } from '../lib/upload-progress';
@@ -113,7 +113,7 @@ export async function prepareFile(
     type,
     width: 0,
     height: 0,
-    takenAt: new Date().toISOString(),
+    takenAt: fileDate(file.lastModified),
     file: {
       name,
       ...(drawn && { preview: true }),

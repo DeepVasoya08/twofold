@@ -6,7 +6,6 @@ import { useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useUploads } from '../app/uploads';
 import type { UploadItem } from '../app/uploads';
-import { PHOTO_TYPES } from '../lib/photo-types';
 import { STATUS_PROGRESS } from '../lib/upload-progress';
 import { Dialog } from './Dialog';
 import { FileIcon } from './FileIcon';
@@ -35,14 +34,13 @@ interface UploadDialogProps {
 }
 
 /**
- * Picks photos and shows how their uploads are going. The uploads themselves run in
+ * Picks photos and files and shows how their uploads are going. The uploads themselves run in
  * app/uploads.tsx, so closing this dialog leaves them going.
  */
 export function UploadDialog({ albumId }: UploadDialogProps) {
   const { items, running, dialogOpen, closeDialog, addFiles, cancelWaiting } = useUploads();
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const filesRef = useRef<HTMLInputElement>(null);
   const finished = items.length > 0 && !running;
   const waiting = items.some((item) => item.status === 'waiting');
   const imports = useImports();
@@ -81,42 +79,21 @@ export function UploadDialog({ albumId }: UploadDialogProps) {
         <p className="dropzone__text">
           PDFs, documents and other files go to Files. Videos can’t be added yet.
         </p>
-        <div className="dropzone__buttons">
-          <button
-            type="button"
-            className="btn btn--secondary"
-            onClick={() => inputRef.current?.click()}
-          >
-            Choose photos
-          </button>
-          <button
-            type="button"
-            className="btn btn--secondary"
-            onClick={() => filesRef.current?.click()}
-          >
-            Choose files
-          </button>
-        </div>
+        <button
+          type="button"
+          className="btn btn--secondary"
+          onClick={() => inputRef.current?.click()}
+        >
+          Choose photos or files
+        </button>
+        {/* One picker for everything: photos go to Photos and the rest to Files. */}
         <input
           ref={inputRef}
           className="visually-hidden"
           type="file"
-          accept={PHOTO_TYPES.join(',')}
           multiple
           tabIndex={-1}
-          aria-label="Choose photos"
-          onChange={(event) => {
-            addFiles(event.currentTarget.files, albumId);
-            event.currentTarget.value = '';
-          }}
-        />
-        <input
-          ref={filesRef}
-          className="visually-hidden"
-          type="file"
-          multiple
-          tabIndex={-1}
-          aria-label="Choose files"
+          aria-label="Choose photos or files"
           onChange={(event) => {
             addFiles(event.currentTarget.files, albumId);
             event.currentTarget.value = '';

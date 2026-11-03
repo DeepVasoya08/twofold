@@ -159,13 +159,6 @@
   font-size: 13px;
 }
 
-.dropzone__buttons {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
-
 .upload-item__thumb--file {
   display: inline-flex;
   align-items: center;

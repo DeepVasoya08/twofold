@@ -6,6 +6,7 @@ import { expect, test } from '@playwright/test';
 
 import {
   MAIN_PASSWORD,
+  PNG,
   PRIVATE_PASSWORD,
   goTo,
   lock,
@@ -19,6 +20,45 @@ const NOTES = Buffer.from('Packing list: passport, charger, tickets\n');
 const TWO_PAGES = readFileSync(join(import.meta.dirname, 'fixtures/two-pages.pdf'));
 const LEASE = readFileSync(join(import.meta.dirname, 'fixtures/lease.docx'));
 
+test('one pick takes photos and files together, and files keep their own dates', async ({
+  page,
+}) => {
+  await signUp(page);
+  await goTo(page, 'Files');
+  await page.getByRole('button', { name: 'Add files' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add photos and files' });
+  await expect(dialog.getByRole('button', { name: 'Choose photos', exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Choose files', exact: true })).toHaveCount(0);
+  await expect(dialog.locator('button', { hasText: 'Choose photos or files' })).toBeVisible();
+
+  // Playwright can't set a file's date, so the pick is made in the page, as a browser would.
+  await dialog.getByLabel('Choose photos or files').evaluate(
+    (input: HTMLInputElement, png: number[]) => {
+      const picked = new DataTransfer();
+      picked.items.add(new File([new Uint8Array(png)], 'beach.png', { type: 'image/png' }));
+      picked.items.add(
+        new File(['Rent agreement, signed'], 'lease.txt', {
+          type: 'text/plain',
+          lastModified: Date.UTC(2021, 4, 10, 12),
+        }),
+      );
+      input.files = picked.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    },
+    [...PNG],
+  );
+  await dialog.getByRole('button', { name: 'Done' }).click();
+
+  const list = page.getByRole('region', { name: 'Files' });
+  await expect(list.getByRole('heading', { name: 'May 2021' })).toBeVisible();
+  await expect(list.getByText('lease.txt')).toBeVisible();
+  await expect(list.getByText(/May 10, 2021/)).toBeVisible();
+  await expect(page.getByText('1 file ·')).toBeVisible();
+
+  await goTo(page, 'Photos');
+  await expect(page.getByRole('link', { name: /^Photo from / })).toHaveCount(1);
+});
+
 test('adds files that aren’t photos, keeps them out of Photos, and saves them back', async ({
   page,
 }) => {
@@ -29,7 +69,7 @@ test('adds files that aren’t photos, keeps them out of Photos, and saves them 
 
   await page.getByRole('button', { name: 'Add files' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add photos and files' });
-  await dialog.getByLabel('Choose files').setInputFiles([
+  await dialog.getByLabel('Choose photos or files').setInputFiles([
     { name: 'Electricity bill March.pdf', mimeType: 'application/pdf', buffer: BILL },
     { name: 'packing.txt', mimeType: 'text/plain', buffer: NOTES },
     { name: 'holiday.mp4', mimeType: 'video/mp4', buffer: Buffer.from('not really a video') },
@@ -90,7 +130,7 @@ test('moves a file into the private space', async ({ page }) => {
   await page.getByRole('button', { name: 'Add files' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add photos and files' });
   await dialog
-    .getByLabel('Choose files')
+    .getByLabel('Choose photos or files')
     .setInputFiles([{ name: 'passport scan.pdf', mimeType: 'application/pdf', buffer: BILL }]);
   await dialog.getByRole('button', { name: 'Done' }).click();
 
@@ -116,7 +156,7 @@ test('shows a PDF, a text file and a Word document inside the app', async ({ pag
   await goTo(page, 'Files');
   await page.getByRole('button', { name: 'Add files' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add photos and files' });
-  await dialog.getByLabel('Choose files').setInputFiles([
+  await dialog.getByLabel('Choose photos or files').setInputFiles([
     { name: 'two pages.pdf', mimeType: 'application/pdf', buffer: TWO_PAGES },
     { name: 'packing.txt', mimeType: 'text/plain', buffer: NOTES },
     {
@@ -168,7 +208,7 @@ test('reads a PDF a page at a time on a light device', async ({ page }) => {
   await page.getByRole('button', { name: 'Add files' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add photos and files' });
   await dialog
-    .getByLabel('Choose files')
+    .getByLabel('Choose photos or files')
     .setInputFiles([{ name: 'two pages.pdf', mimeType: 'application/pdf', buffer: TWO_PAGES }]);
   await dialog.getByRole('button', { name: 'Done' }).click();
 

@@ -50,7 +50,7 @@ export async function answerSmartFeatures(
 }
 
 /** A 1×1 PNG stands in for a real photo. */
-const PNG = Buffer.from(
+export const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64',
 );
@@ -77,7 +77,7 @@ export async function choosePhotos(
     .first()
     .click();
   const dialog = page.getByRole('dialog', { name: 'Add photos' });
-  await dialog.getByLabel('Choose photos').setInputFiles(
+  await dialog.getByLabel('Choose photos or files').setInputFiles(
     Array.from({ length: count }, (_, index) => ({
       name: `photo-${String(index)}.png`,
       mimeType: 'image/png',
