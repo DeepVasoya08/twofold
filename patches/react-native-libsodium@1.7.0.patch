@@ -1,0 +1,201 @@
+diff --git a/cpp/react-native-libsodium.cpp b/cpp/react-native-libsodium.cpp
+index a97e74b23936377c8279bf99defe4389d8e0ff8e..c5257575e9e42d67c8eddadba1e81b71f5033951 100644
+--- a/cpp/react-native-libsodium.cpp
++++ b/cpp/react-native-libsodium.cpp
+@@ -183,8 +183,196 @@ namespace ReactNativeLibsodium
+         }
+     }
+ 
++    // Arcafold additions (patches/react-native-libsodium*.patch): libsodium calls that
++    // @arcafold/crypto needs and react-native-libsodium 1.7.0 does not bind. Each one is a
++    // direct call into libsodium; nothing here implements cryptography itself.
++    jsi::ArrayBuffer arcafoldBuffer(const std::string &functionName, jsi::Runtime &runtime, const jsi::Value *arguments, size_t count, size_t position, const char *name)
++    {
++        if (position >= count || !arguments[position].isObject() || !arguments[position].asObject(runtime).isArrayBuffer(runtime))
++        {
++            throw jsi::JSError(runtime, "[react-native-libsodium][" + functionName + "] " + std::string(name) + " must be an ArrayBuffer");
++        }
++        return arguments[position].asObject(runtime).getArrayBuffer(runtime);
++    }
++
++    void arcafoldRequireSize(const std::string &functionName, jsi::Runtime &runtime, jsi::ArrayBuffer &buffer, size_t size, const char *name)
++    {
++        if (buffer.size(runtime) != size)
++        {
++            throw jsi::JSError(runtime, "[react-native-libsodium][" + functionName + "] " + std::string(name) + " has the wrong length");
++        }
++    }
++
++    void arcafoldSetFunction(jsi::Runtime &runtime, const char *name, unsigned int params, jsi::HostFunctionType body)
++    {
++        auto fn = jsi::Function::createFromHostFunction(runtime, jsi::PropNameID::forUtf8(runtime, name), params, std::move(body));
++        runtime.global().setProperty(runtime, name, std::move(fn));
++    }
++
++    void installArcafoldAdditions(jsi::Runtime &jsiRuntime)
++    {
++        jsiRuntime.global().setProperty(jsiRuntime, "jsi_arcafold_secretstream_ABYTES", static_cast<int>(crypto_secretstream_xchacha20poly1305_ABYTES));
++        jsiRuntime.global().setProperty(jsiRuntime, "jsi_arcafold_secretstream_HEADERBYTES", static_cast<int>(crypto_secretstream_xchacha20poly1305_HEADERBYTES));
++        jsiRuntime.global().setProperty(jsiRuntime, "jsi_arcafold_secretstream_KEYBYTES", static_cast<int>(crypto_secretstream_xchacha20poly1305_KEYBYTES));
++        jsiRuntime.global().setProperty(jsiRuntime, "jsi_arcafold_secretstream_TAG_MESSAGE", static_cast<int>(crypto_secretstream_xchacha20poly1305_TAG_MESSAGE));
++        jsiRuntime.global().setProperty(jsiRuntime, "jsi_arcafold_secretstream_TAG_FINAL", static_cast<int>(crypto_secretstream_xchacha20poly1305_TAG_FINAL));
++        jsiRuntime.global().setProperty(jsiRuntime, "jsi_arcafold_aead_xchacha20poly1305_ietf_ABYTES", static_cast<int>(crypto_aead_xchacha20poly1305_ietf_ABYTES));
++        jsiRuntime.global().setProperty(jsiRuntime, "jsi_arcafold_box_MACBYTES", static_cast<int>(crypto_box_MACBYTES));
++
++        arcafoldSetFunction(jsiRuntime, "jsi_arcafold_secretstream_init_push", 1, [](jsi::Runtime &runtime, const jsi::Value &, const jsi::Value *arguments, size_t count) -> jsi::Value
++        {
++            const std::string fn = "crypto_secretstream_xchacha20poly1305_init_push";
++            auto key = arcafoldBuffer(fn, runtime, arguments, count, 0, "key");
++            arcafoldRequireSize(fn, runtime, key, crypto_secretstream_xchacha20poly1305_KEYBYTES, "key");
++            std::vector<uint8_t> state(sizeof(crypto_secretstream_xchacha20poly1305_state));
++            std::vector<uint8_t> header(crypto_secretstream_xchacha20poly1305_HEADERBYTES);
++            int result = crypto_secretstream_xchacha20poly1305_init_push(
++                reinterpret_cast<crypto_secretstream_xchacha20poly1305_state *>(state.data()), header.data(), key.data(runtime));
++            throwOnBadResult(fn, runtime, result);
++            jsi::Object out(runtime);
++            out.setProperty(runtime, "state", arrayBufferAsObject(runtime, state));
++            out.setProperty(runtime, "header", arrayBufferAsObject(runtime, header));
++            sodium_memzero(state.data(), state.size());
++            return out;
++        });
++
++        arcafoldSetFunction(jsiRuntime, "jsi_arcafold_secretstream_push", 3, [](jsi::Runtime &runtime, const jsi::Value &, const jsi::Value *arguments, size_t count) -> jsi::Value
++        {
++            const std::string fn = "crypto_secretstream_xchacha20poly1305_push";
++            auto state = arcafoldBuffer(fn, runtime, arguments, count, 0, "state");
++            arcafoldRequireSize(fn, runtime, state, sizeof(crypto_secretstream_xchacha20poly1305_state), "state");
++            auto message = arcafoldBuffer(fn, runtime, arguments, count, 1, "message");
++            if (count < 3 || !arguments[2].isNumber())
++            {
++                throw jsi::JSError(runtime, "[react-native-libsodium][" + fn + "] tag must be a number");
++            }
++            unsigned char tag = static_cast<unsigned char>(arguments[2].asNumber());
++            size_t messageLength = message.size(runtime);
++            std::vector<uint8_t> ciphertext(messageLength + crypto_secretstream_xchacha20poly1305_ABYTES);
++            unsigned long long ciphertextLength = 0;
++            int result = crypto_secretstream_xchacha20poly1305_push(
++                reinterpret_cast<crypto_secretstream_xchacha20poly1305_state *>(state.data(runtime)),
++                ciphertext.data(), &ciphertextLength, message.data(runtime), messageLength, nullptr, 0, tag);
++            throwOnBadResult(fn, runtime, result);
++            ciphertext.resize(static_cast<size_t>(ciphertextLength));
++            return arrayBufferAsObject(runtime, ciphertext);
++        });
++
++        arcafoldSetFunction(jsiRuntime, "jsi_arcafold_secretstream_init_pull", 2, [](jsi::Runtime &runtime, const jsi::Value &, const jsi::Value *arguments, size_t count) -> jsi::Value
++        {
++            const std::string fn = "crypto_secretstream_xchacha20poly1305_init_pull";
++            auto header = arcafoldBuffer(fn, runtime, arguments, count, 0, "header");
++            arcafoldRequireSize(fn, runtime, header, crypto_secretstream_xchacha20poly1305_HEADERBYTES, "header");
++            auto key = arcafoldBuffer(fn, runtime, arguments, count, 1, "key");
++            arcafoldRequireSize(fn, runtime, key, crypto_secretstream_xchacha20poly1305_KEYBYTES, "key");
++            std::vector<uint8_t> state(sizeof(crypto_secretstream_xchacha20poly1305_state));
++            int result = crypto_secretstream_xchacha20poly1305_init_pull(
++                reinterpret_cast<crypto_secretstream_xchacha20poly1305_state *>(state.data()), header.data(runtime), key.data(runtime));
++            throwOnBadResult(fn, runtime, result);
++            jsi::Object out = arrayBufferAsObject(runtime, state);
++            sodium_memzero(state.data(), state.size());
++            return out;
++        });
++
++        // Returns null when the chunk does not authenticate, like libsodium-wrappers returns false.
++        arcafoldSetFunction(jsiRuntime, "jsi_arcafold_secretstream_pull", 2, [](jsi::Runtime &runtime, const jsi::Value &, const jsi::Value *arguments, size_t count) -> jsi::Value
++        {
++            const std::string fn = "crypto_secretstream_xchacha20poly1305_pull";
++            auto state = arcafoldBuffer(fn, runtime, arguments, count, 0, "state");
++            arcafoldRequireSize(fn, runtime, state, sizeof(crypto_secretstream_xchacha20poly1305_state), "state");
++            auto ciphertext = arcafoldBuffer(fn, runtime, arguments, count, 1, "ciphertext");
++            size_t ciphertextLength = ciphertext.size(runtime);
++            if (ciphertextLength < crypto_secretstream_xchacha20poly1305_ABYTES)
++            {
++                return jsi::Value::null();
++            }
++            std::vector<uint8_t> message(ciphertextLength - crypto_secretstream_xchacha20poly1305_ABYTES);
++            unsigned long long messageLength = 0;
++            unsigned char tag = 0;
++            int result = crypto_secretstream_xchacha20poly1305_pull(
++                reinterpret_cast<crypto_secretstream_xchacha20poly1305_state *>(state.data(runtime)),
++                message.data(), &messageLength, &tag, ciphertext.data(runtime), ciphertextLength, nullptr, 0);
++            if (result != 0)
++            {
++                return jsi::Value::null();
++            }
++            message.resize(static_cast<size_t>(messageLength));
++            jsi::Object out(runtime);
++            out.setProperty(runtime, "message", arrayBufferAsObject(runtime, message));
++            out.setProperty(runtime, "tag", static_cast<int>(tag));
++            sodium_memzero(message.data(), message.size());
++            return out;
++        });
++
++        arcafoldSetFunction(jsiRuntime, "jsi_arcafold_scalarmult_base", 1, [](jsi::Runtime &runtime, const jsi::Value &, const jsi::Value *arguments, size_t count) -> jsi::Value
++        {
++            const std::string fn = "crypto_scalarmult_base";
++            auto secret = arcafoldBuffer(fn, runtime, arguments, count, 0, "secretKey");
++            arcafoldRequireSize(fn, runtime, secret, crypto_scalarmult_SCALARBYTES, "secretKey");
++            std::vector<uint8_t> publicKey(crypto_scalarmult_BYTES);
++            throwOnBadResult(fn, runtime, crypto_scalarmult_base(publicKey.data(), secret.data(runtime)));
++            return arrayBufferAsObject(runtime, publicKey);
++        });
++
++        arcafoldSetFunction(jsiRuntime, "jsi_arcafold_hash_sha256", 1, [](jsi::Runtime &runtime, const jsi::Value &, const jsi::Value *arguments, size_t count) -> jsi::Value
++        {
++            const std::string fn = "crypto_hash_sha256";
++            auto message = arcafoldBuffer(fn, runtime, arguments, count, 0, "message");
++            std::vector<uint8_t> digest(crypto_hash_sha256_BYTES);
++            throwOnBadResult(fn, runtime, crypto_hash_sha256(digest.data(), message.data(runtime), message.size(runtime)));
++            return arrayBufferAsObject(runtime, digest);
++        });
++
++        arcafoldSetFunction(jsiRuntime, "jsi_arcafold_pad", 2, [](jsi::Runtime &runtime, const jsi::Value &, const jsi::Value *arguments, size_t count) -> jsi::Value
++        {
++            const std::string fn = "sodium_pad";
++            auto data = arcafoldBuffer(fn, runtime, arguments, count, 0, "buf");
++            if (count < 2 || !arguments[1].isNumber() || arguments[1].asNumber() < 1)
++            {
++                throw jsi::JSError(runtime, "[react-native-libsodium][" + fn + "] blocksize must be a positive number");
++            }
++            size_t blockSize = static_cast<size_t>(arguments[1].asNumber());
++            size_t length = data.size(runtime);
++            std::vector<uint8_t> padded(length + blockSize);
++            if (length > 0) memcpy(padded.data(), data.data(runtime), length);
++            size_t paddedLength = 0;
++            throwOnBadResult(fn, runtime, sodium_pad(&paddedLength, padded.data(), length, blockSize, padded.size()));
++            padded.resize(paddedLength);
++            jsi::Object out = arrayBufferAsObject(runtime, padded);
++            sodium_memzero(padded.data(), padded.size());
++            return out;
++        });
++
++        arcafoldSetFunction(jsiRuntime, "jsi_arcafold_unpad", 2, [](jsi::Runtime &runtime, const jsi::Value &, const jsi::Value *arguments, size_t count) -> jsi::Value
++        {
++            const std::string fn = "sodium_unpad";
++            auto data = arcafoldBuffer(fn, runtime, arguments, count, 0, "buf");
++            if (count < 2 || !arguments[1].isNumber() || arguments[1].asNumber() < 1)
++            {
++                throw jsi::JSError(runtime, "[react-native-libsodium][" + fn + "] blocksize must be a positive number");
++            }
++            size_t blockSize = static_cast<size_t>(arguments[1].asNumber());
++            size_t unpaddedLength = 0;
++            throwOnBadResult(fn, runtime, sodium_unpad(&unpaddedLength, data.data(runtime), data.size(runtime), blockSize));
++            return jsi::Value(static_cast<int>(unpaddedLength));
++        });
++
++        arcafoldSetFunction(jsiRuntime, "jsi_arcafold_memcmp", 2, [](jsi::Runtime &runtime, const jsi::Value &, const jsi::Value *arguments, size_t count) -> jsi::Value
++        {
++            const std::string fn = "sodium_memcmp";
++            auto a = arcafoldBuffer(fn, runtime, arguments, count, 0, "b1");
++            auto b = arcafoldBuffer(fn, runtime, arguments, count, 1, "b2");
++            if (a.size(runtime) != b.size(runtime))
++            {
++                throw jsi::JSError(runtime, "[react-native-libsodium][" + fn + "] arguments must be of the same length");
++            }
++            return jsi::Value(sodium_memcmp(a.data(runtime), b.data(runtime), a.size(runtime)) == 0);
++        });
++    }
++
+     void installLibsodium(jsi::Runtime &jsiRuntime)
+     {
++        installArcafoldAdditions(jsiRuntime);
+         jsiRuntime.global().setProperty(jsiRuntime, "jsi_crypto_secretbox_KEYBYTES", static_cast<int>(crypto_secretbox_KEYBYTES));
+         jsiRuntime.global().setProperty(jsiRuntime, "jsi_crypto_secretbox_NONCEBYTES", static_cast<int>(crypto_secretbox_NONCEBYTES));
+         jsiRuntime.global().setProperty(jsiRuntime, "jsi_crypto_pwhash_SALTBYTES", static_cast<int>(crypto_pwhash_SALTBYTES));
