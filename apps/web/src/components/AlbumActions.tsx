@@ -6,8 +6,8 @@ import { errorMessage } from '../app/account-ops';
 import { useDownloads } from '../app/downloads';
 import { leaveJoined } from '../app/sharing';
 import { useToast } from '../app/toast';
-import { albumPhotos, useVault } from '../app/vault';
-import { pluralize } from '../lib/format';
+import { albumFiles, albumPhotos, useVault } from '../app/vault';
+import { photosAndFiles } from '../lib/format';
 import type { Album } from '../mock/data';
 import { AlbumShareDialog } from './AlbumShareDialog';
 import { Dialog } from './Dialog';
@@ -41,7 +41,8 @@ export function AlbumActions({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const downloads = useDownloads();
-  const count = albumPhotos(state, album.id).length;
+  const inside = [...albumPhotos(state, album.id), ...albumFiles(state, album.id)];
+  const count = inside.length;
   const inShared = album.library !== undefined;
   const keys = account.state.status === 'unlocked' ? account.state.session.opened.space : null;
 
@@ -121,7 +122,7 @@ export function AlbumActions({
     label: 'Download',
     icon: 'download',
     onSelect: () => {
-      downloads.start(albumPhotos(state, album.id).map((photo) => photo.id));
+      downloads.start(inside.map((item) => item.id));
     },
   };
   const items: MenuItem[] =
@@ -214,7 +215,7 @@ export function AlbumActions({
         description={
           count === 0
             ? 'The album will be removed for everyone who can see it.'
-            : `The album will be removed for everyone who can see it. ${count === 1 ? 'Its photo stays' : `Its ${pluralize(count, 'photo')} stay`} in ${where}.`
+            : `The album will be removed for everyone who can see it. ${count === 1 ? `Its ${inside[0]?.file ? 'file' : 'photo'} stays` : `Its ${photosAndFiles(inside)} stay`} in ${where}.`
         }
       >
         <div className="dialog__actions">

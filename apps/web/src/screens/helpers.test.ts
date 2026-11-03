@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { fileMenu } from './Album';
 import { albumsInTab } from './Albums';
 import { categoryOf, categoryCounts } from './Files';
 import { filterByOwner } from './Gallery';
@@ -218,5 +219,34 @@ describe('photosInContext', () => {
     const hidden = new Set(looks.keys());
     const shown = photosInContext(state, { kind: 'all' }, null, looks, hidden).map((p) => p.id);
     expect(shown).toEqual(['beach']);
+  });
+});
+
+describe('fileMenu', () => {
+  const file = {
+    id: 'f',
+    src: '',
+    width: 0,
+    height: 0,
+    takenAt: '2026-10-01T00:00:00Z',
+    addedBy: 'me' as const,
+    favorite: false,
+    albumIds: ['a'],
+    file: { name: 'booking.pdf', type: 'application/pdf' },
+  };
+  const album = { id: 'a', title: 'Lisbon' };
+  const actions = { download: () => undefined, remove: () => undefined };
+  const labels = (items: { label: string }[]) => items.map((item) => item.label);
+
+  it('lets you download a file in an album, and take out your own', () => {
+    expect(labels(fileMenu(file, album, actions))).toEqual(['Download', 'Remove from album']);
+  });
+
+  it('only downloads in an album shared with you, or one you can only view', () => {
+    const shared = { ...file, sharedAlbum: true };
+    expect(labels(fileMenu(shared, { ...album, sharedAlbum: true }, actions))).toEqual([
+      'Download',
+    ]);
+    expect(labels(fileMenu(file, { ...album, viewOnly: true }, actions))).toEqual(['Download']);
   });
 });

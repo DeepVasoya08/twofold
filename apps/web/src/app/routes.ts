@@ -53,7 +53,9 @@ export const paths = {
   smartAlbum: (albumId: string) => `/albums/smart/${encodeURIComponent(albumId)}`,
   favorites: '/favorites',
   files: '/files',
-  file: (fileId: string) => `/files/${encodeURIComponent(fileId)}`,
+  /** A file, opened from an album when `albumId` is given, so its back link returns there. */
+  file: (fileId: string, albumId?: string) =>
+    `/files/${encodeURIComponent(fileId)}${albumId === undefined ? '' : `?from=${formatContext({ kind: 'album', albumId })}`}`,
   trash: '/recently-deleted',
   search: '/search',
   people: '/people',

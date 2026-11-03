@@ -2,8 +2,8 @@ import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
 import { errorMessage } from '../app/account-ops';
-import { albumCover, albumPhotos, fitsAlbum, useVault } from '../app/vault';
-import { pluralize } from '../lib/format';
+import { albumCover, albumFiles, albumPhotos, fitsAlbum, useVault } from '../app/vault';
+import { photosAndFiles } from '../lib/format';
 import type { Album, Photo } from '../mock/data';
 import { Dialog } from './Dialog';
 import { TextField } from './Field';
@@ -100,9 +100,7 @@ export function AlbumPicker({
       open={open}
       onClose={close}
       title={
-        sharing
-          ? `Share ${pluralize(photos.length, 'photo')}`
-          : `Add ${pluralize(photos.length, 'photo')} to an album`
+        sharing ? `Share ${photosAndFiles(photos)}` : `Add ${photosAndFiles(photos)} to an album`
       }
       description={
         sharing
@@ -115,7 +113,7 @@ export function AlbumPicker({
         <ul className="album-picker" aria-label="Albums">
           {choices.map((album) => {
             const cover = albumCover(state, album);
-            const count = albumPhotos(state, album.id).length;
+            const inside = [...albumPhotos(state, album.id), ...albumFiles(state, album.id)];
             return (
               <li key={album.id}>
                 <button
@@ -136,7 +134,7 @@ export function AlbumPicker({
                   <span className="album-picker__text">
                     <span className="album-picker__title">{album.title}</span>
                     <span className="album-picker__meta">
-                      {count === 0 ? 'Empty' : pluralize(count, 'photo')}
+                      {inside.length === 0 ? 'Empty' : photosAndFiles(inside)}
                       {album.library !== undefined && ` · ${album.library}’s library`}
                       {album.sharedWith &&
                         album.sharedWith.length > 0 &&
