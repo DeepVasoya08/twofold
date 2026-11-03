@@ -32,3 +32,19 @@ index 41b43599a9af6ef1c170047d39db1f3baa6ca682..e1361a163504c7666ff6838b30a22f8e
    }
  }
  
+diff --git a/android/src/main/java/ai/onnxruntime/reactnative/OnnxruntimeModule.java b/android/src/main/java/ai/onnxruntime/reactnative/OnnxruntimeModule.java
+index c362e6ad71bbe11265efd6beaab614af0632a70f..80f153ff891c968bf6292ee3db0920904d6784bd 100644
+--- a/android/src/main/java/ai/onnxruntime/reactnative/OnnxruntimeModule.java
++++ b/android/src/main/java/ai/onnxruntime/reactnative/OnnxruntimeModule.java
+@@ -47,8 +47,10 @@ public class OnnxruntimeModule extends ReactContextBaseJavaModule {
+     try {
+       System.loadLibrary("onnxruntimejsi");
+       JavaScriptContextHolder jsContext = getReactApplicationContext().getJavaScriptContextHolder();
++      // Arcafold patch: getCatalystInstance() doesn't exist in React Native's bridgeless mode
++      // (the only mode since 0.82); the context hands out the call invoker directly.
+       CallInvokerHolderImpl jsCallInvokerHolder =
+-        (CallInvokerHolderImpl) getReactApplicationContext().getCatalystInstance().getJSCallInvokerHolder();
++        (CallInvokerHolderImpl) getReactApplicationContext().getJSCallInvokerHolder();
+       nativeInstall(jsContext.get(), jsCallInvokerHolder);
+       return true;
+     } catch (Exception e) {

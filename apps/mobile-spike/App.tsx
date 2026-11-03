@@ -1,7 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
+import { caughtErrors, onCaughtError } from './src/crash-guard';
 import { checkWebFixture, sharePhoneFixture, timeArgon2 } from './src/crypto-runner';
 import { scanDisk } from './src/disk-scan';
 import { Grid } from './src/Grid';
@@ -41,6 +42,16 @@ export default function App() {
   const [tab, setTab] = useState<'tests' | 'grid'>('tests');
   const [busy, setBusy] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<readonly string[]>(caughtErrors());
+
+  useEffect(
+    () =>
+      onCaughtError(() => {
+        setErrors([...caughtErrors()]);
+        setBusy(null);
+      }),
+    [],
+  );
 
   const record = (key: string, value: string) => {
     setResults((prev) => ({ ...prev, [key]: value }));
@@ -124,6 +135,7 @@ export default function App() {
     ...Object.keys(results)
       .sort()
       .map((k) => results[k]),
+    ...(errors.length ? [`Uncaught errors:\n  ${errors.join('\n  ')}`] : []),
   ].join('\n\n');
 
   if (tab === 'grid') {

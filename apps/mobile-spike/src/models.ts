@@ -6,7 +6,6 @@
  */
 import { Asset } from 'expo-asset';
 import { Directory, File, Paths } from 'expo-file-system';
-import { InferenceSession, Tensor } from 'onnxruntime-react-native';
 
 import SFACE_MODEL from '../../web/src/lib/people/models/sface-2021dec-w8.onnx';
 import clipDated from '../fixtures/ml/clip-dated.bin';
@@ -103,6 +102,8 @@ export async function checkModel(
   const report: ModelReport = { model, provider, loadMs: 0, minCosine: 0, runMs: 0 };
   try {
     await nextFrame();
+    // Loaded on first use, so the other tests still run if the model runtime can't start.
+    const { InferenceSession, Tensor } = await import('onnxruntime-react-native');
     const loadStart = Date.now();
     const session = await InferenceSession.create(pathOf(modelUri), {
       executionProviders: [provider],

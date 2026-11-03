@@ -32,8 +32,9 @@ as direct calls into libsodium (no cryptography is implemented there). SHA-256 f
 verifiers goes through libsodium on phones (`digest.native.ts`) because Hermes has no Web
 Crypto either.
 
-`patches/onnxruntime-react-native@1.24.3.patch` fixes the package's Android build for
-Gradle 9, pins ONNX Runtime 1.24.3 instead of `latest.integration`, and stops it shipping
+`patches/onnxruntime-react-native@1.24.3.patch` makes the package's Android module start in
+React Native's bridgeless mode (it called the removed `getCatalystInstance()`, so the app
+closed at launch), fixes its Android build for Gradle 9, pins ONNX Runtime 1.24.3 instead of `latest.integration`, and stops it shipping
 mockito and junit inside the app.
 
 ### Building the Android test app
