@@ -129,11 +129,13 @@ export class ArcafoldApi {
         const res = await this.send('PUT', `${photo(id)}/${part}`, { bytes }, headers);
         const body: unknown = await res.json().catch(() => null);
         return (
-          typeof body === 'object' && body !== null && 'committed' in body && body.committed === true
+          typeof body === 'object' &&
+          body !== null &&
+          'committed' in body &&
+          body.committed === true
         );
       },
-      commitPhoto: (id: string) =>
-        this.call<undefined>('POST', `${photo(id)}/commit`, {}, headers),
+      commitPhoto: (id: string) => this.call<undefined>('POST', `${photo(id)}/commit`, {}, headers),
       deletePhoto: (id: string) => this.call<undefined>('DELETE', photo(id), {}, headers),
     };
   }

@@ -52,8 +52,8 @@ export function BackupPanel({ busy, setBusy, record }: Props) {
       <View style={styles.box}>
         <Text style={styles.heading}>8. Background backup (test account)</Text>
         <Text style={styles.muted}>
-          Sign in with a throwaway Arcafold account. Your newest {COUNT} photos will be uploaded
-          to it, encrypted.
+          Sign in with a throwaway Arcafold account. Your newest {COUNT} photos will be uploaded to
+          it, encrypted.
         </Text>
         <TextInput
           style={styles.input}
@@ -92,8 +92,8 @@ export function BackupPanel({ busy, setBusy, record }: Props) {
     <View style={styles.box}>
       <Text style={styles.heading}>8. Background backup</Text>
       <Text style={styles.muted}>
-        Signed in as {session.email}. Tap Start, then lock the phone or switch apps for a while,
-        and come back.
+        Signed in as {session.email}. Tap Start, then lock the phone or switch apps for a while, and
+        come back.
       </Text>
       <Pressable
         style={[styles.button, busy ? styles.disabled : null]}

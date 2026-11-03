@@ -33,9 +33,7 @@
           "photosPermission": "Arcafold Spike reads your newest photos to test encrypted backup.",
           "savePhotosPermission": false,
           "isAccessMediaLocationEnabled": true,
-          "granularPermissions": [
-            "photo"
-          ]
+          "granularPermissions": ["photo"]
         }
       ]
     ]

@@ -1,9 +1,0 @@
-com.arcafold.backupservice.arcafold-backup-service-pngs-0 /home/user/twofold/apps/mobile-spike/modules/backup-service/android/build/generated/res/pngs/release
-com.arcafold.backupservice.arcafold-backup-service-updated_navigation_xml-1 /home/user/twofold/apps/mobile-spike/modules/backup-service/android/build/generated/updated_navigation_xml/release
-com.arcafold.backupservice.arcafold-backup-service-mergeReleaseResources-2 /home/user/twofold/apps/mobile-spike/modules/backup-service/android/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
-com.arcafold.backupservice.arcafold-backup-service-mergeReleaseResources-3 /home/user/twofold/apps/mobile-spike/modules/backup-service/android/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
-com.arcafold.backupservice.arcafold-backup-service-release-4 /home/user/twofold/apps/mobile-spike/modules/backup-service/android/build/intermediates/merged_res/release/mergeReleaseResources
-com.arcafold.backupservice.arcafold-backup-service-release-5 /home/user/twofold/apps/mobile-spike/modules/backup-service/android/build/intermediates/packaged_res/release/packageReleaseResources
-com.arcafold.backupservice.arcafold-backup-service-main-6 /home/user/twofold/apps/mobile-spike/modules/backup-service/android/src/main/res
-com.arcafold.backupservice.arcafold-backup-service-release-7 /home/user/twofold/apps/mobile-spike/modules/backup-service/android/src/release/res
-gradleHome-0 /root/.gradle
