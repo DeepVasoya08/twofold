@@ -5,13 +5,15 @@ import type { SpaceKeys } from '@arcafold/crypto';
 import { useAccount } from '../app/account';
 import { errorMessage } from '../app/account-ops';
 import { useDownloads } from '../app/downloads';
+import { Link } from '../app/router';
+import { paths } from '../app/routes';
 import { useToast } from '../app/toast';
 import { useUploads } from '../app/uploads';
 import { isViewOnly, trashNote, useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
 import { EmptyState } from '../components/EmptyState';
-import { FileIcon } from '../components/FileIcon';
+import { FileThumb } from '../components/FileIcon';
 import { Icon } from '../components/Icon';
 import { Menu } from '../components/Menu';
 import type { MenuItem } from '../components/Menu';
@@ -145,20 +147,17 @@ export function Files() {
             const name = item.file?.name ?? 'File';
             return (
               <li key={item.id} className="file-row">
-                <button
-                  type="button"
+                <Link
+                  to={paths.file(item.id)}
                   className="file-row__main"
-                  onClick={() => {
-                    downloads.start([item.id]);
-                  }}
-                  aria-label={`Download ${name}`}
+                  aria-label={`Open ${name}`}
                 >
-                  {item.file && <FileIcon file={item.file} />}
+                  <FileThumb item={item} />
                   <span className="file-row__text">
                     <span className="file-row__name">{name}</span>
                     <span className="file-row__meta">{detailsOf(item)}</span>
                   </span>
-                </button>
+                </Link>
                 <Menu
                   label={`More for ${name}`}
                   items={menuFor(item)}

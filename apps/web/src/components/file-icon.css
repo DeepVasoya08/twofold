@@ -70,3 +70,27 @@
 .file-icon--audio {
   --kind: #5b3a78;
 }
+
+.file-thumb {
+  display: inline-flex;
+  flex: none;
+  overflow: hidden;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.file-thumb--lg {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+.file-thumb img,
+.file-thumb span {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}

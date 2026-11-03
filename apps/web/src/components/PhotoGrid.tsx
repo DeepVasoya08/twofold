@@ -6,7 +6,7 @@ import type { PhotoContext } from '../app/routes';
 import type { Selection } from '../app/selection';
 import { formatShortDay } from '../lib/format';
 import type { Photo } from '../mock/data';
-import { FileIcon } from './FileIcon';
+import { FileThumb } from './FileIcon';
 import { Icon } from './Icon';
 import { PhotoImage } from './PhotoImage';
 
@@ -85,7 +85,7 @@ const PhotoTile = memo(function PhotoTile({
       >
         {photo.file ? (
           // A file shows its icon; its stored preview is a stand-in, never fetched.
-          <FileIcon file={photo.file} size="lg" />
+          <FileThumb item={photo} size="lg" />
         ) : (
           <PhotoImage
             photoId={photo.id}

@@ -10,6 +10,7 @@ import { Album } from './screens/Album';
 import { SmartAlbumView } from './screens/SmartAlbum';
 import { Albums } from './screens/Albums';
 import { Favorites } from './screens/Favorites';
+import { FileViewer } from './screens/FileViewer';
 import { Files } from './screens/Files';
 import { Gallery } from './screens/Gallery';
 import { Import } from './screens/Import';
@@ -49,6 +50,7 @@ const titles: Record<Route['name'], string> = {
   'smart-album': 'Album · Arcafold',
   favorites: 'Favorites · Arcafold',
   files: 'Files · Arcafold',
+  file: 'File · Arcafold',
   trash: 'Recently deleted · Arcafold',
   search: 'Search · Arcafold',
   people: 'People · Arcafold',
@@ -115,6 +117,12 @@ function Screen({ route }: { route: Route }) {
       return (
         <AppShell>
           <Favorites />
+        </AppShell>
+      );
+    case 'file':
+      return (
+        <AppShell>
+          <FileViewer fileId={route.fileId} />
         </AppShell>
       );
     case 'files':

@@ -150,12 +150,12 @@ export function UploadDialog({ albumId }: UploadDialogProps) {
         <ul className="upload-list" aria-label="Uploads">
           {items.map((item) => (
             <li key={item.id} className="upload-item">
-              {item.file ? (
+              {item.url ? (
+                <img className="upload-item__thumb" src={item.url} alt="" loading="lazy" />
+              ) : item.file ? (
                 <span className="upload-item__thumb upload-item__thumb--file">
                   <FileIcon file={{ name: item.name, type: '' }} />
                 </span>
-              ) : item.url ? (
-                <img className="upload-item__thumb" src={item.url} alt="" loading="lazy" />
               ) : (
                 <span className="upload-item__thumb" aria-hidden="true" />
               )}

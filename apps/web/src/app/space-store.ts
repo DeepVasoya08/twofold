@@ -3,6 +3,7 @@ import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@arcafold/types
 import type { PhotoPage, PhotoPart } from '@arcafold/types';
 
 import { spaceApi } from '../lib/api';
+import { isJpeg } from '../lib/file-preview';
 import { MAX_FILE_NAME, cleanFileType } from '../lib/file-types';
 import { isPhotoType } from '../lib/photo-types';
 import { viewableCopy } from '../lib/thumbnail-service';
@@ -58,7 +59,11 @@ export interface NewPhoto {
    * Set for a file that isn't a photo: its name. `type` is then any media type but video,
    * `thumb` a stand-in preview the app never shows, and width and height are 0.
    */
-  file?: { name: string };
+  file?: {
+    name: string;
+    /** Whether `thumb` is a real preview (a PDF's first page) rather than a stand-in. */
+    preview?: boolean;
+  };
 }
 
 /** Where an upload is: encrypting on this device, then sending ciphertext. */
@@ -193,6 +198,8 @@ interface PhotoMeta {
   name?: string;
   /** A file's own size in bytes, before encryption (its stored size includes a preview). */
   bytes?: number;
+  /** Set when a file's preview is a real JPEG (a PDF's first page), not a stand-in. */
+  preview?: boolean;
 }
 
 /** How this device reaches a library someone shared with it. */
@@ -257,8 +264,14 @@ function parsePhotoMeta(value: unknown): PhotoMeta | null {
     if (typeof value.bytes === 'number' && Number.isSafeInteger(value.bytes) && value.bytes >= 0) {
       meta.bytes = value.bytes;
     }
+    if (value.preview === true) meta.preview = true;
   }
   return meta;
+}
+
+/** Whether a record's preview is an image: every photo's, and a file's own drawn one. */
+function hasPreview(meta: PhotoMeta): boolean {
+  return meta.kind !== 'file' || meta.preview === true;
 }
 
 /** A photo's type must be a photo format; a file's may be any type, with a usable name. */
@@ -276,7 +289,12 @@ function typeKnown(kind: unknown, name: unknown, type: string): boolean {
 /** A file's name and type, if the record is a file's. */
 function fileOf(meta: PhotoMeta): FileDetails | undefined {
   return meta.kind === 'file' && meta.name !== undefined
-    ? { name: meta.name, type: meta.type, ...(meta.bytes !== undefined && { bytes: meta.bytes }) }
+    ? {
+        name: meta.name,
+        type: meta.type,
+        ...(meta.bytes !== undefined && { bytes: meta.bytes }),
+        ...(meta.preview && { preview: true }),
+      }
     : undefined;
 }
 
@@ -473,10 +491,11 @@ export function remoteStore(
     const open = async (photoId: string | undefined, sealed: Uint8Array | null) => {
       if (photoId === undefined) return;
       const entry = known.get(photoId);
-      // A file's preview is a stand-in, not an image: never handed out as one.
-      const usable = sealed && entry && entry.meta.kind !== 'file';
-      const plain = usable ? await crypto.decryptFile(entry.key, sealed).catch(() => null) : null;
-      deliver(photoId, plain && new Uint8Array(plain));
+      const usable = sealed && entry && hasPreview(entry.meta);
+      const opened = usable ? await crypto.decryptFile(entry.key, sealed).catch(() => null) : null;
+      const plain = opened && new Uint8Array(opened);
+      // A file's preview is only ever handed out as the JPEG this app drew.
+      deliver(photoId, plain && (entry?.meta.kind !== 'file' || isJpeg(plain)) ? plain : null);
     };
     for (let start = 0; start < photoIds.length; start += THUMB_BATCH_MAX) {
       const ids = photoIds.slice(start, start + THUMB_BATCH_MAX);
@@ -567,9 +586,13 @@ export function remoteStore(
       const cached = urls.get(`${photoId}/${part}`);
       if (cached) return cached;
       // A file is never shown as an image: an HTML or SVG file opened from an object URL
-      // could run its script inside the app.
-      if (lookup(photoId).meta.kind === 'file') throw new FormError(NOT_A_PHOTO);
+      // could run its script inside the app. Only a preview this app drew (a JPEG) is shown.
+      const meta = lookup(photoId).meta;
+      if (meta.kind === 'file' && (part === 'full' || !meta.preview)) {
+        throw new FormError(NOT_A_PHOTO);
+      }
       const { plain, entry } = await decrypt(photoId, part);
+      if (meta.kind === 'file' && !isJpeg(plain)) throw new FormError(NOT_A_PHOTO);
       if (part === 'full') {
         // Originals can be large, so only the latest one stays decrypted in memory.
         for (const [name, url] of urls) {
@@ -651,6 +674,7 @@ export function remoteStore(
         meta.kind = 'file';
         meta.name = file.name;
         meta.bytes = photo.full.length;
+        if (file.preview) meta.preview = true;
       }
       if (membership) meta.by = { id: membership.memberId, name: membership.myName };
       const api = await remote();
@@ -685,8 +709,8 @@ export function remoteStore(
         meta,
         membership,
         thumb.length + full.length,
-        // A file's preview is a stand-in, never shown.
-        file ? '' : track(id, 'thumb', photo.thumb, THUMB_TYPE),
+        // A file's stand-in preview is never shown; a drawn one is, like a photo's.
+        file && !meta.preview ? '' : track(id, 'thumb', photo.thumb, THUMB_TYPE),
       );
     },
 
@@ -813,7 +837,7 @@ export function remoteStore(
         width,
         height,
         takenAt,
-        ...(file && { file: { name: file.name } }),
+        ...(file && { file: { name: file.name, ...(file.preview && { preview: true }) } }),
       };
     },
 

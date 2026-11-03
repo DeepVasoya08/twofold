@@ -212,10 +212,13 @@ other accounts; see [Sharing](#sharing).
   own key, in the same table and R2 layout. The sealed record adds `kind: "file"` and the
   file's `name` (folders and control characters stripped, at most 120 characters); its
   `type` is any well-formed media type. The server can't tell a file from a photo: it sees
-  the same record sizes and the same two files. A file has no real preview yet, so it stores
-  a stand-in of 16 to 48 KiB (zeros, encrypted like any preview) and never a missing or tiny
-  one, which would single files out. Apps from before files existed leave these records
-  out, since their type isn't a photo format.
+  the same record sizes and the same two files. A PDF's first page is drawn as its preview on
+  the uploading device (pdf.js, see below), as a JPEG padded with zeros after its end to at
+  least 16 KiB; any other file, or a PDF the device couldn't draw in time, stores a stand-in
+  of 16 to 48 KiB (zeros, encrypted like any preview). Neither is ever missing or tiny, which
+  would single files out, and the sealed record says `preview: true` only for a drawn one.
+  Apps from before files existed leave these records out, since their type isn't a photo
+  format.
 - **Moving** a photo to the other space downloads and decrypts it, adds it to the other
   space under a new id and key, then deletes the original. The two copies share nothing
   the server can match.
@@ -606,10 +609,28 @@ so photos can later be found by describing them. The server stores only cipherte
 - Only raster photo formats are stored or shown as photos (JPEG, PNG, GIF, WebP, HEIC, AVIF;
   `apps/web/src/lib/photo-types.ts`). An SVG is a document that can carry script, so it is
   never a photo: it is kept as a file, and a photo record naming it is left out.
-- Files are never shown inside the app. The store refuses to turn a file into an object
-  URL or hand out its preview (an HTML or SVG file opened from a same-origin object URL
-  could run script in the app), so the only way out is a download, saved under the file's
-  own name.
+- A file is never turned into an object URL or shown as a page (an HTML or SVG file opened
+  from a same-origin object URL could run script in the app). The store refuses a file's
+  original as an image, and hands out its preview only when the record says it was drawn
+  and the decrypted bytes start like a JPEG, so a tampered or hand-made record can't get
+  anything else into an `<img>`.
+- The file viewer (`/files/:id`) decrypts a file into memory only and lets it go when it
+  closes. PDFs are drawn by Mozilla's pdf.js (`pdfjs-dist`, Apache-2.0), loaded only when a
+  PDF is opened or previewed. It reads the bytes in its own Web Worker, never runs a PDF's
+  scripts (its scripting sandbox isn't loaded), doesn't draw XFA forms, and has no `eval`
+  path; its fonts, character maps and decoders are served from Arcafold's own origin under
+  `/pdfjs/`, so the content security policy stays `'self'` and nothing is fetched from a
+  third party. Text files and HTML show as plain text in a `<pre>`; a Word (.docx) document
+  shows its paragraphs as plain text, read from `word/document.xml` with the app's own zip
+  reader. Nothing a file contains is ever rendered as markup. Any other kind of file can
+  only be downloaded, saved under its own name.
+- Previews adapt to the device (`apps/web/src/lib/file-preview.ts`). A phone with 4 GB of
+  memory or less or 4 cores or fewer, data saver, or a preview that already ran out of time
+  on this device makes the device "light": it draws a 240 px preview within 3 seconds
+  (otherwise 480 px within 8 seconds) and reads PDFs a page at a time at a lower resolution.
+  A preview that runs late is dropped and the file shows its icon. Every other device only
+  ever shows the small preview stored with the file. A preview can't be added later from a
+  faster device, since a committed photo's files can't be overwritten.
 
 ## Still to design
 

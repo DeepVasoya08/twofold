@@ -46,6 +46,7 @@ export function redirectFor(
     case 'smart-album':
     case 'favorites':
     case 'files':
+    case 'file':
     case 'trash':
     case 'search':
     case 'people':

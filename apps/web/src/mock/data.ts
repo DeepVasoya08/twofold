@@ -69,6 +69,8 @@ export interface FileDetails {
   type: string;
   /** The file's own size in bytes, as it was added. */
   bytes?: number;
+  /** Whether it has a preview to show (a PDF's first page); otherwise its icon shows. */
+  preview?: boolean;
 }
 
 export interface Album {
