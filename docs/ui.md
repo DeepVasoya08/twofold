@@ -127,7 +127,12 @@ exists but is low-key (Settings → Sharing).
   was added. Tapping a file opens it at `/files/:id`: a PDF page by page (a page at a time,
   with Previous and Next, on light phones), text and HTML as plain text, a Word document as
   its paragraphs, and anything else as "No preview for this kind of file" with a
-  **Download** button, which every file has. Its menu has **Download**, **Move
+  **Download** button, which every file has. Files are sorted on the device that adds them
+  (while Smart search is on there) into Receipts and invoices, Bank and finance, Tax, IDs
+  and travel, Medical, Work and contracts, School, Notes and Other; once there's more than
+  one category, a row of filters (All, then each category with its count) sits above the
+  list, and in All each row also says its category. Its menu has **Download**, **Move to
+  category** (nine choices; files like it go there from then on), **Move
   to private space** (or **Move to library**) and **Delete**, which sends it to Recently
   deleted like a photo. Files never appear in the timeline, albums, search or People, and
   count against the same 1 GB. The phone tab bar is Photos, Albums, Files, People and

@@ -64,3 +64,51 @@
   flex: none;
   margin-right: 4px;
 }
+
+.file-categories {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 2px 0 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.file-categories__option {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.file-categories__option[aria-pressed='true'] {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--surface);
+}
+
+.file-categories__count {
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+.category-choices {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.category-choices .checkbox {
+  margin: 0;
+}

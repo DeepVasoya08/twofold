@@ -4,6 +4,9 @@ import type { PhotoPage, PhotoPart } from '@arcafold/types';
 
 import { spaceApi } from '../lib/api';
 import { isJpeg } from '../lib/file-preview';
+import { isCategory } from '../lib/file-sort/categories';
+import type { Category } from '../lib/file-sort/categories';
+import { parseKeywords } from '../lib/file-sort/words';
 import { MAX_FILE_NAME, cleanFileType } from '../lib/file-types';
 import { isPhotoType } from '../lib/photo-types';
 import { viewableCopy } from '../lib/thumbnail-service';
@@ -63,6 +66,12 @@ export interface NewPhoto {
     name: string;
     /** Whether `thumb` is a real preview (a PDF's first page) rather than a stand-in. */
     preview?: boolean;
+    /** The category it was sorted into, if it was (lib/file-sort). */
+    category?: Category;
+    /** The words kept to learn from, when it was sorted. */
+    words?: string[];
+    /** Whether you chose the category yourself, so it teaches the sorting. */
+    sortedByYou?: boolean;
   };
 }
 
@@ -200,6 +209,12 @@ interface PhotoMeta {
   bytes?: number;
   /** Set when a file's preview is a real JPEG (a PDF's first page), not a stand-in. */
   preview?: boolean;
+  /** A file's category, worked out on the device that added it or chosen by you. */
+  category?: Category;
+  /** A few words saying what a file is about, kept to learn from how you sort. */
+  words?: string[];
+  /** Set when you chose the category yourself. */
+  sorted?: 'you';
 }
 
 /** How this device reaches a library someone shared with it. */
@@ -265,6 +280,10 @@ function parsePhotoMeta(value: unknown): PhotoMeta | null {
       meta.bytes = value.bytes;
     }
     if (value.preview === true) meta.preview = true;
+    if (isCategory(value.category)) meta.category = value.category;
+    const words = parseKeywords(value.words);
+    if (words) meta.words = words;
+    if (value.sorted === 'you') meta.sorted = 'you';
   }
   return meta;
 }
@@ -294,6 +313,9 @@ function fileOf(meta: PhotoMeta): FileDetails | undefined {
         type: meta.type,
         ...(meta.bytes !== undefined && { bytes: meta.bytes }),
         ...(meta.preview && { preview: true }),
+        ...(meta.category && { category: meta.category }),
+        ...(meta.words && { words: meta.words }),
+        ...(meta.sorted && { sortedByYou: true }),
       }
     : undefined;
 }
@@ -309,6 +331,27 @@ function parseAlbumMeta(value: unknown): AlbumMeta | null {
 const NOT_A_PHOTO = 'That’s a file, not a photo. Download it to open it.';
 
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
+
+/**
+ * Every photo record is at least this many bytes before sealing, so a file's (with its name,
+ * category and words) is the same size as a photo's and the server can't pick files out.
+ */
+export const PHOTO_RECORD_MIN = 1000;
+
+/**
+ * A photo's metadata, encoded at PHOTO_RECORD_MIN bytes or more: spaces fill a `pad` field
+ * that's ignored when read. A file's words are dropped, last first, rather than let its
+ * record grow past that.
+ */
+export function encodePhotoMeta(meta: PhotoMeta): Uint8Array<ArrayBuffer> {
+  let fitted = meta;
+  while (fitted.words && fitted.words.length > 0 && encode(fitted).length > PHOTO_RECORD_MIN) {
+    fitted = { ...fitted, words: fitted.words.slice(0, -1) };
+  }
+  const bytes = encode({ ...fitted, pad: '' });
+  const missing = PHOTO_RECORD_MIN - bytes.length;
+  return missing > 0 ? encode({ ...fitted, pad: ' '.repeat(missing) }) : bytes;
+}
 
 const ALBUM_GONE = 'That album isn’t here anymore.';
 
@@ -411,7 +454,7 @@ export function remoteStore(
 
   const sealPhoto = async (id: string, meta: PhotoMeta) => {
     const crypto = await loadCrypto();
-    return crypto.sealRecord(await access(), 'photo', id, encode(meta));
+    return crypto.sealRecord(await access(), 'photo', id, encodePhotoMeta(meta));
   };
 
   const sealAlbum = async (id: string, meta: AlbumMeta) => {
@@ -437,12 +480,15 @@ export function remoteStore(
   const listInAlbum = async (shared: SpaceAccess, albumId: string, photoId: string) => {
     const entry = lookup(photoId);
     const crypto = await loadCrypto();
+    // What you've taught the sorting stays yours: shared copies carry no words.
     const meta: PhotoMeta = { ...entry.meta, favorite: false, albumIds: [albumId] };
+    delete meta.words;
+    delete meta.sorted;
     const api = await remote();
     await api.putAlbumItem(
       albumId,
       photoId,
-      await crypto.sealRecord(shared, 'photo', photoId, encode(meta)),
+      await crypto.sealRecord(shared, 'photo', photoId, encodePhotoMeta(meta)),
     );
   };
 
@@ -675,6 +721,9 @@ export function remoteStore(
         meta.name = file.name;
         meta.bytes = photo.full.length;
         if (file.preview) meta.preview = true;
+        if (file.category) meta.category = file.category;
+        if (file.words && file.words.length > 0) meta.words = file.words;
+        if (file.sortedByYou) meta.sorted = 'you';
       }
       if (membership) meta.by = { id: membership.memberId, name: membership.myName };
       const api = await remote();
@@ -717,6 +766,11 @@ export function remoteStore(
     update: async (photo) => {
       const entry = lookup(photo.id);
       const meta: PhotoMeta = { ...entry.meta, favorite: photo.favorite, albumIds: photo.albumIds };
+      const category = photo.file?.category;
+      if (entry.meta.kind === 'file' && category && photo.file?.sortedByYou) {
+        meta.category = category;
+        meta.sorted = 'you';
+      }
       const api = await remote();
       await api.updatePhoto(photo.id, await sealPhoto(photo.id, meta));
       known.set(photo.id, { ...entry, meta });
@@ -837,7 +891,15 @@ export function remoteStore(
         width,
         height,
         takenAt,
-        ...(file && { file: { name: file.name, ...(file.preview && { preview: true }) } }),
+        ...(file && {
+          file: {
+            name: file.name,
+            ...(file.preview && { preview: true }),
+            ...(file.category && { category: file.category }),
+            ...(file.words && { words: file.words }),
+            ...(file.sortedByYou && { sortedByYou: true }),
+          },
+        }),
       };
     },
 

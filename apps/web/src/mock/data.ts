@@ -1,3 +1,4 @@
+import type { Category } from '../lib/file-sort/categories';
 import { landscapeDataUri, paletteNames } from './art';
 import type { Palette } from './art';
 
@@ -71,6 +72,12 @@ export interface FileDetails {
   bytes?: number;
   /** Whether it has a preview to show (a PDF's first page); otherwise its icon shows. */
   preview?: boolean;
+  /** Its category, if it has been sorted (lib/file-sort). */
+  category?: Category;
+  /** A few words saying what it's about, kept to learn from how you sort. */
+  words?: string[];
+  /** Whether you chose its category yourself. */
+  sortedByYou?: boolean;
 }
 
 export interface Album {

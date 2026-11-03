@@ -206,6 +206,9 @@ const icons = {
       <path d="M14 3v5h5M9 13h6M9 17h4" />
     </>
   ),
+  folder: (
+    <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.6l2 2.2h7.4A2.5 2.5 0 0 1 21 9.7v8.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5z" />
+  ),
   cloud: <path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.5 9.5 4.5 4.5 0 0 0 7 18.5z" />,
 } satisfies Record<string, ReactNode>;
 

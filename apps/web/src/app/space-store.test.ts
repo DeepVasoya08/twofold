@@ -182,6 +182,88 @@ describe('remoteStore', () => {
     expect((await later.thumbs([fake.id])).size).toBe(0);
   });
 
+  it('keeps a file’s category and words sealed, and marks a category you chose', async () => {
+    const { server, space } = await setUp();
+    const store = remoteStore(space, server.api);
+    const added = await store.add(
+      { ...FILE, file: { name: 'bill.pdf', category: 'receipts', words: ['bill', 'electricity'] } },
+      [],
+    );
+    expect(added.file).toMatchObject({ category: 'receipts', words: ['bill', 'electricity'] });
+    expect(added.file?.sortedByYou).toBeUndefined();
+    const meta = fromBase64Url(server.photos.get(added.id)?.photo.meta ?? '') ?? new Uint8Array();
+    expect(contains(meta, bytes('receipts'))).toBe(false);
+    expect(contains(meta, bytes('electricity'))).toBe(false);
+
+    const later = remoteStore(space, server.api);
+    const [listed] = (await later.list()).photos;
+    if (!listed?.file) throw new Error('missing');
+    expect(listed.file).toMatchObject({ category: 'receipts', words: ['bill', 'electricity'] });
+    await later.update({
+      ...listed,
+      file: { ...listed.file, category: 'finance', sortedByYou: true },
+    });
+    const [moved] = (await remoteStore(space, server.api).list()).photos;
+    expect(moved?.file).toMatchObject({ category: 'finance', sortedByYou: true });
+    // Moving it to the other space keeps how it was sorted.
+    expect((await later.read(added.id)).file).toMatchObject({
+      category: 'finance',
+      sortedByYou: true,
+      words: ['bill', 'electricity'],
+    });
+  });
+
+  it('leaves out a category or words it doesn’t recognise', async () => {
+    const { server, space } = await setUp();
+    const added = await remoteStore(space, server.api).add(FILE, []);
+    const entry = server.photos.get(added.id);
+    if (!entry) throw new Error('missing');
+    const access = await ownerAccess(space);
+    const meta = JSON.parse(
+      new TextDecoder().decode(await openRecord(access, 'photo', added.id, entry.photo.meta)),
+    ) as Record<string, unknown>;
+    entry.photo.meta = await sealRecord(
+      access,
+      'photo',
+      added.id,
+      new TextEncoder().encode(
+        JSON.stringify({ ...meta, category: 'secret', words: [1, 2], sorted: 'them' }),
+      ),
+    );
+    const [listed] = (await remoteStore(space, server.api).list()).photos;
+    expect(listed?.file).toEqual({
+      name: FILE.file?.name,
+      type: FILE.type,
+      bytes: FILE.full.length,
+    });
+  });
+
+  it('seals a photo’s record and a file’s at the same size', async () => {
+    const { server, space } = await setUp();
+    const store = remoteStore(space, server.api);
+    const photo = await store.add(PHOTO, []);
+    const file = await store.add(
+      {
+        ...FILE,
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        file: {
+          name: `${'東京'.repeat(55)}.docx`,
+          category: 'work',
+          words: Array.from({ length: 16 }, (_, i) => `keyword${String(i).padStart(12, '0')}`),
+        },
+      },
+      [],
+    );
+    const sizeOf = (id: string) => server.photos.get(id)?.photo.meta.length;
+    expect(sizeOf(file.id)).toBe(sizeOf(photo.id));
+    // Words that would make the record bigger are dropped, never the record grown.
+    const [listed] = (await remoteStore(space, server.api).list()).photos.filter(
+      (each) => each.id === file.id,
+    );
+    expect(listed?.file?.words?.length).toBeLessThan(16);
+    expect(listed?.file?.words?.[0]).toBe('keyword000000000000');
+  });
+
   it('refuses a file with a malformed type, and leaves out records claiming one', async () => {
     const { server, space } = await setUp();
     const store = remoteStore(space, server.api);
