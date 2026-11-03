@@ -12,9 +12,11 @@ import { useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
 import { EmptyState } from '../components/EmptyState';
+import { FileResults } from '../components/FileResults';
 import { TextField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
+import { findFiles } from '../lib/file-sort/match';
 import { pluralize } from '../lib/format';
 import type { ParsedQuery } from '../lib/search/query';
 import { SEARCH_RESOURCES } from '../lib/search/resources';
@@ -61,15 +63,24 @@ export function Search() {
   const hasWords = (query?.what ?? '') !== '';
   const looksAlike = query !== null && (query.like !== null || query.taught.length > 0);
   const notIndexed = search.progress.total - search.progress.done;
+  // Files are found by their names and words on this device, whatever Smart search does.
+  const files =
+    query && find.saved
+      ? findFiles(
+          (state.files ?? []).filter((item) => !item.sharedAlbum),
+          find.saved.text,
+          query,
+        )
+      : [];
 
   return (
     <div className="page">
       <PageHeader title="Search" subtitle="Searches run on this device and aren’t saved." />
 
       {!query && (
-        <EmptyState icon="search" title="Search your photos">
-          Type in the search box above, from any screen. Try a place, a person, a date or what’s in
-          the photo.
+        <EmptyState icon="search" title="Search your photos and files">
+          Type in the search box above, from any screen. Try a place, a person, a date, what’s in
+          the photo, or a file’s name.
         </EmptyState>
       )}
 
@@ -149,12 +160,16 @@ export function Search() {
         </button>
       )}
 
+      {files.length > 0 && <FileResults files={files} />}
+
       {found && (
         <>
           {best.length === 0 && more.length === 0 ? (
-            <EmptyState icon="search" title="No matches">
-              Try other words, or tap a part of the search above to leave it out.
-            </EmptyState>
+            files.length > 0 ? null : (
+              <EmptyState icon="search" title="No matches">
+                Try other words, or tap a part of the search above to leave it out.
+              </EmptyState>
+            )
           ) : (
             <>
               <p className="search-count" role="status">

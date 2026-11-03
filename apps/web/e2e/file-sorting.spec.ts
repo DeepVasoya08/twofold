@@ -90,3 +90,29 @@ test('leaves files unsorted while Smart search is off on this device', async ({ 
     page.getByRole('group', { name: 'Show category' }).getByRole('button', { name: 'Medical 1' }),
   ).toBeVisible();
 });
+
+test('the search box finds files by name, category and the words inside', async ({ page }) => {
+  await signUp(page);
+  await goTo(page, 'Files');
+  await addFiles(page, [BILL, LAB]);
+  await expect(
+    page.getByRole('region', { name: 'Files' }).getByText('Lab report.txt'),
+  ).toBeVisible();
+
+  const box = page.getByRole('searchbox', { name: 'Search your photos and files' });
+  const found = page.getByRole('list', { name: 'Files found' });
+  await box.fill('electricity bills');
+  await box.press('Enter');
+  await expect(found.getByRole('link')).toHaveCount(1);
+  await expect(found.getByText('Electricity bill March.txt')).toBeVisible();
+
+  // By category, and by a word only inside the file.
+  await box.fill('medical');
+  await box.press('Enter');
+  await expect(found.getByText('Lab report.txt')).toBeVisible();
+  await box.fill('haemoglobin');
+  await box.press('Enter');
+  await expect(found.getByText('Lab report.txt')).toBeVisible();
+  await found.getByRole('link', { name: 'Open Lab report.txt' }).click();
+  await expect(page.getByLabel('File text')).toContainText('Haemoglobin');
+});

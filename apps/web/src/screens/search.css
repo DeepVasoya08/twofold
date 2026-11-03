@@ -98,3 +98,12 @@
   display: block;
   margin: 24px auto 0;
 }
+
+.search-files {
+  margin-bottom: 28px;
+}
+
+.search-files__title {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
