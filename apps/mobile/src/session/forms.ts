@@ -33,3 +33,10 @@ export function strengthTone(score: number): 'error' | 'warning' | 'success' {
   if (score >= 3) return 'success';
   return score === 2 ? 'warning' : 'error';
 }
+
+const SIGN_UP_ORDER: readonly (keyof SignUpValues)[] = ['name', 'email', 'password', 'confirm'];
+
+/** The first field, top to bottom, with a problem: the one to take the person back to. */
+export function firstProblem(errors: SignUpErrors): keyof SignUpValues | null {
+  return SIGN_UP_ORDER.find((key) => errors[key]) ?? null;
+}

@@ -3,7 +3,7 @@ import type { TextInputInstance } from 'react-native';
 
 import { useAccount } from '../session/account';
 import { signInError } from '../session/forms';
-import { Button, Field, Note, Screen, useSubmit } from '../ui/kit';
+import { Banner, Button, Field, Note, Screen, useSubmit } from '../ui/kit';
 
 /** Email and either password: the one the password fits decides which space opens. */
 export function SignIn({ onSignUp }: { onSignUp: () => void }) {
@@ -26,7 +26,7 @@ export function SignIn({ onSignUp }: { onSignUp: () => void }) {
   };
 
   return (
-    <Screen showLogo title="Sign in" subtitle="Your password unlocks your photos on this phone.">
+    <Screen branded title="Sign in" subtitle="Your password unlocks your photos on this phone.">
       <Field
         label="Email"
         value={email}
@@ -47,13 +47,13 @@ export function SignIn({ onSignUp }: { onSignUp: () => void }) {
           setPassword(text);
           setError(null);
         }}
-        secureTextEntry
+        secure
         autoComplete="current-password"
         textContentType="password"
         onSubmitEditing={submit}
         returnKeyType="go"
       />
-      {error ? <Note error>{error}</Note> : null}
+      {error ? <Banner>{error}</Banner> : null}
       <Button label="Sign in" busyLabel="Signing in…" busy={busy} onPress={submit} />
       <Button kind="link" label="Create an account" onPress={onSignUp} />
       {remembered ? (

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { useAccount } from '../session/account';
-import { Button, Field, Note, Screen, useSubmit } from '../ui/kit';
+import { Banner, Button, Field, Note, Screen, useSubmit } from '../ui/kit';
 
 /**
  * The locked app: one password field, as on the web. The same field opens either space; the
@@ -27,7 +27,7 @@ export function Unlock() {
 
   return (
     <Screen
-      showLogo
+      branded
       title={`Welcome back, ${name}`}
       subtitle="Arcafold locked itself to keep your photos safe. Enter your password to open it."
     >
@@ -39,14 +39,14 @@ export function Unlock() {
           setPassword(text);
           setError(null);
         }}
-        secureTextEntry
+        secure
         autoComplete="current-password"
         textContentType="password"
         autoFocus
         onSubmitEditing={submit}
         returnKeyType="go"
       />
-      {error ? <Note error>{error}</Note> : null}
+      {error ? <Banner>{error}</Banner> : null}
       <Button label="Unlock" busyLabel="Unlocking…" busy={busy} onPress={submit} />
       <Button
         kind="link"
