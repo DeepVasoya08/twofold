@@ -72,7 +72,7 @@ test('leaves files unsorted while Smart search is off on this device', async ({ 
   await goTo(page, 'Settings');
   await page
     .getByRole('region', { name: 'Search', exact: true })
-    .getByRole('button', { name: 'Turn off' })
+    .getByRole('switch', { name: 'Smart search' })
     .click();
   await goTo(page, 'Files');
   await addFiles(page, [BILL, LAB]);

@@ -42,7 +42,10 @@ test('Smart search is on by default, says plainly when it can’t get its resour
   await goTo(page, 'Settings');
   const search = page.getByRole('region', { name: 'Search', exact: true });
   await expect(search).toContainText('Smart search');
-  await search.getByRole('button', { name: 'Turn off' }).click();
+  const smartSearch = search.getByRole('switch', { name: 'Smart search' });
+  await expect(smartSearch).toBeChecked();
+  await smartSearch.click();
+  await expect(smartSearch).not.toBeChecked();
   await expect(search).toContainText('Find photos by what’s in them');
   await expect(card(page)).toHaveCount(0);
 
@@ -53,8 +56,8 @@ test('Smart search is on by default, says plainly when it can’t get its resour
   await expect(
     page
       .getByRole('region', { name: 'Search', exact: true })
-      .getByRole('button', { name: 'Turn on' }),
-  ).toBeVisible();
+      .getByRole('switch', { name: 'Smart search' }),
+  ).not.toBeChecked();
   await expect(card(page)).toHaveCount(0);
 });
 
@@ -110,21 +113,21 @@ test('document photos can be hidden from Photos on this device, while Smart sear
   await signUp(page);
   await goTo(page, 'Settings');
   const search = page.getByRole('region', { name: 'Search', exact: true });
-  const hide = search.getByRole('button', { name: 'Hide document photos from Photos' });
-  await expect(hide).toHaveAttribute('aria-pressed', 'false');
+  const hide = search.getByRole('switch', { name: 'Hide document photos from Photos' });
+  await expect(hide).not.toBeChecked();
   await expect(search).toContainText('show in Photos and in Files');
 
   await hide.click();
-  await expect(hide).toHaveAttribute('aria-pressed', 'true');
+  await expect(hide).toBeChecked();
   await expect(search).toContainText('show only in Files');
 
   // The choice stays with this device.
   await lock(page);
   await unlockWith(page, MAIN_PASSWORD);
   await goTo(page, 'Settings');
-  await expect(hide).toHaveAttribute('aria-pressed', 'true');
+  await expect(hide).toBeChecked();
 
   // It needs Smart search, which tells document photos apart.
-  await search.getByRole('button', { name: 'Turn off' }).click();
+  await search.getByRole('switch', { name: 'Smart search' }).click();
   await expect(hide).toHaveCount(0);
 });

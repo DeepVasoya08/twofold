@@ -7,6 +7,7 @@ import { useDocumentPhotosView } from '../app/views';
 import { pluralize } from '../lib/format';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
+import { Switch } from './Switch';
 import { SEARCH_DOWNLOAD_MB } from './SmartSearchCard';
 import { errorMessage } from '@arcafold/core/errors';
 
@@ -79,16 +80,7 @@ export function SearchSettings() {
           <span className="settings-row__description">{description}</span>
         </div>
         <div className="settings-row__action">
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm"
-            aria-pressed={search.enabled}
-            onClick={() => {
-              search.setEnabled(!search.enabled);
-            }}
-          >
-            {search.enabled ? 'Turn off' : 'Turn on'}
-          </button>
+          <Switch label="Smart search" checked={search.enabled} onChange={search.setEnabled} />
         </div>
       </div>
       {search.enabled && (
@@ -105,17 +97,13 @@ export function SearchSettings() {
             </span>
           </div>
           <div className="settings-row__action">
-            <button
-              type="button"
-              className="btn btn--secondary btn--sm"
-              aria-pressed={documents === 'hide'}
-              aria-label="Hide document photos from Photos"
-              onClick={() => {
-                setDocuments(documents === 'hide' ? 'show' : 'hide');
+            <Switch
+              label="Hide document photos from Photos"
+              checked={documents === 'hide'}
+              onChange={(hide) => {
+                setDocuments(hide ? 'hide' : 'show');
               }}
-            >
-              {documents === 'hide' ? 'Turn off' : 'Turn on'}
-            </button>
+            />
           </div>
         </div>
       )}

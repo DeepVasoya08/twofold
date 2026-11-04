@@ -13,7 +13,7 @@ export const AUTO_LOCK_CHOICES: readonly { minutes: AutoLockMinutes; label: stri
   { minutes: 0, label: 'When I close the tab' },
 ];
 
-export const DEFAULT_AUTO_LOCK: AutoLockMinutes = 15;
+export const DEFAULT_AUTO_LOCK: AutoLockMinutes = 1;
 
 export const AUTO_LOCK_STORAGE_KEY = 'arcafold.autoLockMinutes';
 

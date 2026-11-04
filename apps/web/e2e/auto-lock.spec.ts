@@ -12,17 +12,20 @@ async function chooseAutoLock(page: Page, label: string): Promise<void> {
 
 test('the auto-lock choice is kept after leaving Settings and reloading', async ({ page }) => {
   await signUp(page);
-  await chooseAutoLock(page, '1 minute');
+  await goTo(page, 'Settings');
+  // A minute unless chosen otherwise.
+  await expect(autoLockSelect(page)).toHaveValue('1');
+  await chooseAutoLock(page, '5 minutes');
 
   await goTo(page, 'Photos');
   await goTo(page, 'Settings');
-  await expect(autoLockSelect(page)).toHaveValue('1');
+  await expect(autoLockSelect(page)).toHaveValue('5');
 
   await page.reload();
   await unlockWith(page, MAIN_PASSWORD);
   await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
   await goTo(page, 'Settings');
-  await expect(autoLockSelect(page)).toHaveValue('1');
+  await expect(autoLockSelect(page)).toHaveValue('5');
 });
 
 test('Arcafold locks after the chosen time without use', async ({ page }) => {

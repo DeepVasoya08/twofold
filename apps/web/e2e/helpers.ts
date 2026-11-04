@@ -5,6 +5,9 @@ import type { Locator, Page } from '@playwright/test';
 export const MAIN_PASSWORD = 'Correct-Horse-Battery-9';
 export const PRIVATE_PASSWORD = 'another-secret-phrase-42';
 
+/** How long the smart features question is read before its buttons appear (READ_SECONDS). */
+export const SMART_FEATURES_READ_MS = 10_000;
+
 export function freshEmail(): string {
   return `e2e-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 }
@@ -18,8 +21,11 @@ export async function signUp(
   email = freshEmail(),
   password = MAIN_PASSWORD,
   name = 'Sam',
-  smartFeatures: 'Turn on' | 'Not now' = 'Not now',
+  /** null leaves the question open. */
+  smartFeatures: 'Turn on' | 'Not now' | null = 'Not now',
 ): Promise<{ email: string; words: string }> {
+  // A controllable clock, so the smart features question's reading time can be skipped.
+  await page.clock.install();
   await page.goto('/signup');
   await page.getByLabel('Your name').fill(name);
   await page.getByLabel('Email').fill(email);
@@ -35,16 +41,21 @@ export async function signUp(
   await page.getByRole('button', { name: 'Continue' }).click();
 
   await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
-  await answerSmartFeatures(page, smartFeatures);
+  if (smartFeatures) await answerSmartFeatures(page, smartFeatures);
   return { email, words };
 }
 
-/** Answers the smart features question shown after sign-up. */
+/**
+ * Answers the smart features question shown after sign-up. Its buttons appear only after
+ * a few seconds of reading, which the page's clock (installed before it loaded) skips.
+ */
 export async function answerSmartFeatures(
   page: Page,
   answer: 'Turn on' | 'Not now' = 'Not now',
 ): Promise<void> {
   const question = page.getByRole('dialog', { name: 'Smart features, on your device' });
+  await expect(question).toBeVisible();
+  await page.clock.fastForward(SMART_FEATURES_READ_MS);
   await question.getByRole('button', { name: answer }).click();
   await expect(question).toBeHidden();
 }
@@ -99,7 +110,7 @@ export async function uploadPhotos(
 
 export async function goTo(
   page: Page,
-  link: 'Photos' | 'Albums' | 'Files' | 'People' | 'Favorites' | 'Settings',
+  link: 'Photos' | 'Albums' | 'Files' | 'People' | 'Favorites' | 'Recently deleted' | 'Settings',
 ) {
   await page.getByRole('link', { name: link }).filter({ visible: true }).first().click();
 }

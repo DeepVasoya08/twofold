@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { goTo, signUp, uploadPhotos } from './helpers';
+import { MAIN_PASSWORD, goTo, signUp, unlockWith, uploadPhotos } from './helpers';
 
 test('every screen renders under the production CSP without errors', async ({ page }) => {
   const errors: string[] = [];
@@ -197,4 +197,71 @@ test.describe('on a phone', () => {
     const width = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(width).toBeLessThanOrEqual(390);
   });
+
+  test('Recently deleted is in Settings, not Albums', async ({ page }) => {
+    await signUp(page);
+    await goTo(page, 'Albums');
+    await expect(page.getByRole('link', { name: 'Favorites' })).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /Recently deleted/ }).filter({ visible: true }),
+    ).toHaveCount(0);
+
+    await goTo(page, 'Settings');
+    await page.getByRole('button', { name: 'Open Recently deleted' }).click();
+    await expect(page).toHaveURL('/recently-deleted');
+    await expect(page.getByRole('heading', { level: 1, name: 'Recently deleted' })).toBeVisible();
+  });
+
+  test('the search box stays below the top bar while the page scrolls', async ({ page }) => {
+    await signUp(page);
+    // The search box is always there, so the top bar has no search button.
+    await expect(page.getByRole('banner').getByRole('button', { name: 'Search' })).toHaveCount(0);
+
+    await goTo(page, 'Settings');
+    const search = page.getByRole('search');
+    const before = await search.boundingBox();
+    await page.mouse.wheel(0, 1500);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(500);
+    const after = await search.boundingBox();
+    expect(after?.y).toBe(before?.y);
+    // Nothing shows through it: the first thing under it is its own band.
+    const x = (after?.x ?? 0) + 4;
+    const y = (after?.y ?? 0) + 4;
+    const topmost = await page.evaluate(
+      ([px, py]) => document.elementFromPoint(px ?? 0, py ?? 0)?.closest('.shell__search') !== null,
+      [x, y],
+    );
+    expect(topmost).toBe(true);
+  });
+});
+
+test('the sidebar folds down to icons and remembers it', async ({ page }) => {
+  await signUp(page);
+  const sidebar = page.locator('.shell__sidebar');
+  const wide = (await sidebar.boundingBox())?.width ?? 0;
+  await expect(sidebar.getByText('Albums', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+  await expect.poll(async () => (await sidebar.boundingBox())?.width ?? 0).toBeLessThan(wide / 2);
+  // Names are gone from view, but every link still says where it goes.
+  await expect(sidebar.getByText('Albums', { exact: true })).not.toBeInViewport();
+  await sidebar.getByRole('link', { name: 'Albums' }).click();
+  await expect(page).toHaveURL('/albums');
+
+  await page.reload();
+  await unlockWith(page, MAIN_PASSWORD);
+  await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
+  await page.getByRole('button', { name: 'Expand sidebar' }).click();
+  await expect(sidebar.getByText('Albums', { exact: true })).toBeVisible();
+});
+
+test('the search box stays at the top while photos scroll', async ({ page }) => {
+  await signUp(page);
+  await goTo(page, 'Settings');
+  const search = page.getByRole('search');
+  const before = await search.boundingBox();
+  await page.mouse.move(600, 400);
+  await page.mouse.wheel(0, 1500);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(300);
+  expect((await search.boundingBox())?.y).toBe(before?.y);
 });

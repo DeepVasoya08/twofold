@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { expect, test } from '@playwright/test';
 
 import {
@@ -130,10 +132,21 @@ test('a new recovery key replaces the old one', async ({ page }) => {
   await expect(
     page.getByRole('heading', { level: 1, name: 'Save your recovery key' }),
   ).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Recovery key' }).getByRole('listitem')).toHaveCount(
-    12,
-  );
+  const wordList = page.getByRole('list', { name: 'Recovery key' }).getByRole('listitem');
+  await expect(wordList).toHaveCount(12);
+  const words = await wordList.allTextContents();
+
+  // Ticking the box also saves the words to this device, once.
+  const downloading = page.waitForEvent('download');
   await page.getByLabel("I've saved my recovery key somewhere safe").check();
+  const saved = await downloading;
+  expect(saved.suggestedFilename()).toBe('arcafold-recovery-key.txt');
+  const text = await readFile(await saved.path(), 'utf8');
+  for (const [index, word] of words.entries()) {
+    expect(text).toContain(`${String(index + 1)}. ${word}\n`);
+  }
+  await expect(page.getByText('Also downloaded to this device')).toBeVisible();
+
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByText('New recovery key saved')).toBeVisible();
   await expect(page).toHaveURL('/settings');

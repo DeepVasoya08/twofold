@@ -59,6 +59,7 @@ test('an invite link works without both people online at once', async ({ browser
   await expect(alice).toHaveURL(/\/unlock/);
 
   // Bob opens the link without an account: he signs up first and comes back to it.
+  await bob.clock.install();
   await bob.goto(new URL(link).pathname);
   await expect(bob).toHaveURL(/\/login\?next=/);
   await bob.getByRole('link', { name: 'Create a vault' }).click();

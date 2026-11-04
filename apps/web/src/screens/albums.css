@@ -229,7 +229,8 @@
   font-size: 14px;
 }
 
-/* Favorites has its own place in the sidebar; on phones it's reached from here. */
+/* Favorites has its own place in the sidebar; on phones it's reached from here. Recently
+   deleted has its own place too: the sidebar, and Settings on phones. */
 .albums__favorites {
   display: none;
 }
@@ -237,9 +238,5 @@
 @media (max-width: 860px) {
   .albums__favorites {
     display: flex;
-  }
-
-  .albums__favorites + .albums__trash {
-    margin-top: 10px;
   }
 }

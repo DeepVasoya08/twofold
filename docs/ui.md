@@ -187,11 +187,12 @@ exists but is low-key (Settings → Sharing).
   rules as its photos: someone you shared it with sees them in the album only (never in their
   own Files) and can only download them; a library shared with **Add and edit** lets the
   other person put its files in its albums. The phone tab bar is Photos, Albums, Files, People and
-  Settings; Favorites stays in the desktop sidebar and is a link at the bottom of Albums on
-  phones.
+  Settings; Favorites and Recently deleted are in the desktop sidebar. On phones Favorites
+  is a link at the bottom of Albums and Recently deleted is a row in Settings → Storage
+  (it's rarely needed, and deleted photos count against storage, so it sits with the meter).
 - **Delete** (in the selection bar or the viewer) moves photos to **Recently deleted**: the
   toast has **Undo** for 6 seconds, and the confirmation says they can be restored for 30
-  days. Recently deleted is linked at the bottom of Albums (All albums tab) and lives at
+  days. Recently deleted has its own sidebar item (Settings → Storage on phones) and lives at
   `/recently-deleted`. A tap there selects (photos aren't opened); each tile shows how many
   days are left; the bar offers **Restore** and **Delete now**, and **Empty** deletes
   everything there for good. Deleted photos still count against storage. When it was
@@ -213,7 +214,9 @@ private space that already exists, since the main library can't know whether the
 
 After sign-up (and once at the next unlock for accounts made earlier) a "Smart features, on
 your device" dialog asks whether to turn face grouping on, with two buttons, "Turn on" and
-"Not now" (`components/SmartFeaturesPrompt.tsx`). Closing it without choosing asks again
+"Not now" (`components/SmartFeaturesPrompt.tsx`). The buttons appear only after 10 seconds
+(`READ_SECONDS`), with a countdown in their place, because testers tapped through without
+reading; the close button stays, and only defers the question. Closing it without choosing asks again
 later. The answer is saved on the account, so the account's other devices start the same
 way; each device can still turn it on or off from the People page or Settings → People, and
 that choice wins on that device (`lib/people/face-setting.ts`). Download text says
@@ -252,8 +255,10 @@ off on this device, or deletes all search data for the open space.
 ## Search
 
 The search box sits at the top of every signed-in screen (`components/SearchBar.tsx`, in
-the app shell), so there's no Search tab. "/" jumps to it, and on phones the magnifier in
-the top bar does too. Searching from any screen opens the results at `/search`; the URL
+the app shell), so there's no Search tab. "/" jumps to it. It stays fixed at the top while
+the page scrolls (below the top bar on phones) on a solid band, so photos scroll under it
+rather than showing through; Photos' month headings stick just below it. Phones have no
+magnifier in the top bar, since the box is always there. Searching from any screen opens the results at `/search`; the URL
 never holds what was typed. A search is read by a small parser (`@arcafold/core/search/query`) into who, when and what:
 
 - **Who**: names from People, "me"/"my" (whoever is marked "This is me"), "us"/"we" (me and
@@ -303,13 +308,15 @@ to save the search again.
   always locks.
 - Sign-up makes the keys and the recovery key at step 1 (Argon2id runs on the device, so
   the button shows "Creating your keys…"), shows the 12 words at step 2, and only then
-  creates the account.
+  creates the account. Ticking "I've saved my recovery key" also downloads the words once
+  as `arcafold-recovery-key.txt` (made on the device, `lib/recovery-file.ts`), and a
+  Download button next to Copy words saves another copy.
 - `/signup/recovery-key` doubles as "New key" from Settings in the main library. The private
   space can't make a recovery key; its Settings say the private password can't be recovered.
 - Password hashing runs in a Web Worker, so spinners keep moving and the page stays usable
   while a login or unlock works. Signing out in the meantime ("Use another account")
   cancels it: the library doesn't open afterwards.
-- Auto-lock (Settings) locks after 1, 5 or 15 minutes without use (default 15), or only
+- Auto-lock (Settings) locks after 1, 5 or 15 minutes without use (default 1), or only
   when the tab closes. Pointer, key, wheel, touch and scroll count as use; a hidden tab gets
   none, so its time counts as idle, and the check runs again when the tab is shown. Uploads
   in progress count as use, so a long upload isn't dropped, and the countdown restarts when
@@ -542,6 +549,12 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
   `style-src 'self'` holds. The only inline style is the upload progress width, set
   through the CSSOM, which the CSP allows.
 - Layout switches at 860px: sidebar on wide screens, top bar plus bottom tabs on phones.
+  The sidebar's Collapse button (above storage) folds it to icons only, with each name kept
+  as the link's accessible name and tooltip; the choice is a per-browser preference
+  (`arcafold.sidebarCollapsed` in localStorage, `lib/sidebar.ts`).
+- On/off settings (face grouping, Smart search, hiding document photos) are switches
+  (`components/Switch.tsx`, `role="switch"`) with a quiet On/Off label beside them, since a
+  "Turn off" button left testers unsure which state it was in.
 
 ## Security notes
 
