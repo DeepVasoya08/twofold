@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Photo } from '@arcafold/core/library/model';
 
-import { photosInRows, timelinePhotos, timelineRows } from './timeline';
+import { formatTaken, photosInRows, timelineOrder, timelinePhotos, timelineRows } from './timeline';
 
 function photo(id: string, takenAt: string, extra: Partial<Photo> = {}): Photo {
   return {
@@ -65,5 +65,22 @@ describe('photosInRows', () => {
         undefined,
       ]),
     ).toEqual(['a', 'b']);
+  });
+});
+
+describe('timelineOrder', () => {
+  it('lists photos in the grid order, newest first, across months', () => {
+    const photos = [
+      photo('old', '2025-12-31T00:00:00Z'),
+      photo('new', '2026-02-01T00:00:00Z'),
+      photo('file', '2026-03-01T00:00:00Z', { file: { name: 'a.pdf', type: 'application/pdf' } }),
+    ];
+    expect(timelineOrder(photos, timelineRows(photos)).map((p) => p.id)).toEqual(['new', 'old']);
+  });
+});
+
+describe('formatTaken', () => {
+  it('shows the day and time the photo was taken', () => {
+    expect(formatTaken('2026-11-04T09:41:00Z')).toBe('Wed, Nov 4, 2026 · 9:41 AM');
   });
 });

@@ -48,6 +48,12 @@ or a native module.
   native view. Closing the library (lock or sign-out) wipes them all. (The Phase 0 grid was
   slow on the Pixel 9a because every tile went through base64 and a data URI on the
   JavaScript thread; decrypting itself is a single libsodium call per preview.)
+- The viewer (`screens/Viewer.tsx`): tapping a photo opens it full screen over the
+  timeline (in the same window, so screenshot blocking still applies), swiping left and
+  right in timeline order. The preview shows at once; the original downloads once the photo
+  has been in view for a moment, is decoded no larger than the screen and turned upright
+  (Android's `ImageDecoder`, which also reads HEIC, from Android 9), and is freed when the
+  next one opens. Tapping hides the bar; Back closes it.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

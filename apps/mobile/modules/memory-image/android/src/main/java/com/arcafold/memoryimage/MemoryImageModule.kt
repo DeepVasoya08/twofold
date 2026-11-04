@@ -19,7 +19,9 @@ class MemoryImageModule : Module() {
     Function("clear") { MemoryImages.clear() }
 
     View(MemoryImageView::class) {
-      Prop("imageId") { view: MemoryImageView, id: String? -> view.show(id) }
+      Prop("imageId") { view: MemoryImageView, id: String? -> view.setImageId(id) }
+      Prop("maxSide") { view: MemoryImageView, side: Int -> view.setMaxSide(side) }
+      Prop("fit") { view: MemoryImageView, fit: String -> view.setFit(fit) }
     }
   }
 }

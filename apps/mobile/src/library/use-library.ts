@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Session } from '@arcafold/core/account';
 import type { Photo } from '@arcafold/core/library/model';
+import type { SpaceStore } from '@arcafold/core/library/space-store';
 import { createThumbLoader } from '@arcafold/core/library/thumb-loader';
 import type { ThumbLoader } from '@arcafold/core/library/thumb-loader';
 import { sessionStore } from '@arcafold/core/sharing';
@@ -15,6 +16,11 @@ export interface Library {
   thumbs: ReadonlyMap<string, string>;
   /** Asks for photos' previews; those `onScreen` go first. Asking twice is free. */
   requestThumbs: (photoIds: readonly string[], onScreen?: boolean) => void;
+  /**
+   * Downloads and decrypts a photo's original, for the viewer. Only the latest one is kept:
+   * opening another frees the one before.
+   */
+  openOriginal: (photoId: string) => Promise<string>;
   retry: () => void;
 }
 
@@ -29,6 +35,7 @@ export function useLibrary(session: Session): Library {
   const [thumbs, setThumbs] = useState<ReadonlyMap<string, string>>(new Map());
   const [attempt, setAttempt] = useState(0);
   const loader = useRef<ThumbLoader | null>(null);
+  const opened = useRef<SpaceStore | null>(null);
 
   useEffect(() => {
     let stopped = false;
@@ -41,6 +48,7 @@ export function useLibrary(session: Session): Library {
       },
     });
     loader.current = thumbLoader;
+    opened.current = store;
     store.list().then(
       (loaded) => {
         if (stopped) return;
@@ -54,6 +62,7 @@ export function useLibrary(session: Session): Library {
     return () => {
       stopped = true;
       loader.current = null;
+      opened.current = null;
       thumbLoader.stop();
       store.dispose();
       MemoryImages.clear();
@@ -64,10 +73,16 @@ export function useLibrary(session: Session): Library {
     loader.current?.request(photoIds, onScreen);
   }, []);
 
+  const openOriginal = useCallback((photoId: string) => {
+    const store = opened.current;
+    if (!store) return Promise.reject(new Error('The library is closed.'));
+    return store.image(photoId, 'full');
+  }, []);
+
   const retry = useCallback(() => {
     setStatus('loading');
     setAttempt((count) => count + 1);
   }, []);
 
-  return { status, photos, thumbs, requestThumbs, retry };
+  return { status, photos, thumbs, requestThumbs, openOriginal, retry };
 }
