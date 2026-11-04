@@ -39,7 +39,7 @@ export default tseslint.config(
     rules: reactHooks.configs.recommended.rules,
   },
   {
-    files: ['apps/mobile-spike/**/*.{ts,tsx}'],
+    files: ['apps/mobile/**/*.{ts,tsx}', 'apps/mobile-spike/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     rules: reactHooks.configs.recommended.rules,
   },
@@ -50,7 +50,7 @@ export default tseslint.config(
   },
   {
     // Metro loads its config with require().
-    files: ['apps/mobile-spike/metro.config.js'],
+    files: ['apps/mobile/metro.config.js', 'apps/mobile-spike/metro.config.js'],
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   prettier,
