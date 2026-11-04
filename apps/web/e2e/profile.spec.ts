@@ -59,7 +59,7 @@ test('both spaces show the same storage total, counting both', async ({ page }) 
 test('name and profile photo can be changed, and stay after unlocking again', async ({ page }) => {
   await signUp(page);
   await goTo(page, 'Settings');
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit profile' }).click();
   const dialog = page.getByRole('dialog', { name: 'Edit profile' });
   await dialog.getByLabel('Name').fill('Sam Rivera');
   await dialog.getByLabel('Choose a profile photo').setInputFiles({
@@ -101,7 +101,7 @@ test('name and profile photo can be changed, and stay after unlocking again', as
   await lock(page);
   await unlockWith(page, MAIN_PASSWORD);
   await goTo(page, 'Settings');
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit profile' }).click();
   await dialog.getByRole('button', { name: 'Remove photo' }).click();
   await dialog.getByRole('button', { name: 'Save' }).click();
   await expect(dialog).toBeHidden();

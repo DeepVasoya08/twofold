@@ -6,6 +6,7 @@ import { useVault } from '../app/vault';
 import { MODEL_DOWNLOAD_MB } from '../lib/people/models';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
+import { Switch } from './Switch';
 import { errorMessage } from '@arcafold/core/errors';
 
 /**
@@ -54,16 +55,7 @@ export function PeopleSettings() {
           </span>
         </div>
         <div className="settings-row__action">
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm"
-            aria-pressed={people.enabled}
-            onClick={() => {
-              people.setEnabled(!people.enabled);
-            }}
-          >
-            {people.enabled ? 'Turn off' : 'Turn on'}
-          </button>
+          <Switch label="Face grouping" checked={people.enabled} onChange={people.setEnabled} />
         </div>
       </div>
       <div className="settings-row">

@@ -9,6 +9,8 @@ import { useSubmit } from '../app/use-submit';
 import { AuthLayout } from '../components/AuthLayout';
 import { FormAlert } from '../components/FormAlert';
 import { Icon } from '../components/Icon';
+import { downloadFiles } from '../lib/download-files';
+import { RECOVERY_FILE_NAME, recoveryFile } from '../lib/recovery-file';
 
 import './recovery-key.css';
 
@@ -22,6 +24,8 @@ export function RecoveryKey() {
   const { pendingSignUp, completeSignUp, saveRecoveryKey } = useAccount();
   const { busy, error, run } = useSubmit();
   const [saved, setSaved] = useState(false);
+  // Ticking the box saves a copy once; the Download button is there for another.
+  const [downloaded, setDownloaded] = useState(false);
   const signingUp = pendingSignUp !== null;
   const [renewal, setRenewal] = useState<{ key: Uint8Array; words: string[] } | null>(null);
 
@@ -47,6 +51,11 @@ export function RecoveryKey() {
         toast.show('Copy failed. Write the words down instead.');
       },
     );
+  };
+
+  const download = () => {
+    downloadFiles([recoveryFile(words)]);
+    setDownloaded(true);
   };
 
   const onContinue = () => {
@@ -93,6 +102,15 @@ export function RecoveryKey() {
             <Icon name="copy" size={18} />
             Copy words
           </button>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={download}
+            disabled={words.length === 0}
+          >
+            <Icon name="download" size={18} />
+            Download
+          </button>
         </div>
       </div>
 
@@ -110,11 +128,18 @@ export function RecoveryKey() {
           type="checkbox"
           checked={saved}
           onChange={(event) => {
-            setSaved(event.currentTarget.checked);
+            const checked = event.currentTarget.checked;
+            setSaved(checked);
+            if (checked && !downloaded && words.length > 0) download();
           }}
         />
         <span>I&apos;ve saved my recovery key somewhere safe</span>
       </label>
+      <p className="recovery__note">
+        {downloaded
+          ? `Also downloaded to this device as ${RECOVERY_FILE_NAME}.`
+          : 'Ticking this also downloads the words as a text file, just in case.'}
+      </p>
 
       <FormAlert message={error} />
       <button

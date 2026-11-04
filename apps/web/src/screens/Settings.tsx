@@ -436,17 +436,20 @@ export function Settings() {
           <Avatar person={me} size="lg" src={profile.photo} />
           <div className="profile__text">
             <span className="profile__name">{me.name}</span>
-            <span className="profile__email">{me.email}</span>
+            <span className="profile__email" title={me.email}>
+              {me.email}
+            </span>
           </div>
           <button
             type="button"
             className="btn btn--secondary btn--sm profile__edit"
+            aria-label="Edit profile"
             onClick={() => {
               setDialog('profile');
             }}
           >
             <Icon name="pencil" size={16} />
-            Edit
+            <span className="profile__edit-label">Edit</span>
           </button>
         </div>
       </Section>

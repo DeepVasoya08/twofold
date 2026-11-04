@@ -38,7 +38,16 @@
 
 .recovery__actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  gap: 10px;
+}
+
+/* Sits under the "I've saved it" box, lined up with its label. */
+.recovery__note {
+  margin: -12px 0 20px 32px;
+  color: var(--text-2);
+  font-size: 13px;
 }
 
 .tips {

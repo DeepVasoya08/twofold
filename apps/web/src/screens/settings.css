@@ -71,6 +71,13 @@
   font-weight: 600;
 }
 
+.profile__name,
+.profile__email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .profile__email {
   color: var(--text-2);
   font-size: 14px;
@@ -197,6 +204,19 @@
   }
 
   .profile {
+    gap: 12px;
     padding: 16px;
+  }
+
+  /* Just the pencil on phones, so a long email keeps its room. */
+  .profile__edit {
+    width: 38px;
+    min-height: 38px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .profile__edit-label {
+    display: none;
   }
 }
