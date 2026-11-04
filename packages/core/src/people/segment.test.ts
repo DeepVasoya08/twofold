@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { cosine } from './sface';
+import { cosine } from './vectors';
 import { decodeSegment, encodeSegment, entryBytes, splitResults } from './segment';
 import type { FaceResults } from './segment';
-import { face, photoId, unitVector } from './test-faces';
+import { face, photoId, unitVector } from '../testing/faces';
 
 describe('encodeSegment / decodeSegment', () => {
   it('round-trips boxes and keeps fingerprints within 0.01 cosine', () => {

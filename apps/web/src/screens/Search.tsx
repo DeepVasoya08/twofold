@@ -17,9 +17,9 @@ import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { findFiles } from '../lib/file-sort/match';
 import { pluralize } from '../lib/format';
-import type { ParsedQuery } from '../lib/search/query';
+import type { ParsedQuery } from '@arcafold/core/search/query';
 import { SEARCH_RESOURCES } from '../lib/search/resources';
-import { MAX_SMART_TITLE, smartAlbumFits, suggestTitle } from '../lib/search/smart-album';
+import { MAX_SMART_TITLE, smartAlbumFits, suggestTitle } from '@arcafold/core/search/smart-album';
 import { errorMessage } from '@arcafold/core/errors';
 import type { Photo } from '@arcafold/core/library/model';
 

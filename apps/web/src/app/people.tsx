@@ -12,12 +12,17 @@ import type { ReactNode } from 'react';
 import type { FaceFinder } from '../lib/people/face-finder';
 import { runScan } from '../lib/people/face-scan';
 import { faceGroupingOn, loadFaceSetting, saveFaceSetting } from '../lib/people/face-setting';
-import { confirmedFaces, groupFaces, meChanges, withRejected } from '../lib/people/grouping';
-import type { Group, Person, PersonLabel } from '../lib/people/grouping';
-import type { FaceResults } from '../lib/people/segment';
+import {
+  confirmedFaces,
+  groupFaces,
+  meChanges,
+  withRejected,
+} from '@arcafold/core/people/grouping';
+import type { Group, Person, PersonLabel } from '@arcafold/core/people/grouping';
+import type { FaceResults } from '@arcafold/core/people/segment';
 import type { Settled } from '../lib/settle-each';
 import { useAccount } from './account';
-import type { PeopleStore } from './people-store';
+import type { PeopleStore } from '@arcafold/core/people/store';
 import { useUploads } from './uploads';
 import { useVault } from './vault';
 import type { VaultState } from './vault';

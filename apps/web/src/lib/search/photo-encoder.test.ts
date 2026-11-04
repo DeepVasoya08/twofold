@@ -9,7 +9,7 @@ import {
 } from './photo-encoder';
 import type { EncoderEngine, EncoderMessage, EncoderWorker } from './photo-encoder';
 import { ResourceError } from './resources';
-import { VECTOR_LENGTH } from './segment';
+import { VECTOR_LENGTH } from '@arcafold/core/search/segment';
 
 const blob = () => new Blob([new Uint8Array(4)], { type: 'image/jpeg' });
 const vector = (value = 1) => new Float32Array(VECTOR_LENGTH).fill(value);

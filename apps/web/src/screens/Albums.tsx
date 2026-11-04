@@ -14,7 +14,7 @@ import { TextField } from '../components/Field';
 import { Icon } from '../components/Icon';
 import { PhotoImage } from '../components/PhotoImage';
 import { formatDateRange, photosAndFiles, pluralize } from '../lib/format';
-import type { SmartAlbum } from '../lib/search/smart-album';
+import type { SmartAlbum } from '@arcafold/core/search/smart-album';
 import { errorMessage } from '@arcafold/core/errors';
 import type { Album } from '@arcafold/core/library/model';
 

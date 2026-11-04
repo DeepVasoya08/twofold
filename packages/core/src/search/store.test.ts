@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { newSpace, spaceToken } from '@arcafold/crypto';
 
-import { photoId } from '../lib/people/test-faces';
-import { VECTOR_LENGTH } from '../lib/search/segment';
-import type { SearchResults } from '../lib/search/segment';
-import { FakeServer } from '@arcafold/core/testing/fake-server';
-import { memorySearchStore, remoteSearchStore } from './search-store';
+import { photoId } from '../testing/faces';
+import { VECTOR_LENGTH } from './segment';
+import type { SearchResults } from './segment';
+import { FakeServer } from '../testing/fake-server';
+import { memorySearchStore, remoteSearchStore } from './store';
 
 const vector = (seed: number) => {
   const out = Float32Array.from({ length: VECTOR_LENGTH }, (_, i) => Math.cos(seed + i));

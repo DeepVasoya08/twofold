@@ -7,7 +7,7 @@ import type { BackgroundScanDeps, ScanEnd } from '../background-scan';
 import type { FaceFinder } from './face-finder';
 import { FinderStopped } from './face-finder';
 import { ModelError } from './models';
-import type { StoredFace } from './segment';
+import type { StoredFace } from '@arcafold/core/people/segment';
 
 export { RETRY_MS, SAVE_EVERY, SCAN_BATCH } from '../background-scan';
 export type { ScanEnd } from '../background-scan';

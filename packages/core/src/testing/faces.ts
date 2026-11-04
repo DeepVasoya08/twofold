@@ -1,4 +1,4 @@
-import type { StoredFace } from './segment';
+import type { StoredFace } from '../people/segment';
 
 /** A unit vector of 128 numbers, the same for the same seed. */
 export function unitVector(seed: number): Float32Array {

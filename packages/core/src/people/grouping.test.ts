@@ -11,7 +11,7 @@ import {
 } from './grouping';
 import type { Person } from './grouping';
 import type { FaceResults } from './segment';
-import { face, near, photoId, unitVector } from './test-faces';
+import { face, near, photoId, unitVector } from '../testing/faces';
 
 const ada = unitVector(1);
 const ben = unitVector(2);

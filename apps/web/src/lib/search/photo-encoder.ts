@@ -11,7 +11,7 @@
 import type { SurfaceMaker } from '../people/find-faces';
 import { clipInput } from './clip-image';
 import { ResourceError } from './resources';
-import { VECTOR_LENGTH } from './segment';
+import { VECTOR_LENGTH } from '@arcafold/core/search/segment';
 
 export type EncoderMode = 'fast' | 'low-memory';
 

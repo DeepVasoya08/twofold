@@ -1,5 +1,5 @@
-import { takenIn } from '../search/query';
-import type { When } from '../search/query';
+import { takenIn } from '@arcafold/core/search/query';
+import type { When } from '@arcafold/core/search/query';
 import { fileExtension, fileKindLabel, fileKindOf } from '@arcafold/core/file-types';
 import { categoryLabel } from '@arcafold/core/file-categories';
 import { wordsIn } from '@arcafold/core/keywords';

@@ -2,18 +2,18 @@ import { describe, expect, it } from 'vitest';
 
 import { newSpace, openOwnerRecord, spaceToken } from '@arcafold/crypto';
 
-import { FakeServer } from '@arcafold/core/testing/fake-server';
-import { face, photoId, unitVector } from '../lib/people/test-faces';
-import type { FaceResults } from '../lib/people/segment';
-import { memoryPeopleStore, parsePerson, remotePeopleStore } from './people-store';
-import type { Person } from '../lib/people/grouping';
+import { FakeServer } from '../testing/fake-server';
+import { face, photoId, unitVector } from '../testing/faces';
+import type { FaceResults } from './segment';
+import { memoryPeopleStore, parsePerson, remotePeopleStore } from './store';
+import type { Person } from './grouping';
 
 const results = (from: number, count: number): FaceResults =>
   new Map(Array.from({ length: count }, (_, n) => [photoId(from + n), [face(unitVector(n))]]));
 
 const ada = (id: string): Person => ({
   id,
-  name: 'Ada',
+  name: 'Ada Lovelace',
   faces: [`${photoId(1)}#0`],
   rejected: [],
   hidden: false,
@@ -90,9 +90,9 @@ describe('remotePeopleStore', () => {
     const person = ada(await store.newId());
     await store.savePerson(person);
     const stored = [...server.people.values()][0];
-    expect(stored?.meta).not.toContain('Ada');
+    expect(stored?.meta).not.toContain('Ada Lovelace');
     const opened = await openOwnerRecord(space, 'person', person.id, stored?.meta ?? '');
-    expect(new TextDecoder().decode(opened)).toContain('Ada');
+    expect(new TextDecoder().decode(opened)).toContain('Ada Lovelace');
     expect((await store.load()).people).toEqual([person]);
 
     await store.deletePerson(person.id);

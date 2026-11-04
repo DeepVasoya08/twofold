@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { FinderStopped, answerFaceRequest, workerFaceFinder } from './face-finder';
 import type { FaceEngine, FaceWorker } from './face-finder';
 import { ModelError } from './models';
-import { face, unitVector } from './test-faces';
+import { face, unitVector } from '@arcafold/core/testing/faces';
 
 const blob = () => new Blob([new Uint8Array(4)], { type: 'image/jpeg' });
 

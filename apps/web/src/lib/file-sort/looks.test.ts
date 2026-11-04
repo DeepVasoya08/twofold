@@ -1,7 +1,7 @@
 import { fromBase64Url } from '@arcafold/crypto/webcrypto';
 import { describe, expect, it } from 'vitest';
 
-import { unpackVector } from '../search/segment';
+import { unpackVector } from '@arcafold/core/search/segment';
 import { LOOK_PROMPTS } from './look-prompts';
 import { documentLook, documentLooks, lookCategory, lookPrompts } from './looks';
 import type { DocumentLook, LookPrompt } from './looks';

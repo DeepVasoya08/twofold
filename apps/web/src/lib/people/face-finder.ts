@@ -7,7 +7,7 @@
 import type { FaceModels, SurfaceMaker } from './find-faces';
 import { findFaces } from './find-faces';
 import { ModelError } from './models';
-import type { StoredFace } from './segment';
+import type { StoredFace } from '@arcafold/core/people/segment';
 
 /** What requests still waiting get when the finder is stopped. */
 export class FinderStopped extends Error {

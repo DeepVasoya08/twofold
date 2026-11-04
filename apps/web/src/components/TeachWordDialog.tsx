@@ -4,7 +4,12 @@ import type { SubmitEvent } from 'react';
 import { usePeople } from '../app/people';
 import { useSearch } from '../app/search';
 import { useToast } from '../app/toast';
-import { MAX_EXAMPLES, MAX_WORD_NAME, MIN_EXAMPLES, wordNameProblem } from '../lib/search/taught';
+import {
+  MAX_EXAMPLES,
+  MAX_WORD_NAME,
+  MIN_EXAMPLES,
+  wordNameProblem,
+} from '@arcafold/core/search/taught';
 import { Dialog } from './Dialog';
 import { TextField } from './Field';
 import { errorMessage } from '@arcafold/core/errors';

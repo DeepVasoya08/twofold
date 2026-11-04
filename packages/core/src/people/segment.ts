@@ -10,7 +10,7 @@
  */
 import { fromBase64Url, toBase64Url } from '@arcafold/crypto/webcrypto';
 
-import { EMBEDDING_LENGTH } from './sface';
+import { EMBEDDING_LENGTH } from './vectors';
 
 /** Which models made the results. Results from any other are ignored and redone. */
 export const FACE_MODEL = 1;

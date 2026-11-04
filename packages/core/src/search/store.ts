@@ -1,14 +1,14 @@
 import type { SpaceKeys } from '@arcafold/crypto';
 import { SEARCH_SEGMENT_DELETE_MAX } from '@arcafold/types';
 
-import { spaceApi } from '@arcafold/core/api';
-import type { SpaceApi } from '@arcafold/core/api';
-import { decodeSegment, encodeSegment, splitResults } from '../lib/search/segment';
-import type { SearchResults } from '../lib/search/segment';
-import { parseSmartAlbum, smartMeta } from '../lib/search/smart-album';
-import type { SmartAlbum } from '../lib/search/smart-album';
-import { parseWord, wordMeta } from '../lib/search/taught';
-import type { TaughtWord } from '../lib/search/taught';
+import { spaceApi } from '../api';
+import type { SpaceApi } from '../api';
+import { decodeSegment, encodeSegment, splitResults } from './segment';
+import type { SearchResults } from './segment';
+import { parseSmartAlbum, smartMeta } from './smart-album';
+import type { SmartAlbum } from './smart-album';
+import { parseWord, wordMeta } from './taught';
+import type { TaughtWord } from './taught';
 
 /**
  * The open space's search vectors, stored in segments sealed under the space's own key, and

@@ -12,8 +12,8 @@
  */
 import { fromBase64Url } from '@arcafold/crypto/webcrypto';
 
-import { PACKED_BYTES, unpackVector } from '../search/segment';
-import type { SearchResults } from '../search/segment';
+import { PACKED_BYTES, unpackVector } from '@arcafold/core/search/segment';
+import type { SearchResults } from '@arcafold/core/search/segment';
 import type { Category } from '@arcafold/core/file-categories';
 import { LOOK_PROMPTS, LOOK_VECTORS } from './look-prompts';
 
