@@ -6,7 +6,7 @@ import { useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useUploads } from '../app/uploads';
 import type { UploadItem } from '../app/uploads';
-import { STATUS_PROGRESS } from '../lib/upload-progress';
+import { STATUS_PROGRESS } from '@arcafold/core/upload/progress';
 import { Dialog } from './Dialog';
 import { FileIcon } from './FileIcon';
 import { Icon } from './Icon';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { UPLOADS_AT_ONCE, UPLOAD_BYTES_AT_ONCE, canStartUpload } from './upload-queue';
+import { UPLOADS_AT_ONCE, UPLOAD_BYTES_AT_ONCE, canStartUpload } from './queue';
 
 const MB = 1024 * 1024;
 

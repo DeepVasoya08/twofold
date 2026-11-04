@@ -376,11 +376,11 @@ follows those steps. Stored photos are held back and added to the library togeth
 the whole batch has finished, so the grid and the storage figure change once rather than
 after every photo. Up to three photos go at once, in the order they were added, so each
 one's server round trips overlap the others'. Big photos go fewer at a time: at most 48 MB
-of originals are in flight, and a photo bigger than that goes alone (`lib/upload-queue.ts`),
+of originals are in flight, and a photo bigger than that goes alone (`@arcafold/core/upload/queue`),
 which keeps memory in check on phones. The upload list shows that small preview once a photo
 has been read, never the original, so dropping hundreds of photos stays light.
 
-Uploads don't belong to the dialog: the queue (`app/uploader.ts`, provided by
+Uploads don't belong to the dialog: the queue (`@arcafold/core/upload/uploader`, provided by
 `app/uploads.tsx`) lives as long as the open vault, so closing the dialog (the X, Close, a
 click outside, Escape), moving around the app or switching browser tabs leaves photos
 uploading. While they run with the dialog closed, a small card (bottom right on desktop,
