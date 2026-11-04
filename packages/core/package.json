@@ -13,6 +13,7 @@
     "./keywords": "./src/keywords.ts",
     "./library/model": "./src/library/model.ts",
     "./library/space-store": "./src/library/space-store.ts",
+    "./password": "./src/password.ts",
     "./people/grouping": "./src/people/grouping.ts",
     "./people/segment": "./src/people/segment.ts",
     "./people/store": "./src/people/store.ts",

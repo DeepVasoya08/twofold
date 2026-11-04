@@ -1,5 +1,23 @@
 /** The app's colours, the same as the web app's light and dark themes (styles/base.css). */
 export const colors = {
-  dark: { background: '#161117', text: '#f6eee8', muted: '#c0b2c2', accent: '#ef7d88' },
-  light: { background: '#fbf7f2', text: '#2b2030', muted: '#6b5c6f', accent: '#d9586a' },
+  dark: {
+    background: '#161117',
+    surface: '#1c151e',
+    border: '#3a2f3d',
+    text: '#f6eee8',
+    muted: '#c0b2c2',
+    accent: '#ef7d88',
+    onAccent: '#161117',
+    error: '#ff8a8a',
+  },
+  light: {
+    background: '#fbf7f2',
+    surface: '#f5ede4',
+    border: '#d9cdd3',
+    text: '#2b2030',
+    muted: '#6b5c6f',
+    accent: '#d9586a',
+    onAccent: '#ffffff',
+    error: '#b3261e',
+  },
 } as const;

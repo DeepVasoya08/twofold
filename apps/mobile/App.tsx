@@ -1,29 +1,56 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { useState } from 'react';
+import { View, useColorScheme } from 'react-native';
 
-import { colors } from './src/theme';
+import { Home } from './src/screens/Home';
+import { RecoveryWords } from './src/screens/RecoveryWords';
+import { SignIn } from './src/screens/SignIn';
+import { SignUp } from './src/screens/SignUp';
+import { Unlock } from './src/screens/Unlock';
+import { AccountProvider, useAccount } from './src/session/account';
+import { usePalette } from './src/ui/theme';
 
-/** The first screen. Sign-in and unlock arrive in the next build. */
-export default function App() {
-  const scheme = useColorScheme() === 'light' ? 'light' : 'dark';
-  const palette = colors[scheme];
+function Routes() {
+  const { state, pendingSignUp } = useAccount();
+  const [signingUp, setSigningUp] = useState(false);
+  if (state.status === 'unlocked') return <Home />;
+  if (state.status === 'locked') return <Unlock />;
+  if (pendingSignUp) return <RecoveryWords />;
+  if (signingUp) {
+    return (
+      <SignUp
+        onSignIn={() => {
+          setSigningUp(false);
+        }}
+      />
+    );
+  }
   return (
-    <View style={[styles.screen, { backgroundColor: palette.background }]}>
-      <Text style={[styles.title, { color: palette.text }]}>Arcafold</Text>
-      <Text style={[styles.body, { color: palette.muted }]}>
-        Your photos, encrypted on this phone before they leave it.
-      </Text>
-      <Text style={[styles.note, { color: palette.muted }]}>
-        Sign-in is coming in the next build.
-      </Text>
-      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+    <SignIn
+      onSignUp={() => {
+        setSigningUp(true);
+      }}
+    />
+  );
+}
+
+/** Every touch counts as activity, so the app only auto-locks once it sits untouched. */
+function Shell() {
+  const { touched } = useAccount();
+  const palette = usePalette();
+  const scheme = useColorScheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: palette.background }} onTouchStart={touched}>
+      <Routes />
+      <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
-  title: { fontSize: 32, fontWeight: '700' },
-  body: { fontSize: 16, textAlign: 'center' },
-  note: { fontSize: 14, textAlign: 'center' },
-});
+export default function App() {
+  return (
+    <AccountProvider>
+      <Shell />
+    </AccountProvider>
+  );
+}
