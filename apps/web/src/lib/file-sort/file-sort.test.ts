@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { CATEGORIES, categoryLabel, isCategory } from './categories';
+import { CATEGORIES, categoryLabel, isCategory } from '@arcafold/core/file-categories';
 import { likeness, sortByExamples } from './learn';
 import { scoreByWords, sortByWords } from './rules';
 import { sortFile, textForSorting } from './sort';
-import { MAX_KEYWORDS, keywordsOf, parseKeywords, wordsIn } from './words';
+import { MAX_KEYWORDS, keywordsOf, parseKeywords, wordsIn } from '@arcafold/core/keywords';
 
 const BILL = `Tax Invoice
 Bharat Electricity Ltd · GSTIN 27ABCDE1234F1Z5

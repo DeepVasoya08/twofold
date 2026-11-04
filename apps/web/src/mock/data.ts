@@ -1,4 +1,4 @@
-import type { Category } from '../lib/file-sort/categories';
+import type { Category } from '@arcafold/core/file-categories';
 import { landscapeDataUri, paletteNames } from './art';
 import type { Palette } from './art';
 

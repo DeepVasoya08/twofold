@@ -1,4 +1,4 @@
-import { fileExtension, fileKindOf } from './file-types';
+import { fileExtension, fileKindOf } from '@arcafold/core/file-types';
 import { listZip, readZipEntry } from './zip-reader';
 
 /**

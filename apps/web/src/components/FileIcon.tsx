@@ -1,4 +1,4 @@
-import { fileExtension, fileKindOf } from '../lib/file-types';
+import { fileExtension, fileKindOf } from '@arcafold/core/file-types';
 import type { FileDetails, Photo } from '../mock/data';
 import { Icon } from './Icon';
 import { PhotoImage } from './PhotoImage';

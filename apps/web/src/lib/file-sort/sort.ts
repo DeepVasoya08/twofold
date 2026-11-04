@@ -1,12 +1,12 @@
 import { docxText, readText } from '../document-text';
-import { fileExtension, fileKindOf } from '../file-types';
+import { fileExtension, fileKindOf } from '@arcafold/core/file-types';
 import { TILE_BUDGET_MS, withinBudget } from '../file-preview';
 import type { PreviewTier } from '../file-preview';
-import type { Category } from './categories';
+import type { Category } from '@arcafold/core/file-categories';
 import { sortByExamples } from './learn';
 import type { SortExample } from './learn';
 import { sortByWords } from './rules';
-import { keywordsOf } from './words';
+import { keywordsOf } from '@arcafold/core/keywords';
 
 /**
  * Sorting a file into a category on the device that adds it, before it is encrypted: its

@@ -4,7 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./api": "./src/api.ts"
+    "./api": "./src/api.ts",
+    "./file-categories": "./src/file-categories.ts",
+    "./file-types": "./src/file-types.ts",
+    "./keywords": "./src/keywords.ts",
+    "./photo-types": "./src/photo-types.ts",
+    "./records": "./src/records.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

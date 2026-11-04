@@ -1,50 +1,6 @@
 /**
  * Pieces of the backup test that don't touch the phone, so they can be tested in Node.
- *
- * The photo record format copies apps/web/src/app/space-store.ts (PhotoMeta and
- * encodePhotoMeta) so the web app shows these photos like any other. Phase 1 moves that
- * format into a shared package; until then the two must be kept the same by hand.
  */
-
-/** Records are padded to at least this many bytes, like the web app's PHOTO_RECORD_MIN. */
-export const PHOTO_RECORD_MIN = 1000;
-
-export interface PhotoMeta {
-  v: 1;
-  key: string;
-  type: string;
-  width: number;
-  height: number;
-  takenAt: string;
-  favorite: boolean;
-  albumIds: string[];
-  fp?: string;
-}
-
-export function encodePhotoMeta(meta: PhotoMeta): Uint8Array {
-  const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
-  const bytes = encode({ ...meta, pad: '' });
-  const missing = PHOTO_RECORD_MIN - bytes.length;
-  return missing > 0 ? encode({ ...meta, pad: ' '.repeat(missing) }) : bytes;
-}
-
-const TYPES: Record<string, string> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  heic: 'image/heic',
-  heif: 'image/heif',
-  avif: 'image/avif',
-};
-
-/** The photo type for a gallery file name, or null for a format Arcafold doesn't store. */
-export function photoTypeOf(filename: string): string | null {
-  const dot = filename.lastIndexOf('.');
-  if (dot < 0) return null;
-  return TYPES[filename.slice(dot + 1).toLowerCase()] ?? null;
-}
 
 /**
  * Runs `work` on every item, at most `limit` at a time, in order of starting. Uses only

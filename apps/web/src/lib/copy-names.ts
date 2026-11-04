@@ -1,5 +1,5 @@
-import { fileExtension } from './file-types';
-import { extensionOf } from './photo-types';
+import { fileExtension } from '@arcafold/core/file-types';
+import { extensionOf } from '@arcafold/core/photo-types';
 
 /**
  * Names for photos saved to the device: when each was taken, in this browser's time zone,

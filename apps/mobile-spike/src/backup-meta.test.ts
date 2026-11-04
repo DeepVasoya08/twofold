@@ -1,54 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  PHOTO_RECORD_MIN,
-  eachLimited,
-  encodePhotoMeta,
-  finishedInBackground,
-  longestGap,
-  photoTypeOf,
-} from './backup-meta';
-import type { PhotoMeta } from './backup-meta';
-
-const meta: PhotoMeta = {
-  v: 1,
-  key: 'k',
-  type: 'image/jpeg',
-  width: 4000,
-  height: 3000,
-  takenAt: '2026-11-03T10:00:00.000Z',
-  favorite: false,
-  albumIds: [],
-  fp: 'f',
-};
-
-describe('encodePhotoMeta', () => {
-  it('pads small records to the minimum size, and the padding round-trips', () => {
-    const bytes = encodePhotoMeta(meta);
-    expect(bytes.length).toBe(PHOTO_RECORD_MIN);
-    const back: unknown = JSON.parse(new TextDecoder().decode(bytes));
-    expect(back).toMatchObject(meta);
-  });
-
-  it('leaves large records unpadded beyond the minimum', () => {
-    const big = { ...meta, key: 'x'.repeat(2000) };
-    const bytes = encodePhotoMeta(big);
-    expect(bytes.length).toBeGreaterThan(PHOTO_RECORD_MIN);
-    expect(JSON.parse(new TextDecoder().decode(bytes))).toMatchObject({ pad: '' });
-  });
-});
-
-describe('photoTypeOf', () => {
-  it('maps gallery extensions to photo types, ignoring case', () => {
-    expect(photoTypeOf('IMG_1.JPG')).toBe('image/jpeg');
-    expect(photoTypeOf('a.heic')).toBe('image/heic');
-  });
-
-  it('refuses videos and names without an extension', () => {
-    expect(photoTypeOf('clip.mp4')).toBeNull();
-    expect(photoTypeOf('noext')).toBeNull();
-  });
-});
+import { eachLimited, finishedInBackground, longestGap } from './backup-meta';
 
 describe('eachLimited', () => {
   it('runs every item, never more than the limit at once', async () => {

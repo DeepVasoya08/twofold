@@ -12,7 +12,7 @@ import { docxText, fileViewOf, readText } from '../lib/document-text';
 import type { FileView } from '../lib/document-text';
 import { currentPreviewTier } from '../lib/file-preview';
 import type { PreviewTier } from '../lib/file-preview';
-import { fileKindLabel, fileKindOf } from '../lib/file-types';
+import { fileKindLabel, fileKindOf } from '@arcafold/core/file-types';
 import { formatShortDay } from '../lib/format';
 import { closePdf, drawPage, openPdf } from '../lib/pdf';
 import type { PdfDocument } from '../lib/pdf';

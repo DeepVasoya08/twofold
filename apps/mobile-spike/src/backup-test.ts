@@ -7,16 +7,13 @@ import type { AssetMetadata } from 'expo-media-library';
 import { AppState, PermissionsAndroid, Platform } from 'react-native';
 
 import { api, spaceApi } from '@arcafold/core/api';
+import { photoTypeOf } from '@arcafold/core/file-types';
+import { encodePhotoMeta } from '@arcafold/core/records';
+import type { PhotoMeta } from '@arcafold/core/records';
 
 import { BackupService } from '../modules/backup-service';
-import {
-  eachLimited,
-  encodePhotoMeta,
-  finishedInBackground,
-  longestGap,
-  photoTypeOf,
-} from './backup-meta';
-import type { PhotoMeta, StateSpan } from './backup-meta';
+import { eachLimited, finishedInBackground, longestGap } from './backup-meta';
+import type { StateSpan } from './backup-meta';
 import { fromBase64 } from './encoding';
 
 /**
@@ -125,7 +122,7 @@ async function uploadOne(
   asset: AssetMetadata,
 ): Promise<{ id: string; bytes: number }> {
   const filename = asset.filename ?? '';
-  const type = photoTypeOf(filename);
+  const type = photoTypeOf({ type: '', name: filename });
   if (!type) throw new Error(`skipped a .${filename.split('.').pop() ?? '?'} file`);
   const uri = await new Asset(asset.id).getUri();
   const original = await new File(uri).bytes();

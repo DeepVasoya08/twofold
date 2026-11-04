@@ -1,4 +1,4 @@
-import type { Category } from './categories';
+import type { Category } from '@arcafold/core/file-categories';
 
 /**
  * Learning from how you sort: every file you've moved to a category is an example, kept as

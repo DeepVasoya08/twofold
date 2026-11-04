@@ -3,14 +3,22 @@ import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@arcafold/types
 import type { PhotoPage, PhotoPart } from '@arcafold/types';
 
 import { spaceApi } from '@arcafold/core/api';
-import { isJpeg } from '../lib/file-preview';
-import { isCategory } from '../lib/file-sort/categories';
-import type { Category } from '../lib/file-sort/categories';
-import { parseKeywords } from '../lib/file-sort/words';
-import { MAX_FILE_NAME, cleanFileType } from '../lib/file-types';
-import { isPhotoType } from '../lib/photo-types';
-import { viewableCopy } from '../lib/thumbnail-service';
 import type { SpaceApi } from '@arcafold/core/api';
+import type { Category } from '@arcafold/core/file-categories';
+import { cleanFileType } from '@arcafold/core/file-types';
+import { isPhotoType } from '@arcafold/core/photo-types';
+import {
+  decodeJson,
+  encodeJson,
+  encodePhotoMeta,
+  hasPreview,
+  parseAlbumMeta,
+  parsePhotoMeta,
+} from '@arcafold/core/records';
+import type { AlbumMeta, PhotoMeta } from '@arcafold/core/records';
+
+import { isJpeg } from '../lib/file-preview';
+import { viewableCopy } from '../lib/thumbnail-service';
 import type { Album, FileDetails, Photo } from '../mock/data';
 import { FormError } from './account-ops';
 import { PartialThumbs } from './thumb-loader';
@@ -174,49 +182,6 @@ const LARGEST_MB = String(Math.floor(STORAGE_SIZES.maxFull / (1024 * 1024)) - 1)
 const TOO_LARGE = `That photo is too large. Arcafold takes photos up to ${LARGEST_MB} MB.`;
 const FILE_TOO_LARGE = `That file is too large. Arcafold takes files up to ${LARGEST_MB} MB.`;
 
-/** Who added a photo to someone else's library: their member id and name. */
-interface AddedBy {
-  id: string;
-  name: string;
-}
-
-interface PhotoMeta {
-  v: 1;
-  /** The photo's own file key, base64url. */
-  key: string;
-  type: string;
-  width: number;
-  height: number;
-  takenAt: string;
-  favorite: boolean;
-  albumIds: string[];
-  /** Set when a member (not the library's owner) added it. */
-  by?: AddedBy;
-  /** Set while it is in Recently deleted: when it was deleted (ISO 8601). */
-  deletedAt?: string;
-  /**
-   * The original's fingerprint in this space (see photoFingerprint), so an import can skip
-   * photos already here. Photos stored before fingerprints existed have none.
-   */
-  fp?: string;
-  /**
-   * Set for a file that isn't a photo, with its name. Apps from before files existed refuse
-   * these records (their type isn't a photo's), so they never show a file as a broken photo.
-   */
-  kind?: 'file';
-  name?: string;
-  /** A file's own size in bytes, before encryption (its stored size includes a preview). */
-  bytes?: number;
-  /** Set when a file's preview is a real JPEG (a PDF's first page), not a stand-in. */
-  preview?: boolean;
-  /** A file's category, worked out on the device that added it or chosen by you. */
-  category?: Category;
-  /** A few words saying what a file is about, kept to learn from how you sort. */
-  words?: string[];
-  /** Set when you chose the category yourself. */
-  sorted?: 'you';
-}
-
 /** How this device reaches a library someone shared with it. */
 export interface Membership {
   /** This account's member id in that library. */
@@ -225,84 +190,6 @@ export interface Membership {
   myName: string;
   /** The name of whoever shared the library. */
   ownerName: string;
-}
-
-interface AlbumMeta {
-  v: 1;
-  title: string;
-  /** The album's own key, base64url, once it has been shared. */
-  shareKey?: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function parseAddedBy(value: unknown): AddedBy | null | undefined {
-  if (value === undefined) return undefined;
-  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string') {
-    return null;
-  }
-  return { id: value.id, name: value.name };
-}
-
-function parsePhotoMeta(value: unknown): PhotoMeta | null {
-  if (!isRecord(value)) return null;
-  const { v, key, type, width, height, takenAt, favorite, albumIds } = value;
-  const by = parseAddedBy(value.by);
-  const ok =
-    by !== null &&
-    v === 1 &&
-    typeof key === 'string' &&
-    typeof type === 'string' &&
-    typeKnown(value.kind, value.name, type) &&
-    typeof width === 'number' &&
-    typeof height === 'number' &&
-    typeof takenAt === 'string' &&
-    !Number.isNaN(Date.parse(takenAt)) &&
-    typeof favorite === 'boolean' &&
-    Array.isArray(albumIds) &&
-    albumIds.every((id) => typeof id === 'string');
-  const { deletedAt, fp } = value;
-  const deletedOk =
-    deletedAt === undefined ||
-    (typeof deletedAt === 'string' && !Number.isNaN(Date.parse(deletedAt)));
-  const fpOk = fp === undefined || typeof fp === 'string';
-  if (!ok || !deletedOk || !fpOk) return null;
-  const meta: PhotoMeta = { v, key, type, width, height, takenAt, favorite, albumIds };
-  if (by) meta.by = by;
-  if (deletedAt !== undefined) meta.deletedAt = deletedAt;
-  if (fp !== undefined) meta.fp = fp;
-  if (value.kind === 'file' && typeof value.name === 'string') {
-    meta.kind = 'file';
-    meta.name = value.name;
-    if (typeof value.bytes === 'number' && Number.isSafeInteger(value.bytes) && value.bytes >= 0) {
-      meta.bytes = value.bytes;
-    }
-    if (value.preview === true) meta.preview = true;
-    if (isCategory(value.category)) meta.category = value.category;
-    const words = parseKeywords(value.words);
-    if (words) meta.words = words;
-    if (value.sorted === 'you') meta.sorted = 'you';
-  }
-  return meta;
-}
-
-/** Whether a record's preview is an image: every photo's, and a file's own drawn one. */
-function hasPreview(meta: PhotoMeta): boolean {
-  return meta.kind !== 'file' || meta.preview === true;
-}
-
-/** A photo's type must be a photo format; a file's may be any type, with a usable name. */
-function typeKnown(kind: unknown, name: unknown, type: string): boolean {
-  if (kind === undefined) return isPhotoType(type);
-  return (
-    kind === 'file' &&
-    typeof name === 'string' &&
-    name.length > 0 &&
-    Array.from(name).length <= MAX_FILE_NAME &&
-    cleanFileType(type) === type
-  );
 }
 
 /** A file's name and type, if the record is a file's. */
@@ -320,48 +207,9 @@ function fileOf(meta: PhotoMeta): FileDetails | undefined {
     : undefined;
 }
 
-function parseAlbumMeta(value: unknown): AlbumMeta | null {
-  if (!isRecord(value) || value.v !== 1 || typeof value.title !== 'string') return null;
-  const meta: AlbumMeta = { v: 1, title: value.title };
-  if (typeof value.shareKey === 'string') meta.shareKey = value.shareKey;
-  else if (value.shareKey !== undefined) return null;
-  return meta;
-}
-
 const NOT_A_PHOTO = 'That’s a file, not a photo. Download it to open it.';
 
-const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
-
-/**
- * Every photo record is at least this many bytes before sealing, so a file's (with its name,
- * category and words) is the same size as a photo's and the server can't pick files out.
- */
-export const PHOTO_RECORD_MIN = 1000;
-
-/**
- * A photo's metadata, encoded at PHOTO_RECORD_MIN bytes or more: spaces fill a `pad` field
- * that's ignored when read. A file's words are dropped, last first, rather than let its
- * record grow past that.
- */
-export function encodePhotoMeta(meta: PhotoMeta): Uint8Array<ArrayBuffer> {
-  let fitted = meta;
-  while (fitted.words && fitted.words.length > 0 && encode(fitted).length > PHOTO_RECORD_MIN) {
-    fitted = { ...fitted, words: fitted.words.slice(0, -1) };
-  }
-  const bytes = encode({ ...fitted, pad: '' });
-  const missing = PHOTO_RECORD_MIN - bytes.length;
-  return missing > 0 ? encode({ ...fitted, pad: ' '.repeat(missing) }) : bytes;
-}
-
 const ALBUM_GONE = 'That album isn’t here anymore.';
-
-function decode(bytes: Uint8Array): unknown {
-  try {
-    return JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    return null;
-  }
-}
 
 /** Who added a photo, as this device sees it. The owner's photos carry no `by`. */
 function addedBy(
@@ -459,7 +307,7 @@ export function remoteStore(
 
   const sealAlbum = async (id: string, meta: AlbumMeta) => {
     const crypto = await loadCrypto();
-    return crypto.sealRecord(await access(), 'album', id, encode(meta));
+    return crypto.sealRecord(await access(), 'album', id, encodeJson(meta));
   };
 
   /** What a shared album's records are sealed under, or null if it isn't shared. */
@@ -567,7 +415,7 @@ export function remoteStore(
         const opened = await crypto
           .openRecord(keys, 'photo', stored.id, stored.meta)
           .catch(() => null);
-        const meta = opened && parsePhotoMeta(decode(opened));
+        const meta = opened && parsePhotoMeta(decodeJson(opened));
         const key = meta && crypto.fromBase64Url(meta.key);
         if (!meta || key?.length !== 32) continue;
         known.set(stored.id, { key, meta });
@@ -620,7 +468,7 @@ export function remoteStore(
         const opened = await crypto
           .openRecord(keys, 'album', stored.id, stored.meta)
           .catch(() => null);
-        const meta = opened && parseAlbumMeta(decode(opened));
+        const meta = opened && parseAlbumMeta(decodeJson(opened));
         if (!meta) continue;
         albumMetas.set(stored.id, meta);
         albums.push({ id: stored.id, title: meta.title });
@@ -827,7 +675,7 @@ export function remoteStore(
       if (shared) {
         await api.shareAlbum(
           albumId,
-          await crypto.sealRecord(shared, 'album', albumId, encode({ v: 1, title })),
+          await crypto.sealRecord(shared, 'album', albumId, encodeJson({ v: 1, title })),
         );
       }
     },
@@ -852,7 +700,7 @@ export function remoteStore(
       if (!shared) throw new FormError(ALBUM_GONE);
       await api.shareAlbum(
         albumId,
-        await crypto.sealRecord(shared, 'album', albumId, encode({ v: 1, title: meta.title })),
+        await crypto.sealRecord(shared, 'album', albumId, encodeJson({ v: 1, title: meta.title })),
       );
       // List what's missing and unlist what left, whatever happened since it was last shared.
       const listed = new Set((await api.listAlbumItems(albumId)).photoIds);

@@ -36,8 +36,7 @@ fixed tensors on purpose).
   `src/api-setup.ts` to use `expo/fetch`, which sends encrypted bytes as they are (React
   Native's own `fetch` would turn them into base64 first). The client keeps the session
   cookie in memory, not in the system cookie store.
-- The photo record format is copied from `apps/web/src/app/space-store.ts` until Phase 1
-  moves it into a shared package.
+- Photo records come from `@arcafold/core/records`, the same code the web app uses.
 - Known gap: expo-image-manipulator writes each thumbnail to the app's cache before we read
   and delete it. That's a plaintext copy of a gallery photo on disk for a moment, which the
   real app must avoid (a native in-memory resize), above all for photos headed to the
