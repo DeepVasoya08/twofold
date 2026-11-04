@@ -18,7 +18,7 @@ import {
   fileKindOf,
   photoTypeOf,
   placeholderPreview,
-} from '../lib/file-types';
+} from '@arcafold/core/file-types';
 import { photosAndFiles } from '../lib/format';
 import { fileDate, photoTakenAt } from '../lib/photo-date';
 import { loadSearchSetting } from '../lib/search/search-setting';

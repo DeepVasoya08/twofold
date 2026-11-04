@@ -114,7 +114,8 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
   (the native C library through react-native-libsodium). See [mobile.md](mobile.md).
 - **packages/core** — app logic with no screens in it, shared by the web app and the phone
   apps (Phase 1 of [mobile.md](mobile.md) moves it here piece by piece). So far: the API
-  client (`@arcafold/core/api`). The web app uses its defaults (same origin, the browser
+  client (`@arcafold/core/api`), the sealed photo and album record formats
+  (`@arcafold/core/records`), and the photo, file, category and keyword rules they use. The web app uses its defaults (same origin, the browser
   keeps the session cookie); phones call `configureApi` with arcafold.com, their own fetch,
   and `cookies: 'memory'`, which keeps the session cookie in the client's memory only.
 - **packages/types** — types shared between web, API, and mobile.

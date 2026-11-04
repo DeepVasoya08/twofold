@@ -1,8 +1,8 @@
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
-import { categoryLabel } from '../lib/file-sort/categories';
-import type { Category } from '../lib/file-sort/categories';
-import { fileKindLabel, fileKindOf } from '../lib/file-types';
+import { categoryLabel } from '@arcafold/core/file-categories';
+import type { Category } from '@arcafold/core/file-categories';
+import { fileKindLabel, fileKindOf } from '@arcafold/core/file-types';
 import { formatShortDay } from '../lib/format';
 import { formatBytes } from '../lib/storage-usage';
 import type { Photo } from '../mock/data';

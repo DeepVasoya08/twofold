@@ -1,9 +1,9 @@
 import { takenIn } from '../search/query';
 import type { When } from '../search/query';
-import { fileExtension, fileKindLabel, fileKindOf } from '../file-types';
+import { fileExtension, fileKindLabel, fileKindOf } from '@arcafold/core/file-types';
 import type { Photo } from '../../mock/data';
-import { categoryLabel } from './categories';
-import { wordsIn } from './words';
+import { categoryLabel } from '@arcafold/core/file-categories';
+import { wordsIn } from '@arcafold/core/keywords';
 
 /**
  * Finding files from the search box, on this device: a file matches when every word typed

@@ -14,7 +14,7 @@ import type { SpaceKeys } from '@arcafold/crypto';
 import type { PhotoPart } from '@arcafold/types';
 
 import { copyNames } from '../lib/copy-names';
-import type { Category } from '../lib/file-sort/categories';
+import type { Category } from '@arcafold/core/file-categories';
 import { downloadAll } from '../lib/download-progress';
 import type { DownloadProgress } from '../lib/download-progress';
 import type { PhotoCopy } from '../lib/save-copies';

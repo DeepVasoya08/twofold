@@ -1,4 +1,4 @@
-import { isVideoFile } from '../lib/file-types';
+import { isVideoFile } from '@arcafold/core/file-types';
 import { isUploadRunning } from '../lib/upload-progress';
 import type { UploadStatus } from '../lib/upload-progress';
 import { canStartUpload } from '../lib/upload-queue';

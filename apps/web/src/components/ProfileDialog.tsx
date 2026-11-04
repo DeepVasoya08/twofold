@@ -6,7 +6,7 @@ import { errorMessage } from '../app/account-ops';
 import { useProfile } from '../app/profile';
 import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
-import { PHOTO_TYPES } from '../lib/photo-types';
+import { PHOTO_TYPES } from '@arcafold/core/photo-types';
 import { Avatar } from './Brand';
 import { Dialog } from './Dialog';
 import { TextField } from './Field';

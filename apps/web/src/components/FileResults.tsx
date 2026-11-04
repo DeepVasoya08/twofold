@@ -1,7 +1,7 @@
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
-import { categoryLabel } from '../lib/file-sort/categories';
-import { fileKindLabel, fileKindOf } from '../lib/file-types';
+import { categoryLabel } from '@arcafold/core/file-categories';
+import { fileKindLabel, fileKindOf } from '@arcafold/core/file-types';
 import { formatShortDay, pluralize } from '../lib/format';
 import type { Photo } from '../mock/data';
 import { FileThumb } from './FileIcon';

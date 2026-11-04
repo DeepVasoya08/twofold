@@ -1,5 +1,5 @@
-import type { Category } from './categories';
-import { wordsIn } from './words';
+import type { Category } from '@arcafold/core/file-categories';
+import { wordsIn } from '@arcafold/core/keywords';
 
 /**
  * Sorting by words: each category has a short list of words and phrases that give it away,
