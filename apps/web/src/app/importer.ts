@@ -1,9 +1,9 @@
 import type { ImportItem } from '../lib/import/takeout';
 import { canStartUpload } from '../lib/upload-queue';
 import type { InFlight } from '../lib/upload-queue';
-import type { Album, Photo } from '../mock/data';
-import { errorMessage } from './account-ops';
-import type { NewPhoto } from './space-store';
+import type { Album, Photo } from '@arcafold/core/library/model';
+import { errorMessage } from '@arcafold/core/errors';
+import type { NewPhoto } from '@arcafold/core/library/space-store';
 
 /**
  * Runs an import into the open space, kept outside React like the upload queue, so moving

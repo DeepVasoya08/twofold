@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { GoogleSignInError, googleSignIn } from '../app/google-sign-in';
 import { useImports } from '../app/imports';
 import { useVault } from '../app/vault';
@@ -15,6 +14,7 @@ import {
 import type { PickerSession } from '../lib/import/google-picker';
 import { FormAlert } from './FormAlert';
 import { Icon } from './Icon';
+import { errorMessage } from '@arcafold/core/errors';
 
 /** Google's own errors are written for people; anything else gets the usual message. */
 const connectError = (error: unknown): string =>

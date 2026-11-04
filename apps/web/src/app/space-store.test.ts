@@ -7,10 +7,11 @@ import { fromBase64Url } from '@arcafold/crypto/webcrypto';
 import { STORAGE_SIZES, THUMB_BATCH_MAX } from '@arcafold/types';
 
 import { FakeServer } from '../test/fake-server';
-import { combinedStore, memoryStore, remoteStore } from './space-store';
-import type { NewPhoto } from './space-store';
-import type { Album, Photo } from '../mock/data';
-import { PartialThumbs } from './thumb-loader';
+import { combinedStore, remoteStore } from '@arcafold/core/library/space-store';
+import { memoryStore } from './memory-store';
+import type { NewPhoto } from '@arcafold/core/library/space-store';
+import type { Album, Photo } from '@arcafold/core/library/model';
+import { PartialThumbs } from '@arcafold/core/library/space-store';
 
 function bytes(text: string): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode(text);

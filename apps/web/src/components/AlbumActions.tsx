@@ -2,18 +2,18 @@ import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
 import { useAccount } from '../app/account';
-import { errorMessage } from '../app/account-ops';
 import { useDownloads } from '../app/downloads';
 import { leaveJoined } from '../app/sharing';
 import { useToast } from '../app/toast';
 import { albumFiles, albumPhotos, useVault } from '../app/vault';
 import { photosAndFiles } from '../lib/format';
-import type { Album } from '../mock/data';
 import { AlbumShareDialog } from './AlbumShareDialog';
 import { Dialog } from './Dialog';
 import { TextField } from './Field';
 import { Menu } from './Menu';
 import type { MenuItem } from './Menu';
+import { errorMessage } from '@arcafold/core/errors';
+import type { Album } from '@arcafold/core/library/model';
 
 type Open = 'rename' | 'share' | 'delete' | 'leave' | null;
 

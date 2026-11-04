@@ -3,8 +3,8 @@ import { paths } from '../app/routes';
 import { categoryLabel } from '@arcafold/core/file-categories';
 import { fileKindLabel, fileKindOf } from '@arcafold/core/file-types';
 import { formatShortDay, pluralize } from '../lib/format';
-import type { Photo } from '../mock/data';
 import { FileThumb } from './FileIcon';
+import type { Photo } from '@arcafold/core/library/model';
 
 import '../screens/files.css';
 

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Photo } from '../mock/data';
 import {
   formatDateRange,
   formatLastActive,
@@ -9,6 +8,7 @@ import {
   photosAndFiles,
   pluralize,
 } from './format';
+import type { Photo } from '@arcafold/core/library/model';
 
 function photo(id: string, takenAt: string, location?: string): Photo {
   return {

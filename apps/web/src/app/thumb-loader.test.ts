@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { THUMB_BATCH_MAX } from '@arcafold/types';
 
 import {
-  PartialThumbs,
   THUMB_FLUSH_MS,
   THUMB_GATHER_MS,
   THUMB_ON_SCREEN_BATCH,
@@ -11,6 +10,7 @@ import {
   THUMB_RETRY_MS,
   createThumbLoader,
 } from './thumb-loader';
+import { PartialThumbs } from '@arcafold/core/library/space-store';
 
 const urlsFor = (ids: readonly string[]) => new Map(ids.map((id) => [id, `blob:${id}`]));
 

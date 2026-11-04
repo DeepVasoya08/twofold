@@ -1,6 +1,5 @@
 import { useState } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { allSelected, batchMessage, useSelection } from '../app/selection';
 import { useToast } from '../app/toast';
 import { TRASH_DAYS, trashDaysLeft, useVault } from '../app/vault';
@@ -11,7 +10,8 @@ import { Icon } from '../components/Icon';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { photosAndFiles } from '../lib/format';
 import type { Settled } from '../lib/settle-each';
-import type { Photo } from '../mock/data';
+import { errorMessage } from '@arcafold/core/errors';
+import type { Photo } from '@arcafold/core/library/model';
 
 import '../components/selection-bar.css';
 

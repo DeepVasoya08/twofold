@@ -20,9 +20,7 @@ import type { DownloadProgress } from '../lib/download-progress';
 import type { PhotoCopy } from '../lib/save-copies';
 import { settleEach } from '../lib/settle-each';
 import type { Settled } from '../lib/settle-each';
-import { FormError } from './account-ops';
 import type { Space } from './account-ops';
-import type { NewPhoto, Original, SpaceStore, UploadStage } from './space-store';
 import { createThumbLoader } from './thumb-loader';
 import {
   initialAlbums,
@@ -30,7 +28,14 @@ import {
   initialPrivateAlbums,
   initialPrivatePhotos,
 } from '../mock/data';
-import type { Album, Photo } from '../mock/data';
+import { FormError } from '@arcafold/core/errors';
+import type {
+  NewPhoto,
+  Original,
+  SpaceStore,
+  UploadStage,
+} from '@arcafold/core/library/space-store';
+import type { Album, Photo } from '@arcafold/core/library/model';
 
 /**
  * The open space's photos and albums, decrypted in memory. Changes go to the space's store

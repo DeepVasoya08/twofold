@@ -1,5 +1,7 @@
 import { THUMB_BATCH_MAX } from '@arcafold/types';
 
+import { PartialThumbs } from '@arcafold/core/library/space-store';
+
 /**
  * Thumbnails download only once their photo is near the screen, many per request. Requests
  * made within this long of each other share a batch, and at most THUMB_REQUESTS batches are
@@ -24,19 +26,6 @@ export const THUMB_FLUSH_MS = 100;
  */
 export const THUMB_RETRY_MS = 1000;
 export const THUMB_RETRIES = 3;
-
-/**
- * Thrown by a fetch that got some previews but failed for others (one of several libraries
- * couldn't be reached). The ones it got are shown; only the failed ones are tried again.
- */
-export class PartialThumbs extends Error {
-  constructor(
-    readonly found: ReadonlyMap<string, string>,
-    readonly failed: readonly string[],
-  ) {
-    super('Some previews could not be downloaded.');
-  }
-}
 
 export interface ThumbLoaderDeps {
   /**

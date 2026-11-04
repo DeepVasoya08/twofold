@@ -4,7 +4,6 @@ import type { CSSProperties } from 'react';
 import type { SpaceKeys } from '@arcafold/crypto';
 
 import { useAccount, useMe } from '../app/account';
-import { errorMessage } from '../app/account-ops';
 import { useSmartAlbum } from '../app/answer';
 import { useFind } from '../app/find';
 import { useSearch } from '../app/search';
@@ -24,9 +23,11 @@ import { MoveSpaceDialog, moveLabel } from '../components/MoveSpaceDialog';
 import { PhotoImage } from '../components/PhotoImage';
 import { formatDay, formatTime, sortNewestFirst } from '../lib/format';
 import type { DocumentLook } from '../lib/file-sort/looks';
-import type { Person, Photo } from '../mock/data';
+import type { Person } from '../mock/data';
 
 import { useZoom } from './use-zoom';
+import { errorMessage } from '@arcafold/core/errors';
+import type { Photo } from '@arcafold/core/library/model';
 
 import './photo-viewer.css';
 

@@ -9,6 +9,7 @@ import type {
 } from '@arcafold/types';
 
 import { ApiError } from '@arcafold/core/api';
+import { FormError, errorInput, errorMessage } from '@arcafold/core/errors';
 import type * as ApiModule from '@arcafold/core/api';
 import * as ops from './account-ops';
 import type { Session } from './account-ops';
@@ -177,16 +178,16 @@ describe('main password and recovery', { timeout: 30_000 }, () => {
     const wrong = await ops
       .changeMainPassword(session, 'wrong guess here', 'new main one')
       .catch((error: unknown) => error);
-    expect(wrong).toBeInstanceOf(ops.FormError);
-    expect(ops.errorMessage(wrong)).toBe('That password isn’t right.');
+    expect(wrong).toBeInstanceOf(FormError);
+    expect(errorMessage(wrong)).toBe('That password isn’t right.');
     // Shown under the current password, since that's the one to fix.
-    expect(ops.errorInput(wrong)).toBe('current');
+    expect(errorInput(wrong)).toBe('current');
 
     const withPrivate = await ops.setPrivatePassword(session, null, PRIVATE);
     const clash = await ops
       .changeMainPassword(withPrivate, MAIN, PRIVATE)
       .catch((error: unknown) => error);
-    expect(ops.errorInput(clash)).toBe('new');
+    expect(errorInput(clash)).toBe('new');
 
     const changed = await ops.changeMainPassword(withPrivate, MAIN, 'new main one');
     // Changing the main password keeps the private space's keys for this session.
@@ -266,13 +267,5 @@ describe('deleteAccount', { timeout: 30_000 }, () => {
     expect(server.wiped.sort()).toEqual(tokens.sort());
     // Each space first leaves the libraries it joined.
     expect(left.sort()).toEqual(tokens.sort());
-  });
-});
-
-describe('errorMessage', () => {
-  it('shows form and API messages, and hides anything else', () => {
-    expect(ops.errorMessage(new ops.FormError('Fix this'))).toBe('Fix this');
-    expect(ops.errorMessage(new ApiError(429, 'Slow down'))).toBe('Slow down');
-    expect(ops.errorMessage(new Error('internal detail'))).toBe('Something went wrong. Try again.');
   });
 });

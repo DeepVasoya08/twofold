@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
-
-import { errorMessage } from './account-ops';
+import { errorMessage } from '@arcafold/core/errors';
 
 /** Busy and error state for a form whose submit runs an async account operation. */
 export function useSubmit() {

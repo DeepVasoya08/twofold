@@ -1,6 +1,5 @@
 import { useState } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { usePendingInvites } from '../app/invites';
 import type { InviteEntry, JoinEntry } from '../app/invites';
 import { useRouter } from '../app/router';
@@ -8,6 +7,7 @@ import { matchRoute, paths } from '../app/routes';
 import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
 import { Icon } from './Icon';
+import { errorMessage } from '@arcafold/core/errors';
 
 import '../screens/share.css';
 

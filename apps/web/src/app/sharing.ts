@@ -4,9 +4,9 @@ import type { InviterView, JoinerView, MemberAccess } from '@arcafold/types';
 
 import { ApiError, inviteApi, spaceApi } from '@arcafold/core/api';
 import type { InviteApi, SpaceApi } from '@arcafold/core/api';
-import { FormError } from './account-ops';
-import { combinedStore, remoteStore } from './space-store';
-import type { SharedSource, SpaceStore } from './space-store';
+import { FormError } from '@arcafold/core/errors';
+import { combinedStore, remoteStore } from '@arcafold/core/library/space-store';
+import type { SharedSource, SpaceStore } from '@arcafold/core/library/space-store';
 
 /**
  * Sharing a space or one album of it, and what a space has joined.

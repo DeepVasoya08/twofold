@@ -1,4 +1,4 @@
-import type { Photo } from '../mock/data';
+import type { Photo } from '@arcafold/core/library/model';
 
 // Dates render in UTC until photos carry their own time zone, so labels never drift.
 const monthFormat = new Intl.DateTimeFormat('en-US', {

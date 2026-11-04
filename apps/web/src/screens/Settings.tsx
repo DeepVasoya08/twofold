@@ -7,7 +7,6 @@ import type { Device, MemberAccess } from '@arcafold/types';
 import { useAccount, useMe } from '../app/account';
 import { useAutoLock } from '../app/auto-lock';
 import { useProfile } from '../app/profile';
-import { errorInput, errorMessage } from '../app/account-ops';
 import { useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import {
@@ -37,6 +36,7 @@ import { onVisibleAgain } from '../lib/when-visible';
 import { AUTO_LOCK_CHOICES, parseAutoLock } from '../lib/auto-lock';
 import { formatLastActive, formatShortDay, pluralize } from '../lib/format';
 import { MIN_PASSWORD_LENGTH } from '../lib/password';
+import { errorInput, errorMessage } from '@arcafold/core/errors';
 
 import './settings.css';
 

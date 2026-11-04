@@ -1,12 +1,14 @@
+import type * as CryptoModule from '@arcafold/crypto';
 import type { SpaceAccess, SpaceKeys } from '@arcafold/crypto';
 import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@arcafold/types';
 import type { PhotoPage, PhotoPart } from '@arcafold/types';
 
-import { spaceApi } from '@arcafold/core/api';
-import type { SpaceApi } from '@arcafold/core/api';
-import type { Category } from '@arcafold/core/file-categories';
-import { cleanFileType } from '@arcafold/core/file-types';
-import { isPhotoType } from '@arcafold/core/photo-types';
+import { spaceApi } from '../api';
+import type { SpaceApi } from '../api';
+import { FormError } from '../errors';
+import type { Category } from '../file-categories';
+import { cleanFileType, isJpeg } from '../file-types';
+import { isPhotoType } from '../photo-types';
 import {
   decodeJson,
   encodeJson,
@@ -14,33 +16,66 @@ import {
   hasPreview,
   parseAlbumMeta,
   parsePhotoMeta,
-} from '@arcafold/core/records';
-import type { AlbumMeta, PhotoMeta } from '@arcafold/core/records';
-
-import { isJpeg } from '../lib/file-preview';
-import { viewableCopy } from '../lib/thumbnail-service';
-import type { Album, FileDetails, Photo } from '../mock/data';
-import { FormError } from './account-ops';
-import { PartialThumbs } from './thumb-loader';
+} from '../records';
+import type { AlbumMeta, PhotoMeta } from '../records';
+import type { Album, FileDetails, Photo } from './model';
 
 /**
  * One space's photos and albums, stored encrypted on the server. Every photo has its own
  * key, kept inside the photo's sealed metadata; the metadata and albums are sealed under the
- * space key. Decrypted images only ever exist as in-memory object URLs, revoked on dispose.
+ * space key. Decrypted images only ever exist in memory (object URLs on web), freed on dispose.
  */
 
-let fileCryptoChosen = false;
+type Crypto = typeof CryptoModule;
 
-const loadCrypto = async () => {
-  const crypto = await import('@arcafold/crypto');
-  // Originals encrypt and decrypt in a Web Worker so a large one doesn't freeze the page.
-  if (!fileCryptoChosen && typeof Worker !== 'undefined') {
-    fileCryptoChosen = true;
-    const { spawnFileCryptoWorker } = await import('../lib/file-crypto-worker');
-    crypto.setFileCrypto(crypto.workerFileCrypto(spawnFileCryptoWorker));
-  }
-  return crypto;
+/** What a store needs from the platform it runs on. */
+export interface LibraryPlatform {
+  /** Loads the crypto package, set up for this platform (the web app adds a Web Worker). */
+  loadCrypto: () => Promise<Crypto>;
+  /** Makes decrypted image bytes showable, kept in memory only: an object URL on web. */
+  showImage: (bytes: Uint8Array<ArrayBuffer>, type: string) => string;
+  /** Frees what showImage made. */
+  releaseImage: (src: string) => void;
+  /**
+   * A JPEG copy to show in place of an original this platform can't show (HEIC in most
+   * browsers), made in memory. Null when the original shows as it is.
+   */
+  viewableCopy: (
+    original: Uint8Array<ArrayBuffer>,
+    type: string,
+  ) => Promise<Uint8Array<ArrayBuffer> | null>;
+}
+
+const browserPlatform: LibraryPlatform = {
+  loadCrypto: () => import('@arcafold/crypto'),
+  showImage: (bytes, type) => URL.createObjectURL(new Blob([bytes], { type })),
+  releaseImage: (src) => {
+    URL.revokeObjectURL(src);
+  },
+  viewableCopy: () => Promise.resolve(null),
 };
+
+let platform: LibraryPlatform = browserPlatform;
+
+/** Sets how stores load crypto and show images. Defaults suit a browser. */
+export function configureLibrary(next: Partial<LibraryPlatform>): void {
+  platform = { ...platform, ...next };
+}
+
+const loadCrypto = () => platform.loadCrypto();
+
+/**
+ * Thrown by `thumbs` when some previews arrived and others failed (the batch was cut off or
+ * couldn't be reached). The ones it got are shown; only the failed ones are tried again.
+ */
+export class PartialThumbs extends Error {
+  constructor(
+    readonly found: ReadonlyMap<string, string>,
+    readonly failed: readonly string[],
+  ) {
+    super('Some previews could not be downloaded.');
+  }
+}
 
 /** A photo's decrypted original and what's needed to save a copy of it. */
 export interface Original {
@@ -280,7 +315,7 @@ export function remoteStore(
     const name = `${photoId}/${part}`;
     const previous = urls.get(name);
     if (previous) return previous;
-    const url = URL.createObjectURL(new Blob([bytes], { type }));
+    const url = platform.showImage(bytes, type);
     urls.set(name, url);
     return url;
   };
@@ -289,7 +324,7 @@ export function remoteStore(
     known.delete(photoId);
     for (const part of ['thumb', 'full', 'view'] as const) {
       const url = urls.get(`${photoId}/${part}`);
-      if (url) URL.revokeObjectURL(url);
+      if (url) platform.releaseImage(url);
       urls.delete(`${photoId}/${part}`);
     }
   };
@@ -491,11 +526,11 @@ export function remoteStore(
         // Originals can be large, so only the latest one stays decrypted in memory.
         for (const [name, url] of urls) {
           if (name.endsWith('/full') || name.endsWith('/view')) {
-            URL.revokeObjectURL(url);
+            platform.releaseImage(url);
             urls.delete(name);
           }
         }
-        const copy = await viewableCopy(plain, entry.meta.type);
+        const copy = await platform.viewableCopy(plain, entry.meta.type);
         if (copy) track(photoId, 'view', copy, THUMB_TYPE);
       }
       return track(photoId, part, plain, part === 'thumb' ? THUMB_TYPE : entry.meta.type);
@@ -775,7 +810,7 @@ export function remoteStore(
     },
 
     dispose: () => {
-      for (const url of urls.values()) URL.revokeObjectURL(url);
+      for (const url of urls.values()) platform.releaseImage(url);
       urls.clear();
     },
   };
@@ -980,64 +1015,5 @@ export function combinedStore(
       own.dispose();
       for (const source of shared) source.store.dispose();
     },
-  };
-}
-
-/**
- * A store that keeps nothing: for rendering tests and previews that start from fixed state.
- * Images are whatever `src` the photos already have.
- */
-export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): SpaceStore {
-  let next = 0;
-  const newId = () => {
-    next += 1;
-    return `local-${String(next)}`;
-  };
-  return {
-    list: () => Promise.resolve(initial),
-    image: (photoId) =>
-      Promise.resolve(initial.photos.find((photo) => photo.id === photoId)?.src ?? ''),
-    viewImage: () => undefined,
-    thumbs: (photoIds) =>
-      Promise.resolve(
-        new Map(
-          initial.photos
-            .filter((photo) => photo.src && photoIds.includes(photo.id))
-            .map((photo) => [photo.id, photo.src]),
-        ),
-      ),
-    previews: (photoIds, onPreview) => {
-      // Fixed photos have no encrypted previews to look at.
-      for (const photoId of photoIds) onPreview(photoId, null);
-      return Promise.resolve();
-    },
-    add: (photo, albumIds) => {
-      const url = URL.createObjectURL(new Blob([photo.full], { type: photo.type }));
-      return Promise.resolve({
-        id: newId(),
-        src: url,
-        width: photo.width,
-        height: photo.height,
-        takenAt: photo.takenAt,
-        addedBy: 'me',
-        favorite: photo.favorite ?? false,
-        albumIds,
-      });
-    },
-    update: () => Promise.resolve(),
-    remove: () => Promise.resolve(),
-    listTrash: () => Promise.resolve([]),
-    trash: (photoIds) => Promise.resolve([...photoIds]),
-    restore: (photoIds) => Promise.resolve([...photoIds]),
-    createAlbum: (title) => Promise.resolve({ id: newId(), title }),
-    renameAlbum: () => Promise.resolve(),
-    removeAlbum: () => Promise.resolve(),
-    shareAlbum: () => Promise.reject(new FormError('This preview can’t share albums.')),
-    stopSharingAlbum: () => Promise.resolve(),
-    read: () => Promise.reject(new FormError('This preview can’t move photos.')),
-    original: () => Promise.reject(new FormError('This preview can’t download photos.')),
-    fingerprint: () => Promise.reject(new FormError('This preview can’t import photos.')),
-    fingerprints: () => new Map(),
-    dispose: () => undefined,
   };
 }

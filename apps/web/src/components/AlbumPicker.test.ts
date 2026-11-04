@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Photo } from '../mock/data';
 import { albumChoices, shareChoices } from './AlbumPicker';
+import type { Photo } from '@arcafold/core/library/model';
 
 const photo = (library?: string): Photo => ({
   id: library ?? 'mine',

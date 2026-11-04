@@ -4,11 +4,11 @@ import { SMART_FEATURES_VERSION } from '@arcafold/types';
 import type { SmartFeaturesChoice } from '@arcafold/types';
 
 import { useAccount } from '../app/account';
-import { errorMessage } from '../app/account-ops';
 import { usePeople } from '../app/people';
 import { useToast } from '../app/toast';
 import { MODEL_DOWNLOAD_MB } from '../lib/people/models';
 import { Dialog } from './Dialog';
+import { errorMessage } from '@arcafold/core/errors';
 
 import './smart-features-prompt.css';
 

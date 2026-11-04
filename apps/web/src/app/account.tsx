@@ -15,6 +15,8 @@ import type { AccountResponse, SmartFeaturesChoice } from '@arcafold/types';
 import { ApiError, api, onSessionEnded } from '@arcafold/core/api';
 import { onVisibleAgain } from '../lib/when-visible';
 import type { Person } from '../mock/data';
+import { FormError } from '@arcafold/core/errors';
+
 import * as ops from './account-ops';
 import { leaveAll } from './sharing';
 import type { PendingSignUp, Session, Space } from './account-ops';
@@ -146,7 +148,7 @@ export function AccountProvider({
     async (start: () => Promise<Session>) => {
       const dropped = keysDropped.current;
       const session = await start();
-      if (keysDropped.current !== dropped) throw new ops.FormError(SIGNED_OUT_MEANWHILE);
+      if (keysDropped.current !== dropped) throw new FormError(SIGNED_OUT_MEANWHILE);
       open(session);
     },
     [open],
@@ -198,7 +200,7 @@ export function AccountProvider({
     const session = state.status === 'unlocked' ? state.session : null;
     const account = accountOf(state);
     const requireSession = (): Session => {
-      if (!session) throw new ops.FormError('Unlock Arcafold first.');
+      if (!session) throw new FormError('Unlock Arcafold first.');
       return session;
     };
     /** Keeps an operation's new session, unless the keys were dropped while it ran. */
@@ -222,7 +224,7 @@ export function AccountProvider({
         setPendingSignUp(await ops.prepareSignUp(values));
       },
       completeSignUp: async () => {
-        if (!pendingSignUp) throw new ops.FormError('Start again from the sign-up page.');
+        if (!pendingSignUp) throw new FormError('Start again from the sign-up page.');
         open(await ops.completeSignUp(pendingSignUp));
         setPendingSignUp(null);
       },
@@ -256,7 +258,7 @@ export function AccountProvider({
       otherSpaceOpen: session?.otherSpace !== undefined,
       openOtherSpace: async (password) => {
         const next = await update(() => ops.openOtherSpace(requireSession(), password));
-        if (!next?.otherSpace) throw new ops.FormError('Unlock the other space first.');
+        if (!next?.otherSpace) throw new FormError('Unlock the other space first.');
         return next.otherSpace;
       },
       saveRecoveryKey: (recoveryKey) =>

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SubmitEvent } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { usePendingInvites } from '../app/invites';
 import { matchRoute, paths } from '../app/routes';
 import { useVault } from '../app/vault';
@@ -10,6 +9,7 @@ import { TextField } from '../components/Field';
 import { FormAlert } from '../components/FormAlert';
 import { Icon } from '../components/Icon';
 import { JoinProgressView } from '../components/Invites';
+import { errorMessage } from '@arcafold/core/errors';
 
 import './share.css';
 

@@ -1,6 +1,5 @@
 import { STORAGE_SIZES } from '@arcafold/types';
-
-import type { Photo } from '../mock/data';
+import type { Photo } from '@arcafold/core/library/model';
 
 /**
  * What the open space takes up: the encrypted size of its own photos, as listed. Photos in

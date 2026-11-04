@@ -8,10 +8,10 @@ import type { Selection } from '../app/selection';
 import { usePhotoView } from '../app/views';
 import { formatShortDay } from '../lib/format';
 import { aspectOf } from '../lib/views';
-import type { Photo } from '../mock/data';
 import { FileThumb } from './FileIcon';
 import { Icon } from './Icon';
 import { PhotoImage } from './PhotoImage';
+import type { Photo } from '@arcafold/core/library/model';
 
 import './photo-grid.css';
 

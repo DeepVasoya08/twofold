@@ -1,12 +1,12 @@
 import { useState } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { usePeople } from '../app/people';
 import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
 import { MODEL_DOWNLOAD_MB } from '../lib/people/models';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
+import { errorMessage } from '@arcafold/core/errors';
 
 /**
  * Face grouping in Settings: on or off for this device, and forgetting every face and name

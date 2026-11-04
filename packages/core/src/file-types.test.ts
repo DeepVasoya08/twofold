@@ -7,6 +7,7 @@ import {
   fileExtension,
   fileKindLabel,
   fileKindOf,
+  isJpeg,
   isVideoFile,
   photoTypeOf,
   placeholderPreview,
@@ -105,5 +106,13 @@ describe('placeholderPreview', () => {
   it('is always the size of a small photo preview', () => {
     expect(placeholderPreview(() => 0)).toHaveLength(16 * 1024);
     expect(placeholderPreview(() => 0.999).length).toBeLessThan(48 * 1024);
+  });
+});
+
+describe('isJpeg', () => {
+  it('knows a JPEG from a stand-in or anything else', () => {
+    expect(isJpeg(new Uint8Array([0xff, 0xd8, 0xff, 0xdb]))).toBe(true);
+    expect(isJpeg(new Uint8Array(20_000))).toBe(false);
+    expect(isJpeg(new TextEncoder().encode('<svg>'))).toBe(false);
   });
 });

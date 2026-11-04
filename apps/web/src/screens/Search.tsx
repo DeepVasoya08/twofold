@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { useFind } from '../app/find';
 import type { NotLookedAt } from '../app/answer';
 import { Link, useRouter } from '../app/router';
@@ -21,7 +20,8 @@ import { pluralize } from '../lib/format';
 import type { ParsedQuery } from '../lib/search/query';
 import { SEARCH_RESOURCES } from '../lib/search/resources';
 import { MAX_SMART_TITLE, smartAlbumFits, suggestTitle } from '../lib/search/smart-album';
-import type { Photo } from '../mock/data';
+import { errorMessage } from '@arcafold/core/errors';
+import type { Photo } from '@arcafold/core/library/model';
 
 import './search.css';
 

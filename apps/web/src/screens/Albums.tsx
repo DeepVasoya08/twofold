@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useSmartAlbum } from '../app/answer';
@@ -16,7 +15,8 @@ import { Icon } from '../components/Icon';
 import { PhotoImage } from '../components/PhotoImage';
 import { formatDateRange, photosAndFiles, pluralize } from '../lib/format';
 import type { SmartAlbum } from '../lib/search/smart-album';
-import type { Album } from '../mock/data';
+import { errorMessage } from '@arcafold/core/errors';
+import type { Album } from '@arcafold/core/library/model';
 
 import './albums.css';
 

@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react';
 import type { SpaceKeys } from '@arcafold/crypto';
 
 import { useAccount } from '../app/account';
-import { errorMessage } from '../app/account-ops';
 import { useDownloads } from '../app/downloads';
 import { useToast } from '../app/toast';
 import { useUploads } from '../app/uploads';
@@ -27,7 +26,8 @@ import { lookCategory } from '../lib/file-sort/looks';
 import type { DocumentLook } from '../lib/file-sort/looks';
 import { groupByMonth, pluralize } from '../lib/format';
 import { formatBytes } from '../lib/storage-usage';
-import type { Photo } from '../mock/data';
+import { errorMessage } from '@arcafold/core/errors';
+import type { Photo } from '@arcafold/core/library/model';
 
 import './files.css';
 import './gallery.css';

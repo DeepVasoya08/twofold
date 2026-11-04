@@ -1,4 +1,5 @@
 import { configureApi } from '@arcafold/core/api';
+import { configureLibrary } from '@arcafold/core/library/space-store';
 import { fetch } from 'expo/fetch';
 
 /**
@@ -10,4 +11,13 @@ configureApi({
   origin: 'https://arcafold.com',
   fetch: (url, init) => fetch(url, init),
   cookies: 'memory',
+});
+
+/**
+ * The spike never shows the photos it uploads, so the library store makes no image of them.
+ * The real app will hand decrypted bytes to a native image view here, kept in memory only.
+ */
+configureLibrary({
+  showImage: () => '',
+  releaseImage: () => undefined,
 });

@@ -1,7 +1,7 @@
 import type { DownloadProgress } from '../lib/download-progress';
 import { DOWNLOAD_MAX_BYTES } from '../lib/save-copies';
 import type { PreparedCopies } from '../lib/save-copies';
-import { errorMessage } from './account-ops';
+import { errorMessage } from '@arcafold/core/errors';
 
 /**
  * The open space's download, kept outside React so that closing the download dialog (or

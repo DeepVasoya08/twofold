@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import type { SubmitEvent } from 'react';
 
 import { useAccount, useMe } from '../app/account';
-import { errorMessage } from '../app/account-ops';
 import { useProfile } from '../app/profile';
 import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
@@ -11,6 +10,7 @@ import { Avatar } from './Brand';
 import { Dialog } from './Dialog';
 import { TextField } from './Field';
 import { FormAlert } from './FormAlert';
+import { errorMessage } from '@arcafold/core/errors';
 
 /** Matches the server's limit on names. */
 export const MAX_NAME_LENGTH = 60;
