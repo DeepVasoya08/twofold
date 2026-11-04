@@ -1,9 +1,9 @@
-import type * as CryptoModule from '@arcafold/crypto';
 import type { SpaceAccess, SpaceKeys } from '@arcafold/crypto';
 import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@arcafold/types';
 import type { PhotoPage, PhotoPart } from '@arcafold/types';
 
 import { spaceApi } from '../api';
+import { loadCrypto } from '../crypto-loader';
 import type { SpaceApi } from '../api';
 import { FormError } from '../errors';
 import type { Category } from '../file-categories';
@@ -26,12 +26,8 @@ import type { Album, FileDetails, Photo } from './model';
  * space key. Decrypted images only ever exist in memory (object URLs on web), freed on dispose.
  */
 
-type Crypto = typeof CryptoModule;
-
 /** What a store needs from the platform it runs on. */
 export interface LibraryPlatform {
-  /** Loads the crypto package, set up for this platform (the web app adds a Web Worker). */
-  loadCrypto: () => Promise<Crypto>;
   /** Makes decrypted image bytes showable, kept in memory only: an object URL on web. */
   showImage: (bytes: Uint8Array<ArrayBuffer>, type: string) => string;
   /** Frees what showImage made. */
@@ -47,7 +43,6 @@ export interface LibraryPlatform {
 }
 
 const browserPlatform: LibraryPlatform = {
-  loadCrypto: () => import('@arcafold/crypto'),
   showImage: (bytes, type) => URL.createObjectURL(new Blob([bytes], { type })),
   releaseImage: (src) => {
     URL.revokeObjectURL(src);
@@ -61,8 +56,6 @@ let platform: LibraryPlatform = browserPlatform;
 export function configureLibrary(next: Partial<LibraryPlatform>): void {
   platform = { ...platform, ...next };
 }
-
-const loadCrypto = () => platform.loadCrypto();
 
 /**
  * Thrown by `thumbs` when some previews arrived and others failed (the batch was cut off or

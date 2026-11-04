@@ -325,7 +325,7 @@ to save the search again.
   1 GB used": the account's total across both spaces, the same in either one, against the
   one shared 1 GB (`app/storage.tsx`, `lib/storage-usage.ts`).
 - State lives in `app/account.tsx` (who is signed in, which slot is open) and
-  `app/account-ops.ts` (every operation that touches keys); `app/access.ts` decides
+  `@arcafold/core/account` (every operation that touches keys); `app/access.ts` decides
   redirects.
 
 ## Screens and routes
@@ -548,7 +548,7 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
 - Decrypted photos are shown through in-memory object URLs, revoked when the vault
   unmounts (lock, sign-out), and must never be written to `localStorage`, IndexedDB or
   caches.
-- No password is kept anywhere: it is turned into keys inside `app/account-ops.ts` and
+- No password is kept anywhere: it is turned into keys inside `@arcafold/core/account` and
   dropped. Keys live only in React state and are dropped on lock, sign-out and reload,
   along with every decrypted photo (the vault provider is remounted).
 

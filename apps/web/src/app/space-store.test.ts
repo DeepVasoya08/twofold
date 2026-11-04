@@ -6,7 +6,7 @@ import type { SpaceKeys } from '@arcafold/crypto';
 import { fromBase64Url } from '@arcafold/crypto/webcrypto';
 import { STORAGE_SIZES, THUMB_BATCH_MAX } from '@arcafold/types';
 
-import { FakeServer } from '../test/fake-server';
+import { FakeServer } from '@arcafold/core/testing/fake-server';
 import { combinedStore, remoteStore } from '@arcafold/core/library/space-store';
 import { memoryStore } from './memory-store';
 import type { NewPhoto } from '@arcafold/core/library/space-store';

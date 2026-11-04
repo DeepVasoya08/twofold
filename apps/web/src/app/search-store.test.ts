@@ -5,7 +5,7 @@ import { newSpace, spaceToken } from '@arcafold/crypto';
 import { photoId } from '../lib/people/test-faces';
 import { VECTOR_LENGTH } from '../lib/search/segment';
 import type { SearchResults } from '../lib/search/segment';
-import { FakeServer } from '../test/fake-server';
+import { FakeServer } from '@arcafold/core/testing/fake-server';
 import { memorySearchStore, remoteSearchStore } from './search-store';
 
 const vector = (seed: number) => {

@@ -1,27 +1,15 @@
 import type { OpenedSlot, SlotIndex, SpaceKeys } from '@arcafold/crypto';
 import type { AccountResponse, Keyring } from '@arcafold/types';
 
-import { ApiError, api, spaceApi } from '@arcafold/core/api';
-import { FormError } from '@arcafold/core/errors';
+import { ApiError, api, spaceApi } from './api';
+import { loadCrypto } from './crypto-loader';
+import { FormError } from './errors';
 
 /**
  * Account operations: everything that turns a password or recovery key into keys and talks
  * to the API. Passwords stay inside these functions; only derived login keys and sealed
- * key slots leave the browser. Crypto loads on first use so the welcome page stays light.
+ * key slots leave the device. Crypto loads on first use so the welcome page stays light.
  */
-
-let hasherChosen = false;
-
-const loadCrypto = async () => {
-  const crypto = await import('@arcafold/crypto');
-  // Argon2id runs in a Web Worker so the page keeps responding while it works.
-  if (!hasherChosen && typeof Worker !== 'undefined') {
-    hasherChosen = true;
-    const { spawnHashWorker } = await import('../lib/hash-worker');
-    crypto.setPasswordHasher(crypto.workerHasher(spawnHashWorker));
-  }
-  return crypto;
-};
 
 /** An unlocked account: the server's copy plus the slot this device opened. */
 export interface Session {

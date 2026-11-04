@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { usePendingInvites } from '../app/invites';
 import { paths } from '../app/routes';
-import { checkJoin } from '../app/sharing';
+import { checkJoin } from '@arcafold/core/sharing';
 import { useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { FormAlert } from '../components/FormAlert';

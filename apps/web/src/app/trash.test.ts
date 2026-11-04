@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { newSpace, openRecord, ownerAccess } from '@arcafold/crypto';
 
 import { daysLeftLabel } from '../screens/RecentlyDeleted';
-import { FakeServer } from '../test/fake-server';
+import { FakeServer } from '@arcafold/core/testing/fake-server';
 import {
   TRASH_DAYS,
   loadTrash,

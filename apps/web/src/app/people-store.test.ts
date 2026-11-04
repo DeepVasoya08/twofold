@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { newSpace, openOwnerRecord, spaceToken } from '@arcafold/crypto';
 
-import { FakeServer } from '../test/fake-server';
+import { FakeServer } from '@arcafold/core/testing/fake-server';
 import { face, photoId, unitVector } from '../lib/people/test-faces';
 import type { FaceResults } from '../lib/people/segment';
 import { memoryPeopleStore, parsePerson, remotePeopleStore } from './people-store';
