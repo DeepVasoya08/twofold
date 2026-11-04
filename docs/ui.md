@@ -485,7 +485,7 @@ session (and invites) at most every 30 seconds (`lib/when-visible.ts`), not on e
 switch.
 Decrypted previews reach the grid in batches, at most every 100 ms, so a large library
 redraws a few times a second rather than once per photo. A request that fails is tried
-again after 1, 2 and 4 seconds (`app/thumb-loader.ts`), so a dropped connection doesn't
+again after 1, 2 and 4 seconds (`@arcafold/core/library/thumb-loader`), so a dropped connection doesn't
 leave tiles empty. The viewer then fetches and
 decrypts the original. A HEIC original in a browser that can't show HEIC (all but Safari)
 is shown through a JPEG copy, at most 4096 px on its longer side, made in the thumbnail

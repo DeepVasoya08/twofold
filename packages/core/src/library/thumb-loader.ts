@@ -1,6 +1,6 @@
 import { THUMB_BATCH_MAX } from '@arcafold/types';
 
-import { PartialThumbs } from '@arcafold/core/library/space-store';
+import { PartialThumbs } from './space-store';
 
 /**
  * Thumbnails download only once their photo is near the screen, many per request. Requests

@@ -2,10 +2,10 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { View, useColorScheme } from 'react-native';
 
-import { Home } from './src/screens/Home';
 import { RecoveryWords } from './src/screens/RecoveryWords';
 import { SignIn } from './src/screens/SignIn';
 import { SignUp } from './src/screens/SignUp';
+import { Timeline } from './src/screens/Timeline';
 import { Unlock } from './src/screens/Unlock';
 import { AccountProvider, useAccount } from './src/session/account';
 import { usePalette } from './src/ui/theme';
@@ -13,7 +13,7 @@ import { usePalette } from './src/ui/theme';
 function Routes() {
   const { state, pendingSignUp } = useAccount();
   const [signingUp, setSigningUp] = useState(false);
-  if (state.status === 'unlocked') return <Home />;
+  if (state.status === 'unlocked') return <Timeline session={state.session} />;
   if (state.status === 'locked') return <Unlock />;
   if (pendingSignUp) return <RecoveryWords />;
   if (signingUp) {

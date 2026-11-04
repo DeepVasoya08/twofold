@@ -21,7 +21,7 @@ import type { PhotoCopy } from '../lib/save-copies';
 import { settleEach } from '../lib/settle-each';
 import type { Settled } from '../lib/settle-each';
 import type { Space } from '@arcafold/core/account';
-import { createThumbLoader } from './thumb-loader';
+import { createThumbLoader } from '@arcafold/core/library/thumb-loader';
 import {
   initialAlbums,
   initialPhotos,
