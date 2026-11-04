@@ -13,7 +13,7 @@ const results = (from: number, count: number): FaceResults =>
 
 const ada = (id: string): Person => ({
   id,
-  name: 'Ada',
+  name: 'Ada Lovelace',
   faces: [`${photoId(1)}#0`],
   rejected: [],
   hidden: false,
@@ -90,9 +90,9 @@ describe('remotePeopleStore', () => {
     const person = ada(await store.newId());
     await store.savePerson(person);
     const stored = [...server.people.values()][0];
-    expect(stored?.meta).not.toContain('Ada');
+    expect(stored?.meta).not.toContain('Ada Lovelace');
     const opened = await openOwnerRecord(space, 'person', person.id, stored?.meta ?? '');
-    expect(new TextDecoder().decode(opened)).toContain('Ada');
+    expect(new TextDecoder().decode(opened)).toContain('Ada Lovelace');
     expect((await store.load()).people).toEqual([person]);
 
     await store.deletePerson(person.id);
