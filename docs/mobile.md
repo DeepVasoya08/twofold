@@ -32,9 +32,10 @@ fixed tensors on purpose).
   a day; the service stops when told its time is up.
 - The upload loop uses promises only. React Native pauses JavaScript timers while the app
   is in the background, so a `setTimeout` in that path would stall the backup.
-- Requests go through `expo/fetch`, which sends encrypted bytes as they are (React Native's
-  own `fetch` would turn them into base64 first). The session cookie is kept in memory, not
-  in the system cookie store.
+- Requests go through the shared API client (`@arcafold/core/api`), configured in
+  `src/api-setup.ts` to use `expo/fetch`, which sends encrypted bytes as they are (React
+  Native's own `fetch` would turn them into base64 first). The client keeps the session
+  cookie in memory, not in the system cookie store.
 - The photo record format is copied from `apps/web/src/app/space-store.ts` until Phase 1
   moves it into a shared package.
 - Known gap: expo-image-manipulator writes each thumbnail to the app's cache before we read

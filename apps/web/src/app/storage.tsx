@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { api } from '../lib/api';
+import { api } from '@arcafold/core/api';
 import { shownUsage, spaceBytes } from '../lib/storage-usage';
 import { useVault } from './vault';
 

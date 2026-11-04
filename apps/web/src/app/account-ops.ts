@@ -1,7 +1,7 @@
 import type { OpenedSlot, SlotIndex, SpaceKeys } from '@arcafold/crypto';
 import type { AccountResponse, Keyring } from '@arcafold/types';
 
-import { ApiError, api, spaceApi } from '../lib/api';
+import { ApiError, api, spaceApi } from '@arcafold/core/api';
 
 /**
  * Account operations: everything that turns a password or recovery key into keys and talks

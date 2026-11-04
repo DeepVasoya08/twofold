@@ -2,7 +2,7 @@ import type { SpaceAccess, SpaceKeys } from '@arcafold/crypto';
 import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@arcafold/types';
 import type { PhotoPage, PhotoPart } from '@arcafold/types';
 
-import { spaceApi } from '../lib/api';
+import { spaceApi } from '@arcafold/core/api';
 import { isJpeg } from '../lib/file-preview';
 import { isCategory } from '../lib/file-sort/categories';
 import type { Category } from '../lib/file-sort/categories';
@@ -10,7 +10,7 @@ import { parseKeywords } from '../lib/file-sort/words';
 import { MAX_FILE_NAME, cleanFileType } from '../lib/file-types';
 import { isPhotoType } from '../lib/photo-types';
 import { viewableCopy } from '../lib/thumbnail-service';
-import type { SpaceApi } from '../lib/api';
+import type { SpaceApi } from '@arcafold/core/api';
 import type { Album, FileDetails, Photo } from '../mock/data';
 import { FormError } from './account-ops';
 import { PartialThumbs } from './thumb-loader';

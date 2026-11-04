@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@arcafold/core": "workspace:*",
     "@arcafold/crypto": "workspace:*",
     "@arcafold/types": "workspace:*",
     "@shopify/flash-list": "2.3.2",

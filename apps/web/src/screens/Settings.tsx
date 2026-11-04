@@ -32,7 +32,7 @@ import { SearchSettings } from '../components/SearchSettings';
 import type { IconName } from '../components/Icon';
 import { ProfileDialog } from '../components/ProfileDialog';
 import { StorageMeter } from '../components/StorageMeter';
-import { api } from '../lib/api';
+import { api } from '@arcafold/core/api';
 import { onVisibleAgain } from '../lib/when-visible';
 import { AUTO_LOCK_CHOICES, parseAutoLock } from '../lib/auto-lock';
 import { formatLastActive, formatShortDay, pluralize } from '../lib/format';

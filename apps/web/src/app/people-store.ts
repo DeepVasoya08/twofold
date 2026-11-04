@@ -1,8 +1,8 @@
 import type { SpaceKeys } from '@arcafold/crypto';
 import { FACE_SEGMENT_DELETE_MAX } from '@arcafold/types';
 
-import { spaceApi } from '../lib/api';
-import type { SpaceApi } from '../lib/api';
+import { spaceApi } from '@arcafold/core/api';
+import type { SpaceApi } from '@arcafold/core/api';
 import { MAX_PERSON_FACES } from '../lib/people/grouping';
 import { isPersonLabel } from '../lib/people/grouping';
 import type { Person, PersonLabel } from '../lib/people/grouping';

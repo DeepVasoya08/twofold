@@ -12,7 +12,7 @@ import type { ReactNode } from 'react';
 import type { SpaceKeys } from '@arcafold/crypto';
 import type { AccountResponse, SmartFeaturesChoice } from '@arcafold/types';
 
-import { ApiError, api, onSessionEnded } from '../lib/api';
+import { ApiError, api, onSessionEnded } from '@arcafold/core/api';
 import { onVisibleAgain } from '../lib/when-visible';
 import type { Person } from '../mock/data';
 import * as ops from './account-ops';

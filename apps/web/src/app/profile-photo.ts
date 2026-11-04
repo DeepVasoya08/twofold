@@ -1,8 +1,8 @@
 import type { SpaceKeys } from '@arcafold/crypto';
 import { STORAGE_SIZES } from '@arcafold/types';
 
-import { spaceApi } from '../lib/api';
-import type { SpaceApi } from '../lib/api';
+import { spaceApi } from '@arcafold/core/api';
+import type { SpaceApi } from '@arcafold/core/api';
 import { FormError } from './account-ops';
 
 /**

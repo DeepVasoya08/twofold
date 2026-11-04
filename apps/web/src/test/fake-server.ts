@@ -9,8 +9,8 @@ import type {
   StoredProfilePhoto,
 } from '@arcafold/types';
 
-import { ApiError } from '../lib/api';
-import type { InviteApi, SpaceApi } from '../lib/api';
+import { ApiError } from '@arcafold/core/api';
+import type { InviteApi, SpaceApi } from '@arcafold/core/api';
 
 /**
  * An in-memory stand-in for the storage API, holding exactly what the server would. A
