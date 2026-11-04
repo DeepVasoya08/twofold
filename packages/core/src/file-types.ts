@@ -181,3 +181,8 @@ const PLACEHOLDER_SPREAD = 32 * 1024;
 export function placeholderPreview(random: () => number = Math.random): Uint8Array<ArrayBuffer> {
   return new Uint8Array(PLACEHOLDER_MIN + Math.floor(random() * PLACEHOLDER_SPREAD));
 }
+
+/** Whether bytes start like a JPEG: the only thing a file's preview may ever be. */
+export function isJpeg(bytes: Uint8Array): boolean {
+  return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}

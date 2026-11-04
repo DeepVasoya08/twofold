@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { usePendingInvites } from '../app/invites';
 import { paths } from '../app/routes';
 import { checkJoin } from '../app/sharing';
@@ -9,6 +8,7 @@ import { PageHeader } from '../components/AppShell';
 import { FormAlert } from '../components/FormAlert';
 import { Icon } from '../components/Icon';
 import { JoinProgressView } from '../components/Invites';
+import { errorMessage } from '@arcafold/core/errors';
 
 import './share.css';
 

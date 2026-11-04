@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ImportItem } from '../lib/import/takeout';
-import type { Album, Photo } from '../mock/data';
-import { FormError } from './account-ops';
 import { Importer, SHOW_EVERY } from './importer';
 import type { ImportJob, ImporterDeps } from './importer';
+import type { Album, Photo } from '@arcafold/core/library/model';
+import { FormError } from '@arcafold/core/errors';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 

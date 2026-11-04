@@ -13,11 +13,11 @@ import type { SidecarDetails } from '../lib/import/takeout';
 import type { ImportItem } from '../lib/import/takeout';
 import { photoTakenAt } from '../lib/photo-date';
 import { loadThumbnailer } from '../lib/thumbnail-service';
-import { FormError } from './account-ops';
 import { Importer } from './importer';
 import type { ImportJob, ImporterDeps, ImporterState } from './importer';
-import type { NewPhoto } from './space-store';
 import { useVault } from './vault';
+import { FormError } from '@arcafold/core/errors';
+import type { NewPhoto } from '@arcafold/core/library/space-store';
 
 interface ImportsValue extends ImporterState {
   /** Whether an import is going. */

@@ -2,8 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { ReactNode } from 'react';
 
 import { makeProfileImage } from '../lib/profile-image';
-import { FormError } from './account-ops';
 import type { ProfilePhotoStore } from './profile-photo';
+import { FormError } from '@arcafold/core/errors';
 
 interface ProfileValue {
   /** In-memory object URL of the decrypted profile photo, or null if there is none. */

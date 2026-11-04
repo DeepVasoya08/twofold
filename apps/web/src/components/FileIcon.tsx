@@ -1,7 +1,7 @@
 import { fileExtension, fileKindOf } from '@arcafold/core/file-types';
-import type { FileDetails, Photo } from '../mock/data';
 import { Icon } from './Icon';
 import { PhotoImage } from './PhotoImage';
+import type { FileDetails, Photo } from '@arcafold/core/library/model';
 
 import './file-icon.css';
 

@@ -3,11 +3,11 @@ import { useMemo } from 'react';
 import { documentLooks, lookPrompts } from '../lib/file-sort/looks';
 import type { DocumentLook, LookPrompt } from '../lib/file-sort/looks';
 import type { SearchResults } from '../lib/search/segment';
-import type { Photo } from '../mock/data';
 import type { VaultState } from './vault';
 import { timelinePhotos } from './vault';
 import { useSearch } from './search';
 import { useDocumentPhotosView } from './views';
+import type { Photo } from '@arcafold/core/library/model';
 
 /**
  * Which photos (and scanned files) look like documents, from the search vectors Smart search

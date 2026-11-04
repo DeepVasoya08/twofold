@@ -1,6 +1,5 @@
 import { useState } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { useSearch } from '../app/search';
 import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
@@ -9,6 +8,7 @@ import { pluralize } from '../lib/format';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 import { SEARCH_DOWNLOAD_MB } from './SmartSearchCard';
+import { errorMessage } from '@arcafold/core/errors';
 
 /**
  * Smart search in Settings: on or off for this device, how far looking at photos has got,

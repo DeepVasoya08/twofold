@@ -13,7 +13,6 @@ import { ProfileProvider } from './profile';
 import { memoryProfilePhoto, remoteProfilePhoto } from './profile-photo';
 import { sessionStore } from './sharing';
 import { StorageProvider } from './storage';
-import { memoryStore, remoteStore } from './space-store';
 import { UploadsProvider } from './uploads';
 import { ImportsProvider } from './imports';
 import { PeopleProvider } from './people';
@@ -29,6 +28,8 @@ import { SearchProvider } from './search';
 import { memorySearchStore, remoteSearchStore } from './search-store';
 import { VaultProvider, emptyVaults } from './vault';
 import type { VaultsState } from './vault';
+import { memoryStore } from './memory-store';
+import { remoteStore } from '@arcafold/core/library/space-store';
 
 /** A worker whose module loads on first use; messages sent before then wait for it. */
 function lazyWorker(load: () => Promise<Worker>): FaceWorker & EncoderWorker {

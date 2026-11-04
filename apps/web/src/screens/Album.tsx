@@ -16,7 +16,7 @@ import { SelectButton } from '../components/SelectButton';
 import { PhotoViewPicker } from '../components/ViewPicker';
 import { SelectionBar } from '../components/SelectionBar';
 import { formatDateRange, photosAndFiles } from '../lib/format';
-import type { Album as AlbumData, Photo } from '../mock/data';
+import type { Album as AlbumData, Photo } from '@arcafold/core/library/model';
 
 import './album.css';
 

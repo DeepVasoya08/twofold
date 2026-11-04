@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { STORAGE_SIZES } from '@arcafold/types';
 
-import type { Photo } from '../mock/data';
 import { formatBytes, shownUsage, spaceBytes, usageLabel, usedFraction } from './storage-usage';
+import type { Photo } from '@arcafold/core/library/model';
 
 const photo = (id: string, size?: number, library?: string): Photo => ({
   id,

@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   PREVIEW_MIN_BYTES,
-  isJpeg,
   padPreview,
   previewTier,
   resetSlow,
@@ -59,13 +58,5 @@ describe('padPreview', () => {
     expect(padded).toHaveLength(PREVIEW_MIN_BYTES);
     expect(padded.subarray(0, jpeg.length)).toEqual(jpeg);
     expect(padPreview(new Uint8Array(PREVIEW_MIN_BYTES + 1))).toHaveLength(PREVIEW_MIN_BYTES + 1);
-  });
-});
-
-describe('isJpeg', () => {
-  it('knows a JPEG from a stand-in or anything else', () => {
-    expect(isJpeg(new Uint8Array([0xff, 0xd8, 0xff, 0xdb]))).toBe(true);
-    expect(isJpeg(new Uint8Array(20_000))).toBe(false);
-    expect(isJpeg(new TextEncoder().encode('<svg>'))).toBe(false);
   });
 });

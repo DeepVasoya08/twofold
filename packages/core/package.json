@@ -5,9 +5,12 @@
   "type": "module",
   "exports": {
     "./api": "./src/api.ts",
+    "./errors": "./src/errors.ts",
     "./file-categories": "./src/file-categories.ts",
     "./file-types": "./src/file-types.ts",
     "./keywords": "./src/keywords.ts",
+    "./library/model": "./src/library/model.ts",
+    "./library/space-store": "./src/library/space-store.ts",
     "./photo-types": "./src/photo-types.ts",
     "./records": "./src/records.ts"
   },
@@ -18,6 +21,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@arcafold/crypto": "workspace:*",
     "@arcafold/types": "workspace:*"
   }
 }

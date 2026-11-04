@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import type { MemberAccess } from '@arcafold/types';
 
 import { useMe } from '../app/account';
-import { errorMessage } from '../app/account-ops';
 import { usePendingInvites } from '../app/invites';
 import { Link, useRouter } from '../app/router';
 import { parseShareAlbum, paths } from '../app/routes';
@@ -13,6 +12,7 @@ import { Avatar } from '../components/Brand';
 import { FormAlert } from '../components/FormAlert';
 import { Icon } from '../components/Icon';
 import { PendingInviteList, inviteLink, useCopy } from '../components/Invites';
+import { errorMessage } from '@arcafold/core/errors';
 
 import './share.css';
 

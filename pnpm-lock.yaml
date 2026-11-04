@@ -178,6 +178,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@arcafold/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@arcafold/types':
         specifier: workspace:*
         version: link:../types

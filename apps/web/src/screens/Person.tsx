@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { useGroups, usePeople } from '../app/people';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
@@ -23,8 +22,9 @@ import { SelectionBar } from '../components/SelectionBar';
 import { pluralize } from '../lib/format';
 import { PERSON_LABELS } from '../lib/people/grouping';
 import type { Group, PersonLabel } from '../lib/people/grouping';
-import type { Photo } from '../mock/data';
 import { aboutPerson, groupName, labelNames } from './People';
+import { errorMessage } from '@arcafold/core/errors';
+import type { Photo } from '@arcafold/core/library/model';
 
 import './people.css';
 

@@ -1,7 +1,7 @@
 import type { Face } from '../lib/people/grouping';
-import type { Photo } from '../mock/data';
 import { Icon } from './Icon';
 import { PhotoImage } from './PhotoImage';
+import type { Photo } from '@arcafold/core/library/model';
 
 import './face-thumb.css';
 

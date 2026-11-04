@@ -3,7 +3,7 @@ import { STORAGE_SIZES } from '@arcafold/types';
 
 import { spaceApi } from '@arcafold/core/api';
 import type { SpaceApi } from '@arcafold/core/api';
-import { FormError } from './account-ops';
+import { FormError } from '@arcafold/core/errors';
 
 /**
  * The open space's profile photo, stored like a photo: the image is encrypted under a key

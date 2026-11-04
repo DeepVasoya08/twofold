@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Photo } from '../mock/data';
 import { lookOrder } from './search';
+import type { Photo } from '@arcafold/core/library/model';
 
 const item = (id: string, takenAt: string, extra: Partial<Photo> = {}): Photo => ({
   id,

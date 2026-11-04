@@ -5,10 +5,10 @@ import type { Category } from '@arcafold/core/file-categories';
 import { fileKindLabel, fileKindOf } from '@arcafold/core/file-types';
 import { formatShortDay } from '../lib/format';
 import { formatBytes } from '../lib/storage-usage';
-import type { Photo } from '../mock/data';
 import { FileThumb } from './FileIcon';
 import { Menu } from './Menu';
 import type { MenuItem } from './Menu';
+import type { Photo } from '@arcafold/core/library/model';
 
 import '../screens/files.css';
 

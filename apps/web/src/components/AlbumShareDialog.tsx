@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react';
 
 import { useAccount } from '../app/account';
-import { errorMessage } from '../app/account-ops';
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
 import { listMembers, removeMember } from '../app/sharing';
 import type { Member } from '../app/sharing';
 import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
-import type { Album } from '../mock/data';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 import { PendingInviteList } from './Invites';
+import { errorMessage } from '@arcafold/core/errors';
+import type { Album } from '@arcafold/core/library/model';
 
 import './album-share-dialog.css';
 

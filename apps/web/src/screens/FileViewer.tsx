@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { useDownloads } from '../app/downloads';
 import { useRouter } from '../app/router';
 import { parsePhotoContext, paths } from '../app/routes';
@@ -17,6 +16,7 @@ import { formatShortDay } from '../lib/format';
 import { closePdf, drawPage, openPdf } from '../lib/pdf';
 import type { PdfDocument } from '../lib/pdf';
 import { formatBytes } from '../lib/storage-usage';
+import { errorMessage } from '@arcafold/core/errors';
 
 import './file-viewer.css';
 

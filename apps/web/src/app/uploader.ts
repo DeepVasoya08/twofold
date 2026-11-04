@@ -3,9 +3,9 @@ import { isUploadRunning } from '../lib/upload-progress';
 import type { UploadStatus } from '../lib/upload-progress';
 import { canStartUpload } from '../lib/upload-queue';
 import type { InFlight } from '../lib/upload-queue';
-import type { Photo } from '../mock/data';
-import { errorMessage } from './account-ops';
-import type { NewPhoto, UploadStage } from './space-store';
+import type { Photo } from '@arcafold/core/library/model';
+import { errorMessage } from '@arcafold/core/errors';
+import type { NewPhoto, UploadStage } from '@arcafold/core/library/space-store';
 
 /**
  * The upload queue for the open space, kept outside React so that closing the upload dialog,

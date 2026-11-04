@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { pluralize } from '../lib/format';
 import type { Settled } from '../lib/settle-each';
-import { errorMessage } from './account-ops';
+import { errorMessage } from '@arcafold/core/errors';
 
 /** Photos picked for a change to many at once. */
 export interface Selection {

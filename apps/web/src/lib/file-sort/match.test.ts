@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Photo } from '../../mock/data';
 import { fileMatches, fileWords, findFiles, searchedWords } from './match';
+import type { Photo } from '@arcafold/core/library/model';
 
 const file = (
   id: string,

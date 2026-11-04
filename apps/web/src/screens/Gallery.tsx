@@ -15,7 +15,7 @@ import { SelectButton } from '../components/SelectButton';
 import { PhotoViewPicker } from '../components/ViewPicker';
 import { SelectionBar } from '../components/SelectionBar';
 import { formatDateRange, groupByMonth, pluralize } from '../lib/format';
-import type { Photo } from '../mock/data';
+import type { Photo } from '@arcafold/core/library/model';
 
 import './gallery.css';
 

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Photo } from '../mock/data';
-import type { NewPhoto } from './space-store';
 import { Uploader, VIDEO_REFUSED } from './uploader';
 import type { UploaderDeps } from './uploader';
+import type { Photo } from '@arcafold/core/library/model';
+import type { NewPhoto } from '@arcafold/core/library/space-store';
 
 const photo = (name: string, type = 'image/png'): File =>
   new File([new Uint8Array(4)], name, { type });

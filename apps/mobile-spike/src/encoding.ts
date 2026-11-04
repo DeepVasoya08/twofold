@@ -8,7 +8,7 @@ export function toBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-export function fromBase64(text: string): Uint8Array {
+export function fromBase64(text: string): Uint8Array<ArrayBuffer> {
   const binary = atob(text);
   const out = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);

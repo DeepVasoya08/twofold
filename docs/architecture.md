@@ -118,9 +118,15 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
 - **packages/core** — app logic with no screens in it, shared by the web app and the phone
   apps (Phase 1 of [mobile.md](mobile.md) moves it here piece by piece). So far: the API
   client (`@arcafold/core/api`), the sealed photo and album record formats
-  (`@arcafold/core/records`), and the photo, file, category and keyword rules they use. The web app uses its defaults (same origin, the browser
-  keeps the session cookie); phones call `configureApi` with arcafold.com, their own fetch,
-  and `cookies: 'memory'`, which keeps the session cookie in the client's memory only.
+  (`@arcafold/core/records`), the photo, file, category and keyword rules they use, and the
+  library store (`@arcafold/core/library/space-store`) that lists, uploads, edits and trashes
+  photos. The web app uses the API client's defaults (same origin, the browser keeps the
+  session cookie); phones call `configureApi` with arcafold.com, their own fetch, and
+  `cookies: 'memory'`, which keeps the session cookie in the client's memory only. The store
+  shows decrypted images through `configureLibrary`: by default in-memory object URLs; the
+  web app adds its file-crypto Web Worker and HEIC copies (`app/library-platform.ts`), and
+  phones will supply a native image view. `memoryStore`, for previews and tests, stays in
+  the web app.
 - **packages/types** — types shared between web, API, and mobile.
 
 ## Workspace conventions

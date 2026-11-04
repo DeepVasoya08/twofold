@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { useSmartAlbum } from '../app/answer';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
@@ -17,8 +16,9 @@ import type { MenuItem } from '../components/Menu';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { pluralize } from '../lib/format';
 import { MAX_SMART_TITLE } from '../lib/search/smart-album';
-import type { Photo } from '../mock/data';
 import { notLookedAtLine, notReadyLine } from './Search';
+import { errorMessage } from '@arcafold/core/errors';
+import type { Photo } from '@arcafold/core/library/model';
 
 import './search.css';
 

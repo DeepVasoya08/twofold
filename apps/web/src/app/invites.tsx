@@ -14,7 +14,6 @@ import type { MemberAccess } from '@arcafold/types';
 
 import { onVisibleAgain } from '../lib/when-visible';
 import { useAccount } from './account';
-import { FormError, errorMessage } from './account-ops';
 import { useRouter } from './router';
 import { matchRoute, paths } from './routes';
 import {
@@ -37,6 +36,7 @@ import {
 import type { Invite, InviteProgress, Join, JoinProgress, Member, SharingApis } from './sharing';
 import { useToast } from './toast';
 import { useVault } from './vault';
+import { FormError, errorMessage } from '@arcafold/core/errors';
 
 /**
  * Invites the open space has in progress, on either side, moved along whenever Arcafold is

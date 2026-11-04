@@ -2,11 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { newSpace, openRecord, ownerAccess } from '@arcafold/crypto';
 
-import type { Photo } from '../mock/data';
 import { daysLeftLabel } from '../screens/RecentlyDeleted';
 import { FakeServer } from '../test/fake-server';
-import { combinedStore, memoryStore, remoteStore } from './space-store';
-import type { NewPhoto } from './space-store';
 import {
   TRASH_DAYS,
   loadTrash,
@@ -16,6 +13,10 @@ import {
   vaultReducer,
 } from './vault';
 import type { VaultState } from './vault';
+import type { Photo } from '@arcafold/core/library/model';
+import { combinedStore, remoteStore } from '@arcafold/core/library/space-store';
+import { memoryStore } from './memory-store';
+import type { NewPhoto } from '@arcafold/core/library/space-store';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.parse('2026-11-30T12:00:00.000Z');

@@ -3,7 +3,6 @@ import { useState } from 'react';
 import type { SpaceKeys } from '@arcafold/crypto';
 
 import { useAccount } from '../app/account';
-import { errorMessage } from '../app/account-ops';
 import { useDownloads } from '../app/downloads';
 import { useRouter } from '../app/router';
 import { useSearch } from '../app/search';
@@ -14,13 +13,14 @@ import { useToast } from '../app/toast';
 import { isViewOnly, trashNote, useVault } from '../app/vault';
 import { pluralize } from '../lib/format';
 import type { Settled } from '../lib/settle-each';
-import type { Album } from '../mock/data';
 import { AlbumPicker } from './AlbumPicker';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
 import { MoveSpaceDialog, moveLabel } from './MoveSpaceDialog';
 import { TeachWordDialog } from './TeachWordDialog';
+import { errorMessage } from '@arcafold/core/errors';
+import type { Album } from '@arcafold/core/library/model';
 
 import './selection-bar.css';
 

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Photo } from '../mock/data';
 import {
   albumCover,
   albumFiles,
@@ -14,6 +13,7 @@ import {
   withDetails,
 } from './vault';
 import type { VaultState } from './vault';
+import type { Photo } from '@arcafold/core/library/model';
 
 function photo(id: string, takenAt: string, albumIds: string[] = []): Photo {
   return {

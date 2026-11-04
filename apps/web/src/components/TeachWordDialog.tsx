@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
-import { errorMessage } from '../app/account-ops';
 import { usePeople } from '../app/people';
 import { useSearch } from '../app/search';
 import { useToast } from '../app/toast';
 import { MAX_EXAMPLES, MAX_WORD_NAME, MIN_EXAMPLES, wordNameProblem } from '../lib/search/taught';
 import { Dialog } from './Dialog';
 import { TextField } from './Field';
+import { errorMessage } from '@arcafold/core/errors';
 
 /**
  * Teaches search a word from the selected photos: "Biscuit" for a dog, "the cabin" for a

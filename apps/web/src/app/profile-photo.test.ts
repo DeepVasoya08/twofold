@@ -6,8 +6,8 @@ import { STORAGE_SIZES } from '@arcafold/types';
 import type { StoredProfilePhoto } from '@arcafold/types';
 
 import { FakeServer } from '../test/fake-server';
-import { FormError } from './account-ops';
 import { memoryProfilePhoto, remoteProfilePhoto } from './profile-photo';
+import { FormError } from '@arcafold/core/errors';
 
 const JPEG = new TextEncoder().encode('A SMALL SQUARE PROFILE JPEG');
 

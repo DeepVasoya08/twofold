@@ -97,11 +97,6 @@ export function padPreview(
   return padded;
 }
 
-/** Whether bytes start like a JPEG: the only thing a file's preview may ever be. */
-export function isJpeg(bytes: Uint8Array): boolean {
-  return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-}
-
 /**
  * Draws a PDF's first page as a JPEG preview for `tier`, within its time budget. Null when
  * it can't be read or takes too long; the file then shows its icon.
