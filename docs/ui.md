@@ -309,7 +309,7 @@ to save the search again.
 - Password hashing runs in a Web Worker, so spinners keep moving and the page stays usable
   while a login or unlock works. Signing out in the meantime ("Use another account")
   cancels it: the library doesn't open afterwards.
-- Auto-lock (Settings) locks after 1, 5 or 15 minutes without use (default 15), or only
+- Auto-lock (Settings) locks after 1, 5 or 15 minutes without use (default 1), or only
   when the tab closes. Pointer, key, wheel, touch and scroll count as use; a hidden tab gets
   none, so its time counts as idle, and the check runs again when the tab is shown. Uploads
   in progress count as use, so a long upload isn't dropped, and the countdown restarts when
