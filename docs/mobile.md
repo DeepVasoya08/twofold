@@ -36,6 +36,18 @@ or a native module.
 - The keyboard: the app draws edge to edge, so Android no longer resizes the window for the
   keyboard. Every screen (`ui/kit.tsx` `Screen`) shrinks itself to the space above the keyboard
   and scrolls, and the return key moves to the next field.
+- The timeline (`screens/Timeline.tsx`): the open space's photos by month, newest first,
+  four across, in a FlashList with one list row per grid row. It loads like the web app:
+  the shared library store (`sessionStore`) lists the photos, and previews are fetched in
+  batches as tiles come near the screen, the ones on screen first (the shared
+  `@arcafold/core/library/thumb-loader`). Files, album-only shares and Recently deleted stay
+  out, as on the web.
+- Decrypted previews never touch the disk and never become base64 text: the store hands
+  each one to `modules/memory-image`, which keeps the JPEG bytes in native memory and
+  decodes them off the main thread into a size-limited picture cache, shown by its own
+  native view. Closing the library (lock or sign-out) wipes them all. (The Phase 0 grid was
+  slow on the Pixel 9a because every tile went through base64 and a data URI on the
+  JavaScript thread; decrypting itself is a single libsodium call per preview.)
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

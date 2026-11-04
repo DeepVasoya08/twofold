@@ -10,7 +10,7 @@ import {
   THUMB_RETRY_MS,
   createThumbLoader,
 } from './thumb-loader';
-import { PartialThumbs } from '@arcafold/core/library/space-store';
+import { PartialThumbs } from './space-store';
 
 const urlsFor = (ids: readonly string[]) => new Map(ids.map((id) => [id, `blob:${id}`]));
 
