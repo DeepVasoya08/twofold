@@ -8,11 +8,11 @@ import type {
   UpdateKeyringRequest,
 } from '@arcafold/types';
 
-import { ApiError } from '@arcafold/core/api';
-import { FormError, errorInput, errorMessage } from '@arcafold/core/errors';
-import type * as ApiModule from '@arcafold/core/api';
-import * as ops from './account-ops';
-import type { Session } from './account-ops';
+import { ApiError } from './api';
+import { FormError, errorInput, errorMessage } from './errors';
+import type * as ApiModule from './api';
+import * as ops from './account';
+import type { Session } from './account';
 
 /**
  * These tests run the real crypto (Argon2id included) against an in-memory stand-in for the
@@ -35,7 +35,7 @@ function current(): AccountResponse {
   return server.account;
 }
 
-vi.mock('@arcafold/core/api', async (importOriginal) => {
+vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof ApiModule>();
   return {
     ...actual,

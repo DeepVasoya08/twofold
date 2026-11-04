@@ -4,7 +4,7 @@ import { albumAccess, newInviteKeys, newSpace, openRecord, ownerAccess } from '@
 import type { SpaceKeys } from '@arcafold/crypto';
 import type { MemberAccess } from '@arcafold/types';
 
-import { FakeInvites, FakeServer } from '../test/fake-server';
+import { FakeInvites, FakeServer } from './testing/fake-server';
 import {
   abandonJoin,
   advanceInvite,
@@ -30,9 +30,9 @@ import {
   updateMemberAccess,
 } from './sharing';
 import type { Invite, Join } from './sharing';
-import { FormError } from '@arcafold/core/errors';
-import { VIEW_ONLY_LIBRARY, remoteStore } from '@arcafold/core/library/space-store';
-import type { NewPhoto, SpaceStore } from '@arcafold/core/library/space-store';
+import { FormError } from './errors';
+import { VIEW_ONLY_LIBRARY, remoteStore } from './library/space-store';
+import type { NewPhoto, SpaceStore } from './library/space-store';
 
 const PHOTO: NewPhoto = {
   thumb: new TextEncoder().encode('preview'),

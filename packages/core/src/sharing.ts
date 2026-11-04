@@ -2,11 +2,12 @@ import type { InviteKeys, SpaceKeys } from '@arcafold/crypto';
 import { INVITE_TTL_MS } from '@arcafold/types';
 import type { InviterView, JoinerView, MemberAccess } from '@arcafold/types';
 
-import { ApiError, inviteApi, spaceApi } from '@arcafold/core/api';
-import type { InviteApi, SpaceApi } from '@arcafold/core/api';
-import { FormError } from '@arcafold/core/errors';
-import { combinedStore, remoteStore } from '@arcafold/core/library/space-store';
-import type { SharedSource, SpaceStore } from '@arcafold/core/library/space-store';
+import { ApiError, inviteApi, spaceApi } from './api';
+import type { InviteApi, SpaceApi } from './api';
+import { loadCrypto } from './crypto-loader';
+import { FormError } from './errors';
+import { combinedStore, remoteStore } from './library/space-store';
+import type { SharedSource, SpaceStore } from './library/space-store';
 
 /**
  * Sharing a space or one album of it, and what a space has joined.
@@ -24,8 +25,6 @@ import type { SharedSource, SpaceStore } from '@arcafold/core/library/space-stor
  * (its secret key and what the invite is for) as an owner-only record of its open space, and
  * takes its next step whenever it's next opened, on any device.
  */
-
-const loadCrypto = () => import('@arcafold/crypto');
 
 /** How often each side checks whether the other has taken the next step, on a sharing screen. */
 export const POLL_MS = 1500;

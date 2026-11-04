@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { Providers } from './app/Providers';
 import { finishGoogleSignIn } from './app/google-sign-in';
-import { setUpLibrary } from './app/library-platform';
+import { setUpPlatform } from './app/platform';
 import { BrowserRouter } from './app/router';
 
 import './styles/base.css';
@@ -18,7 +18,7 @@ if (!container) {
 if (finishGoogleSignIn(window.location)) {
   container.textContent = 'Google Photos is connected. You can close this window.';
 } else {
-  setUpLibrary();
+  setUpPlatform();
   createRoot(container).render(
     <StrictMode>
       <BrowserRouter>

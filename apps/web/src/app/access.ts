@@ -1,5 +1,5 @@
 import type { AccountState } from './account';
-import type { Space } from './account-ops';
+import type { Space } from '@arcafold/core/account';
 import { parseNext, paths, withNext } from './routes';
 import type { Route } from './routes';
 

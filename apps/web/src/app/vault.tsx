@@ -20,7 +20,7 @@ import type { DownloadProgress } from '../lib/download-progress';
 import type { PhotoCopy } from '../lib/save-copies';
 import { settleEach } from '../lib/settle-each';
 import type { Settled } from '../lib/settle-each';
-import type { Space } from './account-ops';
+import type { Space } from '@arcafold/core/account';
 import { createThumbLoader } from './thumb-loader';
 import {
   initialAlbums,
@@ -329,7 +329,7 @@ export function albumCover(state: VaultState, album: Album): Photo | undefined {
 }
 
 /** The main library, or the private space that only the private password opens. */
-export type { Space } from './account-ops';
+export type { Space } from '@arcafold/core/account';
 
 /** Fixed contents for both spaces, for rendering tests and previews. */
 export interface VaultsState {

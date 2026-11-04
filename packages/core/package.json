@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./account": "./src/account.ts",
     "./api": "./src/api.ts",
+    "./crypto-loader": "./src/crypto-loader.ts",
     "./errors": "./src/errors.ts",
     "./file-categories": "./src/file-categories.ts",
     "./file-types": "./src/file-types.ts",
@@ -12,7 +14,9 @@
     "./library/model": "./src/library/model.ts",
     "./library/space-store": "./src/library/space-store.ts",
     "./photo-types": "./src/photo-types.ts",
-    "./records": "./src/records.ts"
+    "./records": "./src/records.ts",
+    "./sharing": "./src/sharing.ts",
+    "./testing/fake-server": "./src/testing/fake-server.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

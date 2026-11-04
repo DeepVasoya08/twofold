@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { useAccount } from '../app/account';
-import { newRecoveryWords } from '../app/account-ops';
+import { newRecoveryWords } from '@arcafold/core/account';
 import { useRouter } from '../app/router';
 import { parseNext, paths } from '../app/routes';
 import { useToast } from '../app/toast';
