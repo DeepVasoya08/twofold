@@ -4,6 +4,23 @@ Plan and recommendation: [Arcafold mobile apps](https://claude.ai/artifact/MekYT
 The apps will be React Native (Expo with prebuild), sharing `packages/crypto` and the other
 TypeScript logic with the web app, with the slow or sensitive work in native code.
 
+## The app (`apps/mobile`)
+
+Phase 2 builds the real app here, in small steps, tested as an Android APK until the store
+accounts exist. It uses the shared code in `packages/core` for everything that isn't a screen
+or a native module.
+
+- `src/platform.ts` sets up the core for the phone before anything else runs: the API client
+  talks only to `https://arcafold.com` over `expo/fetch` and keeps the session cookie in
+  memory (`src/config.ts`). Crypto uses the core's default loader, which on a phone is
+  libsodium's native C library.
+- Android backup of app data is off (`allowBackup: false`), so nothing in the app's storage is
+  copied to Google's cloud backup.
+- Over-the-air updates are off (`updates.enabled: false`): every change ships as a new build.
+- Icons are drawn from the web app's mark by `scripts/make_icons.py`.
+
+Build it the same way as the spike (below), from `apps/mobile`.
+
 ## Phase 0 spike (`apps/mobile-spike`)
 
 A throwaway app that checks the risky parts on real phones before the real app is built.
