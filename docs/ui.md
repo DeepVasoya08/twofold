@@ -226,7 +226,7 @@ and looks at every photo's preview in the background, 12 at a time
 hidden, saves what it found every 48 photos, and picks up new photos as they arrive. The
 page title says how far it has got ("120 of 900 photos looked at").
 
-Faces are grouped on the device (`lib/people/grouping.ts`): a face joins a named person
+Faces are grouped on the device (`@arcafold/core/people/grouping`): a face joins a named person
 when it looks enough like them, and the rest are clustered. A group shows once someone is
 in at least 3 photos. Each card shows a crop of the face (`components/FaceThumb.tsx`).
 On a person's page you can add a name or rename, merge with someone else, hide them from
@@ -259,7 +259,7 @@ the app shell), so there's no Search tab. "/" jumps to it. It stays fixed at the
 the page scrolls (below the top bar on phones) on a solid band, so photos scroll under it
 rather than showing through; Photos' month headings stick just below it. Phones have no
 magnifier in the top bar, since the box is always there. Searching from any screen opens the results at `/search`; the URL
-never holds what was typed. A search is read by a small parser (`lib/search/query.ts`) into who, when and what:
+never holds what was typed. A search is read by a small parser (`@arcafold/core/search/query`) into who, when and what:
 
 - **Who**: names from People, "me"/"my" (whoever is marked "This is me"), "us"/"we" (me and
   at least one other person) and "friends", "family" or "work" when someone has that label.
@@ -270,7 +270,7 @@ never holds what was typed. A search is read by a small parser (`lib/search/quer
   photos they were taught with.
 - **What**: everything else, minus words like "photos", ranked by Smart search.
 
-Who and when filter the open space's photos; what ranks them (`lib/search/find.ts`). Each
+Who and when filter the open space's photos; what ranks them (`@arcafold/core/search/find`). Each
 part shows as a chip; tapping one off searches again without it, and its words go back to
 being words. Results come as best matches, with "Show N more" for weaker ones. Opening a
 result steps through the results; closing comes back to the same search.
@@ -286,7 +286,7 @@ typed after it narrow it down. **Teach a word** (in the selection bar, for 3 to 
 names what the photos show, like a pet or a place; typing that name then finds photos that
 look like them. A name can't be a person's or another word's. Settings → Search lists the
 words, each with Forget. Looking alike is compared with its own tuning (`LOOKS_TUNING` in
-`lib/search/find.ts`), since photos score much higher against photos than against words.
+`@arcafold/core/search/find`), since photos score much higher against photos than against words.
 If the photos haven't been looked at yet, the search says so instead of showing nothing.
 
 **Save as album** (under a search's chips, while Smart search is on) saves the search as a
@@ -332,7 +332,7 @@ to save the search again.
   1 GB used": the account's total across both spaces, the same in either one, against the
   one shared 1 GB (`app/storage.tsx`, `lib/storage-usage.ts`).
 - State lives in `app/account.tsx` (who is signed in, which slot is open) and
-  `app/account-ops.ts` (every operation that touches keys); `app/access.ts` decides
+  `@arcafold/core/account` (every operation that touches keys); `app/access.ts` decides
   redirects.
 
 ## Screens and routes
@@ -561,7 +561,7 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
 - Decrypted photos are shown through in-memory object URLs, revoked when the vault
   unmounts (lock, sign-out), and must never be written to `localStorage`, IndexedDB or
   caches.
-- No password is kept anywhere: it is turned into keys inside `app/account-ops.ts` and
+- No password is kept anywhere: it is turned into keys inside `@arcafold/core/account` and
   dropped. Keys live only in React state and are dropped on lock, sign-out and reload,
   along with every decrypted photo (the vault provider is remounted).
 

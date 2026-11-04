@@ -17,9 +17,9 @@ import { onVisibleAgain } from '../lib/when-visible';
 import type { Person } from '../mock/data';
 import { FormError } from '@arcafold/core/errors';
 
-import * as ops from './account-ops';
-import { leaveAll } from './sharing';
-import type { PendingSignUp, Session, Space } from './account-ops';
+import * as ops from '@arcafold/core/account';
+import { leaveAll } from '@arcafold/core/sharing';
+import type { PendingSignUp, Session, Space } from '@arcafold/core/account';
 
 /**
  * Who is signed in, and whether their keys are in memory. Keys live only in this state:

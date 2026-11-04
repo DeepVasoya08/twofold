@@ -10,7 +10,7 @@
 import { EncoderError, EncoderStopped, normalise } from './photo-encoder';
 import type { EncoderWorker } from './photo-encoder';
 import { ResourceError } from './resources';
-import { VECTOR_LENGTH } from './segment';
+import { VECTOR_LENGTH } from '@arcafold/core/search/segment';
 import type { Tokenizer } from './tokenizer';
 
 export interface QueryEncoder {

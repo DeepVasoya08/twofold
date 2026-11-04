@@ -15,8 +15,8 @@ import {
   listMembers,
   removeMember,
   updateMemberAccess,
-} from '../app/sharing';
-import type { JoinedLibrary, Member } from '../app/sharing';
+} from '@arcafold/core/sharing';
+import type { JoinedLibrary, Member } from '@arcafold/core/sharing';
 import { useTheme } from '../app/theme';
 import type { ThemePreference } from '../app/theme';
 import { useToast } from '../app/toast';

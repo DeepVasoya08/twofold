@@ -7,7 +7,6 @@
 import type { Point } from './yunet';
 
 export const SFACE_SIZE = 112;
-export const EMBEDDING_LENGTH = 128;
 /** OpenCV's threshold for "same person" by cosine similarity. */
 export const SAME_PERSON_COSINE = 0.363;
 
@@ -94,11 +93,4 @@ export function normalize(vector: Float32Array): Float32Array {
   const length = Math.sqrt(sum);
   if (length === 0 || !Number.isFinite(length)) throw new Error('Empty face fingerprint');
   return vector.map((v) => v / length);
-}
-
-/** Cosine similarity of two unit vectors. */
-export function cosine(a: ArrayLike<number>, b: ArrayLike<number>): number {
-  let sum = 0;
-  for (let i = 0; i < a.length; i++) sum += (a[i] ?? 0) * (b[i] ?? 0);
-  return sum;
 }

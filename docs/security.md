@@ -353,7 +353,7 @@ nothing links it to an account.
 
 An invite moves the access from one browser to another through a server we don't trust
 (`packages/crypto/src/sharing.ts`, `apps/api/src/routes/invites.ts`,
-`apps/web/src/app/sharing.ts`). Neither person has to be online at the same time as the
+`packages/core/src/sharing.ts`). Neither person has to be online at the same time as the
 other: each side keeps its half of the invite as a sealed record of its own open space, and
 takes its next step whenever that space is next open, on any device.
 

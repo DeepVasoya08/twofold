@@ -118,15 +118,21 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
 - **packages/core** — app logic with no screens in it, shared by the web app and the phone
   apps (Phase 1 of [mobile.md](mobile.md) moves it here piece by piece). So far: the API
   client (`@arcafold/core/api`), the sealed photo and album record formats
-  (`@arcafold/core/records`), the photo, file, category and keyword rules they use, and the
-  library store (`@arcafold/core/library/space-store`) that lists, uploads, edits and trashes
-  photos. The web app uses the API client's defaults (same origin, the browser keeps the
+  (`@arcafold/core/records`), the photo, file, category and keyword rules they use, the
+  library store (`@arcafold/core/library/space-store`) that lists, uploads, edits and
+  trashes photos, accounts (`@arcafold/core/account`: sign-up, unlock, recovery, passwords)
+  and sharing (`@arcafold/core/sharing`: invites, members, joined libraries), and the sealed
+  search and People data with their stores (`@arcafold/core/search/*`: search segments,
+  taught words, smart albums, query parsing and ranking; `@arcafold/core/people/*`: face
+  segments, grouping, people records). The on-device models that make that data stay in each
+  app. The web app uses the API client's defaults (same origin, the browser keeps the
   session cookie); phones call `configureApi` with arcafold.com, their own fetch, and
-  `cookies: 'memory'`, which keeps the session cookie in the client's memory only. The store
-  shows decrypted images through `configureLibrary`: by default in-memory object URLs; the
-  web app adds its file-crypto Web Worker and HEIC copies (`app/library-platform.ts`), and
-  phones will supply a native image view. `memoryStore`, for previews and tests, stays in
-  the web app.
+  `cookies: 'memory'`, which keeps the session cookie in the client's memory only. Core
+  loads crypto through `configureCrypto` and shows decrypted images through
+  `configureLibrary` (by default in-memory object URLs). The web app's `app/platform.ts`
+  adds Web Workers for Argon2id and large files and HEIC copies; phones will supply a native
+  image view. `memoryStore`, for previews and tests, stays in the web app.
+  `@arcafold/core/testing/*` holds test helpers (an in-memory API, sample faces).
 - **packages/types** — types shared between web, API, and mobile.
 
 ## Workspace conventions

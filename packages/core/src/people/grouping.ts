@@ -5,7 +5,7 @@
  * can always be found again; what the user did can't, so only that is saved (in people
  * records), and the groups themselves are worked out again whenever they're needed.
  */
-import { cosine } from './sface';
+import { cosine } from './vectors';
 import type { FaceResults, StoredFace } from './segment';
 
 /** A face joins a person when it's at least this similar to them. */

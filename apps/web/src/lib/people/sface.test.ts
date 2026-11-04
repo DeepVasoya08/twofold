@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { SFACE_SIZE, alignmentFor, cosine, fitSimilarity, normalize, sfaceInput } from './sface';
+import { cosine } from '@arcafold/core/people/vectors';
+
+import { SFACE_SIZE, alignmentFor, fitSimilarity, normalize, sfaceInput } from './sface';
 
 describe('fitSimilarity', () => {
   it('recovers a rotation, scale and shift', () => {

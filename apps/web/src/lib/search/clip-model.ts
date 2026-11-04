@@ -9,7 +9,7 @@ import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 
 import { CLIP_SIZE } from './clip-image';
 import type { EncoderMode, PhotoModel } from './photo-encoder';
-import { VECTOR_LENGTH } from './segment';
+import { VECTOR_LENGTH } from '@arcafold/core/search/segment';
 
 ort.env.wasm.wasmPaths = { wasm: wasmUrl };
 ort.env.wasm.numThreads = 1;

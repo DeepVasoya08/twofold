@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { photoId } from '../people/test-faces';
+import { photoId } from '../testing/faces';
 import {
   SEARCH_MODEL,
   VECTOR_LENGTH,

@@ -1,10 +1,10 @@
-import * as crypto from '@arcafold/crypto';
 import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Asset, AssetField, MediaType, Query, requestPermissionsAsync } from 'expo-media-library';
 import type { AssetMetadata } from 'expo-media-library';
 import { AppState, PermissionsAndroid, Platform } from 'react-native';
 
+import { logIn, spaceOf } from '@arcafold/core/account';
 import { api } from '@arcafold/core/api';
 import { photoTypeOf } from '@arcafold/core/file-types';
 import { remoteStore } from '@arcafold/core/library/space-store';
@@ -38,20 +38,16 @@ export interface SignedIn {
 
 export async function signIn(email: string, password: string): Promise<SignedIn> {
   const started = Date.now();
-  const params = await api.preLogin({ email });
-  const secret = await crypto.deriveFromPassword(password, params.salt, params.kdf);
-  const account = await api.logIn({ email, loginKey: crypto.toBase64Url(secret.loginKey) });
-  const opened = await crypto.openKeyring(account.keyring, secret);
-  if (!opened) {
+  const session = await logIn(email, password).catch(async (error: unknown) => {
+    // A password that signs in but opens no space still left a session on the server.
     await api.logOut().catch(() => undefined);
-    throw new Error('That email and password don’t match.');
-  }
-  const access = await crypto.ownerAccess(opened.space);
+    throw error;
+  });
   return {
     ms: Date.now() - started,
-    store: remoteStore(access),
+    store: remoteStore(session.opened.space),
     email,
-    space: opened.slot === crypto.SLOT.private ? 'private' : 'main',
+    space: spaceOf(session.opened),
   };
 }
 

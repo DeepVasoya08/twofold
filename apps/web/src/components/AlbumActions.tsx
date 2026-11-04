@@ -3,7 +3,7 @@ import type { SubmitEvent } from 'react';
 
 import { useAccount } from '../app/account';
 import { useDownloads } from '../app/downloads';
-import { leaveJoined } from '../app/sharing';
+import { leaveJoined } from '@arcafold/core/sharing';
 import { useToast } from '../app/toast';
 import { albumFiles, albumPhotos, useVault } from '../app/vault';
 import { photosAndFiles } from '../lib/format';

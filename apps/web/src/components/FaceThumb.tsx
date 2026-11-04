@@ -1,4 +1,4 @@
-import type { Face } from '../lib/people/grouping';
+import type { Face } from '@arcafold/core/people/grouping';
 import { Icon } from './Icon';
 import { PhotoImage } from './PhotoImage';
 import type { Photo } from '@arcafold/core/library/model';

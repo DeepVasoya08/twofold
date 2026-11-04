@@ -1,13 +1,13 @@
 import type { SpaceKeys } from '@arcafold/crypto';
 import { FACE_SEGMENT_DELETE_MAX } from '@arcafold/types';
 
-import { spaceApi } from '@arcafold/core/api';
-import type { SpaceApi } from '@arcafold/core/api';
-import { MAX_PERSON_FACES } from '../lib/people/grouping';
-import { isPersonLabel } from '../lib/people/grouping';
-import type { Person, PersonLabel } from '../lib/people/grouping';
-import { decodeSegment, encodeSegment, splitResults } from '../lib/people/segment';
-import type { FaceResults } from '../lib/people/segment';
+import { spaceApi } from '../api';
+import type { SpaceApi } from '../api';
+import { MAX_PERSON_FACES } from './grouping';
+import { isPersonLabel } from './grouping';
+import type { Person, PersonLabel } from './grouping';
+import { decodeSegment, encodeSegment, splitResults } from './segment';
+import type { FaceResults } from './segment';
 
 /**
  * The open space's people, stored sealed under its own key: face results in segments, and

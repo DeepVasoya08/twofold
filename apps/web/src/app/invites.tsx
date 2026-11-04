@@ -32,8 +32,15 @@ import {
   setInviteAccess,
   startInvite,
   startJoin,
-} from './sharing';
-import type { Invite, InviteProgress, Join, JoinProgress, Member, SharingApis } from './sharing';
+} from '@arcafold/core/sharing';
+import type {
+  Invite,
+  InviteProgress,
+  Join,
+  JoinProgress,
+  Member,
+  SharingApis,
+} from '@arcafold/core/sharing';
 import { useToast } from './toast';
 import { useVault } from './vault';
 import { FormError, errorMessage } from '@arcafold/core/errors';
