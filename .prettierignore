@@ -5,3 +5,5 @@ coverage/
 playwright-report/
 test-results/
 .prerender/
+apps/mobile-spike/android/
+apps/mobile-spike/modules/*/android/build/

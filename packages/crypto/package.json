@@ -21,6 +21,15 @@
     "libsodium-wrappers-sumo": "^0.8.4"
   },
   "devDependencies": {
-    "@types/libsodium-wrappers-sumo": "^0.8.2"
+    "@types/libsodium-wrappers-sumo": "^0.8.2",
+    "react-native-libsodium": "1.7.0"
+  },
+  "peerDependencies": {
+    "react-native-libsodium": "1.7.0"
+  },
+  "peerDependenciesMeta": {
+    "react-native-libsodium": {
+      "optional": true
+    }
   }
 }

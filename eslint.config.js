@@ -39,9 +39,19 @@ export default tseslint.config(
     rules: reactHooks.configs.recommended.rules,
   },
   {
+    files: ['apps/mobile-spike/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: reactHooks.configs.recommended.rules,
+  },
+  {
     files: ['**/*.{js,mjs,cjs}'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: globals.node },
+  },
+  {
+    // Metro loads its config with require().
+    files: ['apps/mobile-spike/metro.config.js'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   prettier,
 );

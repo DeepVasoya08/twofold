@@ -2,6 +2,7 @@
  * Hashing and encoding helpers built on Web Crypto only, so the API Worker can use them
  * without loading libsodium's WebAssembly. Exposed as `@arcafold/crypto/webcrypto`.
  */
+import { sha256Digest } from './digest';
 
 export function toBase64Url(bytes: Uint8Array): string {
   let binary = '';
@@ -21,8 +22,8 @@ export function fromBase64Url(text: string): Uint8Array | null {
   return toBase64Url(bytes) === text ? bytes : null;
 }
 
-export async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(bytes)));
+export function sha256(bytes: Uint8Array): Promise<Uint8Array> {
+  return sha256Digest(bytes);
 }
 
 /**

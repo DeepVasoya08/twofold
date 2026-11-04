@@ -108,7 +108,10 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
   Playwright against `wrangler dev`. Run `pnpm --filter @arcafold/api db:migrate:local` once
   before using `wrangler dev` by hand.
 - **packages/crypto** — the only place crypto code may live; libsodium constructions only.
-  `@arcafold/crypto/webcrypto` is the Web Crypto-only part the API uses.
+  `@arcafold/crypto/webcrypto` is the Web Crypto-only part the API uses. Every libsodium
+  call goes through `getSodium()` and the `Sodium` interface (`src/sodium-api.ts`): the
+  WebAssembly build everywhere except the phone apps, where Metro picks `sodium.native.ts`
+  (the native C library through react-native-libsodium). See [mobile.md](mobile.md).
 - **packages/types** — types shared between web, API, and (later) mobile.
 
 ## Workspace conventions

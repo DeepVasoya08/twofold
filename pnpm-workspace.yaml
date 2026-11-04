@@ -2,7 +2,11 @@ packages:
   - apps/*
   - packages/*
 
-# pnpm 10 blocks dependency install scripts by default; allow only the ones we need.
 onlyBuiltDependencies:
   - esbuild
   - workerd
+  - react-native-libsodium
+
+patchedDependencies:
+  onnxruntime-react-native@1.24.3: patches/onnxruntime-react-native@1.24.3.patch
+  react-native-libsodium@1.7.0: patches/react-native-libsodium@1.7.0.patch
