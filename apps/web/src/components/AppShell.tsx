@@ -12,6 +12,7 @@ import { DownloadDialog } from './DownloadDialog';
 import { DownloadProgress } from './DownloadProgress';
 import { SearchBar } from './SearchBar';
 import { SmartSearchCard } from './SmartSearchCard';
+import { UpdateCard } from './UpdateCard';
 import { Icon } from './Icon';
 import { InviteRequests } from './Invites';
 import type { IconName } from './Icon';
@@ -208,6 +209,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
         <UploadProgress />
         <DownloadProgress />
         <SmartSearchCard />
+        <UpdateCard />
       </div>
     </div>
   );

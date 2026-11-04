@@ -74,6 +74,16 @@ jobs:
           VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
           VITE_GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
 
+      # Each deploy replaces every file the Worker serves, so a tab opened before it would ask
+      # for scripts that are gone (Smart search, uploads and unlocking load theirs on first
+      # use). Copy the files recent builds still need from the live site into this one, for
+      # a week (src/build/asset-history.ts, docs/deployment.md).
+      - name: Keep recent builds' files
+        working-directory: apps/web
+        run: |
+          origin="${SITE_URL:-https://arcafold.deepvasoya08.workers.dev}"
+          node scripts/keep-old-assets.mjs "${origin%/}"
+
       # One Worker serves the web app (static assets) and the API (/api/*) on one origin.
       - name: Deploy Worker
         working-directory: apps/api

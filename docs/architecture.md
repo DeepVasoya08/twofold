@@ -20,7 +20,10 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
   previews and structured data, plus `sitemap.xml` and `robots.txt` (see
   [ui.md](ui.md#landing-page-legal-pages-and-seo)). Any other path that isn't a file reaches
   the Worker, which answers with the plain app shell, `app.html` (marked `noindex`); a
-  missing file (a path with an extension) gets a 404. Response headers for assets, the
+  missing file (a path with an extension) gets a 404. Each deploy also serves the `/assets`
+  files of builds from the last 7 days, so tabs opened before it keep working, and an open
+  tab offers a reload once a newer build is live (see
+  [deployment.md](deployment.md)). Response headers for assets, the
   shell included, come from `apps/web/public/_headers`. All encryption and decryption happens
   here, through `packages/crypto`; password hashing (Argon2id) runs in a Web Worker
   bundled from `@arcafold/crypto/password-worker`, encrypting and decrypting originals in one

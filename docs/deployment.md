@@ -15,7 +15,15 @@ It deploys the exact commit CI tested, in this order:
    ([README](../apps/web/scripts/search-resources/README.md)).
 4. Builds the web app into `apps/web/dist`. The build fails if any file is over the
    25 MiB static asset limit.
-5. Deploys the `arcafold` Worker (`wrangler deploy` in `apps/api`), which uploads the web
+5. Keeps recent builds' files (`apps/web/scripts/keep-old-assets.mjs`): reads
+   `/asset-history.json` from the live site (`SITE_URL`, or the workers.dev address), copies
+   the `/assets` files that earlier builds used in the last 7 days into `dist`, and writes a
+   new `asset-history.json`. Without this, a tab opened before the deploy would ask for
+   scripts that are gone (for example Smart search's worker) and that part would stop with a
+   404 until a reload. A problem reaching the live site only prints a warning; it never fails
+   the deploy. Open tabs also check for a newer build when they come back into view and
+   every hour, and offer a reload ("Arcafold has been updated").
+6. Deploys the `arcafold` Worker (`wrangler deploy` in `apps/api`), which uploads the web
    app's assets and the API code together. One deploy updates both, so the web app and
    the API can never be out of step.
 
