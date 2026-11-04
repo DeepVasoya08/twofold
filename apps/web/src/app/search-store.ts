@@ -1,8 +1,8 @@
 import type { SpaceKeys } from '@arcafold/crypto';
 import { SEARCH_SEGMENT_DELETE_MAX } from '@arcafold/types';
 
-import { spaceApi } from '../lib/api';
-import type { SpaceApi } from '../lib/api';
+import { spaceApi } from '@arcafold/core/api';
+import type { SpaceApi } from '@arcafold/core/api';
 import { decodeSegment, encodeSegment, splitResults } from '../lib/search/segment';
 import type { SearchResults } from '../lib/search/segment';
 import { parseSmartAlbum, smartMeta } from '../lib/search/smart-album';

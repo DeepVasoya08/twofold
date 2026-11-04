@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { removeUploads, runBackup, signIn } from './backup-test';
+import { removeUploads, runBackup, signIn, signOut } from './backup-test';
 import type { BackupProgress, BackupReport, SignedIn } from './backup-test';
 
 const COUNT = 200;
@@ -126,7 +126,7 @@ export function BackupPanel({ busy, setBusy, record }: Props) {
       <Pressable
         style={[styles.secondary, busy ? styles.disabled : null]}
         onPress={guard('Signing out', async () => {
-          await session.api.logOut();
+          await signOut();
           setSession(null);
         })}
       >

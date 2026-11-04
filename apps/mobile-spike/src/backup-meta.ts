@@ -89,10 +89,3 @@ export function longestGap(start: number, finishedAt: readonly number[]): number
   }
   return gap;
 }
-
-/** The session cookie's `name=value`, from a login answer's Set-Cookie header. */
-export function sessionCookie(setCookie: string | null): string | null {
-  if (!setCookie) return null;
-  const first = setCookie.split(';')[0]?.trim() ?? '';
-  return /^[^=\s]+=[^=\s]/.test(first) ? first : null;
-}

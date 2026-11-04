@@ -13,6 +13,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@arcafold/core": "workspace:*",
     "@arcafold/crypto": "workspace:*",
     "@arcafold/types": "workspace:*",
     "libheif-js": "1.23.5",

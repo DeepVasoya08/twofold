@@ -54,6 +54,58 @@ export class ApiError extends Error {
 
 const OFFLINE = "Couldn't reach Arcafold. Check your connection and try again.";
 
+/** The parts of a fetch Response this client reads, so any fetch implementation fits. */
+export interface ApiResponse {
+  readonly ok: boolean;
+  readonly status: number;
+  readonly headers: { get(name: string): string | null };
+  readonly body: {
+    getReader(): { read(): Promise<{ done: boolean; value?: Uint8Array | undefined }> };
+  } | null;
+  json(): Promise<unknown>;
+  text(): Promise<string>;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+export interface ApiRequest {
+  method: string;
+  headers: Record<string, string>;
+  body?: string | Uint8Array<ArrayBuffer>;
+  credentials: 'same-origin' | 'omit';
+}
+
+export type ApiFetch = (url: string, init: ApiRequest) => Promise<ApiResponse>;
+
+export interface ApiConfig {
+  /** Where the API lives: '' for the web app's own origin, https://arcafold.com on phones. */
+  origin: string;
+  fetch: ApiFetch;
+  /**
+   * 'browser': the browser keeps the session cookie (the web app).
+   * 'memory': this client keeps it in memory and sends it itself (the phone apps), so it
+   * never reaches the system cookie store.
+   */
+  cookies: 'browser' | 'memory';
+}
+
+const browserFetch: ApiFetch = (url, init) => fetch(url, init);
+
+let config: ApiConfig = { origin: '', fetch: browserFetch, cookies: 'browser' };
+let sessionCookie: string | null = null;
+
+/** Points the client at a server. The web app keeps the defaults. */
+export function configureApi(next: Partial<ApiConfig>): void {
+  config = { ...config, ...next };
+  sessionCookie = null;
+}
+
+/** The `name=value` part of a Set-Cookie header, or null when it sets nothing. */
+export function cookieValue(setCookie: string | null): string | null {
+  if (!setCookie) return null;
+  const first = setCookie.split(';')[0]?.trim() ?? '';
+  return /^[^=\s]+=[^\s;]+$/.test(first) ? first : null;
+}
+
 let sessionEndedListener: (() => void) | null = null;
 
 /**
@@ -80,20 +132,33 @@ async function send(
   path: string,
   body: Body = {},
   headers: Record<string, string> = {},
-): Promise<Response> {
-  const init: RequestInit = { method, credentials: 'same-origin', headers: { ...headers } };
+): Promise<ApiResponse> {
+  const memory = config.cookies === 'memory';
+  const init: ApiRequest = {
+    method,
+    credentials: memory ? 'omit' : 'same-origin',
+    headers: { ...headers },
+  };
+  if (memory && sessionCookie) init.headers.cookie = sessionCookie;
   if (body.json !== undefined) {
-    init.headers = { ...headers, 'content-type': 'application/json' };
+    init.headers['content-type'] = 'application/json';
     init.body = JSON.stringify(body.json);
   } else if (body.bytes) {
-    init.headers = { ...headers, 'content-type': 'application/octet-stream' };
+    init.headers['content-type'] = 'application/octet-stream';
     init.body = body.bytes;
   }
-  let res: Response;
+  let res: ApiResponse;
   try {
-    res = await fetch(`/api${path}`, init);
+    res = await config.fetch(`${config.origin}/api${path}`, init);
   } catch {
     throw new ApiError(0, OFFLINE);
+  }
+  if (memory) {
+    const cookie = cookieValue(res.headers.get('set-cookie'));
+    if (cookie) sessionCookie = cookie;
+    else if (path === '/auth/logout' || (res.status === 401 && !path.startsWith('/auth/'))) {
+      sessionCookie = null;
+    }
   }
   if (!res.ok) {
     // A 401 from /auth is a wrong password, not an ended session.
@@ -106,7 +171,6 @@ async function send(
   }
   return res;
 }
-
 async function call<T>(
   method: string,
   path: string,
@@ -244,7 +308,7 @@ export function spaceApi(token: string) {
           for (;;) {
             const { done, value } = await reader.read();
             if (done) break;
-            take(value);
+            if (value) take(value);
           }
         } else {
           take(new Uint8Array(await res.arrayBuffer()));

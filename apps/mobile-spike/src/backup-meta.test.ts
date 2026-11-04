@@ -7,7 +7,6 @@ import {
   finishedInBackground,
   longestGap,
   photoTypeOf,
-  sessionCookie,
 } from './backup-meta';
 import type { PhotoMeta } from './backup-meta';
 
@@ -86,18 +85,5 @@ describe('timing summaries', () => {
   it('finds the longest pause between photos', () => {
     expect(longestGap(0, [450, 50, 150])).toBe(300);
     expect(longestGap(10, [])).toBe(0);
-  });
-});
-
-describe('sessionCookie', () => {
-  it('keeps only the name and value', () => {
-    expect(sessionCookie('__Host-session=abc123; Path=/; HttpOnly; Secure; SameSite=Strict')).toBe(
-      '__Host-session=abc123',
-    );
-  });
-
-  it('refuses a missing or empty cookie', () => {
-    expect(sessionCookie(null)).toBeNull();
-    expect(sessionCookie('session=; Max-Age=0')).toBeNull();
   });
 });

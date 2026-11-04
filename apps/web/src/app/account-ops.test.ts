@@ -8,8 +8,8 @@ import type {
   UpdateKeyringRequest,
 } from '@arcafold/types';
 
-import { ApiError } from '../lib/api';
-import type * as ApiModule from '../lib/api';
+import { ApiError } from '@arcafold/core/api';
+import type * as ApiModule from '@arcafold/core/api';
 import * as ops from './account-ops';
 import type { Session } from './account-ops';
 
@@ -34,7 +34,7 @@ function current(): AccountResponse {
   return server.account;
 }
 
-vi.mock('../lib/api', async (importOriginal) => {
+vi.mock('@arcafold/core/api', async (importOriginal) => {
   const actual = await importOriginal<typeof ApiModule>();
   return {
     ...actual,

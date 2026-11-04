@@ -6,8 +6,9 @@ import { Asset, AssetField, MediaType, Query, requestPermissionsAsync } from 'ex
 import type { AssetMetadata } from 'expo-media-library';
 import { AppState, PermissionsAndroid, Platform } from 'react-native';
 
+import { api, spaceApi } from '@arcafold/core/api';
+
 import { BackupService } from '../modules/backup-service';
-import { ArcafoldApi } from './arcafold-api';
 import {
   eachLimited,
   encodePhotoMeta,
@@ -31,7 +32,6 @@ const THUMB_QUALITY = 0.82;
 const PARALLEL = 3;
 
 export interface SignedIn {
-  api: ArcafoldApi;
   /** How long signing in took, Argon2id included. */
   ms: number;
   access: SpaceAccess;
@@ -41,7 +41,6 @@ export interface SignedIn {
 
 export async function signIn(email: string, password: string): Promise<SignedIn> {
   const started = Date.now();
-  const api = new ArcafoldApi();
   const params = await api.preLogin({ email });
   const secret = await crypto.deriveFromPassword(password, params.salt, params.kdf);
   const account = await api.logIn({ email, loginKey: crypto.toBase64Url(secret.loginKey) });
@@ -51,7 +50,6 @@ export async function signIn(email: string, password: string): Promise<SignedIn>
     throw new Error('That email and password don’t match.');
   }
   return {
-    api,
     ms: Date.now() - started,
     access: await crypto.ownerAccess(opened.space),
     email,
@@ -150,7 +148,7 @@ async function uploadOne(
     albumIds: [],
     fp: await crypto.photoFingerprint(signedIn.access, original),
   };
-  const space = signedIn.api.space(signedIn.access.token);
+  const space = spaceApi(signedIn.access.token);
   await space.createPhoto({
     id,
     meta: await crypto.sealRecord(signedIn.access, 'photo', id, encodePhotoMeta(meta)),
@@ -164,7 +162,9 @@ async function uploadOne(
     ]);
     const failed = puts.find((put) => put.status === 'rejected');
     if (failed) throw failed.reason;
-    if (!puts.some((put) => put.status === 'fulfilled' && put.value)) await space.commitPhoto(id);
+    if (!puts.some((put) => put.status === 'fulfilled' && put.value.committed)) {
+      await space.commitPhoto(id);
+    }
   } catch (error) {
     await space.deletePhoto(id).catch(() => undefined);
     throw error;
@@ -245,11 +245,16 @@ export async function runBackup(
 
 /** Removes the photos a test uploaded, for good. */
 export async function removeUploads(signedIn: SignedIn, ids: readonly string[]): Promise<number> {
-  const space = signedIn.api.space(signedIn.access.token);
+  const space = spaceApi(signedIn.access.token);
   let removed = 0;
   await eachLimited(ids, PARALLEL, async (id) => {
     await space.deletePhoto(id).catch(() => undefined);
     removed++;
   });
   return removed;
+}
+
+/** Signs this device out of the test account. */
+export function signOut(): Promise<void> {
+  return api.logOut();
 }

@@ -2,7 +2,8 @@
 
 Arcafold is an end-to-end encrypted private photo vault for couples. pnpm monorepo:
 `apps/web` (Vite + React, Cloudflare Pages), `apps/api` (Hono on Cloudflare Workers, R2 + D1),
-`packages/crypto` (libsodium), `packages/types` (shared types), `docs/`.
+`packages/crypto` (libsodium), `packages/core` (shared app logic), `packages/types`
+(shared types), `apps/mobile-spike` (phone test app), `docs/`.
 
 ## Security rules (non-negotiable)
 

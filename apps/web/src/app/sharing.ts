@@ -2,8 +2,8 @@ import type { InviteKeys, SpaceKeys } from '@arcafold/crypto';
 import { INVITE_TTL_MS } from '@arcafold/types';
 import type { InviterView, JoinerView, MemberAccess } from '@arcafold/types';
 
-import { ApiError, inviteApi, spaceApi } from '../lib/api';
-import type { InviteApi, SpaceApi } from '../lib/api';
+import { ApiError, inviteApi, spaceApi } from '@arcafold/core/api';
+import type { InviteApi, SpaceApi } from '@arcafold/core/api';
 import { FormError } from './account-ops';
 import { combinedStore, remoteStore } from './space-store';
 import type { SharedSource, SpaceStore } from './space-store';
