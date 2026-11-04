@@ -11,7 +11,7 @@ import { EmptyState } from '../components/EmptyState';
 import { FaceThumb } from '../components/FaceThumb';
 import { pluralize } from '../lib/format';
 import { MODEL_DOWNLOAD_MB } from '../lib/people/models';
-import type { Group, PersonLabel } from '../lib/people/grouping';
+import type { Group, PersonLabel } from '@arcafold/core/people/grouping';
 
 import './people.css';
 

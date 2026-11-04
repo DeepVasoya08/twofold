@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { newSpace, openOwnerRecord, spaceToken } from '@arcafold/crypto';
 
-import { FakeServer } from '@arcafold/core/testing/fake-server';
-import { face, photoId, unitVector } from '../lib/people/test-faces';
-import type { FaceResults } from '../lib/people/segment';
-import { memoryPeopleStore, parsePerson, remotePeopleStore } from './people-store';
-import type { Person } from '../lib/people/grouping';
+import { FakeServer } from '../testing/fake-server';
+import { face, photoId, unitVector } from '../testing/faces';
+import type { FaceResults } from './segment';
+import { memoryPeopleStore, parsePerson, remotePeopleStore } from './store';
+import type { Person } from './grouping';
 
 const results = (from: number, count: number): FaceResults =>
   new Map(Array.from({ length: count }, (_, n) => [photoId(from + n), [face(unitVector(n))]]));

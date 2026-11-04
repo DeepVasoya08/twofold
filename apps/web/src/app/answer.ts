@@ -1,12 +1,12 @@
 import { useCallback, useMemo } from 'react';
 
-import { findPhotos } from '../lib/search/find';
-import type { Found, PeopleIndex } from '../lib/search/find';
-import { parseQuery } from '../lib/search/query';
-import type { NamedPerson, NamedWord, ParsedQuery } from '../lib/search/query';
-import type { SearchResults } from '../lib/search/segment';
-import type { SmartAlbum } from '../lib/search/smart-album';
-import { wordVector } from '../lib/search/taught';
+import { findPhotos } from '@arcafold/core/search/find';
+import type { Found, PeopleIndex } from '@arcafold/core/search/find';
+import { parseQuery } from '@arcafold/core/search/query';
+import type { NamedPerson, NamedWord, ParsedQuery } from '@arcafold/core/search/query';
+import type { SearchResults } from '@arcafold/core/search/segment';
+import type { SmartAlbum } from '@arcafold/core/search/smart-album';
+import { wordVector } from '@arcafold/core/search/taught';
 import { photoOrder, useGroups, usePeople } from './people';
 import { useSearch } from './search';
 import { useVault } from './vault';

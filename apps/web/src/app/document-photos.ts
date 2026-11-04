@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 
 import { documentLooks, lookPrompts } from '../lib/file-sort/looks';
 import type { DocumentLook, LookPrompt } from '../lib/file-sort/looks';
-import type { SearchResults } from '../lib/search/segment';
+import type { SearchResults } from '@arcafold/core/search/segment';
 import type { VaultState } from './vault';
 import { timelinePhotos } from './vault';
 import { useSearch } from './search';

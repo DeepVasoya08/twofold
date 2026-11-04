@@ -7,7 +7,9 @@
 import * as ort from 'onnxruntime-web/wasm';
 import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 import type { FaceModels } from './find-faces';
-import { EMBEDDING_LENGTH, SFACE_SIZE } from './sface';
+import { EMBEDDING_LENGTH } from '@arcafold/core/people/vectors';
+
+import { SFACE_SIZE } from './sface';
 import { YUNET_SIZE } from './yunet';
 import type { YunetOutputs } from './yunet';
 

@@ -7,7 +7,7 @@ import * as ort from 'onnxruntime-web/wasm';
 import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 
 import type { TextModel } from './query-encoder';
-import { VECTOR_LENGTH } from './segment';
+import { VECTOR_LENGTH } from '@arcafold/core/search/segment';
 import { CONTEXT_LENGTH } from './tokenizer';
 
 ort.env.wasm.wasmPaths = { wasm: wasmUrl };

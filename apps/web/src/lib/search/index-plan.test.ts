@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { photosToIndex, waitForWifi, wipeResults } from './index-plan';
-import type { SearchResults } from './segment';
+import type { SearchResults } from '@arcafold/core/search/segment';
 
 describe('photosToIndex', () => {
   const order = ['a', 'b', 'c', 'd'];

@@ -15,7 +15,7 @@ import { Menu } from '../components/Menu';
 import type { MenuItem } from '../components/Menu';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { pluralize } from '../lib/format';
-import { MAX_SMART_TITLE } from '../lib/search/smart-album';
+import { MAX_SMART_TITLE } from '@arcafold/core/search/smart-album';
 import { notLookedAtLine, notReadyLine } from './Search';
 import { errorMessage } from '@arcafold/core/errors';
 import type { Photo } from '@arcafold/core/library/model';

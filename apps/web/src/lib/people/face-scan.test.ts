@@ -5,8 +5,8 @@ import { FinderStopped } from './face-finder';
 import { RETRY_MS, SAVE_EVERY, SCAN_BATCH, runScan } from './face-scan';
 import type { ScanDeps } from './face-scan';
 import { ModelError } from './models';
-import type { FaceResults } from './segment';
-import { face, unitVector } from './test-faces';
+import type { FaceResults } from '@arcafold/core/people/segment';
+import { face, unitVector } from '@arcafold/core/testing/faces';
 
 const ids = (count: number) => Array.from({ length: count }, (_, n) => `p${String(n)}`);
 

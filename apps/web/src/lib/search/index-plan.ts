@@ -5,7 +5,7 @@
  * otherwise; computers look at everything and download straight away.
  */
 import type { Connection } from './device';
-import type { SearchResults } from './segment';
+import type { SearchResults } from '@arcafold/core/search/segment';
 
 /** The photos still to look at, in `order`. */
 export function photosToIndex({

@@ -9,12 +9,12 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
-import { clipPrompt } from '../lib/search/find';
-import type { Found } from '../lib/search/find';
+import { clipPrompt } from '@arcafold/core/search/find';
+import type { Found } from '@arcafold/core/search/find';
 import { EncoderStopped } from '../lib/search/photo-encoder';
 import type { QueryEncoder } from '../lib/search/query-encoder';
-import { parseQuery } from '../lib/search/query';
-import type { ParsedQuery } from '../lib/search/query';
+import { parseQuery } from '@arcafold/core/search/query';
+import type { ParsedQuery } from '@arcafold/core/search/query';
 import { shownPhotos, useAnswer, useNames } from './answer';
 import type { NotLookedAt } from './answer';
 import { useSearch } from './search';

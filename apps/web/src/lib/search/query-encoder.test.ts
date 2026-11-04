@@ -5,7 +5,7 @@ import type { EncoderWorker } from './photo-encoder';
 import { MAX_QUERY_LENGTH, answerQueryRequest, workerQueryEncoder } from './query-encoder';
 import type { QueryEngine, QueryMessage } from './query-encoder';
 import { ResourceError } from './resources';
-import { VECTOR_LENGTH } from './segment';
+import { VECTOR_LENGTH } from '@arcafold/core/search/segment';
 
 const vector = (value = 1) => new Float32Array(VECTOR_LENGTH).fill(value);
 
