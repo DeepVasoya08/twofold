@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import type { TextInputInstance } from 'react-native';
 
 import { useAccount } from '../session/account';
 import { signInError } from '../session/forms';
@@ -10,6 +11,7 @@ export function SignIn({ onSignUp }: { onSignUp: () => void }) {
   const [email, setEmail] = useState(remembered ?? '');
   const [password, setPassword] = useState('');
   const { busy, error, setError, run } = useSubmit();
+  const passwordField = useRef<TextInputInstance>(null);
 
   const submit = () => {
     const problem = signInError(email, password);
@@ -24,7 +26,7 @@ export function SignIn({ onSignUp }: { onSignUp: () => void }) {
   };
 
   return (
-    <Screen title="Sign in" subtitle="Your password unlocks your photos on this phone.">
+    <Screen showLogo title="Sign in" subtitle="Your password unlocks your photos on this phone.">
       <Field
         label="Email"
         value={email}
@@ -33,8 +35,12 @@ export function SignIn({ onSignUp }: { onSignUp: () => void }) {
         autoComplete="email"
         keyboardType="email-address"
         textContentType="emailAddress"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => passwordField.current?.focus()}
       />
       <Field
+        ref={passwordField}
         label="Password"
         value={password}
         onChangeText={(text) => {

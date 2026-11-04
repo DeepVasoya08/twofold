@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { signInError, signUpErrors } from './forms';
+import { signInError, signUpErrors, strengthTone } from './forms';
 
 const good = {
   name: 'Sam',
@@ -29,5 +29,17 @@ describe('signInError', () => {
     expect(signInError('sam', 'x')).toBe('Enter a valid email.');
     expect(signInError('sam@example.com', '')).toBe('Enter your password.');
     expect(signInError('sam@example.com', 'x')).toBeNull();
+  });
+});
+
+describe('strengthTone', () => {
+  it('is red for too short or weak, amber for fair, green for good or strong', () => {
+    expect([0, 1, 2, 3, 4].map(strengthTone)).toEqual([
+      'error',
+      'error',
+      'warning',
+      'success',
+      'success',
+    ]);
   });
 });

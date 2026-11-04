@@ -1,24 +1,42 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { RECOVERY_FILE_NAME, recoveryFileText } from '@arcafold/core/recovery-file';
+
+import { saveTextFile } from '../../modules/save-file';
 import { useAccount } from '../session/account';
-import { Button, Note, Screen, useSubmit } from '../ui/kit';
+import { Button, CheckBox, Note, Screen, useSubmit } from '../ui/kit';
 import { usePalette } from '../ui/theme';
 
 /**
  * Step 2 of 2: the recovery key, shown once. Screenshots are blocked, so it has to be written
- * down; it is never copied to the clipboard, where other apps could read it.
+ * down or saved as a file; it is never copied to the clipboard, where other apps could read it.
+ * Ticking the box also saves it as a text file, as on the web, through Android's "Save to"
+ * screen, so the person picks where it goes.
  */
 export function RecoveryWords() {
   const { pendingSignUp, completeSignUp, cancelSignUp } = useAccount();
   const [saved, setSaved] = useState(false);
+  const [savedFile, setSavedFile] = useState(false);
   const { busy, error, setError, run } = useSubmit();
   const palette = usePalette();
   if (!pendingSignUp) return null;
+  const words = pendingSignUp.recoveryWords;
+
+  const tick = (next: boolean) => {
+    setSaved(next);
+    setError(null);
+    if (!next || savedFile) return;
+    saveTextFile(RECOVERY_FILE_NAME, recoveryFileText(words))
+      .then(setSavedFile)
+      .catch(() => {
+        setError('The file couldn’t be saved. Write the words down instead.');
+      });
+  };
 
   const submit = () => {
     if (!saved) {
-      setError('Tick the box once you’ve written the words down.');
+      setError('Tick the box once you’ve saved the words.');
       return;
     }
     run(completeSignUp);
@@ -30,7 +48,7 @@ export function RecoveryWords() {
       subtitle="If you ever forget your password, these 12 words are the only way back into your photos. Not even we can help without them."
     >
       <View style={styles.words} accessibilityLabel="Recovery key">
-        {pendingSignUp.recoveryWords.map((word, index) => (
+        {words.map((word, index) => (
           <Text
             key={index}
             style={[styles.word, { color: palette.text, borderColor: palette.border }]}
@@ -40,26 +58,8 @@ export function RecoveryWords() {
         ))}
       </View>
       <Note>Write them on paper, or keep them in a password manager. Don’t share them.</Note>
-      <Pressable
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: saved }}
-        onPress={() => {
-          setSaved((current) => !current);
-          setError(null);
-        }}
-        style={styles.check}
-      >
-        <View
-          style={[
-            styles.box,
-            {
-              borderColor: palette.accent,
-              backgroundColor: saved ? palette.accent : 'transparent',
-            },
-          ]}
-        />
-        <Text style={{ color: palette.text }}>I’ve saved my recovery key somewhere safe</Text>
-      </Pressable>
+      <CheckBox checked={saved} label="I’ve saved my recovery key somewhere safe" onChange={tick} />
+      {savedFile ? <Note>Also saved as {RECOVERY_FILE_NAME}.</Note> : null}
       {error ? <Note error>{error}</Note> : null}
       <Button label="Create account" busyLabel="Creating account…" busy={busy} onPress={submit} />
       <Button kind="link" label="Back" onPress={cancelSignUp} />
@@ -77,6 +77,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     fontSize: 16,
   },
-  check: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
-  box: { width: 22, height: 22, borderWidth: 2, borderRadius: 4 },
 });

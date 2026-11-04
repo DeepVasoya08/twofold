@@ -47,6 +47,8 @@ def on_background(size: int, scale: float) -> Image.Image:
 
 on_background(1024, 0.78).convert('RGB').save('assets/icon.png')
 on_background(1024, 0.5).convert('RGB').save('assets/splash-icon.png')
+# The mark on its own, for the sign-in screens.
+mark(288, 1.0).save('assets/logo.png')
 # Android adaptive icons: keep the mark inside the middle 66% safe zone.
 mark(432, 0.6).save('assets/android-icon-foreground.png')
 Image.new('RGBA', (432, 432), BACKGROUND).save('assets/android-icon-background.png')

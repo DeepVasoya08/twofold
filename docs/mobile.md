@@ -24,6 +24,14 @@ or a native module.
   email that signed in is kept in the app's private storage to fill in the sign-in screen.
 - Locking: the app locks the moment it goes to the background, and after a minute on screen
   without a touch (the web app's default). A system dialog doesn't lock it.
+- The recovery key: ticking "I've saved my recovery key" also saves it as
+  `arcafold-recovery-key.txt` (the same text as the web app's download, from
+  `@arcafold/core/recovery-file`). `modules/save-file` opens Android's own "Save to" screen
+  (`ACTION_CREATE_DOCUMENT`), so the person picks where it goes, and writes the text straight
+  from memory; the app needs no storage permission and keeps no copy.
+- The keyboard: the app draws edge to edge, so Android no longer resizes the window for the
+  keyboard. Every screen (`ui/kit.tsx` `Screen`) shrinks itself to the space above the keyboard
+  and scrolls, and the return key moves to the next field.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

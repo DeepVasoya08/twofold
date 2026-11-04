@@ -27,6 +27,7 @@ export function Unlock() {
 
   return (
     <Screen
+      showLogo
       title={`Welcome back, ${name}`}
       subtitle="Arcafold locked itself to keep your photos safe. Enter your password to open it."
     >

@@ -27,3 +27,9 @@ export function signInError(email: string, password: string): string | null {
   if (!password) return 'Enter your password.';
   return null;
 }
+
+/** Which colour the strength meter takes for a password strength score (0 to 4). */
+export function strengthTone(score: number): 'error' | 'warning' | 'success' {
+  if (score >= 3) return 'success';
+  return score === 2 ? 'warning' : 'error';
+}

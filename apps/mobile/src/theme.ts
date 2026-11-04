@@ -9,6 +9,9 @@ export const colors = {
     accent: '#ef7d88',
     onAccent: '#161117',
     error: '#ff8a8a',
+    warning: '#d9902e',
+    success: '#6fcf9a',
+    track: '#2a222c',
   },
   light: {
     background: '#fbf7f2',
@@ -19,5 +22,8 @@ export const colors = {
     accent: '#d9586a',
     onAccent: '#ffffff',
     error: '#b3261e',
+    warning: '#b86f12',
+    success: '#2f8a5b',
+    track: '#e8ddd6',
   },
 } as const;
