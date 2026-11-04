@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isUploadRunning, summarizeUploads } from './upload-progress';
+import { isUploadRunning, summarizeUploads } from './progress';
 
 describe('summarizeUploads', () => {
   it('is empty with no photos', () => {

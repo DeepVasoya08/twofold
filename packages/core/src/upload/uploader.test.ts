@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { Uploader, VIDEO_REFUSED } from './uploader';
 import type { UploaderDeps } from './uploader';
-import type { Photo } from '@arcafold/core/library/model';
-import type { NewPhoto } from '@arcafold/core/library/space-store';
+import type { Photo } from '../library/model';
+import type { NewPhoto } from '../library/space-store';
 
 const photo = (name: string, type = 'image/png'): File =>
   new File([new Uint8Array(4)], name, { type });
@@ -189,6 +189,21 @@ describe('Uploader', () => {
     for (const upload of pending) upload.finish();
     await settle();
     expect(onStored).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes any source with a name, type and size, such as a gallery photo on a phone', async () => {
+    const { uploader, pending, statuses } = setup();
+    uploader.openDialog();
+    const gallery = ['g1', 'g2', 'g3', 'g4'].map((name) => ({
+      name,
+      type: 'image/jpeg',
+      size: 0,
+    }));
+    uploader.add(gallery, undefined);
+    await settle();
+    // A size that isn't known yet still lets three start at once.
+    expect(pending.map((job) => job.name)).toEqual(['g1', 'g2', 'g3']);
+    expect(statuses()).toEqual(['uploading', 'uploading', 'uploading', 'waiting']);
   });
 
   it('passes the album along with each photo', async () => {

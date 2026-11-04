@@ -1,19 +1,22 @@
-import { isVideoFile } from '@arcafold/core/file-types';
-import { isUploadRunning } from '../lib/upload-progress';
-import type { UploadStatus } from '../lib/upload-progress';
-import { canStartUpload } from '../lib/upload-queue';
-import type { InFlight } from '../lib/upload-queue';
-import type { Photo } from '@arcafold/core/library/model';
-import { errorMessage } from '@arcafold/core/errors';
-import type { NewPhoto, UploadStage } from '@arcafold/core/library/space-store';
+import { errorMessage } from '../errors';
+import { isVideoFile } from '../file-types';
+import type { Photo } from '../library/model';
+import type { NewPhoto, UploadStage } from '../library/space-store';
+import { isUploadRunning } from './progress';
+import type { UploadStatus } from './progress';
+import { canStartUpload } from './queue';
+import type { InFlight } from './queue';
 
 /**
  * The upload queue for the open space, kept outside React so that closing the upload dialog,
  * moving around the app or switching browser tabs doesn't stop photos on their way. Each
  * photo is encrypted on this device, then the ciphertext is uploaded, up to three photos at
- * a time (fewer when they're big; see lib/upload-queue.ts), in the order they were added.
+ * a time (fewer when they're big; see ./queue.ts), in the order they were added.
  * Stored photos are held back and handed over together once the queue runs dry, so the
  * library (and the storage figure worked out from it) changes once, not after every photo.
+ *
+ * It uses promises only, never timers, so it keeps going on a phone with the app in the
+ * background, where timers pause.
  */
 
 /** Why a video is turned away. */
@@ -40,12 +43,23 @@ export interface UploaderState {
   dialogOpen: boolean;
 }
 
-export interface UploaderDeps {
+/**
+ * Something to upload, before it is read: a browser File, or a gallery photo on a phone.
+ * Only its name, type and size are looked at until `prepare` reads it.
+ */
+export interface UploadSource {
+  name: string;
+  type: string;
+  /** Its size in bytes, to keep big uploads from running all at once; 0 when unknown. */
+  size: number;
+}
+
+export interface UploaderDeps<Source extends UploadSource = UploadSource> {
   /**
    * Reads a file into what is stored: a photo's original bytes and a small preview, or any
    * other file's bytes and its name.
    */
-  prepare: (file: File) => Promise<NewPhoto>;
+  prepare: (source: Source) => Promise<NewPhoto>;
   /** Encrypts and stores a photo in the open space, without showing it yet. */
   upload: (
     photo: NewPhoto,
@@ -54,20 +68,20 @@ export interface UploaderDeps {
   ) => Promise<Photo>;
   /** Called once each time the queue runs dry, with every photo stored since the last time. */
   onStored: (photos: Photo[]) => void;
-  /** Makes and drops in-memory preview URLs (object URLs in the browser). */
+  /** Makes and drops in-memory previews (object URLs in the browser). */
   preview: { make: (bytes: Uint8Array<ArrayBuffer>) => string; revoke: (url: string) => void };
 }
 
-interface Job {
+interface Job<Source> {
   id: number;
-  file: File;
+  file: Source;
   albumId: string | undefined;
 }
 
-export class Uploader {
+export class Uploader<Source extends UploadSource = UploadSource> {
   private state: UploaderState = { items: [], dialogOpen: false };
   private readonly listeners = new Set<() => void>();
-  private queue: Job[] = [];
+  private queue: Job<Source>[] = [];
   private inFlight: InFlight = { count: 0, bytes: 0 };
   /** Photos stored since the queue last ran dry, shown together at the end. */
   private stored: Photo[] = [];
@@ -75,10 +89,10 @@ export class Uploader {
   /** Every preview URL made, so clearing revokes them all, even one made as it cleared. */
   private readonly previews = new Set<string>();
 
-  constructor(private deps: UploaderDeps) {}
+  constructor(private deps: UploaderDeps<Source>) {}
 
   /** Swaps in the latest vault and toast; uploads already running keep their own. */
-  connect(deps: UploaderDeps): void {
+  connect(deps: UploaderDeps<Source>): void {
     this.deps = deps;
   }
 
@@ -110,7 +124,7 @@ export class Uploader {
    * Queues photos and files; `albumId` adds photos to that album as well as the timeline.
    * Videos are shown as refused and never read.
    */
-  add = (files: readonly File[], albumId: string | undefined): void => {
+  add = (files: readonly Source[], albumId: string | undefined): void => {
     if (files.length === 0) return;
     const added = files.map((file): UploadItem => {
       this.nextId += 1;
@@ -163,7 +177,7 @@ export class Uploader {
     });
   }
 
-  private async uploadOne({ id, file, albumId }: Job): Promise<void> {
+  private async uploadOne({ id, file, albumId }: Job<Source>): Promise<void> {
     const { prepare, upload, preview } = this.deps;
     try {
       this.update(id, { status: 'encrypting' });

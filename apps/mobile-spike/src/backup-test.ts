@@ -6,9 +6,11 @@ import { AppState, PermissionsAndroid, Platform } from 'react-native';
 
 import { logIn, spaceOf } from '@arcafold/core/account';
 import { api } from '@arcafold/core/api';
+import { FormError } from '@arcafold/core/errors';
 import { photoTypeOf } from '@arcafold/core/file-types';
 import { remoteStore } from '@arcafold/core/library/space-store';
-import type { SpaceStore } from '@arcafold/core/library/space-store';
+import type { NewPhoto, SpaceStore } from '@arcafold/core/library/space-store';
+import { Uploader } from '@arcafold/core/upload/uploader';
 
 import { BackupService } from '../modules/backup-service';
 import { eachLimited, finishedInBackground, longestGap } from './backup-meta';
@@ -118,31 +120,29 @@ async function thumbnail(
   return fromBase64(saved.base64);
 }
 
-async function uploadOne(
-  signedIn: SignedIn,
-  asset: AssetMetadata,
-): Promise<{ id: string; bytes: number }> {
-  const filename = asset.filename ?? '';
-  const type = photoTypeOf({ type: '', name: filename });
-  if (!type) throw new Error(`skipped a .${filename.split('.').pop() ?? '?'} file`);
+/** A gallery photo waiting in the upload queue; only read once its turn comes. */
+interface GalleryPhoto {
+  name: string;
+  type: string;
+  /** Unknown until read, so the queue's byte limit doesn't hold it back. */
+  size: number;
+  asset: AssetMetadata;
+}
+
+async function readPhoto({ name, asset }: GalleryPhoto): Promise<NewPhoto> {
+  const type = photoTypeOf({ type: '', name });
+  if (!type) throw new FormError(`skipped a .${name.split('.').pop() ?? '?'} file`);
   const uri = await new Asset(asset.id).getUri();
-  const original = await new File(uri).bytes();
   const width = asset.width ?? 0;
   const height = asset.height ?? 0;
-  const thumbPlain = await thumbnail(uri, width, height);
-
-  const stored = await signedIn.store.add(
-    {
-      thumb: thumbPlain,
-      full: original,
-      type,
-      width,
-      height,
-      takenAt: new Date(asset.creationTime ?? asset.modificationTime ?? Date.now()).toISOString(),
-    },
-    [],
-  );
-  return { id: stored.id, bytes: stored.size ?? 0 };
+  return {
+    thumb: await thumbnail(uri, width, height),
+    full: await new File(uri).bytes(),
+    type,
+    width,
+    height,
+    takenAt: new Date(asset.creationTime ?? asset.modificationTime ?? Date.now()).toISOString(),
+  };
 }
 
 export async function runBackup(
@@ -169,32 +169,63 @@ export async function runBackup(
   const finishedAt: number[] = [];
   const ids: string[] = [];
   const errors: string[] = [];
-  let bytes = 0;
-  let failed = 0;
-  const report = () => {
-    const done = ids.length;
-    onProgress({ done, failed, total });
-    BackupService.show(
-      `${String(done)} of ${String(total)}${failed ? `, ${String(failed)} failed` : ''}`,
-      done + failed,
-      total,
-    );
+  const noteError = (error: unknown) => {
+    if (errors.length < 5) errors.push(error instanceof Error ? error.message : String(error));
+    throw error;
   };
+  let bytes = 0;
+  const finished = new Set<number>();
+
+  // The same queue the web app uses: three at a time, promises only, no timers.
+  const uploader = new Uploader<GalleryPhoto>({
+    prepare: (photo) => readPhoto(photo).catch(noteError),
+    upload: (photo, albumId, onStage) =>
+      signedIn.store.add(photo, albumId ? [albumId] : [], onStage).catch(noteError),
+    onStored: (photos) => {
+      for (const photo of photos) {
+        ids.push(photo.id);
+        bytes += photo.size ?? 0;
+      }
+    },
+    // Nothing is shown, so no previews are made.
+    preview: { make: () => '', revoke: () => undefined },
+  });
+  // Open, so finished photos stay listed until the run is over.
+  uploader.openDialog();
 
   try {
-    await eachLimited(assets, PARALLEL, async (asset) => {
-      try {
-        const stored = await uploadOne(signedIn, asset);
-        ids.push(stored.id);
-        bytes += stored.bytes;
-      } catch (error) {
-        failed++;
-        if (errors.length < 5) errors.push(error instanceof Error ? error.message : String(error));
-      }
-      finishedAt.push(Date.now());
-      report();
+    await new Promise<void>((resolve) => {
+      const check = () => {
+        const items = uploader.getState().items;
+        let done = 0;
+        let failed = 0;
+        for (const item of items) {
+          if (item.status !== 'done' && item.status !== 'failed') continue;
+          if (item.status === 'done') done++;
+          else failed++;
+          if (!finished.has(item.id)) {
+            finished.add(item.id);
+            finishedAt.push(Date.now());
+          }
+        }
+        onProgress({ done, failed, total });
+        BackupService.show(
+          `${String(done)} of ${String(total)}${failed ? `, ${String(failed)} failed` : ''}`,
+          done + failed,
+          total,
+        );
+        // Stored photos are handed over once the queue runs dry, after the last one finishes.
+        if (done + failed === total && ids.length === done) resolve();
+      };
+      uploader.subscribe(check);
+      uploader.add(
+        assets.map((asset) => ({ name: asset.filename ?? '', type: '', size: 0, asset })),
+        undefined,
+      );
+      check();
     });
   } finally {
+    uploader.dispose();
     watch.remove();
     BackupService.stop();
   }
@@ -203,7 +234,7 @@ export async function runBackup(
   return {
     total,
     uploaded: ids.length,
-    failed,
+    failed: total - ids.length,
     errors,
     megabytes: bytes / 1e6,
     seconds: Math.round((end - start) / 1000),

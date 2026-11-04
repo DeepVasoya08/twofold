@@ -23,17 +23,17 @@ import { photosAndFiles } from '../lib/format';
 import { fileDate, photoTakenAt } from '../lib/photo-date';
 import { loadSearchSetting } from '../lib/search/search-setting';
 import { loadThumbnailer } from '../lib/thumbnail-service';
-import { summarizeUploads } from '../lib/upload-progress';
-import type { UploadSummary } from '../lib/upload-progress';
+import { summarizeUploads } from '@arcafold/core/upload/progress';
+import type { UploadSummary } from '@arcafold/core/upload/progress';
 import { useToast } from './toast';
-import { Uploader } from './uploader';
-import type { UploadItem, UploaderDeps } from './uploader';
+import { Uploader } from '@arcafold/core/upload/uploader';
+import type { UploadItem, UploaderDeps } from '@arcafold/core/upload/uploader';
 import { useVault } from './vault';
 import { FormError } from '@arcafold/core/errors';
 import type { Photo } from '@arcafold/core/library/model';
 import type { NewPhoto } from '@arcafold/core/library/space-store';
 
-export type { UploadItem } from './uploader';
+export type { UploadItem } from '@arcafold/core/upload/uploader';
 
 interface UploadsValue {
   items: readonly UploadItem[];

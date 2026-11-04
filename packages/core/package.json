@@ -27,7 +27,10 @@
     "./search/taught": "./src/search/taught.ts",
     "./sharing": "./src/sharing.ts",
     "./testing/faces": "./src/testing/faces.ts",
-    "./testing/fake-server": "./src/testing/fake-server.ts"
+    "./testing/fake-server": "./src/testing/fake-server.ts",
+    "./upload/progress": "./src/upload/progress.ts",
+    "./upload/queue": "./src/upload/queue.ts",
+    "./upload/uploader": "./src/upload/uploader.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
