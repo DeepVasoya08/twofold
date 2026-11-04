@@ -115,8 +115,7 @@ test('adds files that aren’t photos, keeps them out of Photos, and saves them 
     .click();
   await expect(page.getByText('File deleted')).toBeVisible();
   await expect(list.getByText('packing.txt')).toBeHidden();
-  await goTo(page, 'Albums');
-  await page.getByRole('link', { name: /Recently deleted/ }).click();
+  await goTo(page, 'Recently deleted');
   await expect(page.getByRole('link', { name: 'File packing.txt' })).toBeVisible();
 });
 

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { useAccount, useMe } from '../app/account';
@@ -6,8 +6,9 @@ import { useProfile } from '../app/profile';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useUploads } from '../app/uploads';
+import { loadSidebarCollapsed, saveSidebarCollapsed } from '../lib/sidebar';
 import { isViewOnly, useVault } from '../app/vault';
-import { Avatar, LockBadge, Logo } from './Brand';
+import { Avatar, LockBadge, Logo, LogoMark } from './Brand';
 import { DownloadDialog } from './DownloadDialog';
 import { DownloadProgress } from './DownloadProgress';
 import { SearchBar } from './SearchBar';
@@ -28,7 +29,10 @@ const nav: {
   label: string;
   icon: IconName;
   match: (path: string) => boolean;
-  /** Left out of the phone tab bar, which has room for five; reached from Albums there. */
+  /**
+   * Left out of the phone tab bar, which has room for five. Phones reach Favorites from
+   * Albums and Recently deleted from Settings.
+   */
   wideOnly?: boolean;
 }[] = [
   {
@@ -63,6 +67,13 @@ const nav: {
     wideOnly: true,
   },
   {
+    to: paths.trash,
+    label: 'Recently deleted',
+    icon: 'trash',
+    match: (path) => path === paths.trash,
+    wideOnly: true,
+  },
+  {
     to: paths.settings,
     label: 'Settings',
     icon: 'settings',
@@ -76,7 +87,10 @@ interface AppShellProps {
   uploadAlbumId?: string;
 }
 
-/** Signed-in chrome: a sidebar on wide screens, a top bar and bottom tabs on phones. */
+/**
+ * Signed-in chrome: a sidebar on wide screens (which folds down to icons), a top bar and
+ * bottom tabs on phones. The search box stays at the top of every screen while it scrolls.
+ */
 export function AppShell({ children, uploadAlbumId }: AppShellProps) {
   const { pathname, navigate } = useRouter();
   const { space, state } = useVault();
@@ -89,6 +103,13 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
   const { openDialog: openUpload } = useUploads();
   const isPrivate = space === 'private';
   const searchInput = useRef<HTMLInputElement>(null);
+  const [collapsed, setCollapsed] = useState(() => loadSidebarCollapsed(browserStorage()));
+  const toggleSidebar = () => {
+    setCollapsed((was) => {
+      saveSidebarCollapsed(browserStorage(), !was);
+      return !was;
+    });
+  };
   // Locking drops the keys and every decrypted photo; the next password decides the space.
   const lock = () => {
     lockAccount();
@@ -96,20 +117,25 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
   };
 
   return (
-    <div className="shell">
+    <div className={`shell${collapsed ? ' shell--collapsed' : ''}`}>
       <a className="skip-link" href="#content">
         Skip to content
       </a>
       <aside className="shell__sidebar">
         <div className="shell__brand-row">
           <Link to={paths.gallery} className="shell__brand" aria-label="Arcafold photos">
-            <Logo size={30} />
+            {collapsed ? <LogoMark size={30} /> : <Logo size={30} />}
           </Link>
           {isPrivate && <PrivatePill />}
         </div>
-        <button type="button" className="btn btn--primary btn--block" onClick={openUpload}>
+        <button
+          type="button"
+          className="btn btn--primary btn--block shell__upload"
+          onClick={openUpload}
+          title={collapsed ? 'Upload' : undefined}
+        >
           <Icon name="upload" size={18} />
-          Upload
+          <span className="shell__label">Upload</span>
         </button>
         <nav className="shell__nav" aria-label="Main">
           {nav.map((item) => {
@@ -120,13 +146,25 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
                 to={item.to}
                 className={`shell__nav-link${active ? ' is-active' : ''}`}
                 aria-current={active ? 'page' : undefined}
+                title={collapsed ? item.label : undefined}
               >
                 <Icon name={item.icon} size={20} filled={active && item.icon === 'heart'} />
-                {item.label}
+                <span className="shell__label">{item.label}</span>
               </Link>
             );
           })}
         </nav>
+        <button
+          type="button"
+          className="shell__nav-link shell__collapse"
+          onClick={toggleSidebar}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Expand sidebar' : undefined}
+        >
+          <Icon name="sidebar" size={20} />
+          <span className="shell__label">Collapse</span>
+        </button>
         <div className="shell__storage">
           <StorageMeter compact />
         </div>
@@ -136,7 +174,13 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
             <span className="shell__account-name">{me.name}</span>
             <LockBadge label="Encrypted" />
           </div>
-          <button type="button" className="icon-btn" onClick={lock} aria-label="Lock Arcafold">
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={lock}
+            aria-label="Lock Arcafold"
+            title={collapsed ? 'Lock' : undefined}
+          >
             <Icon name="lock" size={18} />
           </button>
         </div>
@@ -150,17 +194,6 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
           {isPrivate && <PrivatePill />}
         </div>
         <div className="shell__topbar-actions">
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() => {
-              searchInput.current?.scrollIntoView({ block: 'center' });
-              searchInput.current?.focus();
-            }}
-            aria-label="Search"
-          >
-            <Icon name="search" />
-          </button>
           <button type="button" className="icon-btn" onClick={lock} aria-label="Lock Arcafold">
             <Icon name="lock" />
           </button>
@@ -215,12 +248,16 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
   );
 }
 
+function browserStorage(): Storage | undefined {
+  return typeof localStorage === 'undefined' ? undefined : localStorage;
+}
+
 /** Shown only inside the private space, so you always know where you are. */
 function PrivatePill() {
   return (
-    <span className="private-pill">
+    <span className="private-pill" title="Private space">
       <Icon name="eye-off" size={13} />
-      Private
+      <span className="shell__label">Private</span>
     </span>
   );
 }

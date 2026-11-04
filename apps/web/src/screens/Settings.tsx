@@ -20,7 +20,7 @@ import type { JoinedLibrary, Member } from '../app/sharing';
 import { useTheme } from '../app/theme';
 import type { ThemePreference } from '../app/theme';
 import { useToast } from '../app/toast';
-import { useVault } from '../app/vault';
+import { TRASH_DAYS, useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { Avatar } from '../components/Brand';
 import { Dialog } from '../components/Dialog';
@@ -34,7 +34,7 @@ import { StorageMeter } from '../components/StorageMeter';
 import { api } from '@arcafold/core/api';
 import { onVisibleAgain } from '../lib/when-visible';
 import { AUTO_LOCK_CHOICES, parseAutoLock } from '../lib/auto-lock';
-import { formatLastActive, formatShortDay, pluralize } from '../lib/format';
+import { formatLastActive, formatShortDay, photosAndFiles, pluralize } from '../lib/format';
 import { MIN_PASSWORD_LENGTH } from '../lib/password';
 import { errorInput, errorMessage } from '@arcafold/core/errors';
 
@@ -257,7 +257,7 @@ interface PasswordError {
 export function Settings() {
   const { navigate } = useRouter();
   const { theme, setTheme } = useTheme();
-  const { space } = useVault();
+  const { space, state: vault } = useVault();
   const account = useAccount();
   const me = useMe();
   const profile = useProfile();
@@ -462,6 +462,27 @@ export function Settings() {
             libraries shared with you.
           </p>
         </div>
+        <Row
+          icon="trash"
+          title="Recently deleted"
+          description={
+            vault.trash && vault.trash.length > 0
+              ? `${photosAndFiles(vault.trash)}, kept for ${String(TRASH_DAYS)} days in case you want them back.`
+              : `What you delete stays here for ${String(TRASH_DAYS)} days, so you can get it back.`
+          }
+          action={
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              aria-label="Open Recently deleted"
+              onClick={() => {
+                navigate(paths.trash);
+              }}
+            >
+              Open
+            </button>
+          }
+        />
       </Section>
 
       <Section title="Import">

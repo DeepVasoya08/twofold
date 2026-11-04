@@ -68,16 +68,16 @@
 
 .month__header {
   position: sticky;
-  top: 0;
-  z-index: 5;
+  /* Just under the search box, which stays at the top too. */
+  top: var(--search-bottom, 0px);
+  z-index: 4;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 14px;
   margin: 0 -8px 12px;
   padding: 12px 8px 8px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(10px);
+  background: var(--bg);
 }
 
 .month__title {

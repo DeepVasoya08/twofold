@@ -92,8 +92,7 @@ test('a deleted photo goes to Recently deleted, can be undone or restored, and i
   await lock(page);
   await unlockWith(page, MAIN_PASSWORD);
   await expect(page.locator('.photo-tile img')).toHaveCount(1);
-  await goTo(page, 'Albums');
-  await page.getByRole('link', { name: /Recently deleted/ }).click();
+  await goTo(page, 'Recently deleted');
   await expect(page.getByRole('heading', { level: 1, name: 'Recently deleted' })).toBeVisible();
   await expect(page.locator('.photo-tile img')).toHaveCount(1);
   await expect(page.locator('.photo-tile__note')).toHaveText('30 days left');
@@ -112,8 +111,7 @@ test('a deleted photo goes to Recently deleted, can be undone or restored, and i
   await page.keyboard.press('Escape');
   await page.reload();
   await unlockWith(page, MAIN_PASSWORD);
-  await goTo(page, 'Albums');
-  await page.getByRole('link', { name: /Recently deleted/ }).click();
+  await goTo(page, 'Recently deleted');
   await expect(page.locator('.photo-tile')).toHaveCount(1);
   await page.getByRole('button', { name: 'Empty' }).click();
   await page
@@ -124,8 +122,7 @@ test('a deleted photo goes to Recently deleted, can be undone or restored, and i
   await expect(page.getByText('Nothing here')).toBeVisible();
   await page.reload();
   await unlockWith(page, MAIN_PASSWORD);
-  await goTo(page, 'Albums');
-  await page.getByRole('link', { name: /Recently deleted/ }).click();
+  await goTo(page, 'Recently deleted');
   await expect(page.getByText('Nothing here')).toBeVisible();
 });
 

@@ -216,6 +216,12 @@
     border-radius: 50%;
   }
 
+  .profile__edit svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+  }
+
   .profile__edit-label {
     display: none;
   }

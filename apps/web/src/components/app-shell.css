@@ -1,5 +1,13 @@
 .shell {
+  /* The search band's height, and how far down the page it ends (sticky headers sit below). */
+  --search-band: 80px;
+  --search-bottom: var(--search-band);
+
   min-height: 100dvh;
+}
+
+.shell--collapsed {
+  --sidebar: 76px;
 }
 
 .shell__sidebar {
@@ -11,8 +19,10 @@
   gap: 24px;
   width: var(--sidebar);
   padding: 24px 18px;
+  overflow: hidden auto;
   border-right: 1px solid var(--border);
   background: var(--bg-tint);
+  transition: width 0.2s var(--ease);
 }
 
 .shell__brand {
@@ -79,8 +89,76 @@
   gap: 4px;
 }
 
-.shell__storage {
+.shell__collapse {
+  width: 100%;
   margin-top: auto;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shell__collapse:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+/* The collapse button sits just above storage, inside the sidebar's usual gap. */
+.shell__collapse + .shell__storage {
+  margin-top: -12px;
+}
+
+/* Folded down to icons: every label is still there for screen readers, and as a tooltip. */
+.shell--collapsed .shell__sidebar {
+  padding: 24px 12px;
+}
+
+.shell--collapsed .shell__sidebar .shell__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Too narrow for a readable meter; Settings shows it in full. */
+.shell--collapsed .shell__storage {
+  display: none;
+}
+
+.shell--collapsed .shell__brand-row {
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shell--collapsed .shell__brand {
+  padding: 4px 0;
+}
+
+.shell--collapsed .private-pill {
+  padding: 6px;
+}
+
+.shell--collapsed .shell__upload {
+  padding: 0;
+}
+
+.shell--collapsed .shell__nav-link {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.shell--collapsed .shell__account {
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.shell--collapsed .shell__account-text {
+  display: none;
 }
 
 /* Sits close above the account card, inside the sidebar's usual gap. */
@@ -125,16 +203,22 @@
 
 .shell__content {
   margin-left: var(--sidebar);
+  transition: margin-left 0.2s var(--ease);
 }
 
-/* Search sits above every screen, so it's there wherever you are. */
+/* Search stays at the top of every screen while it scrolls. Its band is solid, so photos
+   scroll away under it instead of showing through it. */
 .shell__search {
   position: sticky;
   top: 0;
   z-index: 5;
-  padding: 16px 0;
-  background: color-mix(in srgb, var(--bg) 85%, transparent);
-  backdrop-filter: saturate(1.4) blur(14px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  height: var(--search-band);
+  border-bottom: 1px solid transparent;
+  background: var(--bg);
 }
 
 .shell__search .search-box {
@@ -190,6 +274,11 @@
 }
 
 @media (max-width: 860px) {
+  .shell {
+    --search-band: 62px;
+    --search-bottom: calc(60px + var(--search-band));
+  }
+
   .shell__sidebar {
     display: none;
   }
@@ -203,17 +292,15 @@
     justify-content: space-between;
     height: 60px;
     padding: 0 12px 0 8px;
-    border-bottom: 1px solid var(--border);
-    background: color-mix(in srgb, var(--bg) 85%, transparent);
-    backdrop-filter: saturate(1.4) blur(14px);
+    background: var(--bg);
   }
 
-  /* Below the phone top bar, the search box scrolls away with the page. */
+  /* On phones it stays put just below the top bar. */
   .shell__search {
-    position: static;
-    padding: 12px 16px 0;
-    background: none;
-    backdrop-filter: none;
+    top: 60px;
+    z-index: 15;
+    padding: 0 16px 6px;
+    border-bottom-color: var(--border);
   }
 
   .shell__search .search-box {
@@ -269,5 +356,12 @@
     min-height: 38px;
     padding: 0 14px;
     font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell__sidebar,
+  .shell__content {
+    transition: none;
   }
 }

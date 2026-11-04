@@ -110,7 +110,7 @@ export async function uploadPhotos(
 
 export async function goTo(
   page: Page,
-  link: 'Photos' | 'Albums' | 'Files' | 'People' | 'Favorites' | 'Settings',
+  link: 'Photos' | 'Albums' | 'Files' | 'People' | 'Favorites' | 'Recently deleted' | 'Settings',
 ) {
   await page.getByRole('link', { name: link }).filter({ visible: true }).first().click();
 }
