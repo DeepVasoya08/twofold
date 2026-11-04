@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import type { InputHTMLAttributes, ReactNode } from 'react';
 
-import { passwordStrength } from '../lib/password';
+import { passwordStrength } from '@arcafold/core/password';
 import { Icon } from './Icon';
 
 import './field.css';

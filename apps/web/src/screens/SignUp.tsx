@@ -9,7 +9,7 @@ import { AuthLayout } from '../components/AuthLayout';
 import { PasswordField, TextField } from '../components/Field';
 import { FormAlert } from '../components/FormAlert';
 import { Icon } from '../components/Icon';
-import { MIN_PASSWORD_LENGTH, isValidEmail, passwordStrength } from '../lib/password';
+import { MIN_PASSWORD_LENGTH, isValidEmail, passwordStrength } from '@arcafold/core/password';
 
 interface Errors {
   name?: string;

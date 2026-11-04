@@ -1,0 +1,46 @@
+import { describe, expect, it } from 'vitest';
+
+import type { Session } from '@arcafold/core/account';
+import type { AccountResponse } from '@arcafold/types';
+
+import { AUTO_LOCK_MINUTES, cleanEmail, idleTooLong, leftScreen, locked } from './state';
+
+const account = { email: 'sam@example.com', name: 'Sam' } as AccountResponse;
+
+describe('locked', () => {
+  it('drops the keys but keeps the account', () => {
+    const session = { account, opened: {} } as unknown as Session;
+    expect(locked({ status: 'unlocked', session })).toEqual({ status: 'locked', account });
+  });
+
+  it('leaves a locked or signed-out app as it is', () => {
+    expect(locked({ status: 'signed-out' })).toEqual({ status: 'signed-out' });
+    expect(locked({ status: 'locked', account })).toEqual({ status: 'locked', account });
+  });
+});
+
+describe('idleTooLong', () => {
+  it('locks after the auto-lock time without a touch, not before', () => {
+    const minute = 60_000;
+    expect(idleTooLong(0, (AUTO_LOCK_MINUTES - 1) * minute)).toBe(false);
+    expect(idleTooLong(0, AUTO_LOCK_MINUTES * minute)).toBe(true);
+    expect(AUTO_LOCK_MINUTES).toBe(1);
+    expect(idleTooLong(0, 2 * minute, 1)).toBe(true);
+  });
+});
+
+describe('leftScreen', () => {
+  it('locks only when the app goes to the background', () => {
+    expect(leftScreen('background')).toBe(true);
+    expect(leftScreen('inactive')).toBe(false);
+    expect(leftScreen('active')).toBe(false);
+  });
+});
+
+describe('cleanEmail', () => {
+  it('reads back a saved email and refuses anything else', () => {
+    expect(cleanEmail(' sam@example.com\n')).toBe('sam@example.com');
+    expect(cleanEmail('')).toBeNull();
+    expect(cleanEmail('not an email')).toBeNull();
+  });
+});

@@ -9,7 +9,7 @@ import { useSubmit } from '../app/use-submit';
 import { AuthLayout } from '../components/AuthLayout';
 import { PasswordField, TextField } from '../components/Field';
 import { FormAlert } from '../components/FormAlert';
-import { MIN_PASSWORD_LENGTH, isValidEmail } from '../lib/password';
+import { MIN_PASSWORD_LENGTH, isValidEmail } from '@arcafold/core/password';
 
 const RECOVERY_WORDS = 12;
 

@@ -8,7 +8,7 @@ import { useSubmit } from '../app/use-submit';
 import { AuthLayout } from '../components/AuthLayout';
 import { PasswordField, TextField } from '../components/Field';
 import { FormAlert } from '../components/FormAlert';
-import { isValidEmail } from '../lib/password';
+import { isValidEmail } from '@arcafold/core/password';
 
 export function LogIn() {
   const { navigate, search } = useRouter();

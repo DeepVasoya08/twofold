@@ -35,7 +35,7 @@ import { api } from '@arcafold/core/api';
 import { onVisibleAgain } from '../lib/when-visible';
 import { AUTO_LOCK_CHOICES, parseAutoLock } from '../lib/auto-lock';
 import { formatLastActive, formatShortDay, photosAndFiles, pluralize } from '../lib/format';
-import { MIN_PASSWORD_LENGTH } from '../lib/password';
+import { MIN_PASSWORD_LENGTH } from '@arcafold/core/password';
 import { errorInput, errorMessage } from '@arcafold/core/errors';
 
 import './settings.css';
