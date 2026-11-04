@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { signInError, signUpErrors, strengthTone } from './forms';
+import { firstProblem, signInError, signUpErrors, strengthTone } from './forms';
 
 const good = {
   name: 'Sam',
@@ -41,5 +41,13 @@ describe('strengthTone', () => {
       'success',
       'success',
     ]);
+  });
+});
+
+describe('firstProblem', () => {
+  it('picks the highest field on the screen with a problem', () => {
+    expect(firstProblem({ confirm: 'x', email: 'y' })).toBe('email');
+    expect(firstProblem({ password: 'x' })).toBe('password');
+    expect(firstProblem({})).toBeNull();
   });
 });

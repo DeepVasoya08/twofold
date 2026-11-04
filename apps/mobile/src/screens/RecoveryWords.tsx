@@ -5,14 +5,14 @@ import { RECOVERY_FILE_NAME, recoveryFileText } from '@arcafold/core/recovery-fi
 
 import { saveTextFile } from '../../modules/save-file';
 import { useAccount } from '../session/account';
-import { Button, CheckBox, Note, Screen, useSubmit } from '../ui/kit';
+import { Banner, Button, CheckBox, Note, Screen, useSubmit } from '../ui/kit';
 import { usePalette } from '../ui/theme';
 
 /**
  * Step 2 of 2: the recovery key, shown once. Screenshots are blocked, so it has to be written
  * down or saved as a file; it is never copied to the clipboard, where other apps could read it.
- * Ticking the box also saves it as a text file, as on the web, through Android's "Save to"
- * screen, so the person picks where it goes.
+ * "Download key" saves it as a text file, as on the web, through Android's "Save to" screen, so
+ * the person picks where it goes; ticking the box does too, if it isn't saved yet.
  */
 export function RecoveryWords() {
   const { pendingSignUp, completeSignUp, cancelSignUp } = useAccount();
@@ -23,15 +23,23 @@ export function RecoveryWords() {
   if (!pendingSignUp) return null;
   const words = pendingSignUp.recoveryWords;
 
-  const tick = (next: boolean) => {
-    setSaved(next);
+  const download = () => {
     setError(null);
-    if (!next || savedFile) return;
     saveTextFile(RECOVERY_FILE_NAME, recoveryFileText(words))
-      .then(setSavedFile)
+      .then((done) => {
+        if (!done) return;
+        setSavedFile(true);
+        setSaved(true);
+      })
       .catch(() => {
         setError('The file couldn’t be saved. Write the words down instead.');
       });
+  };
+
+  const tick = (next: boolean) => {
+    setSaved(next);
+    setError(null);
+    if (next && !savedFile) download();
   };
 
   const submit = () => {
@@ -44,6 +52,7 @@ export function RecoveryWords() {
 
   return (
     <Screen
+      branded
       title="Save your recovery key"
       subtitle="If you ever forget your password, these 12 words are the only way back into your photos. Not even we can help without them."
     >
@@ -51,16 +60,28 @@ export function RecoveryWords() {
         {words.map((word, index) => (
           <Text
             key={index}
-            style={[styles.word, { color: palette.text, borderColor: palette.border }]}
+            style={[
+              styles.word,
+              {
+                color: palette.text,
+                borderColor: palette.border,
+                backgroundColor: palette.background,
+              },
+            ]}
           >
             {index + 1}. {word}
           </Text>
         ))}
       </View>
       <Note>Write them on paper, or keep them in a password manager. Don’t share them.</Note>
+      <Button
+        kind="secondary"
+        label={savedFile ? 'Saved. Download again' : 'Download key'}
+        onPress={download}
+      />
       <CheckBox checked={saved} label="I’ve saved my recovery key somewhere safe" onChange={tick} />
-      {savedFile ? <Note>Also saved as {RECOVERY_FILE_NAME}.</Note> : null}
-      {error ? <Note error>{error}</Note> : null}
+      {savedFile ? <Note>Saved as {RECOVERY_FILE_NAME}.</Note> : null}
+      {error ? <Banner>{error}</Banner> : null}
       <Button label="Create account" busyLabel="Creating account…" busy={busy} onPress={submit} />
       <Button kind="link" label="Back" onPress={cancelSignUp} />
     </Screen>

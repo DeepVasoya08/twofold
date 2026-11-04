@@ -2,9 +2,9 @@ import { useRef, useState } from 'react';
 import type { TextInputInstance } from 'react-native';
 
 import { useAccount } from '../session/account';
-import { signUpErrors } from '../session/forms';
+import { firstProblem, signUpErrors } from '../session/forms';
 import type { SignUpErrors, SignUpValues } from '../session/forms';
-import { Button, Field, Note, Screen, StrengthMeter, useSubmit } from '../ui/kit';
+import { Banner, Button, Field, Note, Screen, StrengthMeter, useSubmit } from '../ui/kit';
 
 /** Step 1 of 2: name, email and password. The keys are made on this phone. */
 export function SignUp({ onSignIn }: { onSignIn: () => void }) {
@@ -18,6 +18,7 @@ export function SignUp({ onSignIn }: { onSignIn: () => void }) {
   const [errors, setErrors] = useState<SignUpErrors>({});
   const { busy, error, run } = useSubmit();
   // The return key moves on to the next field, so the keyboard stays up between them.
+  const nameField = useRef<TextInputInstance>(null);
   const emailField = useRef<TextInputInstance>(null);
   const passwordField = useRef<TextInputInstance>(null);
   const confirmField = useRef<TextInputInstance>(null);
@@ -29,17 +30,29 @@ export function SignUp({ onSignIn }: { onSignIn: () => void }) {
   const submit = () => {
     const found = signUpErrors(values);
     setErrors(found);
-    if (Object.keys(found).length > 0) return;
+    const problem = firstProblem(found);
+    if (problem) {
+      // Back to the first field that needs fixing, which scrolls it into view above the keyboard.
+      const fields = {
+        name: nameField,
+        email: emailField,
+        password: passwordField,
+        confirm: confirmField,
+      };
+      fields[problem].current?.focus();
+      return;
+    }
     run(() => prepareSignUp(values));
   };
 
   return (
     <Screen
-      showLogo
+      branded
       title="Create your vault"
       subtitle="Your photos, encrypted on your device before they go anywhere."
     >
       <Field
+        ref={nameField}
         label="Your name"
         value={values.name}
         onChangeText={set('name')}
@@ -67,7 +80,7 @@ export function SignUp({ onSignIn }: { onSignIn: () => void }) {
         label="Password"
         value={values.password}
         onChangeText={set('password')}
-        secureTextEntry
+        secure
         autoComplete="new-password"
         textContentType="newPassword"
         error={errors.password}
@@ -81,7 +94,7 @@ export function SignUp({ onSignIn }: { onSignIn: () => void }) {
         label="Confirm password"
         value={values.confirm}
         onChangeText={set('confirm')}
-        secureTextEntry
+        secure
         autoComplete="new-password"
         textContentType="newPassword"
         error={errors.confirm}
@@ -92,7 +105,7 @@ export function SignUp({ onSignIn }: { onSignIn: () => void }) {
         Your password unlocks your photos, so we can’t reset it for you. Next you’ll get a recovery
         key to keep somewhere safe.
       </Note>
-      {error ? <Note error>{error}</Note> : null}
+      {error ? <Banner>{error}</Banner> : null}
       <Button label="Continue" busyLabel="Creating your keys…" busy={busy} onPress={submit} />
       <Button kind="link" label="I already have an account" onPress={onSignIn} />
     </Screen>
