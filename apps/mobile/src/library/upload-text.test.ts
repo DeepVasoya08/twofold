@@ -1,0 +1,44 @@
+import { describe, expect, it } from 'vitest';
+
+import { summarizeUploads } from '@arcafold/core/upload/progress';
+import type { UploadItem } from '@arcafold/core/upload/uploader';
+
+import { firstFailure, uploadHeadline } from './upload-text';
+
+describe('uploadHeadline', () => {
+  it('counts up while photos are on their way', () => {
+    expect(uploadHeadline(summarizeUploads(['done', 'uploading', 'waiting']))).toBe(
+      'Adding 3 photos… 1 done',
+    );
+  });
+
+  it('says how it went at the end', () => {
+    expect(uploadHeadline(summarizeUploads(['done']))).toBe('1 photo added');
+    expect(uploadHeadline(summarizeUploads(['failed', 'failed']))).toBe(
+      '2 photos couldn’t be added',
+    );
+    expect(uploadHeadline(summarizeUploads(['done', 'done', 'failed']))).toBe(
+      '2 photos added, 1 couldn’t be',
+    );
+  });
+});
+
+describe('firstFailure', () => {
+  const item = (status: UploadItem['status'], error?: string): UploadItem => ({
+    id: 1,
+    name: 'IMG_1.heic',
+    url: '',
+    status,
+    ...(error === undefined ? {} : { error }),
+  });
+
+  it('names the photo and why', () => {
+    expect(firstFailure([item('done'), item('failed', 'Storage is full.')])).toBe(
+      'IMG_1.heic: Storage is full.',
+    );
+  });
+
+  it('is null when nothing failed', () => {
+    expect(firstFailure([item('done')])).toBeNull();
+  });
+});

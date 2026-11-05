@@ -1,6 +1,11 @@
 {
-  "platforms": ["android"],
+  "platforms": [
+    "android"
+  ],
   "android": {
-    "modules": ["com.arcafold.memoryimage.MemoryImageModule"]
+    "modules": [
+      "com.arcafold.memoryimage.MemoryImageModule",
+      "com.arcafold.memoryimage.PhotoPickerModule"
+    ]
   }
 }

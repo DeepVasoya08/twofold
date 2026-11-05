@@ -16,6 +16,7 @@
     "./library/space-store": "./src/library/space-store.ts",
     "./library/thumb-loader": "./src/library/thumb-loader.ts",
     "./password": "./src/password.ts",
+    "./photo-date": "./src/photo-date.ts",
     "./recovery-file": "./src/recovery-file.ts",
     "./people/grouping": "./src/people/grouping.ts",
     "./people/segment": "./src/people/segment.ts",

@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { HEIF_MAX_PIXELS, decodeHeif, isHeif } from './heif';
 import type { HeifImage, LibHeif, Pixels } from './heif';
-import { exifTakenAt } from './photo-date';
+import { exifTakenAt } from '@arcafold/core/photo-date';
 
 // A 96×64 HEIC made with libheif: left half red, right half blue, taken 9 March 2018 08:15
 // at UTC−5 (fixtures are shared with the browser tests).

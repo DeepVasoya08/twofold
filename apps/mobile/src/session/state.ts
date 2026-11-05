@@ -38,6 +38,24 @@ export function leftScreen(next: string): boolean {
   return next === 'background';
 }
 
+/**
+ * How long the app may sit behind a screen of Android's own (the photo picker) without
+ * locking. Past this it locks as soon as it comes back, as if it had been left.
+ */
+export const SYSTEM_SCREEN_GRACE_MS = 3 * 60_000;
+
+/**
+ * Whether the app should lock as it comes back on screen: it was left for a system screen
+ * (`leftAt`, null if it wasn't) and was away longer than the grace.
+ */
+export function lockOnReturn(
+  leftAt: number | null,
+  now: number,
+  grace: number = SYSTEM_SCREEN_GRACE_MS,
+): boolean {
+  return leftAt !== null && now - leftAt >= grace;
+}
+
 /** A remembered email as it can be used, or null if it isn't one. */
 export function cleanEmail(text: string): string | null {
   const email = text.trim();

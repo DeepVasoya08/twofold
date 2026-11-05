@@ -23,7 +23,9 @@ or a native module.
   and the session live in memory only, so a closed app always starts signed out; the last
   email that signed in is kept in the app's private storage to fill in the sign-in screen.
 - Locking: the app locks the moment it goes to the background, and after a minute on screen
-  without a touch (the web app's default). A system dialog doesn't lock it.
+  without a touch (the web app's default). A system dialog doesn't lock it, and neither does
+  Android's photo picker for up to three minutes (`onSystemScreen` in `session/account.tsx`);
+  away longer than that, it locks the moment it's back.
 - Sign-in, sign-up and unlock have the mark's glow and the logo at the top and their form
   on a card. Password fields have an eye button to show what's typed. A form's problem
   shows in a red banner by the button, and sign-up takes you back to the first field that
@@ -62,6 +64,17 @@ or a native module.
   password gets the same answer as having no private space at all. A moved photo is
   re-encrypted in the other space under a new key and id, and arrives in no album. Photos
   shared with you can't be moved.
+- Adding photos (`+ Add` on the timeline): Android's own photo picker (`ACTION_PICK_IMAGES`
+  from Android 13, the document picker before that), so the app needs no storage permission
+  and sees only the photos picked, up to 100 at a time. `PhotoPicker` in
+  `modules/memory-image` reads each photo's bytes and makes its 640 px JPEG preview, upright,
+  in memory (no copy or preview is written to disk). The shared uploader
+  (`@arcafold/core/upload/uploader`) then encrypts and uploads them a few at a time, exactly
+  as the web app does, and the timeline shows them all together once the last is in. The date
+  taken comes from the photo's EXIF (`@arcafold/core/photo-date`, moved from the web app).
+  Leaving the app mid-upload locks it, which stops the photos that hadn't started; one already
+  uploading still arrives and shows on the next unlock. Only photos for now, no videos or
+  other files.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

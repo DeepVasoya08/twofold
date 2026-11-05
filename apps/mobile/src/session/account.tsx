@@ -18,7 +18,7 @@ import { api, onSessionEnded } from '@arcafold/core/api';
 import { FormError } from '@arcafold/core/errors';
 
 import { forgetEmail, rememberEmail, rememberedEmail } from './remembered';
-import { idleTooLong, leftScreen, locked } from './state';
+import { idleTooLong, leftScreen, locked, lockOnReturn } from './state';
 import type { AccountState } from './state';
 
 interface AccountValue {
@@ -49,6 +49,12 @@ interface AccountValue {
   forgetAccount: () => Promise<void>;
   /** Call on every touch, so the app locks only after it has sat untouched. */
   touched: () => void;
+  /**
+   * Runs a task that shows one of Android's own screens over the app (the photo picker),
+   * which would otherwise lock it as it leaves. Away longer than a few minutes, it still
+   * locks the moment it's back.
+   */
+  onSystemScreen: <T>(task: () => Promise<T>) => Promise<T>;
 }
 
 const SIGNED_OUT_MEANWHILE = 'Arcafold locked before it finished opening. Try again.';
@@ -65,6 +71,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const keysDropped = useRef(0);
   // Set when the app opens; only read while unlocked.
   const lastTouch = useRef(0);
+  /** How many system screens may be over the app now, so leaving doesn't lock. */
+  const systemScreens = useRef(0);
+  /** When the app left for a system screen, while it's away. */
+  const leftAt = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,11 +109,21 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const signedIn = state.status !== 'signed-out';
   const unlocked = state.status === 'unlocked';
 
-  // Leaving the screen locks at once; the keys never sit in a backgrounded app.
+  // Leaving the screen locks at once; the keys never sit in a backgrounded app. Only the
+  // photo picker may cover it for a while.
   useEffect(() => {
     if (!unlocked) return;
     const watch = AppState.addEventListener('change', (next) => {
-      if (leftScreen(next)) lock();
+      const now = Date.now();
+      if (leftScreen(next)) {
+        if (systemScreens.current === 0) lock();
+        else leftAt.current ??= now;
+      } else if (next === 'active') {
+        const away = leftAt.current;
+        leftAt.current = null;
+        if (lockOnReturn(away, now)) lock();
+        else lastTouch.current = now;
+      }
     });
     return () => {
       watch.remove();
@@ -114,6 +134,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!unlocked) return;
     const timer = setInterval(() => {
+      if (systemScreens.current > 0) return;
       if (idleTooLong(lastTouch.current, Date.now())) lock();
     }, IDLE_CHECK_MS);
     return () => {
@@ -178,6 +199,15 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       },
       touched: () => {
         lastTouch.current = Date.now();
+      },
+      onSystemScreen: async (task) => {
+        systemScreens.current += 1;
+        try {
+          return await task();
+        } finally {
+          systemScreens.current -= 1;
+          lastTouch.current = Date.now();
+        }
       },
     }),
     [state, email, pendingSignUp, open, lock, dropKeys],
