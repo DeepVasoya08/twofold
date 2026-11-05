@@ -1,5 +1,22 @@
+export interface Palette {
+  background: string;
+  surface: string;
+  border: string;
+  text: string;
+  muted: string;
+  accent: string;
+  onAccent: string;
+  error: string;
+  errorSoft: string;
+  /** How strongly the sign-in screens' glow shows. */
+  glow: number;
+  warning: string;
+  success: string;
+  track: string;
+}
+
 /** The app's colours, the same as the web app's light and dark themes (styles/base.css). */
-export const colors = {
+export const colors: { dark: Palette; light: Palette } = {
   dark: {
     background: '#161117',
     surface: '#1c151e',
@@ -31,4 +48,27 @@ export const colors = {
     success: '#2f8a5b',
     track: '#e8ddd6',
   },
-} as const;
+};
+
+/**
+ * The private space: the same layout in cooler violet tones, as on the web, so you always
+ * know where you are. Only shown once the private space is open.
+ */
+export const privateColors: { dark: Partial<Palette>; light: Partial<Palette> } = {
+  dark: {
+    background: '#120f1a',
+    surface: '#1d1828',
+    border: '#2e2840',
+    accent: '#b39cf2',
+    onAccent: '#160f24',
+    track: '#30293f',
+  },
+  light: {
+    background: '#f4f1f8',
+    surface: '#efeaf5',
+    border: '#e2dbec',
+    accent: '#7a5bc4',
+    onAccent: '#ffffff',
+    track: '#e5ddef',
+  },
+};

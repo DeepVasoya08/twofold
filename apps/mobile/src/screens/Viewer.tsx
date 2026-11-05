@@ -13,11 +13,19 @@ import {
 } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
+import { FormError } from '@arcafold/core/errors';
 import type { Photo } from '@arcafold/core/library/model';
+import type { Session } from '@arcafold/core/account';
 
 import { MemoryImage } from '../../modules/memory-image';
 import { formatTaken } from '../library/timeline';
 import type { Library } from '../library/use-library';
+import { useAccount } from '../session/account';
+import { Banner } from '../ui/kit';
+import { moveLabel } from '../session/forms';
+import { MoveSheet } from './MoveSheet';
+
+type SpaceKeys = NonNullable<Session['otherSpace']>;
 
 /** How long a photo stays in view before its original downloads, so a fast swipe skips it. */
 const SETTLE_MS = 250;
@@ -77,17 +85,50 @@ export function Viewer({
 }: {
   photos: Photo[];
   start: number;
-  library: Pick<Library, 'thumbs' | 'requestThumbs' | 'openOriginal'>;
+  library: Pick<Library, 'thumbs' | 'requestThumbs' | 'openOriginal' | 'movePhoto'>;
   onClose: () => void;
 }) {
+  const { space, otherSpace } = useAccount();
+  const [moving, setMoving] = useState<'asking' | 'moving' | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
   const { width, height } = useWindowDimensions();
   const maxSide = Math.round(Math.max(width, height) * PixelRatio.get());
   const [index, setIndex] = useState(start);
   const [original, setOriginal] = useState<{ photoId: string; imageId: string } | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [chrome, setChrome] = useState(true);
-  const { thumbs, requestThumbs, openOriginal } = library;
-  const photo = photos.at(index);
+  const { thumbs, requestThumbs, openOriginal, movePhoto } = library;
+  const last = photos.length - 1;
+  const photo = photos.at(Math.min(index, last));
+
+  // After a move the list is one shorter: the next photo takes this one's place, and when
+  // the last one has gone there is nothing left to show.
+  useEffect(() => {
+    if (photos.length === 0) onClose();
+  }, [photos.length, onClose]);
+
+  const canMove = photo !== undefined && photo.library === undefined && !photo.viewOnly;
+  const moveWith = (keys: SpaceKeys) => {
+    if (!photo) return;
+    setMoving('moving');
+    setMoveError(null);
+    movePhoto(photo.id, keys).then(
+      () => {
+        setMoving(null);
+      },
+      (error: unknown) => {
+        setMoving(null);
+        setMoveError(
+          error instanceof FormError ? error.message : 'The photo couldn’t be moved. Try again.',
+        );
+      },
+    );
+  };
+  const move = () => {
+    if (!photo || !space) return;
+    if (otherSpace) moveWith(otherSpace);
+    else setMoving('asking');
+  };
 
   useEffect(() => {
     const back = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -179,6 +220,31 @@ export function Viewer({
           </View>
         </View>
       ) : null}
+      {chrome && photo && space && canMove ? (
+        <View style={styles.actions}>
+          {moveError ? <Banner>{moveError}</Banner> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ busy: moving === 'moving' }}
+            disabled={moving !== null}
+            onPress={move}
+            style={styles.action}
+          >
+            <Text style={styles.actionText}>
+              {moving === 'moving' ? 'Moving…' : moveLabel(space)}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {moving === 'asking' && space ? (
+        <MoveSheet
+          space={space}
+          onCancel={() => {
+            setMoving(null);
+          }}
+          onUnlocked={moveWith}
+        />
+      ) : null}
     </View>
   );
 }
@@ -202,4 +268,23 @@ const styles = StyleSheet.create({
   barText: { flex: 1 },
   date: { color: '#fff', fontSize: 16, fontWeight: '600' },
   count: { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 2 },
+  actions: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    gap: 10,
+    padding: 16,
+    paddingBottom: 40,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  action: {
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
+    borderRadius: 999,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  actionText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 });

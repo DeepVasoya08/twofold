@@ -54,6 +54,14 @@ or a native module.
   has been in view for a moment, is decoded no larger than the screen and turned upright
   (Android's `ImageDecoder`, which also reads HEIC, from Android 9), and is freed when the
   next one opens. Tapping hides the bar; Back closes it.
+- The private space works as on the web. The same password field opens either space, and
+  the private space shows in the web app's violet tones. In the viewer, "Move to private
+  space" (or "Move to library") asks for the other space's password the first time after
+  unlocking (`screens/MoveSheet.tsx`, drawn in the app's own window so screenshot blocking
+  covers it). The keys then stay in memory until the app locks. From the library, a wrong
+  password gets the same answer as having no private space at all. A moved photo is
+  re-encrypted in the other space under a new key and id, and arrives in no album. Photos
+  shared with you can't be moved.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

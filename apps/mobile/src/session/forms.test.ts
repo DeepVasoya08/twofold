@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { firstProblem, signInError, signUpErrors, strengthTone } from './forms';
+import {
+  firstProblem,
+  moveLabel,
+  signInError,
+  signUpErrors,
+  strengthTone,
+  wrongOtherPassword,
+} from './forms';
 
 const good = {
   name: 'Sam',
@@ -49,5 +56,17 @@ describe('firstProblem', () => {
     expect(firstProblem({ confirm: 'x', email: 'y' })).toBe('email');
     expect(firstProblem({ password: 'x' })).toBe('password');
     expect(firstProblem({})).toBeNull();
+  });
+});
+
+describe('moving between spaces', () => {
+  it('names the move after where the photo goes', () => {
+    expect(moveLabel('main')).toBe('Move to private space');
+    expect(moveLabel('private')).toBe('Move to library');
+  });
+
+  it('answers a wrong password from the library as if there were no private space', () => {
+    expect(wrongOtherPassword('main')).toContain('doesn’t open a private space');
+    expect(wrongOtherPassword('private')).toBe('That isn’t your main password.');
   });
 });

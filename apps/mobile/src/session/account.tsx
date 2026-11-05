@@ -12,6 +12,8 @@ import { AppState } from 'react-native';
 
 import * as ops from '@arcafold/core/account';
 import type { PendingSignUp, Session, Space } from '@arcafold/core/account';
+
+type SpaceKeys = NonNullable<Session['otherSpace']>;
 import { api, onSessionEnded } from '@arcafold/core/api';
 import { FormError } from '@arcafold/core/errors';
 
@@ -23,6 +25,16 @@ interface AccountValue {
   state: AccountState;
   /** The open space, or null while locked or signed out. */
   space: Space | null;
+  /**
+   * The other space's keys, once its password has been typed since unlocking (to move photos
+   * there). Kept in memory only and dropped on lock, like the rest.
+   */
+  otherSpace: SpaceKeys | null;
+  /**
+   * Opens the other space's keys with its password. From the main library a wrong password
+   * gets the same answer as no private space at all.
+   */
+  openOtherSpace: (password: string) => Promise<SpaceKeys>;
   /** The last email that signed in here, to fill in on the sign-in screen. */
   email: string | null;
   pendingSignUp: PendingSignUp | null;
@@ -124,6 +136,16 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     () => ({
       state,
       space: state.status === 'unlocked' ? ops.spaceOf(state.session.opened) : null,
+      otherSpace: state.status === 'unlocked' ? (state.session.otherSpace ?? null) : null,
+      openOtherSpace: async (password) => {
+        if (state.status !== 'unlocked') throw new FormError('Unlock Arcafold first.');
+        const dropped = keysDropped.current;
+        const next = await ops.openOtherSpace(state.session, password);
+        if (keysDropped.current !== dropped) throw new FormError(SIGNED_OUT_MEANWHILE);
+        if (!next.otherSpace) throw new FormError('Unlock the other space first.');
+        setState({ status: 'unlocked', session: next });
+        return next.otherSpace;
+      },
       email,
       pendingSignUp,
       prepareSignUp: async (values) => {
