@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
 import type { ViewToken } from '@shopify/flash-list';
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -16,11 +16,12 @@ import type { Session } from '@arcafold/core/account';
 
 import logo from '../../assets/logo.png';
 import { MemoryImage } from '../../modules/memory-image';
-import { photosInRows, timelineRows, COLUMNS } from '../library/timeline';
+import { photosInRows, timelineOrder, timelineRows, COLUMNS } from '../library/timeline';
 import type { TimelineRow } from '../library/timeline';
 import { useLibrary } from '../library/use-library';
 import { useAccount } from '../session/account';
 import { Button, Note } from '../ui/kit';
+import { Viewer } from './Viewer';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 
@@ -33,21 +34,31 @@ const Tile = memo(function Tile({
   size,
   placeholder,
   requestThumbs,
+  onOpen,
 }: {
   photoId: string;
   imageId: string | null;
   size: number;
   placeholder: string;
   requestThumbs: (photoIds: readonly string[]) => void;
+  onOpen: (photoId: string) => void;
 }) {
   useEffect(() => {
     if (!imageId) requestThumbs([photoId]);
   }, [photoId, imageId, requestThumbs]);
   return (
-    <MemoryImage
-      imageId={imageId}
-      style={{ width: size, height: size, backgroundColor: placeholder }}
-    />
+    <Pressable
+      accessibilityRole="imagebutton"
+      accessibilityLabel="Open photo"
+      onPress={() => {
+        onOpen(photoId);
+      }}
+    >
+      <MemoryImage
+        imageId={imageId}
+        style={{ width: size, height: size, backgroundColor: placeholder }}
+      />
+    </Pressable>
   );
 });
 
@@ -58,6 +69,7 @@ const TileRow = memo(
     size: number;
     placeholder: string;
     requestThumbs: (photoIds: readonly string[]) => void;
+    onOpen: (photoId: string) => void;
   }) {
     return (
       <View style={[styles.tileRow, { height: props.size }]}>
@@ -69,6 +81,7 @@ const TileRow = memo(
             size={props.size}
             placeholder={props.placeholder}
             requestThumbs={props.requestThumbs}
+            onOpen={props.onOpen}
           />
         ))}
       </View>
@@ -78,6 +91,7 @@ const TileRow = memo(
   (before, after) =>
     before.size === after.size &&
     before.placeholder === after.placeholder &&
+    before.onOpen === after.onOpen &&
     before.photoIds.length === after.photoIds.length &&
     before.photoIds.every((id, index) => id === after.photoIds[index]) &&
     before.imageIds.every((id, index) => id === after.imageIds[index]),
@@ -111,6 +125,18 @@ export function Timeline({ session }: { session: Session }) {
   const { width } = useWindowDimensions();
   const size = Math.floor((width - GAP * (COLUMNS - 1)) / COLUMNS);
   const rows = useMemo(() => timelineRows(library.photos), [library.photos]);
+  const ordered = useMemo(() => timelineOrder(library.photos, rows), [library.photos, rows]);
+  const [open, setOpen] = useState<number | null>(null);
+  const openPhoto = useCallback(
+    (photoId: string) => {
+      const at = ordered.findIndex((photo) => photo.id === photoId);
+      if (at >= 0) setOpen(at);
+    },
+    [ordered],
+  );
+  const closeViewer = useCallback(() => {
+    setOpen(null);
+  }, []);
 
   // Previews actually on screen jump the queue ahead of those just drawn off screen.
   const onViewableItemsChanged = useCallback(
@@ -132,9 +158,10 @@ export function Timeline({ session }: { session: Session }) {
           size={size}
           placeholder={palette.surface}
           requestThumbs={requestThumbs}
+          onOpen={openPhoto}
         />
       ),
-    [palette, thumbs, size, requestThumbs],
+    [palette, thumbs, size, requestThumbs, openPhoto],
   );
 
   const title = space === 'private' ? 'Private space' : 'Library';
@@ -211,6 +238,9 @@ export function Timeline({ session }: { session: Session }) {
           />
         }
       />
+      {open !== null ? (
+        <Viewer photos={ordered} start={open} library={library} onClose={closeViewer} />
+      ) : null}
     </View>
   );
 }

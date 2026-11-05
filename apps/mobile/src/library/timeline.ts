@@ -38,3 +38,32 @@ export function timelineRows(photos: readonly Photo[], columns = COLUMNS): Timel
 export function photosInRows(rows: readonly (TimelineRow | undefined)[]): string[] {
   return rows.flatMap((row) => (row?.kind === 'tiles' ? row.photoIds : []));
 }
+
+// Dates show in UTC, as on the web, until photos carry their own time zone.
+const dayFormat = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+const timeFormat = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'UTC',
+});
+
+/** "Tue, Nov 4, 2026 · 9:41 AM": when a photo was taken, for the viewer. */
+export function formatTaken(iso: string): string {
+  const date = new Date(iso);
+  return `${dayFormat.format(date)} · ${timeFormat.format(date)}`;
+}
+
+/** The timeline's photos in the order the grid shows them, for swiping through. */
+export function timelineOrder(photos: readonly Photo[], rows: readonly TimelineRow[]): Photo[] {
+  const byId = new Map(photos.map((photo) => [photo.id, photo]));
+  return photosInRows(rows).flatMap((photoId) => {
+    const photo = byId.get(photoId);
+    return photo ? [photo] : [];
+  });
+}
