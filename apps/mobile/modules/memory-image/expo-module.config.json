@@ -1,7 +1,5 @@
 {
-  "platforms": [
-    "android"
-  ],
+  "platforms": ["android"],
   "android": {
     "modules": [
       "com.arcafold.memoryimage.MemoryImageModule",
