@@ -109,20 +109,25 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const signedIn = state.status !== 'signed-out';
   const unlocked = state.status === 'unlocked';
 
-  // Leaving the screen locks at once; the keys never sit in a backgrounded app. Only the
-  // photo picker may cover it for a while.
+  // In the background, as on screen, the app locks once the auto-lock minutes pass without
+  // a touch (time away counts), so photos uploading carry on meanwhile. Android may pause
+  // the timer below in the background, so coming back checks too, before anything is used.
+  // The photo picker has its own few minutes' grace instead.
   useEffect(() => {
     if (!unlocked) return;
     const watch = AppState.addEventListener('change', (next) => {
       const now = Date.now();
       if (leftScreen(next)) {
-        if (systemScreens.current === 0) lock();
-        else leftAt.current ??= now;
+        if (systemScreens.current > 0) leftAt.current ??= now;
       } else if (next === 'active') {
         const away = leftAt.current;
         leftAt.current = null;
-        if (lockOnReturn(away, now)) lock();
-        else lastTouch.current = now;
+        if (away !== null) {
+          if (lockOnReturn(away, now)) lock();
+          else lastTouch.current = now;
+        } else if (idleTooLong(lastTouch.current, now)) {
+          lock();
+        }
       }
     });
     return () => {
@@ -130,7 +135,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     };
   }, [unlocked, lock]);
 
-  // On screen, it locks after the auto-lock minutes without a touch.
+  // It locks after the auto-lock minutes without a touch, on screen or in the background.
   useEffect(() => {
     if (!unlocked) return;
     const timer = setInterval(() => {

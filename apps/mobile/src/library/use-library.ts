@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { AppState } from 'react-native';
 
 import type { Session } from '@arcafold/core/account';
 
@@ -15,6 +16,8 @@ import type { UploaderDeps, UploaderState } from '@arcafold/core/upload/uploader
 
 import { MemoryImages, PhotoPicker } from '../../modules/memory-image';
 import type { PickedPhoto } from '../../modules/memory-image';
+import { UploadService } from '../../modules/upload-service';
+import { BackgroundUploads } from './background-uploads';
 import { preparePicked } from './prepare';
 
 export interface Library {
@@ -59,6 +62,21 @@ const memoryPreviews: UploaderDeps['preview'] = {
   },
 };
 
+/** Once locked, no new previews are made, and any still held are wiped as they finish. */
+const lockedPreviews: UploaderDeps['preview'] = { make: () => '', revoke: memoryPreviews.revoke };
+
+/** A fresh uploader for one opening of the library (which the arguments name). */
+function newUploader(...opening: unknown[]): Uploader<PickedPhoto> {
+  if (opening.length === 0) throw new Error('Name the opening an uploader is for.');
+  return new Uploader<PickedPhoto>(CLOSED);
+}
+
+/** Keeps uploads going with the app in the background, and says when they're done. */
+const backgroundUploads = new BackgroundUploads(
+  UploadService,
+  () => AppState.currentState === 'active',
+);
+
 /**
  * The open space's photos, with previews downloaded and decrypted as they come near the
  * screen, the same way as on the web. Decrypted previews live only in native memory, and
@@ -74,7 +92,9 @@ export function useLibrary(session: Session): Library {
   const [attempt, setAttempt] = useState(0);
   const loader = useRef<ThumbLoader | null>(null);
   const opened = useRef<SpaceStore | null>(null);
-  const [uploader] = useState(() => new Uploader<PickedPhoto>(CLOSED));
+  // One uploader per opening of the library, so photos added before a lock can finish
+  // with the keys they started with while the next unlock starts its own.
+  const uploader = useMemo(() => newUploader(keys, name, attempt), [keys, name, attempt]);
   const uploads = useSyncExternalStore(uploader.subscribe, uploader.getState);
 
   useEffect(() => {
@@ -89,15 +109,20 @@ export function useLibrary(session: Session): Library {
     });
     loader.current = thumbLoader;
     opened.current = store;
+    const prepare: UploaderDeps<PickedPhoto>['prepare'] = (picked) =>
+      preparePicked(picked, PhotoPicker);
+    const upload: UploaderDeps<PickedPhoto>['upload'] = (photo, albumId, onStage) =>
+      store.add(photo, albumId ? [albumId] : [], onStage);
     uploader.connect({
-      prepare: (picked) => preparePicked(picked, PhotoPicker),
-      upload: (photo, albumId, onStage) => store.add(photo, albumId ? [albumId] : [], onStage),
+      prepare,
+      upload,
       onStored: (added) => {
         if (stopped) return;
         setPhotos((current) => [...added, ...current]);
       },
       preview: memoryPreviews,
     });
+    const unwatch = backgroundUploads.watch(uploader);
     store.list().then(
       (loaded) => {
         if (stopped) return;
@@ -113,11 +138,25 @@ export function useLibrary(session: Session): Library {
       loader.current = null;
       opened.current = null;
       thumbLoader.stop();
-      // Locking stops photos that haven't started; one already uploading shows next time.
-      uploader.dispose();
-      uploader.connect(CLOSED);
-      store.dispose();
       MemoryImages.clear();
+      const close = () => {
+        uploader.dispose();
+        uploader.connect(CLOSED);
+        unwatch();
+        store.dispose();
+      };
+      if (!uploader.running) {
+        close();
+        return;
+      }
+      // Photos on their way when the app locks still finish, then the keys they used go.
+      // They show in the timeline at the next unlock.
+      uploader.connect({ prepare, upload, onStored: () => undefined, preview: lockedPreviews });
+      const stop = uploader.subscribe(() => {
+        if (uploader.running) return;
+        stop();
+        close();
+      });
     };
   }, [keys, name, attempt, uploader]);
 

@@ -12,7 +12,7 @@ export type AccountState =
   | { status: 'locked'; account: AccountResponse }
   | { status: 'unlocked'; session: Session };
 
-/** Minutes without a touch, with the app on screen, before it locks (as on the web). */
+/** Minutes without a touch, on screen or in the background, before it locks (as on the web). */
 export const AUTO_LOCK_MINUTES = 1;
 
 /** The same account, locked: its keys are dropped, the server session stays. */
@@ -20,7 +20,7 @@ export function locked(state: AccountState): AccountState {
   return state.status === 'unlocked' ? { status: 'locked', account: state.session.account } : state;
 }
 
-/** Whether the app has sat untouched on screen long enough to lock. */
+/** Whether the app has sat untouched (or in the background) long enough to lock. */
 export function idleTooLong(
   lastTouch: number,
   now: number,
@@ -31,7 +31,7 @@ export function idleTooLong(
 
 /**
  * Whether an app state change means the app left the screen. 'inactive' (a system dialog,
- * or the app switcher on iPhone) doesn't lock, so a permission prompt can't lock mid-task;
+ * or the app switcher on iPhone) doesn't count, so a permission prompt isn't time away;
  * the screen is blanked in the app switcher anyway.
  */
 export function leftScreen(next: string): boolean {

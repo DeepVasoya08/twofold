@@ -22,10 +22,11 @@ or a native module.
   use the shared account code, so the same single password field opens either space. Keys
   and the session live in memory only, so a closed app always starts signed out; the last
   email that signed in is kept in the app's private storage to fill in the sign-in screen.
-- Locking: the app locks the moment it goes to the background, and after a minute on screen
-  without a touch (the web app's default). A system dialog doesn't lock it, and neither does
-  Android's photo picker for up to three minutes (`onSystemScreen` in `session/account.tsx`);
-  away longer than that, it locks the moment it's back.
+- Locking: the app locks after a minute without a touch (the web app's default), on screen
+  or in the background, where time away counts; Android may pause the timer in the
+  background, so coming back checks it too. Android's photo picker gets
+  up to three minutes instead (`onSystemScreen` in `session/account.tsx`); away longer than
+  that, it locks the moment it's back.
 - Sign-in, sign-up and unlock have the mark's glow and the logo at the top and their form
   on a card. Password fields have an eye button to show what's typed. A form's problem
   shows in a red banner by the button, and sign-up takes you back to the first field that
@@ -72,9 +73,15 @@ or a native module.
   (`@arcafold/core/upload/uploader`) then encrypts and uploads them a few at a time, exactly
   as the web app does, and the timeline shows them all together once the last is in. The date
   taken comes from the photo's EXIF (`@arcafold/core/photo-date`, moved from the web app).
-  Leaving the app mid-upload locks it, which stops the photos that hadn't started; one already
-  uploading still arrives and shows on the next unlock. Only photos for now, no videos or
-  other files.
+  Uploads keep going with the app in the background or the screen off:
+  `modules/upload-service` runs an Android foreground service (data sync) with a progress
+  notification and a partial wake lock while any photo is on its way
+  (`library/background-uploads.ts`). When the last one is in and Arcafold isn't on screen, a
+  notification says how many were added (it asks for the notification permission after the
+  first pick, from Android 13). Notifications give counts only, never names, and read the
+  same whichever space the photos went to. If the app locks mid-upload, the photos already
+  added still finish with the keys they started with, which are then dropped; they show at
+  the next unlock. Only photos for now, no videos or other files.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

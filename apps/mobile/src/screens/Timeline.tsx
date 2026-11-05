@@ -4,6 +4,8 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  PermissionsAndroid,
+  Platform,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -29,6 +31,17 @@ import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 
 const GAP = 2;
+
+/**
+ * Asks (from Android 13, where it's needed) to post the notification that says when photos
+ * finished uploading in the background. Saying no only means no notification.
+ */
+async function askToNotify(): Promise<void> {
+  if (Platform.OS !== 'android' || Platform.Version < 33) return;
+  const permission = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+  if (await PermissionsAndroid.check(permission)) return;
+  await PermissionsAndroid.request(permission).catch(() => undefined);
+}
 
 /** One preview. Asks for its own preview when it's drawn, which is when it's near the screen. */
 const Tile = memo(function Tile({
@@ -151,7 +164,7 @@ function UploadCard({ library, palette }: { library: Library; palette: Palette }
       </View>
       {summary.running > 0 ? (
         <Text style={[styles.uploadNote, { color: palette.muted }]}>
-          Keep Arcafold open until they’re in. Leaving it locks it and stops the rest.
+          You can leave Arcafold: they keep going, and a notification says when they’re in.
         </Text>
       ) : null}
       {failure ? (
@@ -186,9 +199,15 @@ export function Timeline({ session }: { session: Session }) {
   const { addPhotos } = library;
   const pickPhotos = useCallback(() => {
     setPickError(null);
-    onSystemScreen(() => PhotoPicker.pickAsync()).then(addPhotos, () => {
-      setPickError('The photo picker couldn’t open. Try again.');
-    });
+    onSystemScreen(() => PhotoPicker.pickAsync()).then(
+      (picked) => {
+        addPhotos(picked);
+        if (picked.length > 0) void askToNotify();
+      },
+      () => {
+        setPickError('The photo picker couldn’t open. Try again.');
+      },
+    );
   }, [onSystemScreen, addPhotos]);
 
   // Previews actually on screen jump the queue ahead of those just drawn off screen.
