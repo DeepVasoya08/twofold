@@ -174,6 +174,60 @@ function UploadCard({ library, palette }: { library: Library; palette: Palette }
   );
 }
 
+/** Offers fingerprint unlock once, just after the main password opened the library. */
+function BiometricOffer({ palette }: { palette: Palette }) {
+  const { biometricOffer, answerBiometricOffer } = useAccount();
+  const [error, setError] = useState<string | null>(null);
+  if (!biometricOffer && !error) return null;
+  const answer = (turnOn: boolean) => {
+    setError(null);
+    answerBiometricOffer(turnOn).catch(() => {
+      setError('Fingerprint unlock wasn’t turned on. You can try again next time you unlock.');
+    });
+  };
+  return (
+    <View style={[styles.offer, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+      {error ? (
+        <>
+          <Banner>{error}</Banner>
+          <Button
+            kind="link"
+            label="OK"
+            onPress={() => {
+              setError(null);
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <Text style={[styles.offerTitle, { color: palette.text }]}>
+            Unlock with your fingerprint or face?
+          </Text>
+          <Note>
+            Next time, open Arcafold without typing your password. Only your library opens this way,
+            and you can still use your password.
+          </Note>
+          <View style={styles.offerButtons}>
+            <Button
+              kind="link"
+              label="Not now"
+              onPress={() => {
+                answer(false);
+              }}
+            />
+            <Button
+              label="Turn on"
+              onPress={() => {
+                answer(true);
+              }}
+            />
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
 /** The open space's photos, newest first, by month. */
 export function Timeline({ session }: { session: Session }) {
   const { space, lock, logOut, onSystemScreen } = useAccount();
@@ -273,6 +327,7 @@ export function Timeline({ session }: { session: Session }) {
       <View style={[styles.fill, { backgroundColor: palette.background }]}>
         {header}
         {banner}
+        <BiometricOffer palette={palette} />
         <View style={styles.centre}>
           {library.status === 'loading' ? (
             <>
@@ -311,6 +366,7 @@ export function Timeline({ session }: { session: Session }) {
     <View style={[styles.fill, { backgroundColor: palette.background }]}>
       {header}
       {banner}
+      <BiometricOffer palette={palette} />
       <FlashList
         data={rows}
         renderItem={renderItem}
@@ -352,6 +408,16 @@ const styles = StyleSheet.create({
   headerButtonText: { fontSize: 14, fontWeight: '600' },
   addButton: { borderWidth: 0 },
   bannerWrap: { paddingHorizontal: 16, paddingBottom: 8 },
+  offer: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    gap: 8,
+  },
+  offerTitle: { fontSize: 16, fontWeight: '700' },
+  offerButtons: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 12 },
   uploadCard: {
     position: 'absolute',
     left: 12,

@@ -7,7 +7,13 @@ import { Banner, Button, Field, Note, Screen, useSubmit } from '../ui/kit';
 
 /** Email and either password: the one the password fits decides which space opens. */
 export function SignIn({ onSignUp }: { onSignUp: () => void }) {
-  const { email: remembered, logIn, forgetAccount } = useAccount();
+  const {
+    email: remembered,
+    logIn,
+    forgetAccount,
+    biometricFor,
+    unlockWithBiometrics,
+  } = useAccount();
   const [email, setEmail] = useState(remembered ?? '');
   const [password, setPassword] = useState('');
   const { busy, error, setError, run } = useSubmit();
@@ -55,6 +61,15 @@ export function SignIn({ onSignUp }: { onSignUp: () => void }) {
       />
       {error ? <Banner>{error}</Banner> : null}
       <Button label="Sign in" busyLabel="Signing in…" busy={busy} onPress={submit} />
+      {biometricFor !== null && email.trim() === biometricFor ? (
+        <Button
+          kind="secondary"
+          label="Sign in with fingerprint or face"
+          onPress={() => {
+            run(unlockWithBiometrics);
+          }}
+        />
+      ) : null}
       <Button kind="link" label="Create an account" onPress={onSignUp} />
       {remembered ? (
         <Button

@@ -1,4 +1,4 @@
-import type { OpenedSlot, SlotIndex, SpaceKeys } from '@arcafold/crypto';
+import type { OpenedSlot, SlotIndex, SlotSecret, SpaceKeys } from '@arcafold/crypto';
 import type { AccountResponse, Keyring } from '@arcafold/types';
 
 import { ApiError, api, spaceApi } from './api';
@@ -23,6 +23,8 @@ export interface Session {
    */
   otherSpace?: OpenedSlot['space'];
 }
+
+export type { SlotSecret } from '@arcafold/crypto';
 
 export type Space = 'main' | 'private';
 
@@ -107,10 +109,23 @@ export async function completeSignUp(pending: PendingSignUp): Promise<Session> {
 
 /** Logs in with either password. Which space opens depends on the slot it fits. */
 export async function logIn(email: string, password: string): Promise<Session> {
+  return logInWithSecret(email, await loginSecret(email, password));
+}
+
+/**
+ * What a password turns into (Argon2id, on this device) for signing in. A phone can keep the
+ * main password's secret behind its fingerprint lock, to sign in and unlock without typing.
+ */
+export async function loginSecret(email: string, password: string): Promise<SlotSecret> {
   const params = await saltFor(email);
   await nextFrame();
   const crypto = await loadCrypto();
-  const secret = await crypto.deriveFromPassword(password, params.salt, params.kdf);
+  return crypto.deriveFromPassword(password, params.salt, params.kdf);
+}
+
+/** Logs in with a password's secret (see loginSecret). */
+export async function logInWithSecret(email: string, secret: SlotSecret): Promise<Session> {
+  const crypto = await loadCrypto();
   const account = await api.logIn({ email, loginKey: crypto.toBase64Url(secret.loginKey) });
   const opened = await crypto.openKeyring(account.keyring, secret);
   if (!opened) throw new FormError(WRONG_LOGIN);
@@ -119,9 +134,27 @@ export async function logIn(email: string, password: string): Promise<Session> {
 
 /** Opens the keyring on this device. Nothing is sent to the server. */
 export async function unlock(account: AccountResponse, password: string): Promise<Session> {
+  return unlockWithSecret(account, await unlockSecret(account, password));
+}
+
+/** What a password turns into for unlocking this account (the same as loginSecret's). */
+export async function unlockSecret(
+  account: AccountResponse,
+  password: string,
+): Promise<SlotSecret> {
   await nextFrame();
   const crypto = await loadCrypto();
-  const opened = await crypto.unlockWithPassword(account.keyring, password);
+  crypto.validateKeyring(account.keyring);
+  return crypto.deriveFromPassword(password, account.keyring.salt, account.keyring.kdf);
+}
+
+/** Opens the keyring with a password's secret. Nothing is sent to the server. */
+export async function unlockWithSecret(
+  account: AccountResponse,
+  secret: SlotSecret,
+): Promise<Session> {
+  const crypto = await loadCrypto();
+  const opened = await crypto.openKeyring(account.keyring, secret);
   if (!opened || opened.slot === SLOTS.recovery) throw new FormError(WRONG_PASSWORD);
   return { account, opened };
 }

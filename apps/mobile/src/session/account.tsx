@@ -11,12 +11,21 @@ import type { ReactNode } from 'react';
 import { AppState } from 'react-native';
 
 import * as ops from '@arcafold/core/account';
-import type { PendingSignUp, Session, Space } from '@arcafold/core/account';
+import type { PendingSignUp, Session, SlotSecret, Space } from '@arcafold/core/account';
 
 type SpaceKeys = NonNullable<Session['otherSpace']>;
-import { api, onSessionEnded } from '@arcafold/core/api';
+import { ApiError, api, onSessionEnded } from '@arcafold/core/api';
 import { FormError } from '@arcafold/core/errors';
 
+import {
+  biometricEmail,
+  biometricsAvailable,
+  declineBiometrics,
+  declinedBiometrics,
+  enableBiometrics,
+  forgetBiometrics,
+  readBiometricSecret,
+} from './biometric';
 import { forgetEmail, rememberEmail, rememberedEmail } from './remembered';
 import { idleTooLong, leftScreen, locked, lockOnReturn } from './state';
 import type { AccountState } from './state';
@@ -55,7 +64,20 @@ interface AccountValue {
    * locks the moment it's back.
    */
   onSystemScreen: <T>(task: () => Promise<T>) => Promise<T>;
+  /** The account fingerprint and face unlock is on for here, or null. */
+  biometricFor: string | null;
+  /** Signs in or unlocks the main library with a fingerprint or face, without the password. */
+  unlockWithBiometrics: () => Promise<void>;
+  /** Whether to offer fingerprint unlock, just after the main password opened the library. */
+  biometricOffer: boolean;
+  /** Turns fingerprint unlock on (Android asks for a fingerprint), or says not now. */
+  answerBiometricOffer: (turnOn: boolean) => Promise<void>;
 }
+
+const BIOMETRICS_RESET =
+  'Fingerprint unlock was turned off because this phone’s fingerprints or face changed. Use your password, and you can turn it back on.';
+const BIOMETRICS_STALE =
+  'Your password changed, so fingerprint unlock was turned off. Use your password, and you can turn it back on.';
 
 const SIGNED_OUT_MEANWHILE = 'Arcafold locked before it finished opening. Try again.';
 /** How often the app checks whether it has sat untouched long enough to lock. */
@@ -75,11 +97,22 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const systemScreens = useRef(0);
   /** When the app left for a system screen, while it's away. */
   const leftAt = useRef<number | null>(null);
+  const [biometricFor, setBiometricFor] = useState<string | null>(null);
+  const [biometricOffer, setBiometricOffer] = useState(false);
+  /**
+   * The main password's secret, held from a password unlock until fingerprint unlock is
+   * offered and answered (or the keys are dropped). It opens no more than the keys already
+   * in memory.
+   */
+  const offeredSecret = useRef<SlotSecret | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void rememberedEmail().then((saved) => {
       if (!cancelled && saved) setEmail(saved);
+    });
+    void biometricEmail().then((saved) => {
+      if (!cancelled) setBiometricFor(saved);
     });
     return () => {
       cancelled = true;
@@ -88,15 +121,34 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   const dropKeys = useCallback((next: (current: AccountState) => AccountState) => {
     keysDropped.current += 1;
+    offeredSecret.current = null;
+    setBiometricOffer(false);
     setPendingSignUp(null);
     setState(next);
   }, []);
+
+  const turnOffBiometrics = useCallback(() => {
+    setBiometricFor(null);
+    void forgetBiometrics();
+  }, []);
+
+  /** After the main password opened the library, offers fingerprint unlock once. */
+  const maybeOffer = useCallback(
+    async (session: Session, secret: SlotSecret) => {
+      if (ops.spaceOf(session.opened) !== 'main' || !biometricsAvailable()) return;
+      const address = session.account.email;
+      if (biometricFor === address || (await declinedBiometrics(address))) return;
+      offeredSecret.current = secret;
+      setBiometricOffer(true);
+    },
+    [biometricFor],
+  );
 
   const lock = useCallback(() => {
     dropKeys(locked);
   }, [dropKeys]);
 
-  const open = useCallback(async (start: () => Promise<Session>) => {
+  const open = useCallback(async (start: () => Promise<Session>): Promise<Session> => {
     const dropped = keysDropped.current;
     const session = await start();
     if (keysDropped.current !== dropped) throw new FormError(SIGNED_OUT_MEANWHILE);
@@ -104,6 +156,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     void rememberEmail(session.account.email);
     setEmail(session.account.email);
     setState({ status: 'unlocked', session });
+    return session;
   }, []);
 
   const signedIn = state.status !== 'signed-out';
@@ -151,12 +204,14 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!signedIn) return;
     onSessionEnded(() => {
+      // Signed out from another device: this phone mustn't be able to sign back in unasked.
+      turnOffBiometrics();
       dropKeys(() => ({ status: 'signed-out' }));
     });
     return () => {
       onSessionEnded(null);
     };
-  }, [signedIn, dropKeys]);
+  }, [signedIn, dropKeys, turnOffBiometrics]);
 
   const value = useMemo<AccountValue>(
     () => ({
@@ -185,20 +240,29 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       cancelSignUp: () => {
         setPendingSignUp(null);
       },
-      logIn: (address, password) => open(() => ops.logIn(address.trim(), password)),
+      logIn: async (address, password) => {
+        const trimmed = address.trim();
+        const secret = await ops.loginSecret(trimmed, password);
+        const session = await open(() => ops.logInWithSecret(trimmed, secret));
+        await maybeOffer(session, secret);
+      },
       unlock: async (password) => {
         if (state.status !== 'locked') throw new FormError('Sign in first.');
         const { account } = state;
-        await open(() => ops.unlock(account, password));
+        const secret = await ops.unlockSecret(account, password);
+        const session = await open(() => ops.unlockWithSecret(account, secret));
+        await maybeOffer(session, secret);
       },
       lock,
       logOut: async () => {
+        turnOffBiometrics();
         dropKeys(() => ({ status: 'signed-out' }));
         await api.logOut().catch(() => undefined);
       },
       forgetAccount: async () => {
         forgetEmail();
         setEmail(null);
+        turnOffBiometrics();
         dropKeys(() => ({ status: 'signed-out' }));
         await api.logOut().catch(() => undefined);
       },
@@ -214,8 +278,65 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           lastTouch.current = Date.now();
         }
       },
+      biometricFor,
+      unlockWithBiometrics: async () => {
+        const address = state.status === 'locked' ? state.account.email : biometricFor;
+        if (!address || address !== biometricFor) {
+          throw new FormError('Fingerprint unlock isn’t on for this account.');
+        }
+        const secret = await readBiometricSecret().catch(() => {
+          throw new FormError('Fingerprint unlock was cancelled. Try again, or use your password.');
+        });
+        if (!secret) {
+          turnOffBiometrics();
+          throw new FormError(BIOMETRICS_RESET);
+        }
+        try {
+          if (state.status === 'locked') {
+            const { account } = state;
+            await open(() => ops.unlockWithSecret(account, secret));
+          } else {
+            await open(() => ops.logInWithSecret(address, secret));
+          }
+        } catch (error) {
+          // A refused secret means the password changed; a network failure keeps it.
+          const refused =
+            (error instanceof FormError && error.message !== SIGNED_OUT_MEANWHILE) ||
+            (error instanceof ApiError && error.status === 401);
+          if (refused) {
+            turnOffBiometrics();
+            throw new FormError(BIOMETRICS_STALE);
+          }
+          throw error;
+        }
+      },
+      biometricOffer,
+      answerBiometricOffer: async (turnOn) => {
+        const secret = offeredSecret.current;
+        const address = state.status === 'unlocked' ? state.session.account.email : null;
+        setBiometricOffer(false);
+        offeredSecret.current = null;
+        if (!secret || !address) return;
+        if (!turnOn) {
+          await declineBiometrics(address);
+          return;
+        }
+        await enableBiometrics(address, secret);
+        setBiometricFor(address);
+      },
     }),
-    [state, email, pendingSignUp, open, lock, dropKeys],
+    [
+      state,
+      email,
+      pendingSignUp,
+      open,
+      lock,
+      dropKeys,
+      maybeOffer,
+      turnOffBiometrics,
+      biometricFor,
+      biometricOffer,
+    ],
   );
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;

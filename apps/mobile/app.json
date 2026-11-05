@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#161117"
     },
-    "updates": { "enabled": false },
+    "updates": {
+      "enabled": false
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.arcafold.app"
@@ -27,6 +29,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
-    }
+    },
+    "plugins": ["expo-secure-store"]
   }
 }

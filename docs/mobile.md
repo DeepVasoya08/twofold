@@ -82,6 +82,17 @@ or a native module.
   same whichever space the photos went to. If the app locks mid-upload, the photos already
   added still finish with the keys they started with, which are then dropped; they show at
   the next unlock. Only photos for now, no videos or other files.
+- Fingerprint and face unlock (`session/biometric.ts`, `expo-secure-store`), for the main
+  library only. After the main password opens the library, the app offers it once ("Not now"
+  isn't asked again). Turning it on keeps the main password's secret (what Argon2id makes of
+  it: the wrap key and login key, never the password) in Android's keystore under an AES key
+  that opens only after a strong (class 3) biometric check and that Android destroys when
+  fingerprints or faces are added. The lock screen then asks for a fingerprint as it shows,
+  and the sign-in screen (after the app was closed) has "Sign in with fingerprint or face".
+  The secret opens only the main slot (`unlockWithSecret` / `logInWithSecret` in
+  `@arcafold/core/account`), so the private space always needs its password, and nothing kept
+  says whether there is one. Signing out, forgetting the account, being signed out from
+  another device, a changed password or changed fingerprints all turn it off.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

@@ -649,6 +649,23 @@ so photos can later be found by describing them. The server stores only cipherte
   ever shows the small preview stored with the file. A preview can't be added later from a
   faster device, since a committed photo's files can't be overwritten.
 
+## On the phone
+
+- Keys, the session cookie and every decrypted photo live in memory only; a closed app
+  starts signed out. Decrypted images go to native memory (`modules/memory-image`), never to
+  disk, and the window is `FLAG_SECURE`. See [mobile.md](mobile.md).
+- **Fingerprint and face unlock** keeps one thing on disk: the main password's secret (the
+  Argon2id-derived wrap key and login key, never the password) in Android's keystore through
+  `expo-secure-store`, under an AES-GCM key that needs a strong biometric check for every use
+  and is destroyed by Android when fingerprints or faces are added. It opens only the main
+  slot and signs in only as the main password would, so the private space always needs its
+  password and nothing stored differs with or without one.
+- **Trade-off.** Anyone who can pass the phone's biometric check can open the main library,
+  without the password, until it's turned off. Signing out, forgetting the account, being
+  signed out from another device and a password change all turn it off (the last because the
+  old secret stops matching). The app's data isn't backed up (`allowBackup: false`), and the
+  keystore key can't leave the phone.
+
 ## Still to design
 
 - Rotating a space's key when someone stops sharing it (see the sharing trade-offs).

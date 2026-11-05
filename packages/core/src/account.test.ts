@@ -123,6 +123,34 @@ describe('sign-up and unlock', { timeout: 30_000 }, () => {
   });
 });
 
+describe('a kept password secret (phone fingerprint unlock)', { timeout: 30_000 }, () => {
+  it('signs in and unlocks with the main password’s secret, as the password does', async () => {
+    await signUp();
+    const secret = await ops.loginSecret(EMAIL, MAIN);
+    const signedIn = await ops.logInWithSecret(EMAIL, secret);
+    expect(ops.spaceOf(signedIn.opened)).toBe('main');
+    const unlocked = await ops.unlockWithSecret(current(), secret);
+    expect(ops.spaceOf(unlocked.opened)).toBe('main');
+    // The unlock screen's secret is the same one.
+    const again = await ops.unlockSecret(current(), MAIN);
+    expect(toBase64Url(again.wrapKey)).toBe(toBase64Url(secret.wrapKey));
+  });
+
+  it('stops working once the password changes, or for a wrong password', async () => {
+    const { session } = await signUp();
+    const old = await ops.loginSecret(EMAIL, MAIN);
+    const wrong = await ops.unlockSecret(current(), 'not the password');
+    await expect(ops.unlockWithSecret(current(), wrong)).rejects.toThrow(
+      'That password isn’t right.',
+    );
+    await ops.changeMainPassword(session, MAIN, 'a brand new main password');
+    await expect(ops.unlockWithSecret(current(), old)).rejects.toThrow(
+      'That password isn’t right.',
+    );
+    await expect(ops.logInWithSecret(EMAIL, old)).rejects.toThrow();
+  });
+});
+
 describe('private space', { timeout: 30_000 }, () => {
   it('is set up from the main library and opened by the same box', async () => {
     const { session } = await signUp();
