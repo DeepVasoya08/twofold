@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
 import { sidecarDetails } from '../lib/import/takeout';
 import type { SidecarDetails } from '../lib/import/takeout';
 import type { ImportItem } from '../lib/import/takeout';
-import { photoTakenAt } from '../lib/photo-date';
+import { photoTakenAt } from '@arcafold/core/photo-date';
 import { loadThumbnailer } from '../lib/thumbnail-service';
 import { Importer } from './importer';
 import type { ImportJob, ImporterDeps, ImporterState } from './importer';

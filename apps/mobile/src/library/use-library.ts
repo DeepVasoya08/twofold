@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { AppState } from 'react-native';
 
 import type { Session } from '@arcafold/core/account';
 
@@ -10,8 +11,14 @@ import { FormError } from '@arcafold/core/errors';
 import { createThumbLoader } from '@arcafold/core/library/thumb-loader';
 import type { ThumbLoader } from '@arcafold/core/library/thumb-loader';
 import { sessionStore } from '@arcafold/core/sharing';
+import { Uploader } from '@arcafold/core/upload/uploader';
+import type { UploaderDeps, UploaderState } from '@arcafold/core/upload/uploader';
 
-import { MemoryImages } from '../../modules/memory-image';
+import { MemoryImages, PhotoPicker } from '../../modules/memory-image';
+import type { PickedPhoto } from '../../modules/memory-image';
+import { UploadService } from '../../modules/upload-service';
+import { BackgroundUploads } from './background-uploads';
+import { preparePicked } from './prepare';
 
 export interface Library {
   status: 'loading' | 'ready' | 'failed';
@@ -32,7 +39,43 @@ export interface Library {
    */
   movePhoto: (photoId: string, otherSpace: SpaceKeys) => Promise<void>;
   retry: () => void;
+  /** Photos being added from this phone, and whether their progress is showing. */
+  uploads: UploaderState;
+  /** Encrypts and uploads picked photos, a few at a time, then shows them all together. */
+  addPhotos: (picked: readonly PickedPhoto[]) => void;
+  /** Hides the upload progress; photos still on their way keep going. */
+  hideUploads: () => void;
 }
+
+const CLOSED: UploaderDeps<PickedPhoto> = {
+  prepare: () => Promise.reject(new Error('The library is closed.')),
+  upload: () => Promise.reject(new Error('The library is closed.')),
+  onStored: () => undefined,
+  preview: { make: () => '', revoke: () => undefined },
+};
+
+/** Upload previews live in native memory, like every other decrypted image. */
+const memoryPreviews: UploaderDeps['preview'] = {
+  make: (bytes) => MemoryImages.put(bytes),
+  revoke: (id) => {
+    MemoryImages.release(id);
+  },
+};
+
+/** Once locked, no new previews are made, and any still held are wiped as they finish. */
+const lockedPreviews: UploaderDeps['preview'] = { make: () => '', revoke: memoryPreviews.revoke };
+
+/** A fresh uploader for one opening of the library (which the arguments name). */
+function newUploader(...opening: unknown[]): Uploader<PickedPhoto> {
+  if (opening.length === 0) throw new Error('Name the opening an uploader is for.');
+  return new Uploader<PickedPhoto>(CLOSED);
+}
+
+/** Keeps uploads going with the app in the background, and says when they're done. */
+const backgroundUploads = new BackgroundUploads(
+  UploadService,
+  () => AppState.currentState === 'active',
+);
 
 /**
  * The open space's photos, with previews downloaded and decrypted as they come near the
@@ -49,6 +92,10 @@ export function useLibrary(session: Session): Library {
   const [attempt, setAttempt] = useState(0);
   const loader = useRef<ThumbLoader | null>(null);
   const opened = useRef<SpaceStore | null>(null);
+  // One uploader per opening of the library, so photos added before a lock can finish
+  // with the keys they started with while the next unlock starts its own.
+  const uploader = useMemo(() => newUploader(keys, name, attempt), [keys, name, attempt]);
+  const uploads = useSyncExternalStore(uploader.subscribe, uploader.getState);
 
   useEffect(() => {
     let stopped = false;
@@ -62,6 +109,20 @@ export function useLibrary(session: Session): Library {
     });
     loader.current = thumbLoader;
     opened.current = store;
+    const prepare: UploaderDeps<PickedPhoto>['prepare'] = (picked) =>
+      preparePicked(picked, PhotoPicker);
+    const upload: UploaderDeps<PickedPhoto>['upload'] = (photo, albumId, onStage) =>
+      store.add(photo, albumId ? [albumId] : [], onStage);
+    uploader.connect({
+      prepare,
+      upload,
+      onStored: (added) => {
+        if (stopped) return;
+        setPhotos((current) => [...added, ...current]);
+      },
+      preview: memoryPreviews,
+    });
+    const unwatch = backgroundUploads.watch(uploader);
     store.list().then(
       (loaded) => {
         if (stopped) return;
@@ -77,10 +138,27 @@ export function useLibrary(session: Session): Library {
       loader.current = null;
       opened.current = null;
       thumbLoader.stop();
-      store.dispose();
       MemoryImages.clear();
+      const close = () => {
+        uploader.dispose();
+        uploader.connect(CLOSED);
+        unwatch();
+        store.dispose();
+      };
+      if (!uploader.running) {
+        close();
+        return;
+      }
+      // Photos on their way when the app locks still finish, then the keys they used go.
+      // They show in the timeline at the next unlock.
+      uploader.connect({ prepare, upload, onStored: () => undefined, preview: lockedPreviews });
+      const stop = uploader.subscribe(() => {
+        if (uploader.running) return;
+        stop();
+        close();
+      });
     };
-  }, [keys, name, attempt]);
+  }, [keys, name, attempt, uploader]);
 
   const requestThumbs = useCallback((photoIds: readonly string[], onScreen?: boolean) => {
     loader.current?.request(photoIds, onScreen);
@@ -117,5 +195,29 @@ export function useLibrary(session: Session): Library {
     setAttempt((count) => count + 1);
   }, []);
 
-  return { status, photos, thumbs, requestThumbs, openOriginal, movePhoto, retry };
+  const addPhotos = useCallback(
+    (picked: readonly PickedPhoto[]) => {
+      if (picked.length === 0) return;
+      uploader.openDialog();
+      uploader.add(picked, undefined);
+    },
+    [uploader],
+  );
+
+  const hideUploads = useCallback(() => {
+    uploader.closeDialog();
+  }, [uploader]);
+
+  return {
+    status,
+    photos,
+    thumbs,
+    requestThumbs,
+    openOriginal,
+    movePhoto,
+    retry,
+    uploads,
+    addPhotos,
+    hideUploads,
+  };
 }

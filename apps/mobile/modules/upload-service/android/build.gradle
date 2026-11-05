@@ -1,0 +1,15 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.arcafold'
+version = '0.0.1'
+
+android {
+  namespace "com.arcafold.uploadservice"
+}
+
+dependencies {
+  implementation 'androidx.core:core:1.17.0'
+}

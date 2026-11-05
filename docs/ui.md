@@ -371,7 +371,7 @@ album it also adds the photos to that album. Each photo is read on the device, g
 640px JPEG preview (`lib/thumbnail.ts`, drawn in a Web Worker by `lib/thumbnailer.ts`),
 dated, encrypted (also in a worker), then its two files are uploaded together. The date is
 when the photo was taken, read from its own EXIF block (JPEG, HEIC, AVIF, WebP and PNG,
-`lib/photo-date.ts`), with its time zone when the camera wrote one; a photo without one
+`@arcafold/core/photo-date`), with its time zone when the camera wrote one; a photo without one
 takes the file's own date, and failing that, now. The date goes into the photo's sealed
 metadata like everything else, so the server never sees it. Browsers other than Safari
 can't decode HEIC, so for those the preview worker decodes it with libheif, compiled to

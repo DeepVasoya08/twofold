@@ -3,7 +3,15 @@ import { describe, expect, it } from 'vitest';
 import type { Session } from '@arcafold/core/account';
 import type { AccountResponse } from '@arcafold/types';
 
-import { AUTO_LOCK_MINUTES, cleanEmail, idleTooLong, leftScreen, locked } from './state';
+import {
+  AUTO_LOCK_MINUTES,
+  SYSTEM_SCREEN_GRACE_MS,
+  cleanEmail,
+  idleTooLong,
+  leftScreen,
+  locked,
+  lockOnReturn,
+} from './state';
 
 const account = { email: 'sam@example.com', name: 'Sam' } as AccountResponse;
 
@@ -42,5 +50,20 @@ describe('cleanEmail', () => {
     expect(cleanEmail(' sam@example.com\n')).toBe('sam@example.com');
     expect(cleanEmail('')).toBeNull();
     expect(cleanEmail('not an email')).toBeNull();
+  });
+});
+
+describe('lockOnReturn', () => {
+  it('lets the app come back from the photo picker within the grace', () => {
+    expect(lockOnReturn(1_000, 1_000 + SYSTEM_SCREEN_GRACE_MS - 1)).toBe(false);
+  });
+
+  it('locks when the picker took longer than the grace', () => {
+    expect(lockOnReturn(1_000, 1_000 + SYSTEM_SCREEN_GRACE_MS)).toBe(true);
+    expect(SYSTEM_SCREEN_GRACE_MS).toBe(3 * 60_000);
+  });
+
+  it('does nothing when the app never left', () => {
+    expect(lockOnReturn(null, 10 * SYSTEM_SCREEN_GRACE_MS)).toBe(false);
   });
 });
