@@ -14,7 +14,13 @@ import * as ops from '@arcafold/core/account';
 import type { PendingSignUp, Session, SlotSecret, Space } from '@arcafold/core/account';
 
 type SpaceKeys = NonNullable<Session['otherSpace']>;
-import { ApiError, api, onSessionEnded } from '@arcafold/core/api';
+import {
+  ApiError,
+  api,
+  onSessionCookie,
+  onSessionEnded,
+  restoreSessionCookie,
+} from '@arcafold/core/api';
 import { FormError } from '@arcafold/core/errors';
 
 import {
@@ -26,6 +32,7 @@ import {
   forgetBiometrics,
   readBiometricSecret,
 } from './biometric';
+import { keepSession, keptSession } from './kept-session';
 import { forgetEmail, rememberEmail, rememberedEmail } from './remembered';
 import { idleTooLong, leftScreen, locked, lockOnReturn } from './state';
 import type { AccountState } from './state';
@@ -86,7 +93,7 @@ const IDLE_CHECK_MS = 10_000;
 const AccountContext = createContext<AccountValue | null>(null);
 
 export function AccountProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AccountState>({ status: 'signed-out' });
+  const [state, setState] = useState<AccountState>({ status: 'starting' });
   const [email, setEmail] = useState<string | null>(null);
   const [pendingSignUp, setPendingSignUp] = useState<PendingSignUp | null>(null);
   /** Bumped whenever keys are dropped, so a login still running can't open afterwards. */
@@ -132,6 +139,34 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     void forgetBiometrics();
   }, []);
 
+  // The session from the last launch, if it's still good, opens at the lock screen. Every
+  // change to the session cookie is kept for the next launch.
+  useEffect(() => {
+    let cancelled = false;
+    onSessionCookie((cookie) => {
+      void keepSession(cookie);
+    });
+    const start = async (): Promise<AccountState> => {
+      const cookie = await keptSession();
+      if (!cookie) return { status: 'signed-out' };
+      restoreSessionCookie(cookie);
+      try {
+        return { status: 'locked', account: await api.account() };
+      } catch (error) {
+        // Signed out from another device (or it ran out) while the app was closed.
+        if (error instanceof ApiError && error.status === 401) turnOffBiometrics();
+        return { status: 'signed-out' };
+      }
+    };
+    void start().then((next) => {
+      if (!cancelled) setState((current) => (current.status === 'starting' ? next : current));
+    });
+    return () => {
+      cancelled = true;
+      onSessionCookie(null);
+    };
+  }, [turnOffBiometrics]);
+
   /** After the main password opened the library, offers fingerprint unlock once. */
   const maybeOffer = useCallback(
     async (session: Session, secret: SlotSecret) => {
@@ -159,7 +194,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     return session;
   }, []);
 
-  const signedIn = state.status !== 'signed-out';
+  const signedIn = state.status === 'locked' || state.status === 'unlocked';
   const unlocked = state.status === 'unlocked';
 
   // In the background, as on screen, the app locks once the auto-lock minutes pass without
@@ -256,6 +291,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       lock,
       logOut: async () => {
         turnOffBiometrics();
+        void keepSession(null);
         dropKeys(() => ({ status: 'signed-out' }));
         await api.logOut().catch(() => undefined);
       },
@@ -263,6 +299,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         forgetEmail();
         setEmail(null);
         turnOffBiometrics();
+        void keepSession(null);
         dropKeys(() => ({ status: 'signed-out' }));
         await api.logOut().catch(() => undefined);
       },

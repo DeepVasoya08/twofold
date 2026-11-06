@@ -651,10 +651,13 @@ so photos can later be found by describing them. The server stores only cipherte
 
 ## On the phone
 
-- Keys, the session cookie and every decrypted photo live in memory only; a closed app
-  starts signed out. Decrypted images go to native memory (`modules/memory-image`), never to
+- Keys and every decrypted photo live in memory only. The session cookie is kept across
+  launches, encrypted by `expo-secure-store` with a key in Android's keystore, so a closed
+  app opens locked; it reaches the account's encrypted keyring and nothing more, so the
+  password (or a fingerprint) is still needed every time. It's the same whichever space was
+  open, and signing out or being signed out elsewhere removes it. Decrypted images go to native memory (`modules/memory-image`), never to
   disk, and the window is `FLAG_SECURE`. See [mobile.md](mobile.md).
-- **Fingerprint and face unlock** keeps one thing on disk: the main password's secret (the
+- **Fingerprint and face unlock** keeps one more thing on disk: the main password's secret (the
   Argon2id-derived wrap key and login key, never the password) in Android's keystore through
   `expo-secure-store`, under an AES-GCM key that needs a strong biometric check for every use
   and is destroyed by Android when fingerprints or faces are added. It opens only the main

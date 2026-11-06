@@ -352,6 +352,7 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 12,
     paddingVertical: 15,
+    paddingHorizontal: 20,
   },
   buttonText: { fontSize: 16, fontWeight: '600' },
   link: { paddingVertical: 8, alignItems: 'center' },

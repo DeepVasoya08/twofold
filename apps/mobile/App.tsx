@@ -7,31 +7,41 @@ import { SignIn } from './src/screens/SignIn';
 import { SignUp } from './src/screens/SignUp';
 import { Timeline } from './src/screens/Timeline';
 import { Unlock } from './src/screens/Unlock';
+import { forgetSignUpChoice, routeFor } from './src/routes';
 import { AccountProvider, useAccount } from './src/session/account';
 import { usePalette } from './src/ui/theme';
 
 function Routes() {
   const { state, pendingSignUp } = useAccount();
   const [signingUp, setSigningUp] = useState(false);
-  if (state.status === 'unlocked') return <Timeline session={state.session} />;
-  if (state.status === 'locked') return <Unlock />;
-  if (pendingSignUp) return <RecoveryWords />;
-  if (signingUp) {
-    return (
-      <SignUp
-        onSignIn={() => {
-          setSigningUp(false);
-        }}
-      />
-    );
+  // Once in, the next time the app is signed out it starts at sign-in, not sign-up.
+  if (signingUp && forgetSignUpChoice(state)) setSigningUp(false);
+  switch (routeFor(state, pendingSignUp !== null, signingUp)) {
+    case 'starting':
+      return null;
+    case 'timeline':
+      return state.status === 'unlocked' ? <Timeline session={state.session} /> : null;
+    case 'unlock':
+      return <Unlock />;
+    case 'recovery-words':
+      return <RecoveryWords />;
+    case 'sign-up':
+      return (
+        <SignUp
+          onSignIn={() => {
+            setSigningUp(false);
+          }}
+        />
+      );
+    case 'sign-in':
+      return (
+        <SignIn
+          onSignUp={() => {
+            setSigningUp(true);
+          }}
+        />
+      );
   }
-  return (
-    <SignIn
-      onSignUp={() => {
-        setSigningUp(true);
-      }}
-    />
-  );
 }
 
 /** Every touch counts as activity, so the app only auto-locks once it sits untouched. */

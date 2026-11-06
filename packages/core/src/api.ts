@@ -106,6 +106,27 @@ export function cookieValue(setCookie: string | null): string | null {
   return /^[^=\s]+=[^\s;]+$/.test(first) ? first : null;
 }
 
+let cookieListener: ((cookie: string | null) => void) | null = null;
+
+/**
+ * Called whenever the kept session cookie changes ('memory' cookies only), with the new
+ * value or null once it's gone, so a phone can keep it across launches.
+ */
+export function onSessionCookie(listener: ((cookie: string | null) => void) | null): void {
+  cookieListener = listener;
+}
+
+/** Puts back a session cookie kept from an earlier launch ('memory' cookies only). */
+export function restoreSessionCookie(cookie: string): void {
+  if (config.cookies === 'memory' && cookieValue(cookie) === cookie) sessionCookie = cookie;
+}
+
+function keepCookie(cookie: string | null): void {
+  if (cookie === sessionCookie) return;
+  sessionCookie = cookie;
+  cookieListener?.(cookie);
+}
+
 let sessionEndedListener: (() => void) | null = null;
 
 /**
@@ -155,9 +176,9 @@ async function send(
   }
   if (memory) {
     const cookie = cookieValue(res.headers.get('set-cookie'));
-    if (cookie) sessionCookie = cookie;
+    if (cookie) keepCookie(cookie);
     else if (path === '/auth/logout' || (res.status === 401 && !path.startsWith('/auth/'))) {
-      sessionCookie = null;
+      keepCookie(null);
     }
   }
   if (!res.ok) {

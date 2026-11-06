@@ -2,7 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SPACE_HEADER } from '@arcafold/types';
 
-import { ApiError, api, configureApi, cookieValue, onSessionEnded, spaceApi } from './api';
+import {
+  ApiError,
+  api,
+  configureApi,
+  cookieValue,
+  onSessionCookie,
+  onSessionEnded,
+  restoreSessionCookie,
+  spaceApi,
+} from './api';
 import type { ApiFetch, ApiRequest, ApiResponse } from './api';
 
 interface Reply {
@@ -171,6 +180,46 @@ describe('memory cookies', () => {
     configureApi({ origin: 'https://other.test' });
     await api.account();
     expect(calls[1]?.init.headers.cookie).toBeUndefined();
+  });
+});
+
+describe('a kept session cookie', () => {
+  const account = { email: 'a', name: 'n', version: 1, keyring: {}, smartFeatures: null };
+
+  it('reports each change, so a phone can keep it across launches', async () => {
+    const changes: (string | null)[] = [];
+    onSessionCookie((cookie) => changes.push(cookie));
+    const { fetch } = fakeFetch(
+      { json: account, setCookie: 's=1; Path=/' },
+      { json: account, setCookie: 's=1; Path=/' },
+      { setCookie: 's=; Max-Age=0' },
+    );
+    configureApi({ fetch, cookies: 'memory' });
+    await api.logIn({ email: 'a', loginKey: 'k' });
+    await api.account();
+    await api.logOut();
+    expect(changes).toEqual(['s=1', null]);
+    onSessionCookie(null);
+  });
+
+  it('sends a restored cookie, and refuses one that isn’t a cookie', async () => {
+    const { fetch, calls } = fakeFetch({ json: account }, { json: account });
+    configureApi({ fetch, cookies: 'memory' });
+    restoreSessionCookie('s=kept');
+    await api.account();
+    expect(calls[0]?.init.headers.cookie).toBe('s=kept');
+    configureApi({ fetch, cookies: 'memory' });
+    restoreSessionCookie('s=kept; Path=/\r\nX-Evil: 1');
+    await api.account();
+    expect(calls[1]?.init.headers.cookie).toBeUndefined();
+  });
+
+  it('is never restored for the browser, which keeps its own cookies', async () => {
+    const { fetch, calls } = fakeFetch({ json: account });
+    configureApi({ fetch, cookies: 'browser' });
+    restoreSessionCookie('s=kept');
+    await api.account();
+    expect(calls[0]?.init.headers.cookie).toBeUndefined();
   });
 });
 
