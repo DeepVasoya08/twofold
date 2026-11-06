@@ -4,10 +4,12 @@ import type { AccountResponse } from '@arcafold/types';
 
 /**
  * Who is signed in, and whether their keys are in memory. Keys live only in this state:
- * locking, signing out or closing the app forgets them. The session cookie is in memory too,
- * so a closed app always starts signed out.
+ * locking, signing out or closing the app forgets them. The session cookie is kept (in the
+ * keystore-encrypted store) so a closed app opens locked, asking for the password again;
+ * 'starting' is while it checks that session is still good.
  */
 export type AccountState =
+  | { status: 'starting' }
   | { status: 'signed-out' }
   | { status: 'locked'; account: AccountResponse }
   | { status: 'unlocked'; session: Session };

@@ -20,8 +20,12 @@ or a native module.
 - Icons are drawn from the web app's mark by `scripts/make_icons.py`.
 - Signing in (`src/session/`): sign-in, sign-up with the recovery key, and the unlock screen
   use the shared account code, so the same single password field opens either space. Keys
-  and the session live in memory only, so a closed app always starts signed out; the last
-  email that signed in is kept in the app's private storage to fill in the sign-in screen.
+  live in memory only. The session cookie is kept across launches (`session/kept-session.ts`,
+  `expo-secure-store`, encrypted with a keystore key), so a closed app opens at the lock
+  screen, after checking the session is still good; signed out from another device meanwhile,
+  it opens at sign-in. Signing out forgets it. The last email that signed in is kept in the
+  app's private storage to fill in the sign-in screen. Signing out always goes back to the
+  sign-in screen (`src/routes.ts`), even straight after signing up.
 - Locking: the app locks after a minute without a touch (the web app's default), on screen
   or in the background, where time away counts; Android may pause the timer in the
   background, so coming back checks it too. Android's photo picker gets
@@ -82,6 +86,17 @@ or a native module.
   same whichever space the photos went to. If the app locks mid-upload, the photos already
   added still finish with the keys they started with, which are then dropped; they show at
   the next unlock. Only photos for now, no videos or other files.
+- Fingerprint and face unlock (`session/biometric.ts`, `expo-secure-store`), for the main
+  library only. After the main password opens the library, the app offers it once ("Not now"
+  isn't asked again). Turning it on keeps the main password's secret (what Argon2id makes of
+  it: the wrap key and login key, never the password) in Android's keystore under an AES key
+  that opens only after a strong (class 3) biometric check and that Android destroys when
+  fingerprints or faces are added. The lock screen then asks for a fingerprint as it shows,
+  and the sign-in screen (after the app was closed) has "Sign in with fingerprint or face".
+  The secret opens only the main slot (`unlockWithSecret` / `logInWithSecret` in
+  `@arcafold/core/account`), so the private space always needs its password, and nothing kept
+  says whether there is one. Signing out, forgetting the account, being signed out from
+  another device, a changed password or changed fingerprints all turn it off.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

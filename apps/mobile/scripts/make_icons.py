@@ -107,6 +107,31 @@ def backdrop(width: int, height: int) -> Image.Image:
     return out
 
 
+def fingerprint(size: int) -> Image.Image:
+    """A line-drawn fingerprint (white, tinted in the app): nested rings, each with a break."""
+    big = size * 4
+    stroke = big // 26
+    shape = Image.new('L', (big, big), 0)
+    draw = ImageDraw.Draw(shape)
+    cx, cy = big / 2, big * 0.52
+    # (radius across, start angle, end angle) from the centre out; 0 degrees points right.
+    rings = (
+        (0.06, 200, 470),
+        (0.13, 150, 400),
+        (0.20, 190, 470),
+        (0.27, 160, 380),
+        (0.34, 200, 345),
+        (0.41, 215, 325),
+    )
+    for r, start, end in rings:
+        rx, ry = r * big, r * big * 1.12
+        draw.arc((cx - rx, cy - ry, cx + rx, cy + ry), start, end, fill=255, width=stroke)
+    out = Image.new('RGBA', (big, big), (255, 255, 255, 0))
+    out.putalpha(shape)
+    return out.resize((size, size), Image.LANCZOS)
+
+
 eye(96, crossed=False).save('assets/eye.png')
 eye(96, crossed=True).save('assets/eye-off.png')
 backdrop(720, 640).save('assets/backdrop.png', optimize=True)
+fingerprint(144).save('assets/fingerprint.png')

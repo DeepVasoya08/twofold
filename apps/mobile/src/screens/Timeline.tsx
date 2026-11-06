@@ -26,6 +26,7 @@ import { useLibrary } from '../library/use-library';
 import type { Library } from '../library/use-library';
 import { useAccount } from '../session/account';
 import { Banner, Button, Note } from '../ui/kit';
+import { BiometricSheet } from './BiometricSheet';
 import { Viewer } from './Viewer';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
@@ -303,6 +304,7 @@ export function Timeline({ session }: { session: Session }) {
           />
         </View>
         <UploadCard library={library} palette={palette} />
+        <BiometricSheet />
       </View>
     );
   }
@@ -333,6 +335,7 @@ export function Timeline({ session }: { session: Session }) {
       {open !== null ? (
         <Viewer photos={ordered} start={open} library={library} onClose={closeViewer} />
       ) : null}
+      <BiometricSheet />
     </View>
   );
 }
