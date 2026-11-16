@@ -10,6 +10,7 @@ import type {
   CreateMemberRequest,
   CreatePendingInviteRequest,
   CreatePhotoRequest,
+  CreateUploadTokenRequest,
   DeleteAccountRequest,
   DeviceList,
   ErrorResponse,
@@ -35,6 +36,8 @@ import type {
   SignUpRequest,
   SmartFeaturesRequest,
   StoredProfilePhoto,
+  UploadKeyResponse,
+  UploadTokenList,
   TrashRequest,
   TrashResponse,
   UpdateKeyringRequest,
@@ -457,6 +460,16 @@ export function spaceApi(token: string) {
       call<undefined>('PUT', `/space/smart-albums/${encodeURIComponent(id)}`, { meta }, headers),
     deleteSmartAlbum: (id: string) =>
       call<undefined>('DELETE', `/space/smart-albums/${encodeURIComponent(id)}`, {}, headers),
+    /** The space's upload key, sealed under the owner's key, or null. Owner-only. */
+    getUploadKey: () => call<UploadKeyResponse>('GET', '/space/upload-key', undefined, headers),
+    /** Keeps the space's upload key. Refused (409) if it already has one. */
+    putUploadKey: (meta: string) => call<undefined>('PUT', '/space/upload-key', { meta }, headers),
+    listUploadTokens: () =>
+      call<UploadTokenList>('GET', '/space/upload-tokens', undefined, headers),
+    addUploadToken: (body: CreateUploadTokenRequest) =>
+      call<undefined>('POST', '/space/upload-tokens', body, headers),
+    removeUploadToken: (id: string) =>
+      call<undefined>('DELETE', `/space/upload-tokens/${encodeURIComponent(id)}`, {}, headers),
   };
 }
 

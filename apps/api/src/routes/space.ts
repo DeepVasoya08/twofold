@@ -24,6 +24,8 @@ import type {
   ProfilePhotoResponse,
   PutFileResponse,
   TrashResponse,
+  UploadKeyResponse,
+  UploadTokenList,
 } from '@arcafold/types';
 
 import {
@@ -52,6 +54,7 @@ import {
   createMemberSchema,
   createPendingInviteSchema,
   createPhotoSchema,
+  createUploadTokenSchema,
   emptySchema,
   photoPartSchema,
   profilePhotoSchema,
@@ -108,6 +111,15 @@ import {
   updatePhotoMeta,
 } from '../space-db';
 import type { PhotoSize } from '../space-db';
+import {
+  deleteUploadKeys,
+  deleteUploadToken,
+  findUploadKey,
+  insertUploadKey,
+  insertUploadToken,
+  listUploadTokens,
+  uploadTokenQuery,
+} from '../upload-db';
 import { requireOwner } from './owner';
 import { people } from './people';
 import { deleteSearchData, search } from './search';
@@ -148,19 +160,27 @@ const requireSpace = createMiddleware<AppEnv>(async (c, next) => {
     return account ? c.json({ error: messages.badRequest }, 400) : sessionEnded(c);
   }
   const hash = toBase64Url(await sha256(bytes));
-  const [session, members] = await c.env.DB.batch([
+  const [session, members, uploaders] = await c.env.DB.batch([
     sessionAccountQuery(c.env.DB, sessionHash, now),
     memberByTokenQuery(c.env.DB, hash),
+    uploadTokenQuery(c.env.DB, hash),
   ]);
   const account = sessionAccountFrom(session?.results ?? []);
   if (!account) return sessionEnded(c);
   const member = members?.results[0] as
     { id: string; space: string; album: string | null; access: MemberAccess } | undefined;
+  const uploader = uploaders?.results[0] as { id: string; space: string } | undefined;
   c.set('account', account);
   c.set('session', sessionHash);
+  c.set('album', member?.album ?? null);
+  if (uploader && !member) {
+    c.set('space', uploader.space);
+    c.set('member', null);
+    c.set('access', 'upload');
+    return next();
+  }
   c.set('space', member?.space ?? hash);
   c.set('member', member?.id ?? null);
-  c.set('album', member?.album ?? null);
   // Someone given one album can only view, whatever their row says.
   c.set('access', member ? (member.album === null ? member.access : 'view') : 'edit');
   return next();
@@ -174,14 +194,28 @@ const ALBUM_ROUTES: readonly { method: string; path: RegExp }[] = [
   { method: 'DELETE', path: /\/space\/membership$/ },
 ];
 
+/** What a phone's upload-only token may do: add photos, and nothing else. */
+const UPLOAD_ROUTES: readonly { method: string; path: RegExp }[] = [
+  { method: 'POST', path: /\/space\/photos$/ },
+  { method: 'PUT', path: /\/space\/photos\/[^/]+\/(thumb|full)$/ },
+  { method: 'POST', path: /\/space\/photos\/[^/]+\/commit$/ },
+];
+
 const albumOnly = 'You can only see this album.';
+const uploadOnly = 'This phone can only add photos here.';
 const viewOnly = 'You can view this library, but not change it.';
 
 /**
- * Keeps album-scoped tokens to the few read-only routes their album needs, and view-only
- * members to reading (and leaving). Owner-only reads are refused later, by requireOwner.
+ * Keeps upload-only tokens to adding photos, album-scoped tokens to the few read-only routes
+ * their album needs, and view-only members to reading (and leaving). Owner-only reads are refused later, by requireOwner.
  */
 const limitMemberTokens = createMiddleware<AppEnv>(async (c, next) => {
+  if (c.get('access') === 'upload') {
+    const allowed = UPLOAD_ROUTES.some(
+      (route) => route.method === c.req.method && route.path.test(c.req.path),
+    );
+    return allowed ? next() : c.json({ error: uploadOnly }, 403);
+  }
   if (c.get('album') !== null) {
     const allowed = ALBUM_ROUTES.some(
       (route) => route.method === c.req.method && route.path.test(c.req.path),
@@ -331,7 +365,8 @@ space.post('/photos', async (c) => {
   if (!reserved && !(await reserve())) {
     return c.json({ error: storageFull }, 413);
   }
-  if (!(await insertPendingPhoto(c.env.DB, tag, body, now))) {
+  const sealedForOwner = c.get('access') === 'upload';
+  if (!(await insertPendingPhoto(c.env.DB, tag, body, now, sealedForOwner))) {
     await releaseStorage(c.env.DB, accountId, size);
     return c.json({ error: messages.badRequest }, 409);
   }
@@ -599,7 +634,7 @@ space.delete('/albums/:id/items/:photo', async (c) => {
 
 /**
  * Deletes everything in the space: every photo, its files, every album, its sharing, its
- * people and its search vectors.
+ * upload key and phones' upload tokens, its people and its search vectors.
  */
 space.delete('/', requireOwner, async (c) => {
   if (!(await readBody(c, emptySchema))) return c.json({ error: messages.badRequest }, 400);
@@ -612,11 +647,54 @@ space.delete('/', requireOwner, async (c) => {
   }
   await deleteAlbums(c.env.DB, tag);
   await deleteSharing(c.env.DB, tag);
+  await deleteUploadKeys(c.env.DB, tag);
   const freed =
     (await deleteProfilePhoto(c.env.DB, tag)) +
     (await deleteFaceData(c.env.DB, tag)) +
     (await deleteSearchData(c.env.DB, tag));
   await releaseStorage(c.env.DB, c.get('account').id, freed);
+  return c.body(null, 204);
+});
+
+/**
+ * The space's upload-only key: the secret half of its key pair, sealed under a key only the
+ * owner has. There is only ever one, so a second device setting one up keeps the first.
+ */
+space.get('/upload-key', requireOwner, async (c) =>
+  c.json({ meta: await findUploadKey(c.env.DB, c.get('space')) } satisfies UploadKeyResponse),
+);
+
+space.put('/upload-key', requireOwner, async (c) => {
+  const body = await readBody(c, updateRecordSchema);
+  if (!body) return c.json({ error: messages.badRequest }, 400);
+  if (!(await insertUploadKey(c.env.DB, c.get('space'), body.meta))) {
+    return c.json({ error: 'This library already has an upload key.' }, 409);
+  }
+  return c.body(null, 204);
+});
+
+/** Phones that can add photos to this space while locked, by their tokens' ids. */
+space.get('/upload-tokens', requireOwner, async (c) =>
+  c.json({ ids: await listUploadTokens(c.env.DB, c.get('space')) } satisfies UploadTokenList),
+);
+
+space.post('/upload-tokens', requireOwner, async (c) => {
+  const body = await readBody(c, createUploadTokenSchema);
+  const token = body && fromBase64Url(body.token);
+  if (!body || !token) return c.json({ error: messages.badRequest }, 400);
+  const hash = toBase64Url(await sha256(token));
+  if (!(await insertUploadToken(c.env.DB, c.get('space'), body.id, hash))) {
+    return c.json({ error: 'Too many phones are backing up to this library.' }, 409);
+  }
+  return c.body(null, 201);
+});
+
+space.delete('/upload-tokens/:id', requireOwner, async (c) => {
+  const id = recordIdSchema.safeParse(c.req.param('id'));
+  if (!id.success || !(await readBody(c, emptySchema))) {
+    return c.json({ error: messages.badRequest }, 400);
+  }
+  await deleteUploadToken(c.env.DB, c.get('space'), id.data);
   return c.body(null, 204);
 });
 
@@ -717,8 +795,11 @@ space.delete('/members/:id', requireOwner, async (c) => {
 
 /** What this member's token may do. The owner's own token isn't a membership. */
 space.get('/membership', (c) => {
-  if (c.get('member') === null) return c.json({ error: messages.badRequest }, 400);
-  return c.json<MembershipResponse>({ access: c.get('access') });
+  const access = c.get('access');
+  if (c.get('member') === null || access === 'upload') {
+    return c.json({ error: messages.badRequest }, 400);
+  }
+  return c.json<MembershipResponse>({ access });
 });
 
 /** A member leaves: their own token stops working. */

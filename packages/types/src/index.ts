@@ -265,6 +265,11 @@ export interface StoredPhoto {
   meta: string;
   thumbSize: number;
   fullSize: number;
+  /**
+   * Set when a phone added this photo with an upload-only token: its metadata is sealed to
+   * the space's upload key, so only the owner can open it (and seal it again as usual).
+   */
+  sealedForOwner?: true;
 }
 
 export interface StoredAlbum {
@@ -308,7 +313,23 @@ export interface AccountStorage {
  * Starts a photo upload. The two files follow with PUT (in either order, or together); the
  * one that lands second makes the photo visible, so a separate commit is only a fallback.
  */
-export type CreatePhotoRequest = StoredPhoto;
+export type CreatePhotoRequest = Omit<StoredPhoto, 'sealedForOwner'>;
+
+/** A space's upload key: its secret half, sealed under the owner's key, if it has one. */
+export interface UploadKeyResponse {
+  meta: string | null;
+}
+
+/** The ids of the phones' upload-only tokens for a space. */
+export interface UploadTokenList {
+  ids: string[];
+}
+
+/** Registers one phone's upload-only token (the server keeps its SHA-256). */
+export interface CreateUploadTokenRequest {
+  id: string;
+  token: string;
+}
 
 /** The answer to uploading one file: whether that made the photo visible. */
 export interface PutFileResponse {

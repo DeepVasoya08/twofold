@@ -11,10 +11,18 @@ interface PhotoRow {
   thumb_size: number;
   full_size: number;
   pending_since: number | null;
+  sealed_for_owner: number;
 }
 
 function toPhoto(row: PhotoRow): StoredPhoto {
-  return { id: row.id, meta: row.meta, thumbSize: row.thumb_size, fullSize: row.full_size };
+  const photo: StoredPhoto = {
+    id: row.id,
+    meta: row.meta,
+    thumbSize: row.thumb_size,
+    fullSize: row.full_size,
+  };
+  if (row.sealed_for_owner === 1) photo.sealedForOwner = true;
+  return photo;
 }
 
 /** A photo row, committed or still uploading. */
@@ -40,7 +48,7 @@ export async function listPhotos(
 ): Promise<StoredPhoto[]> {
   const { results } = await db
     .prepare(
-      `SELECT id, meta, thumb_size, full_size, pending_since FROM photos
+      `SELECT id, meta, thumb_size, full_size, pending_since, sealed_for_owner FROM photos
         WHERE space = ? AND id > ? AND pending_since IS NULL AND trashed = 0
         ORDER BY id LIMIT ?`,
     )
@@ -56,26 +64,30 @@ export async function findPhoto(
 ): Promise<PhotoRecord | null> {
   const row = await db
     .prepare(
-      'SELECT id, meta, thumb_size, full_size, pending_since FROM photos WHERE space = ? AND id = ?',
+      'SELECT id, meta, thumb_size, full_size, pending_since, sealed_for_owner FROM photos WHERE space = ? AND id = ?',
     )
     .bind(space, id)
     .first<PhotoRow>();
   return row ? { ...toPhoto(row), pending: row.pending_since !== null } : null;
 }
 
-/** Starts an upload. Returns false if the id is taken (in any space). */
+/**
+ * Starts an upload. Returns false if the id is taken (in any space). `sealedForOwner` marks a
+ * photo a phone added with an upload-only token.
+ */
 export async function insertPendingPhoto(
   db: D1Database,
   space: string,
   photo: StoredPhoto,
   now: number,
+  sealedForOwner = false,
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      `INSERT INTO photos (id, space, meta, thumb_size, full_size, pending_since)
-       VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+      `INSERT INTO photos (id, space, meta, thumb_size, full_size, pending_since, sealed_for_owner)
+       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
     )
-    .bind(photo.id, space, photo.meta, photo.thumbSize, photo.fullSize, now)
+    .bind(photo.id, space, photo.meta, photo.thumbSize, photo.fullSize, now, sealedForOwner ? 1 : 0)
     .run();
   return result.meta.changes === 1;
 }
@@ -147,7 +159,7 @@ export async function listTrashedPhotos(
 ): Promise<StoredPhoto[]> {
   const { results } = await db
     .prepare(
-      `SELECT id, meta, thumb_size, full_size, pending_since FROM photos
+      `SELECT id, meta, thumb_size, full_size, pending_since, sealed_for_owner FROM photos
         WHERE space = ? AND trashed = 1 AND id > ?
         ORDER BY id LIMIT ?`,
     )
@@ -171,7 +183,7 @@ export async function setPhotosTrashed(
     photos.map((photo) =>
       db
         .prepare(
-          `UPDATE photos SET meta = ?, trashed = ?
+          `UPDATE photos SET meta = ?, trashed = ?, sealed_for_owner = 0
             WHERE space = ? AND id = ? AND pending_since IS NULL AND trashed = ?`,
         )
         .bind(photo.meta, trashed ? 1 : 0, space, photo.id, trashed ? 0 : 1),
@@ -180,7 +192,11 @@ export async function setPhotosTrashed(
   return photos.filter((_, index) => results[index]?.meta.changes === 1).map((photo) => photo.id);
 }
 
-/** Returns false if the photo isn't a committed photo in this space. */
+/**
+ * Replaces a photo's sealed metadata, which is then sealed the usual way (an owner opening a
+ * photo a phone added clears `sealed_for_owner` like this). Returns false if the photo isn't
+ * a committed photo in this space.
+ */
 export async function updatePhotoMeta(
   db: D1Database,
   space: string,
@@ -188,7 +204,10 @@ export async function updatePhotoMeta(
   meta: string,
 ): Promise<boolean> {
   const result = await db
-    .prepare('UPDATE photos SET meta = ? WHERE space = ? AND id = ? AND pending_since IS NULL')
+    .prepare(
+      `UPDATE photos SET meta = ?, sealed_for_owner = 0
+        WHERE space = ? AND id = ? AND pending_since IS NULL`,
+    )
     .bind(meta, space, id)
     .run();
   return result.meta.changes === 1;

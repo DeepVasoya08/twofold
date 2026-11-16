@@ -1,4 +1,4 @@
-import type { SpaceAccess, SpaceKeys } from '@arcafold/crypto';
+import type { SpaceAccess, SpaceKeys, UploadKeyPair } from '@arcafold/crypto';
 import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@arcafold/types';
 import type { PhotoPage, PhotoPart } from '@arcafold/types';
 
@@ -18,6 +18,7 @@ import {
   parsePhotoMeta,
 } from '../records';
 import type { AlbumMeta, PhotoMeta } from '../records';
+import { uploadKeyPair } from '../upload/upload-only';
 import type { Album, FileDetails, Photo } from './model';
 
 /**
@@ -430,27 +431,64 @@ export function remoteStore(
     }
   };
 
+  /**
+   * The space's upload key pair, for the owner only: what opens photos a phone backed up
+   * while locked. Null when there isn't one or it couldn't be fetched (tried again next time).
+   */
+  let uploadKey: Promise<UploadKeyPair | null> | null = null;
+  const ownerUploadKey = () => {
+    if (!('spaceKey' in space)) return Promise.resolve(null);
+    uploadKey ??= remote()
+      .then((api) => uploadKeyPair(space, api, false))
+      .catch(() => {
+        uploadKey = null;
+        return null;
+      });
+    return uploadKey;
+  };
+
+  /**
+   * Seals photos a phone backed up again under the records key, so members and other
+   * devices read them the usual way. Best effort: any left over are done next time.
+   */
+  const adopt = async (photos: { id: string; meta: PhotoMeta }[]) => {
+    const api = await remote();
+    for (const { id, meta } of photos) {
+      await sealPhoto(id, meta)
+        .then((sealed) => api.updatePhoto(id, sealed))
+        .catch(() => undefined);
+    }
+  };
+
   /** Opens every page of photos `listPage` returns, and remembers their keys. */
   const openPhotos = async (listPage: (after?: string) => Promise<PhotoPage>) => {
     const crypto = await loadCrypto();
     const keys = await access();
     const photos: Photo[] = [];
+    const backedUp: { id: string; meta: PhotoMeta }[] = [];
+    const open = async (stored: PhotoPage['photos'][number]) => {
+      if (!stored.sealedForOwner) return crypto.openRecord(keys, 'photo', stored.id, stored.meta);
+      const pair = await ownerUploadKey();
+      if (!pair) return null;
+      return crypto.openUpload(pair, 'photo', stored.id, stored.meta);
+    };
     let after: string | undefined;
     do {
       const page = await listPage(after);
       for (const stored of page.photos) {
         // A record that doesn't open was tampered with or isn't ours: leave it out.
-        const opened = await crypto
-          .openRecord(keys, 'photo', stored.id, stored.meta)
-          .catch(() => null);
+        const opened = await open(stored).catch(() => null);
         const meta = opened && parsePhotoMeta(decodeJson(opened));
         const key = meta && crypto.fromBase64Url(meta.key);
         if (!meta || key?.length !== 32) continue;
         known.set(stored.id, { key, meta });
+        if (stored.sealedForOwner) backedUp.push({ id: stored.id, meta });
         photos.push(toPhoto(stored.id, meta, membership, stored.thumbSize + stored.fullSize));
       }
       after = page.next ?? undefined;
     } while (after);
+    // The photos show now; sealing them again carries on behind.
+    if (backedUp.length > 0) void adopt(backedUp);
     return photos;
   };
 
@@ -805,6 +843,8 @@ export function remoteStore(
     dispose: () => {
       for (const url of urls.values()) platform.releaseImage(url);
       urls.clear();
+      void uploadKey?.then((pair) => pair?.secretKey.fill(0));
+      uploadKey = null;
     },
   };
 }

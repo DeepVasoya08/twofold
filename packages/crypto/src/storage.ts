@@ -37,11 +37,11 @@ export type RecordKind = 'photo' | 'album';
  * Records only the space's owner can open: who it is shared with, the libraries it has
  * joined, the key of its profile photo, invites still in progress (either side's secret key
  * for one invite), people (a name and the faces confirmed or turned down), words taught to
- * search (a name and the photos that show it), and smart albums (a saved search). They use a
- * subkey that members never receive.
+ * search (a name and the photos that show it), smart albums (a saved search), and the secret
+ * half of the upload-only key. They use a subkey that members never receive.
  */
 export type OwnerRecordKind =
-  'member' | 'joined' | 'profile' | 'invite' | 'person' | 'word' | 'smart-album';
+  'member' | 'joined' | 'profile' | 'invite' | 'person' | 'word' | 'smart-album' | 'upload-key';
 
 /** Segments of results worked out on the device: faces found, and photos' search vectors. */
 export type SegmentKind = 'faces' | 'search';
@@ -417,4 +417,127 @@ export async function decryptFile(key: Uint8Array, data: Uint8Array): Promise<Ui
   }
   if (!finished) throw new DecryptionError();
   return out.slice(0, written);
+}
+
+/**
+ * Upload-only keys, so a phone can back up photos while Arcafold is locked.
+ *
+ * The owner makes one crypto_box key pair per space. Its secret half is kept only as an
+ * owner record (sealed under the owner subkey, so members never get it); a phone keeps the
+ * public half. With it the phone seals new photos' records so that only the owner can open
+ * them, and it can't open them (or anything else in the space) itself.
+ *
+ * A record sealed for upload is a fresh random key sealed to the public key with
+ * crypto_box_seal, followed by the record sealed under that key exactly as sealRecord does
+ * (XChaCha20-Poly1305, bound to its kind and id). The owner opens it, then seals it again
+ * under the records key, so everyone else reads it the usual way.
+ */
+export interface UploadKeyPair {
+  publicKey: Uint8Array;
+  secretKey: Uint8Array;
+}
+
+/** The fixed id of a space's upload key record: there is only ever one. */
+export const UPLOAD_KEY_ID = 'upload-key';
+
+/** A new upload-only key pair for a space. */
+export async function newUploadKeyPair(): Promise<UploadKeyPair> {
+  const sodium = await getSodium();
+  const pair = sodium.crypto_box_keypair();
+  return { publicKey: pair.publicKey, secretKey: pair.privateKey };
+}
+
+/** Seals the secret half of an upload key pair as an owner record of the space. */
+export function sealUploadKeyPair(space: SpaceKeys, pair: UploadKeyPair): Promise<string> {
+  return sealOwnerRecord(space, 'upload-key', UPLOAD_KEY_ID, pair.secretKey);
+}
+
+/**
+ * Opens a space's upload key pair. The public half is worked out again from the secret one.
+ * Throws DecryptionError if the record doesn't open or doesn't hold a key.
+ */
+export async function openUploadKeyPair(
+  space: SpaceKeys,
+  sealedText: string,
+): Promise<UploadKeyPair> {
+  const sodium = await getSodium();
+  const secretKey = await openOwnerRecord(space, 'upload-key', UPLOAD_KEY_ID, sealedText);
+  if (secretKey.length !== sodium.crypto_box_SECRETKEYBYTES) throw new DecryptionError();
+  return { publicKey: sodium.crypto_scalarmult_base(secretKey), secretKey };
+}
+
+/** Bytes crypto_box_seal adds to a records key: an ephemeral public key and a MAC. */
+async function sealedKeyBytes(): Promise<number> {
+  const sodium = await getSodium();
+  return RECORD_KEY_BYTES + sodium.crypto_box_PUBLICKEYBYTES + sodium.crypto_box_MACBYTES;
+}
+
+/**
+ * Seals a record so only the space's owner can open it, with just the upload key's public
+ * half. The whole sealed record fits the same size limit as any other.
+ */
+export async function sealForUpload(
+  publicKey: Uint8Array,
+  kind: RecordKind,
+  id: string,
+  data: Uint8Array,
+): Promise<string> {
+  const sodium = await getSodium();
+  if (publicKey.length !== sodium.crypto_box_PUBLICKEYBYTES) {
+    throw new Error('Malformed upload key');
+  }
+  const keyBytes = await sealedKeyBytes();
+  const key = sodium.crypto_kdf_keygen();
+  try {
+    const sealedKey = sodium.crypto_box_seal(key, publicKey);
+    const record = await sealWith(key, kind, id, data, {
+      padBlock: PAD_BLOCK,
+      maxBytes: STORAGE_SIZES.maxRecord - keyBytes,
+    });
+    const body = fromBase64Url(record);
+    if (!body) throw new Error('This record is too large');
+    const sealed = new Uint8Array(sealedKey.length + body.length);
+    sealed.set(sealedKey, 0);
+    sealed.set(body, sealedKey.length);
+    return toBase64Url(sealed);
+  } finally {
+    sodium.memzero(key);
+  }
+}
+
+/**
+ * Opens a record sealed for upload. Throws DecryptionError for the wrong key pair, any
+ * changed byte, or a record that belongs to another id or kind.
+ */
+export async function openUpload(
+  pair: UploadKeyPair,
+  kind: RecordKind,
+  id: string,
+  sealedText: string,
+): Promise<Uint8Array> {
+  const sodium = await getSodium();
+  const sealed = fromBase64Url(sealedText);
+  const keyBytes = await sealedKeyBytes();
+  if (!sealed || sealed.length <= keyBytes) throw new DecryptionError();
+  let key: Uint8Array;
+  try {
+    key = sodium.crypto_box_seal_open(sealed.subarray(0, keyBytes), pair.publicKey, pair.secretKey);
+  } catch {
+    throw new DecryptionError();
+  }
+  try {
+    if (key.length !== RECORD_KEY_BYTES) throw new DecryptionError();
+    return await openWith(key, kind, id, toBase64Url(sealed.subarray(keyBytes)));
+  } finally {
+    sodium.memzero(key);
+  }
+}
+
+/**
+ * A new random token that lets one phone add photos to a space, and nothing else. The
+ * server keeps only its SHA-256, and the owner can revoke it.
+ */
+export async function newUploadToken(): Promise<string> {
+  const sodium = await getSodium();
+  return toBase64Url(sodium.randombytes_buf(STORAGE_SIZES.spaceToken));
 }
