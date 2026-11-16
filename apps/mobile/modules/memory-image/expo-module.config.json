@@ -3,7 +3,8 @@
   "android": {
     "modules": [
       "com.arcafold.memoryimage.MemoryImageModule",
-      "com.arcafold.memoryimage.PhotoPickerModule"
+      "com.arcafold.memoryimage.PhotoPickerModule",
+      "com.arcafold.memoryimage.PhotoLibraryModule"
     ]
   }
 }

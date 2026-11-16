@@ -18,6 +18,8 @@ import { errorMessage } from '@arcafold/core/errors';
 import type { Session } from '@arcafold/core/account';
 import type { Device } from '@arcafold/types';
 
+import { backupStatusText } from '../backup/backup-text';
+import { useBackup } from '../backup/use-backup';
 import { lastActiveText, shortDay } from '../library/devices';
 import { useAccount } from '../session/account';
 import { AUTO_LOCK_CHOICES, autoLockLabel } from '../session/auto-lock';
@@ -224,11 +226,84 @@ function PasswordSheet({ onDone }: { onDone: () => void }) {
   );
 }
 
+/** Automatic backup of the main library: on or off, and backing up now. */
+function Backup({
+  session,
+  palette,
+  onBackedUp,
+}: {
+  session: Session;
+  palette: Palette;
+  onBackedUp: () => void;
+}) {
+  const backup = useBackup(session, onBackedUp);
+  const text = backupStatusText(backup.status);
+  const running = backup.status.kind === 'running';
+  return (
+    <>
+      <Row
+        title="Back up new photos"
+        detail={
+          backup.on
+            ? 'Photos added to this phone since you turned this on go to your library, encrypted.'
+            : 'Photos you take from now on go to your library, encrypted. Older ones stay as they are.'
+        }
+        palette={palette}
+        action={
+          backup.loaded && !backup.busy ? (
+            <Switch
+              accessibilityLabel="Back up new photos"
+              value={backup.on}
+              trackColor={{ true: palette.accent, false: palette.track }}
+              thumbColor={palette.surface}
+              onValueChange={(on) => {
+                void (on ? backup.turnOn() : backup.turnOff());
+              }}
+            />
+          ) : (
+            <ActivityIndicator color={palette.accent} />
+          )
+        }
+      />
+      {backup.on || text ? (
+        <View style={styles.rowPad}>
+          {text ? (
+            backup.status.kind === 'failed' ? (
+              <Banner>{text}</Banner>
+            ) : (
+              <Text style={[styles.rowDetail, { color: palette.muted }]}>{text}</Text>
+            )
+          ) : null}
+          {backup.on ? (
+            <Button
+              kind="secondary"
+              label="Back up now"
+              busy={running}
+              onPress={() => {
+                void backup.backUpNow();
+              }}
+            />
+          ) : null}
+        </View>
+      ) : null}
+    </>
+  );
+}
+
 /**
  * The phone's settings, over the timeline (in the app's own window, so screenshot blocking
  * covers it): the account, fingerprint unlock and auto-lock, devices, and signing out.
  */
-export function Settings({ session, onClose }: { session: Session; onClose: () => void }) {
+export function Settings({
+  session,
+  onClose,
+  onBackedUp,
+}: {
+  session: Session;
+  onClose: () => void;
+  /** Photos were backed up just now, so the library should show them. */
+  onBackedUp: () => void;
+}) {
   const {
     space,
     lock,
@@ -355,6 +430,12 @@ export function Settings({ session, onClose }: { session: Session; onClose: () =
             </View>
           </View>
         </Section>
+
+        {space === 'main' ? (
+          <Section title="Backup" palette={palette}>
+            <Backup session={session} palette={palette} onBackedUp={onBackedUp} />
+          </Section>
+        ) : null}
 
         <Section title="Devices" palette={palette}>
           <Devices palette={palette} />
