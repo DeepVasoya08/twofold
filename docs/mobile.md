@@ -26,7 +26,8 @@ or a native module.
   it opens at sign-in. Signing out forgets it. The last email that signed in is kept in the
   app's private storage to fill in the sign-in screen. Signing out always goes back to the
   sign-in screen (`src/routes.ts`), even straight after signing up.
-- Locking: the app locks after a minute without a touch (the web app's default), on screen
+- Locking: the app locks after a minute without a touch by default (1, 5, 15 or 30 minutes
+  in Settings, saved in a plain file on this phone, `session/auto-lock.ts`), on screen
   or in the background, where time away counts; Android may pause the timer in the
   background, so coming back checks it too. Android's photo picker gets
   up to three minutes instead (`onSystemScreen` in `session/account.tsx`); away longer than
@@ -60,7 +61,10 @@ or a native module.
   right in timeline order. The preview shows at once; the original downloads once the photo
   has been in view for a moment, is decoded no larger than the screen and turned upright
   (Android's `ImageDecoder`, which also reads HEIC, from Android 9), and is freed when the
-  next one opens. Tapping hides the bar; Back closes it.
+  next one opens. Tapping hides the bar; Back closes it. Pinch, double-tap and pan zoom up to
+  5x (`zoomable` on `MemoryImageView`, native gestures). Zoomed in, the original is decoded
+  again at up to 4096 px so it stays sharp, the swap from preview to original keeps the zoom,
+  and one finger pans the photo instead of swiping to the next.
 - The private space works as on the web. The same password field opens either space, and
   the private space shows in the web app's violet tones. In the viewer, "Move to private
   space" (or "Move to library") asks for the other space's password the first time after
@@ -97,6 +101,11 @@ or a native module.
   `@arcafold/core/account`), so the private space always needs its password, and nothing kept
   says whether there is one. Signing out, forgetting the account, being signed out from
   another device, a changed password or changed fingerprints all turn it off.
+- Settings (`screens/Settings.tsx`, the round initial at the top right): the account's name
+  and email; fingerprint unlock on or off (shown only in the main library; turning it on
+  asks for the main password, so the private space's password is never kept); the auto-lock
+  time; this account's devices, with "Sign out" for any other one (`/api/account/devices`,
+  like the web app's Settings); and Lock now, Sign out, and Sign out and forget this account.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

@@ -22,6 +22,13 @@ interface MemoryImageProps extends ViewProps {
   fit?: 'cover' | 'contain';
   /** Decodes no larger than this many pixels on the longer side (default 512). */
   maxSide?: number;
+  /**
+   * Pinch, double-tap and pan to zoom (the viewer). The view then handles its own touches:
+   * a single tap reaches `onTap`, and `onZoom` says when it's zoomed in or back out.
+   */
+  zoomable?: boolean;
+  onTap?: () => void;
+  onZoom?: (event: { nativeEvent: { zoomed: boolean } }) => void;
 }
 
 /** Shows an image MemoryImages holds, decoded at the size it's shown and turned upright. */

@@ -30,6 +30,9 @@ type SpaceKeys = NonNullable<Session['otherSpace']>;
 /** How long a photo stays in view before its original downloads, so a fast swipe skips it. */
 const SETTLE_MS = 250;
 
+/** The sharpest the original is decoded while zoomed in, so it doesn't blur. */
+const ZOOMED_MAX_SIDE = 4096;
+
 const Page = memo(function Page({
   photo,
   thumbId,
@@ -39,6 +42,7 @@ const Page = memo(function Page({
   maxSide,
   requestThumbs,
   onTap,
+  onZoom,
 }: {
   photo: Photo;
   thumbId: string | null;
@@ -48,27 +52,32 @@ const Page = memo(function Page({
   maxSide: number;
   requestThumbs: Library['requestThumbs'];
   onTap: () => void;
+  onZoom: (zoomed: boolean) => void;
 }) {
+  const [zoomed, setZoomed] = useState(false);
   useEffect(() => {
     if (!thumbId) requestThumbs([photo.id], true);
   }, [photo.id, thumbId, requestThumbs]);
   return (
-    <Pressable
-      onPress={onTap}
+    <View
       style={{ width, height }}
       accessibilityLabel={`Photo taken ${formatTaken(photo.takenAt)}`}
     >
-      {/* The preview shows at once; the original covers it once it has arrived. */}
-      <MemoryImage imageId={thumbId} fit="contain" style={StyleSheet.absoluteFill} />
-      {originalId ? (
-        <MemoryImage
-          imageId={originalId}
-          fit="contain"
-          maxSide={maxSide}
-          style={StyleSheet.absoluteFill}
-        />
-      ) : null}
-    </Pressable>
+      {/* The preview shows at once and the original replaces it when it arrives, keeping the
+          zoom. Zoomed in, the original is decoded sharper. */}
+      <MemoryImage
+        imageId={originalId ?? thumbId}
+        fit="contain"
+        zoomable
+        maxSide={zoomed && originalId ? Math.max(maxSide, ZOOMED_MAX_SIDE) : maxSide}
+        onTap={onTap}
+        onZoom={(event) => {
+          setZoomed(event.nativeEvent.zoomed);
+          onZoom(event.nativeEvent.zoomed);
+        }}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
   );
 });
 
@@ -171,6 +180,12 @@ export function Viewer({
     setChrome((shown) => !shown);
   }, []);
 
+  // While a photo is zoomed, one finger pans it instead of swiping to the next.
+  const [zoomed, setZoomed] = useState(false);
+  const onZoom = useCallback((now: boolean) => {
+    setZoomed(now);
+  }, []);
+
   return (
     <View style={styles.viewer}>
       <StatusBar style="light" hidden={!chrome} />
@@ -186,6 +201,7 @@ export function Viewer({
         maxToRenderPerBatch={2}
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onSwiped}
+        scrollEnabled={!zoomed}
         extraData={[thumbs, original]}
         renderItem={({ item }) => (
           <Page
@@ -197,6 +213,7 @@ export function Viewer({
             maxSide={maxSide}
             requestThumbs={requestThumbs}
             onTap={toggleChrome}
+            onZoom={onZoom}
           />
         )}
       />

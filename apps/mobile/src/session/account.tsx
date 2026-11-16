@@ -32,9 +32,10 @@ import {
   forgetBiometrics,
   readBiometricSecret,
 } from './biometric';
+import { saveAutoLock, savedAutoLock } from './auto-lock';
 import { keepSession, keptSession } from './kept-session';
 import { forgetEmail, rememberEmail, rememberedEmail } from './remembered';
-import { idleTooLong, leftScreen, locked, lockOnReturn } from './state';
+import { AUTO_LOCK_MINUTES, idleTooLong, leftScreen, locked, lockOnReturn } from './state';
 import type { AccountState } from './state';
 
 interface AccountValue {
@@ -79,6 +80,15 @@ interface AccountValue {
   biometricOffer: boolean;
   /** Turns fingerprint unlock on (Android asks for a fingerprint), or says not now. */
   answerBiometricOffer: (turnOn: boolean) => Promise<void>;
+  /**
+   * Turns fingerprint unlock on from Settings: checks the main password here (it must open the
+   * main library), then Android asks for a fingerprint.
+   */
+  enableBiometricsWithPassword: (password: string) => Promise<void>;
+  disableBiometrics: () => void;
+  /** Minutes without a touch before the app locks, chosen on this phone. */
+  autoLockMinutes: number;
+  setAutoLockMinutes: (minutes: number) => void;
 }
 
 const BIOMETRICS_RESET =
@@ -106,6 +116,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const leftAt = useRef<number | null>(null);
   const [biometricFor, setBiometricFor] = useState<string | null>(null);
   const [biometricOffer, setBiometricOffer] = useState(false);
+  const [autoLock, setAutoLock] = useState(AUTO_LOCK_MINUTES);
   /**
    * The main password's secret, held from a password unlock until fingerprint unlock is
    * offered and answered (or the keys are dropped). It opens no more than the keys already
@@ -117,6 +128,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void rememberedEmail().then((saved) => {
       if (!cancelled && saved) setEmail(saved);
+    });
+    void savedAutoLock().then((saved) => {
+      if (!cancelled) setAutoLock(saved);
     });
     void biometricEmail().then((saved) => {
       if (!cancelled) setBiometricFor(saved);
@@ -213,7 +227,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         if (away !== null) {
           if (lockOnReturn(away, now)) lock();
           else lastTouch.current = now;
-        } else if (idleTooLong(lastTouch.current, now)) {
+        } else if (idleTooLong(lastTouch.current, now, autoLock)) {
           lock();
         }
       }
@@ -221,19 +235,19 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     return () => {
       watch.remove();
     };
-  }, [unlocked, lock]);
+  }, [unlocked, lock, autoLock]);
 
   // It locks after the auto-lock minutes without a touch, on screen or in the background.
   useEffect(() => {
     if (!unlocked) return;
     const timer = setInterval(() => {
       if (systemScreens.current > 0) return;
-      if (idleTooLong(lastTouch.current, Date.now())) lock();
+      if (idleTooLong(lastTouch.current, Date.now(), autoLock)) lock();
     }, IDLE_CHECK_MS);
     return () => {
       clearInterval(timer);
     };
-  }, [unlocked, lock]);
+  }, [unlocked, lock, autoLock]);
 
   // A signed-in request refused with a 401 means this phone was signed out elsewhere.
   useEffect(() => {
@@ -361,6 +375,25 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         await enableBiometrics(address, secret);
         setBiometricFor(address);
       },
+      enableBiometricsWithPassword: async (password) => {
+        if (state.status !== 'unlocked') throw new FormError('Unlock Arcafold first.');
+        const { account } = state.session;
+        const secret = await ops.unlockSecret(account, password);
+        // Only the main password can be kept: it must open the main library.
+        const opened = await ops.unlockWithSecret(account, secret).catch(() => null);
+        if (!opened || ops.spaceOf(opened.opened) !== 'main') {
+          throw new FormError('That isn’t your main password.');
+        }
+        await enableBiometrics(account.email, secret);
+        setBiometricFor(account.email);
+      },
+      disableBiometrics: turnOffBiometrics,
+      autoLockMinutes: autoLock,
+      setAutoLockMinutes: (minutes) => {
+        lastTouch.current = Date.now();
+        setAutoLock(minutes);
+        void saveAutoLock(minutes);
+      },
     }),
     [
       state,
@@ -373,6 +406,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       turnOffBiometrics,
       biometricFor,
       biometricOffer,
+      autoLock,
     ],
   );
 
