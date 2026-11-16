@@ -48,8 +48,38 @@ export class FakeServer {
   words = new Map<string, { token: string; id: string; meta: string }>();
   /** By `token/id`: each space's sealed smart albums. */
   smartAlbums = new Map<string, { token: string; id: string; meta: string }>();
+  /** By space token: its sealed upload key. */
+  uploadKeys = new Map<string, string>();
+  /** By upload-only token: the space it adds photos to, and the token's id. */
+  uploadTokens = new Map<string, { space: string; id: string }>();
+
+  /**
+   * An upload-only token reaches only starting, uploading and committing photos, which are
+   * marked as sealed for the owner.
+   */
+  private uploadOnly(api: SpaceApi): SpaceApi {
+    const allowed = new Set<string>(['createPhoto', 'putFile', 'commitPhoto']);
+    const refuse = () => Promise.reject(new ApiError(403, 'Upload only'));
+    return Object.fromEntries(
+      Object.entries(api).map(([name, call]) => [
+        name,
+        allowed.has(name)
+          ? name === 'createPhoto'
+            ? (photo: StoredPhoto) => {
+                const created = api.createPhoto(photo);
+                const entry = this.photos.get(photo.id);
+                if (entry) entry.photo = { ...entry.photo, sealedForOwner: true };
+                return created;
+              }
+            : call
+          : refuse,
+      ]),
+    ) as SpaceApi;
+  }
 
   api = (token: string): SpaceApi => {
+    const uploader = this.uploadTokens.get(token);
+    if (uploader) return this.uploadOnly(this.api(uploader.space));
     const member = this.members.get(token);
     const space = member?.space ?? token;
     const scope = member?.album ?? null;
@@ -77,7 +107,8 @@ export class FakeServer {
           continue;
         }
         entry.trashed = trashed;
-        entry.photo.meta = meta;
+        entry.photo = { ...entry.photo, meta };
+        delete entry.photo.sealedForOwner;
         moved.push(id);
       }
       return Promise.resolve({ photoIds: moved });
@@ -175,7 +206,9 @@ export class FakeServer {
       restorePhotos: (photos) => moveTrash(photos, false),
       updatePhoto: (id, meta) => {
         writable();
-        mine(id).photo.meta = meta;
+        const entry = mine(id);
+        entry.photo = { ...entry.photo, meta };
+        delete entry.photo.sealedForOwner;
         return Promise.resolve(undefined);
       },
       deletePhoto: (id) => {
@@ -463,6 +496,39 @@ export class FakeServer {
         ownerOnly();
         await Promise.resolve();
         if (!this.smartAlbums.delete(`${space}/${id}`)) throw new ApiError(404, 'Not here');
+      },
+      getUploadKey: async () => {
+        ownerOnly();
+        await Promise.resolve();
+        return { meta: this.uploadKeys.get(space) ?? null };
+      },
+      putUploadKey: async (meta) => {
+        ownerOnly();
+        await Promise.resolve();
+        if (this.uploadKeys.has(space)) throw new ApiError(409, 'Taken');
+        this.uploadKeys.set(space, meta);
+      },
+      listUploadTokens: async () => {
+        ownerOnly();
+        await Promise.resolve();
+        const ids = [...this.uploadTokens.values()]
+          .filter((entry) => entry.space === space)
+          .map((entry) => entry.id)
+          .sort();
+        return { ids };
+      },
+      addUploadToken: async ({ id, token: uploadToken }) => {
+        ownerOnly();
+        await Promise.resolve();
+        if (this.uploadTokens.has(uploadToken)) throw new ApiError(409, 'Taken');
+        this.uploadTokens.set(uploadToken, { space, id });
+      },
+      removeUploadToken: async (id) => {
+        ownerOnly();
+        await Promise.resolve();
+        for (const [key, entry] of this.uploadTokens) {
+          if (entry.space === space && entry.id === id) this.uploadTokens.delete(key);
+        }
       },
     };
   };

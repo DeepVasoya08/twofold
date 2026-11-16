@@ -35,6 +35,7 @@
     "./testing/fake-server": "./src/testing/fake-server.ts",
     "./upload/progress": "./src/upload/progress.ts",
     "./upload/queue": "./src/upload/queue.ts",
+    "./upload/upload-only": "./src/upload/upload-only.ts",
     "./upload/uploader": "./src/upload/uploader.ts"
   },
   "scripts": {

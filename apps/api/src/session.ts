@@ -27,8 +27,11 @@ export interface AppEnv {
     space: string;
     member: string | null;
     album: string | null;
-    /** What the token may do: always 'edit' for the space's own token. */
-    access: MemberAccess;
+    /**
+     * What the token may do: always 'edit' for the space's own token, and 'upload' for a
+     * phone's upload-only token (start, upload and commit photos, and nothing else).
+     */
+    access: MemberAccess | 'upload';
   };
 }
 

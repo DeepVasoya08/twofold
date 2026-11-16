@@ -100,6 +100,9 @@ export const createAlbumSchema = z.strictObject({ id: recordId, meta: sealedReco
 
 export const updateRecordSchema = z.strictObject({ meta: sealedRecord });
 
+/** A phone's upload-only token, sent once so the server can keep its SHA-256. */
+export const createUploadTokenSchema = z.strictObject({ id: recordId, token: spaceTokenSchema });
+
 export const trashSchema = z.strictObject({
   photos: z
     .array(z.strictObject({ id: recordId, meta: sealedRecord }))

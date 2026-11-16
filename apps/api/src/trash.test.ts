@@ -134,6 +134,7 @@ describe('Recently deleted', () => {
       'full_size',
       'pending_since',
       'trashed',
+      'sealed_for_owner',
     ]);
   });
 

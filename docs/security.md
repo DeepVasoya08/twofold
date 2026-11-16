@@ -248,6 +248,42 @@ other accounts; see [Sharing](#sharing).
   one, the other one if its password was typed this session, and the one the confirming
   password opens), then the account.
 
+### Upload-only keys
+
+Automatic backup on the phone has to add photos while Arcafold is locked, when the phone
+holds no keys. It gets a way to add photos that can't read anything back
+(`packages/crypto/src/storage.ts`, `packages/core/src/upload/upload-only.ts`):
+
+- **The upload key.** The owner makes one crypto_box key pair per space. Its secret half
+  is kept only as an owner-only `upload-key` record (`GET`/`PUT /api/space/upload-key`,
+  table `upload_keys`), sealed under the owner subkey, so members never get it. A second
+  device setting one up gets 409 and opens the one already kept.
+- **Upload-only tokens.** Each phone that backs up registers a random 16-byte token of its
+  own (`POST /api/space/upload-tokens`; the server keeps its SHA-256 in `upload_tokens`, at
+  most 20 per space, with no timestamps). Sent in place of the space token, it reaches
+  only `POST /api/space/photos`, `PUT /api/space/photos/:id/:part` and the commit, and
+  every other route answers 403. It can't list, download, change, trash or delete
+  anything, including the photos it added. The owner revokes a phone with
+  `DELETE /api/space/upload-tokens/:id`, and wiping the space forgets the key and every
+  token. A session is still required, as for every space route.
+- **What the phone keeps** is that token and the public half, nothing that opens anything.
+- **Sealing for the owner.** Each backed-up photo gets a random file key as usual. Its
+  metadata (which holds that key) is sealed with a fresh random key, the same
+  XChaCha20-Poly1305 record sealing bound to the kind and id, and that key is sealed to the
+  public half with crypto_box_seal (`sealForUpload`). The server marks such photos
+  `sealed_for_owner`. When the owner next opens the library (web or phone),
+  `remoteStore` opens them with the secret half (`openUpload`), shows them, and seals them
+  again under the records key, which clears the flag. Until then a member sees nothing for
+  them. A record that was changed, or belongs to another id or kind, doesn't open and is
+  left out.
+- **Trade-offs.** Someone who takes the phone and its session can fill the library with
+  photos (up to the storage limit) until the phone is signed out or its token revoked, but
+  can't see or remove anything. The server learns which photos came from backup, until the
+  owner's next unlock. Backed-up photos have no fingerprint (that needs the records key),
+  so an import can't tell they're already there. An upload cut short can't be deleted by
+  the phone and is cleared by the server after a day, like any unfinished upload. Backup
+  only ever targets the main library, so nothing here hints that a private space exists.
+
 ## Sharing
 
 A space is shared with another account by giving it **access**, not keys: a share token of
