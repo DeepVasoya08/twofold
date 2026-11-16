@@ -27,6 +27,7 @@ import type { Library } from '../library/use-library';
 import { useAccount } from '../session/account';
 import { Banner, Button, Note } from '../ui/kit';
 import { BiometricSheet } from './BiometricSheet';
+import { Settings } from './Settings';
 import { Viewer } from './Viewer';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
@@ -177,7 +178,7 @@ function UploadCard({ library, palette }: { library: Library; palette: Palette }
 
 /** The open space's photos, newest first, by month. */
 export function Timeline({ session }: { session: Session }) {
-  const { space, lock, logOut, onSystemScreen } = useAccount();
+  const { space, lock, onSystemScreen } = useAccount();
   const palette = usePalette();
   const library = useLibrary(session);
   const { thumbs, requestThumbs } = library;
@@ -195,6 +196,10 @@ export function Timeline({ session }: { session: Session }) {
   );
   const closeViewer = useCallback(() => {
     setOpen(null);
+  }, []);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false);
   }, []);
   const [pickError, setPickError] = useState<string | null>(null);
   const { addPhotos } = library;
@@ -238,6 +243,7 @@ export function Timeline({ session }: { session: Session }) {
   );
 
   const title = space === 'private' ? 'Private space' : 'Library';
+  const initial = (session.account.name.trim().at(0) ?? '?').toUpperCase();
   const header = (
     <View style={[styles.header, { paddingTop: (StatusBar.currentHeight ?? 24) + 12 }]}>
       <Image source={logo} style={styles.headerLogo} accessible={false} />
@@ -261,8 +267,19 @@ export function Timeline({ session }: { session: Session }) {
       >
         <Text style={[styles.headerButtonText, { color: palette.text }]}>Lock</Text>
       </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Settings"
+        onPress={() => {
+          setSettingsOpen(true);
+        }}
+        style={[styles.avatar, { backgroundColor: palette.surface, borderColor: palette.border }]}
+      >
+        <Text style={[styles.avatarText, { color: palette.text }]}>{initial}</Text>
+      </Pressable>
     </View>
   );
+  const settings = settingsOpen ? <Settings session={session} onClose={closeSettings} /> : null;
   const banner = pickError ? (
     <View style={styles.bannerWrap}>
       <Banner>{pickError}</Banner>
@@ -295,15 +312,9 @@ export function Timeline({ session }: { session: Session }) {
               <Button label="Add photos" onPress={pickPhotos} />
             </>
           )}
-          <Button
-            kind="link"
-            label="Sign out"
-            onPress={() => {
-              void logOut();
-            }}
-          />
         </View>
         <UploadCard library={library} palette={palette} />
+        {settings}
         <BiometricSheet />
       </View>
     );
@@ -321,20 +332,12 @@ export function Timeline({ session }: { session: Session }) {
         extraData={thumbs}
         onViewableItemsChanged={onViewableItemsChanged}
         contentContainerStyle={styles.list}
-        ListFooterComponent={
-          <Button
-            kind="link"
-            label="Sign out"
-            onPress={() => {
-              void logOut();
-            }}
-          />
-        }
       />
       <UploadCard library={library} palette={palette} />
       {open !== null ? (
         <Viewer photos={ordered} start={open} library={library} onClose={closeViewer} />
       ) : null}
+      {settings}
       <BiometricSheet />
     </View>
   );
@@ -353,6 +356,15 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: 22, fontWeight: '700' },
   headerButton: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
   headerButtonText: { fontSize: 14, fontWeight: '600' },
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { fontSize: 15, fontWeight: '700' },
   addButton: { borderWidth: 0 },
   bannerWrap: { paddingHorizontal: 16, paddingBottom: 8 },
   uploadCard: {
