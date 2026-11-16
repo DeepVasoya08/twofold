@@ -60,7 +60,10 @@ or a native module.
   right in timeline order. The preview shows at once; the original downloads once the photo
   has been in view for a moment, is decoded no larger than the screen and turned upright
   (Android's `ImageDecoder`, which also reads HEIC, from Android 9), and is freed when the
-  next one opens. Tapping hides the bar; Back closes it.
+  next one opens. Tapping hides the bar; Back closes it. Pinch, double-tap and pan zoom up to
+  5x (`zoomable` on `MemoryImageView`, native gestures). Zoomed in, the original is decoded
+  again at up to 4096 px so it stays sharp, the swap from preview to original keeps the zoom,
+  and one finger pans the photo instead of swiping to the next.
 - The private space works as on the web. The same password field opens either space, and
   the private space shows in the web app's violet tones. In the viewer, "Move to private
   space" (or "Move to library") asks for the other space's password the first time after
