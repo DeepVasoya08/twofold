@@ -62,3 +62,27 @@ interface PhotoPickerModule {
  * photos picked are visible to the app, and nothing is written to disk.
  */
 export const PhotoPicker = requireNativeModule<PhotoPickerModule>('ArcafoldPhotoPicker');
+
+/** A photo on the phone, as automatic backup finds it. */
+export interface LibraryPhoto {
+  /** MediaStore's id: photos added later have larger ones. */
+  id: number;
+  uri: string;
+  name: string;
+  type: string;
+  /** Its size in bytes; 0 when Android doesn't say. */
+  size: number;
+}
+
+interface PhotoLibraryModule {
+  /** The newest photo's id, or 0 when there are none this app may see. */
+  latestIdAsync(): Promise<number>;
+  /** Photos with an id above `afterId`, oldest first, at most `limit` (up to 200). */
+  listAsync(afterId: number, limit: number, cameraOnly: boolean): Promise<LibraryPhoto[]>;
+}
+
+/**
+ * The phone's photos, listed for automatic backup (it needs the photos permission). They're
+ * read like picked photos, with PhotoPicker's readAsync and previewAsync.
+ */
+export const PhotoLibrary = requireNativeModule<PhotoLibraryModule>('ArcafoldPhotoLibrary');

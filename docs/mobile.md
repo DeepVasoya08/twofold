@@ -106,6 +106,19 @@ or a native module.
   asks for the main password, so the private space's password is never kept); the auto-lock
   time; this account's devices, with "Sign out" for any other one (`/api/account/devices`,
   like the web app's Settings); and Lock now, Sign out, and Sign out and forget this account.
+- Automatic backup, step one (`src/backup`, Settings > Backup, main library only). Turning
+  it on asks to see all the phone's photos (READ_MEDIA_IMAGES; "Select photos" isn't
+  enough), sets up this phone's upload-only token (see "Upload-only keys" in
+  [security.md](security.md)) and starts from the newest photo, so only photos added after
+  that are backed up. "Back up now" lists newer photos with `PhotoLibrary`
+  (`modules/memory-image`, a MediaStore query, no new dependency), reads each in memory like
+  a picked photo and adds it with `addForOwner`, using only the token and the public key.
+  It remembers the last photo's MediaStore id after each one; a photo it can't read or
+  store is passed over, and anything else (offline, storage full) stops the run until next
+  time. What it keeps (the token, the public key and that id) is in `expo-secure-store`.
+  Turning it off revokes the token; signing out forgets it (and revokes it too when the main
+  library is open). Running by itself in the background, with Wi-Fi and battery rules, is
+  the next step.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

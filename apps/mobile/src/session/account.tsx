@@ -22,6 +22,7 @@ import {
   restoreSessionCookie,
 } from '@arcafold/core/api';
 import { FormError } from '@arcafold/core/errors';
+import { turnOffUploadOnly } from '@arcafold/core/upload/upload-only';
 
 import {
   biometricEmail,
@@ -32,6 +33,7 @@ import {
   forgetBiometrics,
   readBiometricSecret,
 } from './biometric';
+import { keepBackup, keptBackup } from '../backup/backup-state';
 import { saveAutoLock, savedAutoLock } from './auto-lock';
 import { keepSession, keptSession } from './kept-session';
 import { forgetEmail, rememberEmail, rememberedEmail } from './remembered';
@@ -102,6 +104,19 @@ const IDLE_CHECK_MS = 10_000;
 
 const AccountContext = createContext<AccountValue | null>(null);
 
+/**
+ * Stops this phone backing up when it signs out: revokes its upload-only token if the main
+ * library is open (its keys are needed), and forgets what backup kept either way.
+ */
+async function stopBackup(state: AccountState): Promise<void> {
+  const kept = await keptBackup();
+  if (!kept) return;
+  await keepBackup(null);
+  if (state.status === 'unlocked' && ops.spaceOf(state.session.opened) === 'main') {
+    await turnOffUploadOnly(state.session.opened.space, kept.tokenId).catch(() => undefined);
+  }
+}
+
 export function AccountProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AccountState>({ status: 'starting' });
   const [email, setEmail] = useState<string | null>(null);
@@ -168,7 +183,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         return { status: 'locked', account: await api.account() };
       } catch (error) {
         // Signed out from another device (or it ran out) while the app was closed.
-        if (error instanceof ApiError && error.status === 401) turnOffBiometrics();
+        if (error instanceof ApiError && error.status === 401) {
+          turnOffBiometrics();
+          void keepBackup(null);
+        }
         return { status: 'signed-out' };
       }
     };
@@ -253,8 +271,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!signedIn) return;
     onSessionEnded(() => {
-      // Signed out from another device: this phone mustn't be able to sign back in unasked.
+      // Signed out from another device: this phone mustn't be able to sign back in unasked,
+      // and its backup token is no use without a session.
       turnOffBiometrics();
+      void keepBackup(null);
       dropKeys(() => ({ status: 'signed-out' }));
     });
     return () => {
@@ -305,16 +325,20 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       lock,
       logOut: async () => {
         turnOffBiometrics();
+        const stopping = stopBackup(state);
         void keepSession(null);
         dropKeys(() => ({ status: 'signed-out' }));
+        await stopping;
         await api.logOut().catch(() => undefined);
       },
       forgetAccount: async () => {
         forgetEmail();
         setEmail(null);
         turnOffBiometrics();
+        const stopping = stopBackup(state);
         void keepSession(null);
         dropKeys(() => ({ status: 'signed-out' }));
+        await stopping;
         await api.logOut().catch(() => undefined);
       },
       touched: () => {

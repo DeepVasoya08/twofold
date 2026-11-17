@@ -279,7 +279,9 @@ export function Timeline({ session }: { session: Session }) {
       </Pressable>
     </View>
   );
-  const settings = settingsOpen ? <Settings session={session} onClose={closeSettings} /> : null;
+  const settings = settingsOpen ? (
+    <Settings session={session} onClose={closeSettings} onBackedUp={library.retry} />
+  ) : null;
   const banner = pickError ? (
     <View style={styles.bannerWrap}>
       <Banner>{pickError}</Banner>
