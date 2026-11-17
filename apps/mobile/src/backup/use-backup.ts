@@ -11,6 +11,8 @@ import { useAccount } from '../session/account';
 import { backUpKept, stopBackupRun } from './backup-runner';
 import { keepBackup, keptBackup } from './backup-state';
 import type { BackupState } from './backup-state';
+import { forgetLastRun, lastRun } from './last-run';
+import type { LastRun } from './last-run';
 import { askForPhotos, canSeePhotos } from './photo-permission';
 
 export type BackupStatus =
@@ -41,11 +43,15 @@ export function useBackup(session: Session, onAdded: () => void) {
   const [kept, setKept] = useState<BackupState | null | undefined>(undefined);
   const [status, setStatus] = useState<BackupStatus>({ kind: 'idle' });
   const [busy, setBusy] = useState(false);
+  const [last, setLast] = useState<LastRun | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void keptBackup().then((state) => {
       if (!cancelled) setKept(state);
+    });
+    void lastRun().then((run) => {
+      if (!cancelled) setLast(run);
     });
     return () => {
       cancelled = true;
@@ -82,7 +88,9 @@ export function useBackup(session: Session, onAdded: () => void) {
     BackupJob.cancel();
     await turnOffUploadOnly(session.opened.space, kept.tokenId).catch(() => undefined);
     await keepBackup(null);
+    forgetLastRun();
     setKept(null);
+    setLast(null);
     setStatus({ kind: 'idle' });
     setBusy(false);
   }, [kept, session]);
@@ -103,10 +111,11 @@ export function useBackup(session: Session, onAdded: () => void) {
       return;
     }
     setStatus({ kind: 'running', done: 0 });
-    const result = await backUpKept((done) => {
+    const result = await backUpKept('you', (done) => {
       setStatus({ kind: 'running', done });
     }).catch((error: unknown) => ({ added: 0, skipped: 0, lastId: 0, error }));
     setKept(await keptBackup());
+    setLast(await lastRun());
     if (!result) {
       setStatus({ kind: 'idle' });
       return;
@@ -123,6 +132,7 @@ export function useBackup(session: Session, onAdded: () => void) {
     on: Boolean(kept),
     mobileData: kept?.mobileData ?? false,
     loaded: kept !== undefined,
+    last,
     busy,
     status,
     turnOn,

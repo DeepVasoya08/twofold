@@ -54,8 +54,8 @@ object BackupJobs {
             JobInfo.TriggerContentUri.FLAG_NOTIFY_FOR_DESCENDANTS,
           ),
         )
-        .setTriggerContentUpdateDelay(10_000)
-        .setTriggerContentMaxDelay(120_000)
+        .setTriggerContentUpdateDelay(5_000)
+        .setTriggerContentMaxDelay(30_000)
         .setRequiredNetworkType(network(context))
         .setRequiresBatteryNotLow(true)
         .build()

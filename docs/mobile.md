@@ -128,6 +128,10 @@ or a native module.
   backup as "Back up now" (`backup-runner.ts`, one run at a time). It posts "Photos backed
   up" when it added any while Arcafold wasn't on screen. Being signed out (a 401) stops the
   jobs and forgets backup. The jobs are set again at each launch while backup is on.
+  Each run (or a background run that gave up: no photo access, signed out) is kept as a
+  time, counts and a reason in `backup-last-run.json` (`last-run.ts`; nothing about the
+  photos), which Settings shows as "Last backup", and the library reloads on coming back
+  when a run added photos after it loaded.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

@@ -19,6 +19,7 @@ import type { Session } from '@arcafold/core/account';
 import type { Device } from '@arcafold/types';
 
 import { backupStatusText } from '../backup/backup-text';
+import { lastRunText } from '../backup/last-run';
 import { useBackup } from '../backup/use-backup';
 import { lastActiveText, shortDay } from '../library/devices';
 import { useAccount } from '../session/account';
@@ -295,6 +296,11 @@ function Backup({
             ) : (
               <Text style={[styles.rowDetail, { color: palette.muted }]}>{text}</Text>
             )
+          ) : null}
+          {backup.on ? (
+            <Text style={[styles.rowDetail, { color: palette.muted }]}>
+              {lastRunText(backup.last)}
+            </Text>
           ) : null}
           {backup.on ? (
             <Button

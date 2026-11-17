@@ -1,8 +1,9 @@
 import { FlashList } from '@shopify/flash-list';
 import type { ViewToken } from '@shopify/flash-list';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Image,
   PermissionsAndroid,
   Platform,
@@ -26,6 +27,7 @@ import { useLibrary } from '../library/use-library';
 import type { Library } from '../library/use-library';
 import { useAccount } from '../session/account';
 import { Banner, Button, Note } from '../ui/kit';
+import { lastRun } from '../backup/last-run';
 import { BiometricSheet } from './BiometricSheet';
 import { Settings } from './Settings';
 import { Viewer } from './Viewer';
@@ -197,6 +199,24 @@ export function Timeline({ session }: { session: Session }) {
   const closeViewer = useCallback(() => {
     setOpen(null);
   }, []);
+  // Photos backed up in the background since the library loaded show when you come back.
+  const { status: libraryStatus, retry } = library;
+  const loadedAt = useRef(0);
+  useEffect(() => {
+    if (libraryStatus === 'ready') loadedAt.current = Date.now();
+  }, [libraryStatus]);
+  useEffect(() => {
+    if (space !== 'main') return;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return;
+      void lastRun().then((run) => {
+        if (run && run.added > 0 && run.at > loadedAt.current) retry();
+      });
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [space, retry]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);

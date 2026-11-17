@@ -1,10 +1,13 @@
 import { ApiError } from '@arcafold/core/api';
+import { errorMessage } from '@arcafold/core/errors';
 import { addForOwner } from '@arcafold/core/upload/upload-only';
 
 import { BackupJob } from '../../modules/backup-job';
 import { PhotoLibrary, PhotoPicker } from '../../modules/memory-image';
 import { preparePicked } from '../library/prepare';
 import { keepBackup, keptBackup } from './backup-state';
+import { saveLastRun } from './last-run';
+import type { LastRun } from './last-run';
 import { backUpNew } from './run-backup';
 import type { BackupResult } from './run-backup';
 
@@ -16,8 +19,11 @@ let stopRequested = false;
  * Settings or from the background job. Only one run at a time: asking again while one is
  * going joins it. Null when backup is off.
  */
-export function backUpKept(onProgress?: (done: number) => void): Promise<BackupResult | null> {
-  running ??= run(onProgress).finally(() => {
+export function backUpKept(
+  by: LastRun['by'],
+  onProgress?: (done: number) => void,
+): Promise<BackupResult | null> {
+  running ??= run(by, onProgress).finally(() => {
     running = null;
   });
   return running;
@@ -28,7 +34,10 @@ export function stopBackupRun(): void {
   if (running) stopRequested = true;
 }
 
-async function run(onProgress?: (done: number) => void): Promise<BackupResult | null> {
+async function run(
+  by: LastRun['by'],
+  onProgress?: (done: number) => void,
+): Promise<BackupResult | null> {
   stopRequested = false;
   let current = await keptBackup();
   if (!current) return null;
@@ -49,5 +58,12 @@ async function run(onProgress?: (done: number) => void): Promise<BackupResult | 
     BackupJob.cancel();
     await keepBackup(null);
   }
+  await saveLastRun({
+    at: Date.now(),
+    by,
+    added: result.added,
+    skipped: result.skipped,
+    problem: result.error ? errorMessage(result.error) : null,
+  });
   return result;
 }

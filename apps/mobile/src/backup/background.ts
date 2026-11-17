@@ -7,6 +7,7 @@ import { UploadService } from '../../modules/upload-service';
 import { keptSession } from '../session/kept-session';
 import { backUpKept } from './backup-runner';
 import { keptBackup } from './backup-state';
+import { saveLastRun } from './last-run';
 import { canSeePhotos } from './photo-permission';
 
 /** What the notification says after a backup in the background. */
@@ -27,11 +28,19 @@ export async function backgroundBackup(): Promise<void> {
     BackupJob.cancel();
     return;
   }
-  if (!(await canSeePhotos())) return;
+  const gaveUp = (problem: string) =>
+    saveLastRun({ at: Date.now(), by: 'background', added: 0, skipped: 0, problem });
+  if (!(await canSeePhotos())) {
+    await gaveUp('Arcafold can’t see your photos. Allow it in Android’s settings.');
+    return;
+  }
   const cookie = await keptSession();
-  if (!cookie) return;
+  if (!cookie) {
+    await gaveUp('This phone is signed out.');
+    return;
+  }
   restoreSessionCookie(cookie);
-  const result = await backUpKept();
+  const result = await backUpKept('background');
   if (result && result.added > 0 && AppState.currentState !== 'active') {
     UploadService.notifyFinished('Photos backed up', backedUpText(result.added));
   }

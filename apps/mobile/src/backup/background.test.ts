@@ -7,6 +7,7 @@ vi.mock('../session/kept-session', () => ({}));
 vi.mock('./backup-runner', () => ({}));
 vi.mock('./backup-state', () => ({}));
 vi.mock('./photo-permission', () => ({}));
+vi.mock('./last-run', () => ({}));
 
 const { backedUpText } = await import('./background');
 
