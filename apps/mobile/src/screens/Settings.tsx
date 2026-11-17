@@ -19,7 +19,10 @@ import type { Session } from '@arcafold/core/account';
 import type { Device } from '@arcafold/types';
 
 import { backupStatusText } from '../backup/backup-text';
+import { jobStatusText } from '../backup/job-status';
 import { lastRunText } from '../backup/last-run';
+import { BackupJob } from '../../modules/backup-job';
+import type { BackupJobStatus } from '../../modules/backup-job';
 import { useBackup } from '../backup/use-backup';
 import { lastActiveText, shortDay } from '../library/devices';
 import { useAccount } from '../session/account';
@@ -227,6 +230,14 @@ function PasswordSheet({ onDone }: { onDone: () => void }) {
   );
 }
 
+function readJobStatus(): BackupJobStatus | null {
+  try {
+    return BackupJob.status();
+  } catch {
+    return null;
+  }
+}
+
 /** Automatic backup of the main library: on or off, and backing up now. */
 function Backup({
   session,
@@ -238,6 +249,16 @@ function Backup({
   onBackedUp: () => void;
 }) {
   const backup = useBackup(session, onBackedUp);
+  const [jobStatus, setJobStatus] = useState<BackupJobStatus | null>(readJobStatus);
+  // What the background jobs did changes while Settings is open, so it's read again.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setJobStatus(readJobStatus());
+    }, 5000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [backup.on, backup.last]);
   const text = backupStatusText(backup.status);
   const running = backup.status.kind === 'running';
   return (
@@ -299,7 +320,7 @@ function Backup({
           ) : null}
           {backup.on ? (
             <Text style={[styles.rowDetail, { color: palette.muted }]}>
-              {lastRunText(backup.last)}
+              {lastRunText(backup.last)} {jobStatusText(jobStatus)}
             </Text>
           ) : null}
           {backup.on ? (
@@ -309,6 +330,16 @@ function Backup({
               busy={running}
               onPress={() => {
                 void backup.backUpNow();
+              }}
+            />
+          ) : null}
+          {backup.on ? (
+            <Button
+              kind="link"
+              label="Run in the background now"
+              onPress={() => {
+                backup.runInBackground();
+                setJobStatus(readJobStatus());
               }}
             />
           ) : null}

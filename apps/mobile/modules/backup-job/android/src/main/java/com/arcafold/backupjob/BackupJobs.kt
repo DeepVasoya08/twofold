@@ -16,10 +16,15 @@ object BackupJobs {
   const val CHANGE_JOB = 0x0BAC0001
   /** Runs about once every six hours, and is kept across restarts. */
   const val PERIODIC_JOB = 0x0BAC0002
+  /** Runs once, as soon as Android allows (to check backup works in the background). */
+  const val SOON_JOB = 0x0BAC0003
 
   private const val PREFS = "arcafold.backup-job"
   private const val ON = "on"
   private const val MOBILE_DATA = "mobileData"
+  private const val LAST_START = "lastStart"
+  private const val LAST_END = "lastEnd"
+  private const val NOTE = "note"
   private const val PERIOD_MS = 6 * 60 * 60 * 1000L
 
   private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -28,6 +33,49 @@ object BackupJobs {
     context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
 
   fun isOn(context: Context): Boolean = prefs(context).getBoolean(ON, false)
+
+  /** Notes what the jobs last did, for Settings: when one started or ended, and why. */
+  fun note(context: Context, text: String, started: Boolean = false, ended: Boolean = false) {
+    val edit = prefs(context).edit().putString(NOTE, text.take(200))
+    if (started) edit.putLong(LAST_START, System.currentTimeMillis())
+    if (ended) edit.putLong(LAST_END, System.currentTimeMillis())
+    edit.apply()
+  }
+
+  /** Whether each job is waiting with Android, and what they last did. */
+  fun status(context: Context): Map<String, Any> {
+    val prefs = prefs(context)
+    val scheduler = scheduler(context)
+    return mapOf(
+      "on" to prefs.getBoolean(ON, false),
+      "onChangeWaiting" to (scheduler.getPendingJob(CHANGE_JOB) != null),
+      "periodicWaiting" to (scheduler.getPendingJob(PERIODIC_JOB) != null),
+      "lastStart" to prefs.getLong(LAST_START, 0L).toDouble(),
+      "lastEnd" to prefs.getLong(LAST_END, 0L).toDouble(),
+      "note" to (prefs.getString(NOTE, null) ?: ""),
+    )
+  }
+
+  /** Runs the backup once in the background, as soon as the network rule allows. */
+  fun runSoon(context: Context) {
+    if (!isOn(context)) return
+    val soon =
+      JobInfo.Builder(SOON_JOB, ComponentName(context, BackupJobService::class.java))
+        .setRequiredNetworkType(network(context))
+        .setOverrideDeadline(60_000)
+        .build()
+    submit(context, soon, "Run now")
+  }
+
+  private fun submit(context: Context, job: JobInfo, name: String) {
+    try {
+      if (scheduler(context).schedule(job) != JobScheduler.RESULT_SUCCESS) {
+        note(context, "$name: Android refused the job")
+      }
+    } catch (error: Exception) {
+      note(context, "$name: ${error.message ?: error.javaClass.simpleName}")
+    }
+  }
 
   /** Turns the jobs on (or updates whether they may use mobile data). */
   fun schedule(context: Context, mobileData: Boolean) {
@@ -40,7 +88,7 @@ object BackupJobs {
         .setPeriodic(PERIOD_MS)
         .setPersisted(true)
         .build()
-    scheduler(context).schedule(periodic)
+    submit(context, periodic, "Every six hours")
   }
 
   /** Sets the job that runs once photos change, if backup is on. */
@@ -59,13 +107,14 @@ object BackupJobs {
         .setRequiredNetworkType(network(context))
         .setRequiresBatteryNotLow(true)
         .build()
-    scheduler(context).schedule(change)
+    submit(context, change, "New photos")
   }
 
   fun cancel(context: Context) {
     prefs(context).edit().clear().apply()
     scheduler(context).cancel(CHANGE_JOB)
     scheduler(context).cancel(PERIODIC_JOB)
+    scheduler(context).cancel(SOON_JOB)
   }
 
   private fun network(context: Context) =

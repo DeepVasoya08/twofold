@@ -16,5 +16,9 @@ class BackupJobModule : Module() {
     Function("schedule") { mobileData: Boolean -> BackupJobs.schedule(context, mobileData) }
 
     Function("cancel") { BackupJobs.cancel(context) }
+
+    Function("status") { BackupJobs.status(context) }
+
+    Function("runSoon") { BackupJobs.runSoon(context) }
   }
 }

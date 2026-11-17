@@ -23,6 +23,22 @@ export function backedUpText(added: number): string {
  * keeps, so it never needs the password and can't read the library.
  */
 export async function backgroundBackup(): Promise<void> {
+  try {
+    await backUpInBackground();
+  } catch (error) {
+    // Kept so Settings can say why; a code, never anything about the photos.
+    const name = error instanceof Error ? error.name : typeof error;
+    await saveLastRun({
+      at: Date.now(),
+      by: 'background',
+      added: 0,
+      skipped: 0,
+      problem: `It stopped with an error (${name}).`,
+    });
+  }
+}
+
+async function backUpInBackground(): Promise<void> {
   const kept = await keptBackup();
   if (!kept) {
     BackupJob.cancel();

@@ -30,6 +30,7 @@ class BackupJobService : JobService(), HeadlessJsTaskEventListener {
     if (!BackupJobs.isOn(this)) return false
     if (running != null) return false
     running = params
+    BackupJobs.note(this, "Started", started = true)
     UiThreadUtil.runOnUiThread { start() }
     return true
   }
@@ -37,12 +38,18 @@ class BackupJobService : JobService(), HeadlessJsTaskEventListener {
   override fun onStopJob(params: JobParameters): Boolean {
     // Android stopped it early (Wi-Fi went, the battery got low). The task stops itself at its
     // timeout; the next run carries on from the last photo it finished.
+    BackupJobs.note(this, "Stopped by Android", ended = true)
     finish(reschedule = false)
     return true
   }
 
   private fun start() {
-    val host = (application as ReactApplication).reactHost ?: return finish(reschedule = true)
+    val host = (application as? ReactApplication)?.reactHost
+    if (host == null) {
+      BackupJobs.note(this, "React Native isn't available", ended = true)
+      finish(reschedule = true)
+      return
+    }
     val current = host.currentReactContext
     if (current != null) {
       run(current)
@@ -70,6 +77,7 @@ class BackupJobService : JobService(), HeadlessJsTaskEventListener {
             HeadlessJsTaskConfig(TASK, Arguments.createMap(), TASK_TIMEOUT_MS, true),
           )
       } catch (error: Exception) {
+        BackupJobs.note(this, "Couldn't start: ${error.message ?: error.javaClass.simpleName}", ended = true)
         finish(reschedule = true)
       }
     }
@@ -78,7 +86,9 @@ class BackupJobService : JobService(), HeadlessJsTaskEventListener {
   override fun onHeadlessJsTaskStart(taskId: Int) = Unit
 
   override fun onHeadlessJsTaskFinish(taskId: Int) {
-    if (taskId == this.taskId) finish(reschedule = false)
+    if (taskId != this.taskId) return
+    BackupJobs.note(this, "Finished", ended = true)
+    finish(reschedule = false)
   }
 
   private fun finish(reschedule: Boolean) {
