@@ -267,6 +267,8 @@ holds no keys. It gets a way to add photos that can't read anything back
   `DELETE /api/space/upload-tokens/:id`, and wiping the space forgets the key and every
   token. A session is still required, as for every space route.
 - **What the phone keeps** is that token and the public half, nothing that opens anything.
+  The background job (docs/mobile.md) uses them with the kept session cookie, which reaches
+  the API but no keys, so backing up never needs the password and never unlocks the app.
 - **Sealing for the owner.** Each backed-up photo gets a random file key as usual. Its
   metadata (which holds that key) is sealed with a fresh random key, the same
   XChaCha20-Poly1305 record sealing bound to the kind and id, and that key is sealed to the

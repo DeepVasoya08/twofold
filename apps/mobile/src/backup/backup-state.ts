@@ -11,6 +11,8 @@ import type { UploadOnly } from '@arcafold/core/upload/upload-only';
 export interface BackupState extends UploadOnly {
   /** MediaStore id of the last photo backed up or skipped; later ones are new. */
   lastId: number;
+  /** Whether it may back up over mobile data, not only Wi-Fi. Off unless turned on. */
+  mobileData: boolean;
 }
 
 const KEY = 'arcafold.backup';
@@ -29,15 +31,15 @@ export function parseBackupState(text: string | null): BackupState | null {
     return null;
   }
   if (typeof value !== 'object' || value === null) return null;
-  const { v, token, tokenId, publicKey, lastId } = value as Record<string, unknown>;
+  const { v, token, tokenId, publicKey, lastId, mobileData } = value as Record<string, unknown>;
   if (v !== 1 || !isText(token) || !isText(tokenId) || !isText(publicKey)) return null;
   if (typeof lastId !== 'number' || !Number.isSafeInteger(lastId) || lastId < 0) return null;
-  return { token, tokenId, publicKey, lastId };
+  return { token, tokenId, publicKey, lastId, mobileData: mobileData === true };
 }
 
 export function encodeBackupState(state: BackupState): string {
-  const { token, tokenId, publicKey, lastId } = state;
-  return JSON.stringify({ v: 1, token, tokenId, publicKey, lastId });
+  const { token, tokenId, publicKey, lastId, mobileData } = state;
+  return JSON.stringify({ v: 1, token, tokenId, publicKey, lastId, mobileData });
 }
 
 export async function keptBackup(): Promise<BackupState | null> {

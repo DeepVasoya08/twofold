@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { PermissionsAndroid, Platform } from 'react-native';
 
 import type { Session } from '@arcafold/core/account';
 import { errorMessage } from '@arcafold/core/errors';
-import { addForOwner, setUpUploadOnly, turnOffUploadOnly } from '@arcafold/core/upload/upload-only';
+import { setUpUploadOnly, turnOffUploadOnly } from '@arcafold/core/upload/upload-only';
 
-import { PhotoLibrary, PhotoPicker } from '../../modules/memory-image';
-import { preparePicked } from '../library/prepare';
+import { BackupJob } from '../../modules/backup-job';
+import { PhotoLibrary } from '../../modules/memory-image';
 import { useAccount } from '../session/account';
+import { backUpKept, stopBackupRun } from './backup-runner';
 import { keepBackup, keptBackup } from './backup-state';
 import type { BackupState } from './backup-state';
 import { askForPhotos, canSeePhotos } from './photo-permission';
-import { backUpNew } from './run-backup';
 
 export type BackupStatus =
   | { kind: 'idle' }
@@ -21,17 +22,25 @@ export type BackupStatus =
 export const NO_PHOTO_ACCESS =
   'Arcafold needs to see all your photos to back them up. Allow it in Android’s settings.';
 
+/** Asks (from Android 13) to post the notification that says photos were backed up. */
+async function askToNotify(): Promise<void> {
+  if (Platform.OS !== 'android' || Platform.Version < 33) return;
+  const permission = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+  if (await PermissionsAndroid.check(permission)) return;
+  await PermissionsAndroid.request(permission).catch(() => undefined);
+}
+
 /**
- * Automatic backup of the main library, as Settings shows it: on or off, and backing up now.
- * Turning it on asks to see the phone's photos and starts from the newest one, so only
- * photos added after that are backed up. Backing up uses only what a locked phone keeps.
+ * Automatic backup of the main library, as Settings shows it. Turning it on asks to see the
+ * phone's photos and starts from the newest one, so only photos added after that are backed
+ * up; Android's job then runs it in the background (modules/backup-job). "Back up now" runs
+ * the same backup at once. Both use only what a locked phone keeps.
  */
 export function useBackup(session: Session, onAdded: () => void) {
   const { space, onSystemScreen } = useAccount();
   const [kept, setKept] = useState<BackupState | null | undefined>(undefined);
   const [status, setStatus] = useState<BackupStatus>({ kind: 'idle' });
   const [busy, setBusy] = useState(false);
-  const stopped = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,11 +61,12 @@ export function useBackup(session: Session, onAdded: () => void) {
         setStatus({ kind: 'failed', message: NO_PHOTO_ACCESS });
         return;
       }
+      await onSystemScreen(askToNotify);
       const lastId = await PhotoLibrary.latestIdAsync();
       const upload = await setUpUploadOnly(session.opened.space);
-      const state = { ...upload, lastId };
+      const state: BackupState = { ...upload, lastId, mobileData: false };
       await keepBackup(state);
-      stopped.current = false;
+      BackupJob.schedule(state.mobileData);
       setKept(state);
     } catch (error) {
       setStatus({ kind: 'failed', message: errorMessage(error) });
@@ -67,8 +77,9 @@ export function useBackup(session: Session, onAdded: () => void) {
 
   const turnOff = useCallback(async () => {
     if (!kept) return;
-    stopped.current = true;
     setBusy(true);
+    stopBackupRun();
+    BackupJob.cancel();
     await turnOffUploadOnly(session.opened.space, kept.tokenId).catch(() => undefined);
     await keepBackup(null);
     setKept(null);
@@ -76,28 +87,30 @@ export function useBackup(session: Session, onAdded: () => void) {
     setBusy(false);
   }, [kept, session]);
 
+  const setMobileData = useCallback(async (mobileData: boolean) => {
+    const latest = await keptBackup();
+    if (!latest) return;
+    const state = { ...latest, mobileData };
+    await keepBackup(state);
+    BackupJob.schedule(mobileData);
+    setKept(state);
+  }, []);
+
   const backUpNow = useCallback(async () => {
     if (!kept || status.kind === 'running') return;
     if (!(await canSeePhotos())) {
       setStatus({ kind: 'failed', message: NO_PHOTO_ACCESS });
       return;
     }
-    let current = kept;
     setStatus({ kind: 'running', done: 0 });
-    const result = await backUpNew(current.lastId, {
-      list: (afterId, limit) => PhotoLibrary.listAsync(afterId, limit, false),
-      prepare: (photo) => preparePicked(photo, PhotoPicker),
-      add: (photo) => addForOwner(current, photo),
-      saveLastId: async (lastId) => {
-        current = { ...current, lastId };
-        await keepBackup(current);
-      },
-      onProgress: (done) => {
-        setStatus({ kind: 'running', done });
-      },
-      stopped: () => stopped.current,
-    }).catch((error: unknown) => ({ added: 0, skipped: 0, lastId: current.lastId, error }));
-    if (!stopped.current) setKept(current);
+    const result = await backUpKept((done) => {
+      setStatus({ kind: 'running', done });
+    }).catch((error: unknown) => ({ added: 0, skipped: 0, lastId: 0, error }));
+    setKept(await keptBackup());
+    if (!result) {
+      setStatus({ kind: 'idle' });
+      return;
+    }
     if (result.added > 0) onAdded();
     setStatus(
       result.error
@@ -108,11 +121,13 @@ export function useBackup(session: Session, onAdded: () => void) {
 
   return {
     on: Boolean(kept),
+    mobileData: kept?.mobileData ?? false,
     loaded: kept !== undefined,
     busy,
     status,
     turnOn,
     turnOff,
+    setMobileData,
     backUpNow,
   };
 }

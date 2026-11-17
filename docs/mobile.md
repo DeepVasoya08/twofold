@@ -117,8 +117,17 @@ or a native module.
   store is passed over, and anything else (offline, storage full) stops the run until next
   time. What it keeps (the token, the public key and that id) is in `expo-secure-store`.
   Turning it off revokes the token; signing out forgets it (and revokes it too when the main
-  library is open). Running by itself in the background, with Wi-Fi and battery rules, is
-  the next step.
+  library is open).
+- Backup in the background (`modules/backup-job`, `src/backup/background.ts`). Android's
+  JobScheduler (no extra library) runs the `ArcafoldBackup` headless JS task (registered in
+  `index.ts`) soon after a photo is added (a content-URI job, set again after each run) and
+  every six hours (a periodic job kept across restarts). Both wait for Wi-Fi (or any network
+  with "Use mobile data" on) and a battery that isn't low, and get about ten minutes; what's
+  left waits for the next run. The task starts React Native without a screen if Arcafold is
+  closed, restores the kept session (to reach the API, never the keys), and runs the same
+  backup as "Back up now" (`backup-runner.ts`, one run at a time). It posts "Photos backed
+  up" when it added any while Arcafold wasn't on screen. Being signed out (a 401) stops the
+  jobs and forgets backup. The jobs are set again at each launch while backup is on.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

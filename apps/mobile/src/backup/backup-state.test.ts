@@ -4,11 +4,24 @@ vi.mock('expo-secure-store', () => ({}));
 
 const { encodeBackupState, parseBackupState } = await import('./backup-state');
 
-const state = { token: 'tok', tokenId: 'tid', publicKey: 'pk', lastId: 42 };
+const state = { token: 'tok', tokenId: 'tid', publicKey: 'pk', lastId: 42, mobileData: true };
 
 describe('backup state', () => {
   it('round-trips', () => {
     expect(parseBackupState(encodeBackupState(state))).toEqual(state);
+  });
+
+  it('keeps to Wi-Fi unless mobile data was allowed', () => {
+    const older = {
+      token: state.token,
+      tokenId: state.tokenId,
+      publicKey: state.publicKey,
+      lastId: 1,
+    };
+    expect(parseBackupState(JSON.stringify({ v: 1, ...older }))?.mobileData).toBe(false);
+    expect(
+      parseBackupState(JSON.stringify({ v: 1, ...older, mobileData: 'yes' }))?.mobileData,
+    ).toBe(false);
   });
 
   it('refuses anything malformed', () => {

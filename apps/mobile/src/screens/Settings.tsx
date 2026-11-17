@@ -245,7 +245,7 @@ function Backup({
         title="Back up new photos"
         detail={
           backup.on
-            ? 'Photos added to this phone since you turned this on go to your library, encrypted.'
+            ? 'New photos on this phone go to your library by themselves, encrypted, even while Arcafold is locked or closed.'
             : 'Photos you take from now on go to your library, encrypted. Older ones stay as they are.'
         }
         palette={palette}
@@ -265,6 +265,28 @@ function Backup({
           )
         }
       />
+      {backup.on ? (
+        <Row
+          title="Use mobile data"
+          detail={
+            backup.mobileData
+              ? 'Backs up on Wi-Fi or mobile data, when the battery isn’t low.'
+              : 'Backs up on Wi-Fi only, when the battery isn’t low.'
+          }
+          palette={palette}
+          action={
+            <Switch
+              accessibilityLabel="Use mobile data"
+              value={backup.mobileData}
+              trackColor={{ true: palette.accent, false: palette.track }}
+              thumbColor={palette.surface}
+              onValueChange={(on) => {
+                void backup.setMobileData(on);
+              }}
+            />
+          }
+        />
+      ) : null}
       {backup.on || text ? (
         <View style={styles.rowPad}>
           {text ? (
