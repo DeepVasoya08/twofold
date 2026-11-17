@@ -33,6 +33,8 @@ import {
   forgetBiometrics,
   readBiometricSecret,
 } from './biometric';
+import { BackupJob } from '../../modules/backup-job';
+import { stopBackupRun } from '../backup/backup-runner';
 import { keepBackup, keptBackup } from '../backup/backup-state';
 import { saveAutoLock, savedAutoLock } from './auto-lock';
 import { keepSession, keptSession } from './kept-session';
@@ -111,6 +113,8 @@ const AccountContext = createContext<AccountValue | null>(null);
 async function stopBackup(state: AccountState): Promise<void> {
   const kept = await keptBackup();
   if (!kept) return;
+  stopBackupRun();
+  BackupJob.cancel();
   await keepBackup(null);
   if (state.status === 'unlocked' && ops.spaceOf(state.session.opened) === 'main') {
     await turnOffUploadOnly(state.session.opened.space, kept.tokenId).catch(() => undefined);
@@ -185,6 +189,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         // Signed out from another device (or it ran out) while the app was closed.
         if (error instanceof ApiError && error.status === 401) {
           turnOffBiometrics();
+          BackupJob.cancel();
           void keepBackup(null);
         }
         return { status: 'signed-out' };
@@ -274,6 +279,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       // Signed out from another device: this phone mustn't be able to sign back in unasked,
       // and its backup token is no use without a session.
       turnOffBiometrics();
+      stopBackupRun();
+      BackupJob.cancel();
       void keepBackup(null);
       dropKeys(() => ({ status: 'signed-out' }));
     });

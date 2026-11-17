@@ -117,8 +117,24 @@ or a native module.
   store is passed over, and anything else (offline, storage full) stops the run until next
   time. What it keeps (the token, the public key and that id) is in `expo-secure-store`.
   Turning it off revokes the token; signing out forgets it (and revokes it too when the main
-  library is open). Running by itself in the background, with Wi-Fi and battery rules, is
-  the next step.
+  library is open).
+- Backup in the background (`modules/backup-job`, `src/backup/background.ts`). Android's
+  JobScheduler (no extra library) runs the `ArcafoldBackup` headless JS task (registered in
+  `index.ts`) soon after a photo is added and
+  every six hours (a periodic job kept across restarts). Both wait for Wi-Fi (or any network
+  with "Use mobile data" on) and a battery that isn't low, and get about ten minutes; what's
+  left waits for the next run. Android drops a content-URI job once it runs, so there are two
+  that take turns: as one starts, it sets the other (setting a running job again would stop
+  it), so a photo the camera finishes during a run gets a run of its own. The photo list stops
+  at a photo the camera is still writing (`IS_PENDING`), so it is never passed over. The task starts React Native without a screen if Arcafold is
+  closed, restores the kept session (to reach the API, never the keys), and runs the same
+  backup as "Back up now" (`backup-runner.ts`, one run at a time). It posts "Photos backed
+  up" when it added any while Arcafold wasn't on screen. Being signed out (a 401) stops the
+  jobs and forgets backup. The jobs are set again at each launch while backup is on.
+  Each run (or a background run that gave up: no photo access, signed out) is kept as a
+  time, counts and a reason in `backup-last-run.json` (`last-run.ts`; nothing about the
+  photos), which Settings shows as "Last backup", and the library reloads on coming back
+  when a run added photos after it loaded.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

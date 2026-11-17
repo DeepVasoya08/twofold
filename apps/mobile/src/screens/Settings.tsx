@@ -19,6 +19,10 @@ import type { Session } from '@arcafold/core/account';
 import type { Device } from '@arcafold/types';
 
 import { backupStatusText } from '../backup/backup-text';
+import { jobStatusText } from '../backup/job-status';
+import { lastRunText } from '../backup/last-run';
+import { BackupJob } from '../../modules/backup-job';
+import type { BackupJobStatus } from '../../modules/backup-job';
 import { useBackup } from '../backup/use-backup';
 import { lastActiveText, shortDay } from '../library/devices';
 import { useAccount } from '../session/account';
@@ -226,6 +230,14 @@ function PasswordSheet({ onDone }: { onDone: () => void }) {
   );
 }
 
+function readJobStatus(): BackupJobStatus | null {
+  try {
+    return BackupJob.status();
+  } catch {
+    return null;
+  }
+}
+
 /** Automatic backup of the main library: on or off, and backing up now. */
 function Backup({
   session,
@@ -237,6 +249,16 @@ function Backup({
   onBackedUp: () => void;
 }) {
   const backup = useBackup(session, onBackedUp);
+  const [jobStatus, setJobStatus] = useState<BackupJobStatus | null>(readJobStatus);
+  // What the background jobs did changes while Settings is open, so it's read again.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setJobStatus(readJobStatus());
+    }, 5000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [backup.on, backup.last]);
   const text = backupStatusText(backup.status);
   const running = backup.status.kind === 'running';
   return (
@@ -245,7 +267,7 @@ function Backup({
         title="Back up new photos"
         detail={
           backup.on
-            ? 'Photos added to this phone since you turned this on go to your library, encrypted.'
+            ? 'New photos on this phone go to your library by themselves, encrypted, even while Arcafold is locked or closed.'
             : 'Photos you take from now on go to your library, encrypted. Older ones stay as they are.'
         }
         palette={palette}
@@ -265,6 +287,28 @@ function Backup({
           )
         }
       />
+      {backup.on ? (
+        <Row
+          title="Use mobile data"
+          detail={
+            backup.mobileData
+              ? 'Backs up on Wi-Fi or mobile data, when the battery isn’t low.'
+              : 'Backs up on Wi-Fi only, when the battery isn’t low.'
+          }
+          palette={palette}
+          action={
+            <Switch
+              accessibilityLabel="Use mobile data"
+              value={backup.mobileData}
+              trackColor={{ true: palette.accent, false: palette.track }}
+              thumbColor={palette.surface}
+              onValueChange={(on) => {
+                void backup.setMobileData(on);
+              }}
+            />
+          }
+        />
+      ) : null}
       {backup.on || text ? (
         <View style={styles.rowPad}>
           {text ? (
@@ -275,12 +319,27 @@ function Backup({
             )
           ) : null}
           {backup.on ? (
+            <Text style={[styles.rowDetail, { color: palette.muted }]}>
+              {lastRunText(backup.last)} {jobStatusText(jobStatus)}
+            </Text>
+          ) : null}
+          {backup.on ? (
             <Button
               kind="secondary"
               label="Back up now"
               busy={running}
               onPress={() => {
                 void backup.backUpNow();
+              }}
+            />
+          ) : null}
+          {backup.on ? (
+            <Button
+              kind="link"
+              label="Run in the background now"
+              onPress={() => {
+                backup.runInBackground();
+                setJobStatus(readJobStatus());
               }}
             />
           ) : null}
