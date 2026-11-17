@@ -25,17 +25,25 @@ class BackupJobService : JobService(), HeadlessJsTaskEventListener {
   private var running: JobParameters? = null
   private var taskId: Int? = null
   private var context: ReactContext? = null
+  private var runAgain = false
 
   override fun onStartJob(params: JobParameters): Boolean {
     if (!BackupJobs.isOn(this)) return false
-    if (running != null) return false
+    if (BackupJobs.isChangeJob(params.jobId)) BackupJobs.scheduleNextOnChange(this, params.jobId)
+    if (running != null) {
+      // One run at a time; this one is picked up again when the current run ends.
+      runAgain = true
+      return false
+    }
     running = params
+    BackupJobs.runningJob = params.jobId
     BackupJobs.note(this, "Started", started = true)
     UiThreadUtil.runOnUiThread { start() }
     return true
   }
 
   override fun onStopJob(params: JobParameters): Boolean {
+    if (running?.jobId != params.jobId) return false
     // Android stopped it early (Wi-Fi went, the battery got low). The task stops itself at its
     // timeout; the next run carries on from the last photo it finished.
     BackupJobs.note(this, "Stopped by Android", ended = true)
@@ -97,8 +105,13 @@ class BackupJobService : JobService(), HeadlessJsTaskEventListener {
     taskId = null
     context?.let { HeadlessJsTaskContext.getInstance(it).removeTaskEventListener(this) }
     context = null
-    // The photo-change job is used up once it runs, so it's set again for the next photo.
-    BackupJobs.scheduleOnChange(this)
     jobFinished(params, reschedule)
+    BackupJobs.runningJob = null
+    // Keep a photo-change job waiting, and catch up on one that came in during this run.
+    BackupJobs.scheduleOnChange(this)
+    if (runAgain) {
+      runAgain = false
+      BackupJobs.runSoon(this)
+    }
   }
 }

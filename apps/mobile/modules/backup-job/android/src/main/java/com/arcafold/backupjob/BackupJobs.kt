@@ -12,8 +12,13 @@ import android.provider.MediaStore
  * Both wait for Wi-Fi (or any network, with mobile data allowed) and a battery that isn't low.
  */
 object BackupJobs {
-  /** Runs when the phone's photos change. Android drops it after each run, so it's set again. */
+  /**
+   * Run when the phone's photos change. Android drops such a job once it runs, so the other one
+   * is set as each starts: setting a job again while it runs would stop it, and a photo the
+   * camera finishes during a run still gets a run of its own.
+   */
   const val CHANGE_JOB = 0x0BAC0001
+  const val CHANGE_JOB_NEXT = 0x0BAC0004
   /** Runs about once every six hours, and is kept across restarts. */
   const val PERIODIC_JOB = 0x0BAC0002
   /** Runs once, as soon as Android allows (to check backup works in the background). */
@@ -26,6 +31,11 @@ object BackupJobs {
   private const val LAST_END = "lastEnd"
   private const val NOTE = "note"
   private const val PERIOD_MS = 6 * 60 * 60 * 1000L
+
+  /** The job running now, if any (jobs start on the main thread). */
+  @Volatile var runningJob: Int? = null
+
+  fun isChangeJob(id: Int) = id == CHANGE_JOB || id == CHANGE_JOB_NEXT
 
   private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -48,7 +58,7 @@ object BackupJobs {
     val scheduler = scheduler(context)
     return mapOf(
       "on" to prefs.getBoolean(ON, false),
-      "onChangeWaiting" to (scheduler.getPendingJob(CHANGE_JOB) != null),
+      "onChangeWaiting" to changeJobWaiting(context),
       "periodicWaiting" to (scheduler.getPendingJob(PERIODIC_JOB) != null),
       "lastStart" to prefs.getLong(LAST_START, 0L).toDouble(),
       "lastEnd" to prefs.getLong(LAST_END, 0L).toDouble(),
@@ -91,11 +101,29 @@ object BackupJobs {
     submit(context, periodic, "Every six hours")
   }
 
-  /** Sets the job that runs once photos change, if backup is on. */
+  private fun changeJobWaiting(context: Context): Boolean {
+    val scheduler = scheduler(context)
+    return listOf(CHANGE_JOB, CHANGE_JOB_NEXT).any {
+      it != runningJob && scheduler.getPendingJob(it) != null
+    }
+  }
+
+  /** Makes sure a photo-change job is waiting, if backup is on. Leaves one that already is. */
   fun scheduleOnChange(context: Context) {
+    if (changeJobWaiting(context)) return
+    setOnChange(context, if (runningJob == CHANGE_JOB) CHANGE_JOB_NEXT else CHANGE_JOB)
+  }
+
+  /** As a photo-change job starts, sets the other one for photos that change from now on. */
+  fun scheduleNextOnChange(context: Context, starting: Int) {
+    val next = if (starting == CHANGE_JOB) CHANGE_JOB_NEXT else CHANGE_JOB
+    if (next != runningJob) setOnChange(context, next)
+  }
+
+  private fun setOnChange(context: Context, id: Int) {
     if (!isOn(context)) return
     val change =
-      JobInfo.Builder(CHANGE_JOB, ComponentName(context, BackupJobService::class.java))
+      JobInfo.Builder(id, ComponentName(context, BackupJobService::class.java))
         .addTriggerContentUri(
           JobInfo.TriggerContentUri(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -113,6 +141,7 @@ object BackupJobs {
   fun cancel(context: Context) {
     prefs(context).edit().clear().apply()
     scheduler(context).cancel(CHANGE_JOB)
+    scheduler(context).cancel(CHANGE_JOB_NEXT)
     scheduler(context).cancel(PERIODIC_JOB)
     scheduler(context).cancel(SOON_JOB)
   }

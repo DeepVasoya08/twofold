@@ -34,15 +34,15 @@ class PhotoLibraryModule : Module() {
 
     /**
      * Photos with an id above `afterId`, oldest first, at most `limit` of them. With
-     * `cameraOnly`, only those in the camera's folder. Photos still being written are left
-     * for next time.
+     * `cameraOnly`, only those in the camera's folder. The list stops at a photo that is still
+     * being written (the camera can take a few seconds to finish one), so nothing after it is
+     * counted as done and it is picked up on the next run.
      */
     AsyncFunction("listAsync") { afterId: Double, limit: Int, cameraOnly: Boolean ->
       val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
       val conditions = mutableListOf("${MediaStore.Images.Media._ID} > ?")
       val args = mutableListOf(afterId.toLong().toString())
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        conditions.add("${MediaStore.Images.Media.IS_PENDING} = 0")
         if (cameraOnly) {
           conditions.add("${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?")
           args.add("DCIM/Camera/%")
@@ -57,6 +57,8 @@ class PhotoLibraryModule : Module() {
           MediaStore.Images.Media.DISPLAY_NAME,
           MediaStore.Images.Media.MIME_TYPE,
           MediaStore.Images.Media.SIZE,
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.Images.Media.IS_PENDING
+          else MediaStore.Images.Media._ID,
         )
       val found = mutableListOf<Map<String, Any>>()
       resolver
@@ -70,6 +72,7 @@ class PhotoLibraryModule : Module() {
         ?.use { cursor ->
           val max = limit.coerceIn(1, LIST_MAX)
           while (found.size < max && cursor.moveToNext()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && cursor.getInt(4) != 0) break
             val id = cursor.getLong(0)
             found.add(
               mapOf(

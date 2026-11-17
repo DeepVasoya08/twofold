@@ -120,10 +120,13 @@ or a native module.
   library is open).
 - Backup in the background (`modules/backup-job`, `src/backup/background.ts`). Android's
   JobScheduler (no extra library) runs the `ArcafoldBackup` headless JS task (registered in
-  `index.ts`) soon after a photo is added (a content-URI job, set again after each run) and
+  `index.ts`) soon after a photo is added and
   every six hours (a periodic job kept across restarts). Both wait for Wi-Fi (or any network
   with "Use mobile data" on) and a battery that isn't low, and get about ten minutes; what's
-  left waits for the next run. The task starts React Native without a screen if Arcafold is
+  left waits for the next run. Android drops a content-URI job once it runs, so there are two
+  that take turns: as one starts, it sets the other (setting a running job again would stop
+  it), so a photo the camera finishes during a run gets a run of its own. The photo list stops
+  at a photo the camera is still writing (`IS_PENDING`), so it is never passed over. The task starts React Native without a screen if Arcafold is
   closed, restores the kept session (to reach the API, never the keys), and runs the same
   backup as "Back up now" (`backup-runner.ts`, one run at a time). It posts "Photos backed
   up" when it added any while Arcafold wasn't on screen. Being signed out (a 401) stops the
