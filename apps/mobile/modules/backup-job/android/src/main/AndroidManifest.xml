@@ -1,5 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <!-- The daily backup job is kept across restarts. -->
+  <!-- The jobs wait for Wi-Fi (or any network), which Android checks with this. -->
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <!-- The six-hourly backup job is kept across restarts. -->
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <application>
     <service
