@@ -18,7 +18,10 @@ non-negotiable; this document is the threat model and key design as they stand.
   `Strict-Transport-Security` makes browsers use HTTPS only, ahead of a custom domain.
 - API responses get their own, stricter headers (`default-src 'none'`, `X-Frame-Options:
 DENY`, `no-referrer`, `nosniff`, `Cache-Control: no-store`) in `apps/api/src/app.ts`.
-- CI runs `pnpm audit --audit-level high` on every PR and push to `main`.
+- CI runs `pnpm audit --audit-level high` on every PR and push to `main`. An advisory with
+  no fixed version, reached only by dev or build tools, may be ignored by its GHSA id under
+  `auditConfig.ignoreGhsas` in `pnpm-workspace.yaml`, with a note saying why; take it out
+  once a fix ships.
 - Credentials live only in GitHub secrets (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`).
 
 ## Key slots

@@ -10,3 +10,11 @@ onlyBuiltDependencies:
 patchedDependencies:
   onnxruntime-react-native@1.24.3: patches/onnxruntime-react-native@1.24.3.patch
   react-native-libsodium@1.7.0: patches/react-native-libsodium@1.7.0.patch
+
+# Audit findings ignored on purpose, each with why. Take one out once a fixed version ships.
+auditConfig:
+  ignoreGhsas:
+    # picomatch ReDoS (2026-11-18): every version is affected and no fix exists yet. It is
+    # reached only through dev and build tools (typescript-eslint, Expo's Metro bundler) on
+    # our own glob patterns; nothing in the web app, the Worker or the phone app ships it.
+    - GHSA-fc5q-39xc-vjpf
