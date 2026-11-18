@@ -22,6 +22,7 @@ import logo from '../../assets/logo.png';
 import { MemoryImage, PhotoPicker } from '../../modules/memory-image';
 import { photosInRows, timelineOrder, timelineRows, COLUMNS } from '../library/timeline';
 import type { TimelineRow } from '../library/timeline';
+import { deletedText, originalsText } from '../library/originals';
 import { firstFailure, uploadHeadline } from '../library/upload-text';
 import { useLibrary } from '../library/use-library';
 import type { Library } from '../library/use-library';
@@ -136,12 +137,24 @@ function MonthHeading({
   );
 }
 
-/** How the photos being added are getting on, over the bottom of the timeline. */
-function UploadCard({ library, palette }: { library: Library; palette: Palette }) {
+/**
+ * How the photos being added are getting on, over the bottom of the timeline. Once photos
+ * picked into the private space are all in, it offers to delete them from the gallery.
+ */
+function UploadCard({
+  library,
+  palette,
+  onDeleteOriginals,
+}: {
+  library: Library;
+  palette: Palette;
+  onDeleteOriginals: () => void;
+}) {
   const { items } = library.uploads;
   const summary = useMemo(() => summarizeUploads(items.map((item) => item.status)), [items]);
   if (items.length === 0) return null;
   const failure = firstFailure(items);
+  const offer = summary.running === 0 && library.originals > 0;
   return (
     <View
       style={[styles.uploadCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
@@ -151,7 +164,7 @@ function UploadCard({ library, palette }: { library: Library; palette: Palette }
         <Text style={[styles.uploadTitle, { color: palette.text }]}>{uploadHeadline(summary)}</Text>
         {summary.running > 0 ? (
           <ActivityIndicator color={palette.accent} />
-        ) : (
+        ) : offer ? null : (
           <Button kind="link" label="Done" onPress={library.hideUploads} />
         )}
       </View>
@@ -173,6 +186,22 @@ function UploadCard({ library, palette }: { library: Library; palette: Palette }
       ) : null}
       {failure ? (
         <Text style={[styles.uploadNote, { color: palette.error }]}>{failure}</Text>
+      ) : null}
+      {offer ? (
+        <>
+          <Text style={[styles.uploadNote, { color: palette.text }]}>
+            {originalsText(library.originals)}
+          </Text>
+          <Button label="Delete from gallery" onPress={onDeleteOriginals} />
+          <Button
+            kind="link"
+            label="Keep them there"
+            onPress={() => {
+              library.keepOriginals();
+              library.hideUploads();
+            }}
+          />
+        </>
       ) : null}
     </View>
   );
@@ -235,6 +264,21 @@ export function Timeline({ session }: { session: Session }) {
       },
     );
   }, [onSystemScreen, addPhotos]);
+  const { deleteOriginals, hideUploads } = library;
+  const removeOriginals = useCallback(() => {
+    setPickError(null);
+    onSystemScreen(() => deleteOriginals((uris) => PhotoPicker.deleteAsync(uris))).then(
+      (result) => {
+        setPickError(deletedText(result));
+        hideUploads();
+      },
+      () => {
+        setPickError(
+          'The photos couldn’t be deleted from the gallery. Delete them in your gallery app.',
+        );
+      },
+    );
+  }, [onSystemScreen, deleteOriginals, hideUploads]);
 
   // Previews actually on screen jump the queue ahead of those just drawn off screen.
   const onViewableItemsChanged = useCallback(
@@ -335,7 +379,7 @@ export function Timeline({ session }: { session: Session }) {
             </>
           )}
         </View>
-        <UploadCard library={library} palette={palette} />
+        <UploadCard library={library} palette={palette} onDeleteOriginals={removeOriginals} />
         {settings}
         <BiometricSheet />
       </View>
@@ -355,7 +399,7 @@ export function Timeline({ session }: { session: Session }) {
         onViewableItemsChanged={onViewableItemsChanged}
         contentContainerStyle={styles.list}
       />
-      <UploadCard library={library} palette={palette} />
+      <UploadCard library={library} palette={palette} onDeleteOriginals={removeOriginals} />
       {open !== null ? (
         <Viewer photos={ordered} start={open} library={library} onClose={closeViewer} />
       ) : null}

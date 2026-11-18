@@ -2,6 +2,7 @@ package com.arcafold.memoryimage
 
 import android.app.Activity
 import android.content.ClipData
+import android.content.ContentUris
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -10,6 +11,7 @@ import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import expo.modules.kotlin.Promise
@@ -22,6 +24,8 @@ import java.nio.ByteBuffer
 
 private const val PICK_REQUEST = 0xA5D0
 private const val PICK_MAX = 100
+private const val DELETE_REQUEST = 0xA5D1
+private const val PICKER_AUTHORITY = "com.android.providers.media.photopicker"
 
 /**
  * Picks photos with Android's own photo picker and reads them for upload, all in memory:
@@ -30,6 +34,10 @@ private const val PICK_MAX = 100
  */
 class PhotoPickerModule : Module() {
   private var pending: Promise? = null
+  /** A delete Android is asking about: who's waiting, and how many it asks to delete. */
+  private var pendingDelete: Pair<Promise, Int>? = null
+  /** Of the photos in that delete, how many Android can't delete. */
+  private var deleteKept = 0
 
   private val resolver
     get() = appContext.reactContext?.contentResolver
@@ -57,7 +65,41 @@ class PhotoPickerModule : Module() {
       activity.startActivityForResult(intent, PICK_REQUEST)
     }
 
+    /**
+     * Asks Android to delete picked photos from the phone, with its own confirmation that shows
+     * each one. Only photos on the phone itself can be: a photo only in a cloud service, or on
+     * Android before 11, is left where it is and counted as kept.
+     */
+    AsyncFunction("deleteAsync") { uris: List<String>, promise: Promise ->
+      val activity = appContext.currentActivity
+        ?: throw CodedException("ERR_NO_ACTIVITY", "Arcafold isn't on screen.", null)
+      val onPhone = uris.mapNotNull { mediaUriOf(Uri.parse(it)) }.distinct()
+      val kept = uris.size - onPhone.size
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || onPhone.isEmpty()) {
+        promise.resolve(mapOf("deleted" to 0, "kept" to uris.size))
+        return@AsyncFunction
+      }
+      val request =
+        try {
+          MediaStore.createDeleteRequest(resolver, onPhone)
+        } catch (error: Exception) {
+          throw CodedException("ERR_DELETE", "Android couldn't delete those photos.", error)
+        }
+      pendingDelete?.let { (waiting, asked) -> waiting.resolve(mapOf("deleted" to 0, "kept" to deleteKept + asked)) }
+      pendingDelete = promise to onPhone.size
+      deleteKept = kept
+      activity.startIntentSenderForResult(request.intentSender, DELETE_REQUEST, null, 0, 0, 0)
+    }
+
     OnActivityResult { _, payload ->
+      if (payload.requestCode == DELETE_REQUEST) {
+        val (promise, asked) = pendingDelete ?: return@OnActivityResult
+        pendingDelete = null
+        // Android deletes all of them or, if you say no, none.
+        val deleted = if (payload.resultCode == Activity.RESULT_OK) asked else 0
+        promise.resolve(mapOf("deleted" to deleted, "kept" to deleteKept + asked - deleted))
+        return@OnActivityResult
+      }
       if (payload.requestCode != PICK_REQUEST) return@OnActivityResult
       val promise = pending ?: return@OnActivityResult
       pending = null
@@ -99,6 +141,32 @@ class PhotoPickerModule : Module() {
       buffer.flip()
       mapOf("thumb" to ArrayBuffer(buffer), "width" to width, "height" to height)
     }
+  }
+
+  /**
+   * The phone's own entry for a picked photo, which Android can delete: the photo picker's
+   * local items carry the same id, and an older picker's documents map across. Null for a
+   * photo that isn't on the phone (a cloud service's) or can't be matched.
+   */
+  private fun mediaUriOf(uri: Uri): Uri? {
+    if (uri.authority == MediaStore.AUTHORITY) {
+      val segments = uri.pathSegments
+      if (segments.firstOrNull() == "picker") {
+        if (segments.size < 2 || segments[segments.size - 2] != "media") return null
+        if (!segments.contains(PICKER_AUTHORITY)) return null
+        val id = segments.last().toLongOrNull() ?: return null
+        return ContentUris.withAppendedId(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL), id)
+      }
+      return if (segments.contains("images") && segments.last().toLongOrNull() != null) uri else null
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && DocumentsContract.isDocumentUri(appContext.reactContext, uri)) {
+      return try {
+        MediaStore.getMediaUri(appContext.reactContext ?: return null, uri)
+      } catch (error: Exception) {
+        null
+      }
+    }
+    return null
   }
 
   private fun urisOf(data: Intent): List<Uri> {

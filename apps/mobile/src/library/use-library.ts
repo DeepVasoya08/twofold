@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
+import { spaceOf } from '@arcafold/core/account';
 import type { Session } from '@arcafold/core/account';
 
 type SpaceKeys = NonNullable<Session['otherSpace']>;
@@ -15,9 +16,10 @@ import { Uploader } from '@arcafold/core/upload/uploader';
 import type { UploaderDeps, UploaderState } from '@arcafold/core/upload/uploader';
 
 import { MemoryImages, PhotoPicker } from '../../modules/memory-image';
-import type { PickedPhoto } from '../../modules/memory-image';
+import type { DeleteResult, PickedPhoto } from '../../modules/memory-image';
 import { UploadService } from '../../modules/upload-service';
 import { BackgroundUploads } from './background-uploads';
+import { Originals } from './originals';
 import { preparePicked } from './prepare';
 
 export interface Library {
@@ -45,6 +47,18 @@ export interface Library {
   addPhotos: (picked: readonly PickedPhoto[]) => void;
   /** Hides the upload progress; photos still on their way keep going. */
   hideUploads: () => void;
+  /**
+   * Photos picked into the private space that are stored there and still in the phone's
+   * gallery, waiting for you to say whether to delete them from it. Always 0 in the main
+   * library, which backs up rather than moves.
+   */
+  originals: number;
+  /** Asks Android to delete those photos from the gallery (it shows them and asks first). */
+  deleteOriginals: (
+    ask: (uris: readonly string[]) => Promise<DeleteResult>,
+  ) => Promise<DeleteResult>;
+  /** Keeps them in the gallery. */
+  keepOriginals: () => void;
 }
 
 const CLOSED: UploaderDeps<PickedPhoto> = {
@@ -69,6 +83,12 @@ const lockedPreviews: UploaderDeps['preview'] = { make: () => '', revoke: memory
 function newUploader(...opening: unknown[]): Uploader<PickedPhoto> {
   if (opening.length === 0) throw new Error('Name the opening an uploader is for.');
   return new Uploader<PickedPhoto>(CLOSED);
+}
+
+/** A fresh list of moved-in photos for one uploader (one opening of the library). */
+function newOriginals(uploader: Uploader<PickedPhoto>): Originals {
+  if (!(uploader instanceof Uploader)) throw new Error('Name the uploader it is for.');
+  return new Originals();
 }
 
 /** Keeps uploads going with the app in the background, and says when they're done. */
@@ -96,6 +116,10 @@ export function useLibrary(session: Session): Library {
   // with the keys they started with while the next unlock starts its own.
   const uploader = useMemo(() => newUploader(keys, name, attempt), [keys, name, attempt]);
   const uploads = useSyncExternalStore(uploader.subscribe, uploader.getState);
+  const moving = spaceOf(session.opened) === 'private';
+  // What was moved in during this opening; locking forgets it.
+  const originals = useMemo(() => newOriginals(uploader), [uploader]);
+  const originalCount = useSyncExternalStore(originals.subscribe, originals.getCount);
 
   useEffect(() => {
     let stopped = false;
@@ -109,10 +133,16 @@ export function useLibrary(session: Session): Library {
     });
     loader.current = thumbLoader;
     opened.current = store;
-    const prepare: UploaderDeps<PickedPhoto>['prepare'] = (picked) =>
-      preparePicked(picked, PhotoPicker);
-    const upload: UploaderDeps<PickedPhoto>['upload'] = (photo, albumId, onStage) =>
-      store.add(photo, albumId ? [albumId] : [], onStage);
+    const prepare: UploaderDeps<PickedPhoto>['prepare'] = async (picked) => {
+      const photo = await preparePicked(picked, PhotoPicker);
+      if (moving) originals.prepared(photo, picked.uri);
+      return photo;
+    };
+    const upload: UploaderDeps<PickedPhoto>['upload'] = async (photo, albumId, onStage) => {
+      const stored = await store.add(photo, albumId ? [albumId] : [], onStage);
+      originals.storedPhoto(photo);
+      return stored;
+    };
     uploader.connect({
       prepare,
       upload,
@@ -158,7 +188,7 @@ export function useLibrary(session: Session): Library {
         close();
       });
     };
-  }, [keys, name, attempt, uploader]);
+  }, [keys, name, attempt, uploader, originals, moving]);
 
   const requestThumbs = useCallback((photoIds: readonly string[], onScreen?: boolean) => {
     loader.current?.request(photoIds, onScreen);
@@ -208,6 +238,22 @@ export function useLibrary(session: Session): Library {
     uploader.closeDialog();
   }, [uploader]);
 
+  const deleteOriginals = useCallback(
+    async (ask: (uris: readonly string[]) => Promise<DeleteResult>) => {
+      const uris = originals.take();
+      try {
+        return await ask(uris);
+      } catch (error) {
+        originals.giveBack(uris);
+        throw error;
+      }
+    },
+    [originals],
+  );
+  const keepOriginals = useCallback(() => {
+    originals.take();
+  }, [originals]);
+
   return {
     status,
     photos,
@@ -219,5 +265,8 @@ export function useLibrary(session: Session): Library {
     uploads,
     addPhotos,
     hideUploads,
+    originals: originalCount,
+    deleteOriginals,
+    keepOriginals,
   };
 }

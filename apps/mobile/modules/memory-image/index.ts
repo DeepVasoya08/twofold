@@ -44,6 +44,14 @@ export interface PickedPhoto {
   size: number;
 }
 
+/** How a request to delete photos from the phone went. */
+export interface DeleteResult {
+  /** Deleted from the phone. */
+  deleted: number;
+  /** Still on the phone: you said no, or Android can't delete them (a cloud service's). */
+  kept: number;
+}
+
 interface PhotoPickerModule {
   /** Opens Android's photo picker; resolves with what was picked (none if cancelled). */
   pickAsync(): Promise<PickedPhoto[]>;
@@ -55,6 +63,8 @@ interface PhotoPickerModule {
     maxSide: number,
     quality: number,
   ): Promise<{ thumb: ArrayBuffer; width: number; height: number }>;
+  /** Asks Android to delete picked photos from the phone; it shows them and asks first. */
+  deleteAsync(uris: readonly string[]): Promise<DeleteResult>;
 }
 
 /**
