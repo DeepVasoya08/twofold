@@ -14,15 +14,20 @@ import {
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import { FormError } from '@arcafold/core/errors';
-import type { Photo } from '@arcafold/core/library/model';
+import { canChangeAlbum, isViewOnly } from '@arcafold/core/library/albums';
+import type { Album, Photo } from '@arcafold/core/library/model';
 import type { Session } from '@arcafold/core/account';
 
 import { MemoryImage } from '../../modules/memory-image';
+import { bottomInset } from '../../modules/system-bars';
+import { albumChangeText } from '../library/album-text';
 import { formatTaken } from '../library/timeline';
 import type { Library } from '../library/use-library';
 import { useAccount } from '../session/account';
 import { Banner } from '../ui/kit';
+import { useNotice } from '../ui/notice';
 import { moveLabel } from '../session/forms';
+import { NameSheet, PickAlbumSheet } from './AlbumSheets';
 import { MoveSheet } from './MoveSheet';
 
 type SpaceKeys = NonNullable<Session['otherSpace']>;
@@ -82,22 +87,36 @@ const Page = memo(function Page({
 });
 
 /**
- * A photo full screen, swiping left and right through the timeline. The original is
- * downloaded and decrypted for the photo in view, decoded no larger than the screen, and
- * freed when another one opens.
+ * A photo full screen, swiping left and right through the timeline (or an album). The
+ * original is downloaded and decrypted for the photo in view, decoded no larger than the
+ * screen, and freed when another one opens.
  */
 export function Viewer({
   photos,
   start,
   library,
+  album,
   onClose,
 }: {
   photos: Photo[];
   start: number;
-  library: Pick<Library, 'thumbs' | 'requestThumbs' | 'openOriginal' | 'movePhoto'>;
+  library: Pick<
+    Library,
+    | 'thumbs'
+    | 'requestThumbs'
+    | 'openOriginal'
+    | 'movePhoto'
+    | 'albums'
+    | 'setInAlbum'
+    | 'createAlbum'
+  >;
+  /** The album being swiped through, if it's one: its photos can be taken out of it. */
+  album?: Album;
   onClose: () => void;
 }) {
   const { space, otherSpace } = useAccount();
+  const notice = useNotice();
+  const [filing, setFiling] = useState<'picking' | 'naming' | 'saving' | null>(null);
   const [moving, setMoving] = useState<'asking' | 'moving' | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const { width, height } = useWindowDimensions();
@@ -133,6 +152,28 @@ export function Viewer({
       },
     );
   };
+  const canFile = photo !== undefined && !isViewOnly(photo);
+  const canTakeOut = canFile && album !== undefined && canChangeAlbum(album);
+  const { setInAlbum, createAlbum } = library;
+  /** Puts the photo in view in an album, or takes it out, and says how that went. */
+  const file = (target: Album, included: boolean): Promise<void> => {
+    if (!photo) return Promise.resolve();
+    setFiling('saving');
+    setMoveError(null);
+    return setInAlbum([photo.id], target, included).then(
+      (result) => {
+        setFiling(null);
+        const text = albumChangeText(result, target.title, included);
+        if (result.done.length > 0) notice(text);
+        else setMoveError(text);
+      },
+      () => {
+        setFiling(null);
+        setMoveError(albumChangeText({ done: [], failed: [photo.id] }, target.title, included));
+      },
+    );
+  };
+
   const move = () => {
     if (!photo || !space) return;
     if (otherSpace) moveWith(otherSpace);
@@ -237,21 +278,81 @@ export function Viewer({
           </View>
         </View>
       ) : null}
-      {chrome && photo && space && canMove ? (
-        <View style={styles.actions}>
+      {chrome && photo && space && (canMove || canFile) ? (
+        <View style={[styles.actions, { paddingBottom: 24 + bottomInset() }]}>
           {moveError ? <Banner>{moveError}</Banner> : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ busy: moving === 'moving' }}
-            disabled={moving !== null}
-            onPress={move}
-            style={styles.action}
-          >
-            <Text style={styles.actionText}>
-              {moving === 'moving' ? 'Moving…' : moveLabel(space)}
-            </Text>
-          </Pressable>
+          <View style={styles.actionRow}>
+            {canFile ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ busy: filing === 'saving' }}
+                disabled={filing !== null || moving !== null}
+                onPress={() => {
+                  setMoveError(null);
+                  setFiling('picking');
+                }}
+                style={styles.action}
+              >
+                <Text style={styles.actionText}>
+                  {filing === 'saving' ? 'Saving…' : 'Add to album'}
+                </Text>
+              </Pressable>
+            ) : null}
+            {canTakeOut ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={filing !== null || moving !== null}
+                onPress={() => {
+                  void file(album, false);
+                }}
+                style={styles.action}
+              >
+                <Text style={styles.actionText}>Remove from album</Text>
+              </Pressable>
+            ) : null}
+            {canMove ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ busy: moving === 'moving' }}
+                disabled={moving !== null || filing !== null}
+                onPress={move}
+                style={styles.action}
+              >
+                <Text style={styles.actionText}>
+                  {moving === 'moving' ? 'Moving…' : moveLabel(space)}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
+      ) : null}
+      {filing === 'picking' && photo ? (
+        <PickAlbumSheet
+          photo={photo}
+          albums={library.albums}
+          onPick={(target) => {
+            void file(target, true);
+          }}
+          onNew={() => {
+            setFiling('naming');
+          }}
+          onCancel={() => {
+            setFiling(null);
+          }}
+        />
+      ) : null}
+      {filing === 'naming' ? (
+        <NameSheet
+          title="New album"
+          action="Create and add"
+          onSave={async (name) => {
+            const made = await createAlbum(name);
+            await file(made, true);
+          }}
+          onCancel={() => {
+            setFiling(null);
+          }}
+        />
       ) : null}
       {moving === 'asking' && space ? (
         <MoveSheet
@@ -292,15 +393,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     gap: 10,
     padding: 16,
-    paddingBottom: 40,
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10 },
   action: {
-    alignSelf: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.6)',
     borderRadius: 999,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 10,
   },
   actionText: { color: '#fff', fontSize: 15, fontWeight: '600' },

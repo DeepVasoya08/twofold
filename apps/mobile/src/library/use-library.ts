@@ -5,7 +5,10 @@ import { spaceOf } from '@arcafold/core/account';
 import type { Session } from '@arcafold/core/account';
 
 type SpaceKeys = NonNullable<Session['otherSpace']>;
-import type { Photo } from '@arcafold/core/library/model';
+import { fitsAlbum, withAlbum } from '@arcafold/core/library/albums';
+import type { Album, Photo } from '@arcafold/core/library/model';
+import { settleEach } from '@arcafold/core/settle-each';
+import type { Settled } from '@arcafold/core/settle-each';
 import { remoteStore } from '@arcafold/core/library/space-store';
 import type { SpaceStore } from '@arcafold/core/library/space-store';
 import { FormError } from '@arcafold/core/errors';
@@ -25,6 +28,8 @@ import { preparePicked } from './prepare';
 export interface Library {
   status: 'loading' | 'ready' | 'failed';
   photos: Photo[];
+  /** Albums in the open space, and those of libraries and albums shared with you. */
+  albums: Album[];
   /** Each preview that's ready: an id MemoryImage shows it by. */
   thumbs: ReadonlyMap<string, string>;
   /** Asks for photos' previews; those `onScreen` go first. Asking twice is free. */
@@ -43,8 +48,25 @@ export interface Library {
   retry: () => void;
   /** Photos being added from this phone, and whether their progress is showing. */
   uploads: UploaderState;
-  /** Encrypts and uploads picked photos, a few at a time, then shows them all together. */
-  addPhotos: (picked: readonly PickedPhoto[]) => void;
+  /**
+   * Encrypts and uploads picked photos, a few at a time, then shows them all together. With
+   * `albumId` they go in that album too.
+   */
+  addPhotos: (picked: readonly PickedPhoto[], albumId?: string) => void;
+  /** Makes an album of your own, empty. */
+  createAlbum: (title: string) => Promise<Album>;
+  renameAlbum: (albumId: string, title: string) => Promise<void>;
+  /** Deletes an album. Its photos stay in the library. */
+  deleteAlbum: (albumId: string) => Promise<void>;
+  /**
+   * Puts photos in an album, or takes them out. Each photo is saved on its own; the result
+   * says which went through.
+   */
+  setInAlbum: (
+    photoIds: readonly string[],
+    album: Album,
+    included: boolean,
+  ) => Promise<Settled<string>>;
   /** Hides the upload progress; photos still on their way keep going. */
   hideUploads: () => void;
   /**
@@ -60,6 +82,9 @@ export interface Library {
   /** Keeps them in the gallery. */
   keepOriginals: () => void;
 }
+
+/** Photo records saved at once when many change together. */
+const SAVES_AT_ONCE = 4;
 
 const CLOSED: UploaderDeps<PickedPhoto> = {
   prepare: () => Promise.reject(new Error('The library is closed.')),
@@ -108,6 +133,7 @@ export function useLibrary(session: Session): Library {
   const name = session.account.name;
   const [status, setStatus] = useState<Library['status']>('loading');
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [albums, setAlbums] = useState<Album[]>([]);
   const [thumbs, setThumbs] = useState<ReadonlyMap<string, string>>(new Map());
   const [attempt, setAttempt] = useState(0);
   const loader = useRef<ThumbLoader | null>(null);
@@ -157,6 +183,7 @@ export function useLibrary(session: Session): Library {
       (loaded) => {
         if (stopped) return;
         setPhotos(loaded.photos);
+        setAlbums(loaded.albums);
         setStatus('ready');
       },
       () => {
@@ -226,12 +253,69 @@ export function useLibrary(session: Session): Library {
   }, []);
 
   const addPhotos = useCallback(
-    (picked: readonly PickedPhoto[]) => {
+    (picked: readonly PickedPhoto[], albumId?: string) => {
       if (picked.length === 0) return;
       uploader.openDialog();
-      uploader.add(picked, undefined);
+      uploader.add(picked, albumId);
     },
     [uploader],
+  );
+
+  const createAlbum = useCallback(async (title: string) => {
+    const store = opened.current;
+    if (!store) throw new Error('The library is closed.');
+    const album = await store.createAlbum(title);
+    setAlbums((current) => [...current, album]);
+    return album;
+  }, []);
+
+  const renameAlbum = useCallback(async (albumId: string, title: string) => {
+    const store = opened.current;
+    if (!store) throw new Error('The library is closed.');
+    await store.renameAlbum(albumId, title);
+    setAlbums((current) =>
+      current.map((album) => (album.id === albumId ? { ...album, title } : album)),
+    );
+  }, []);
+
+  const deleteAlbum = useCallback(
+    async (albumId: string) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      await store.removeAlbum(albumId);
+      // A photo that still names the deleted album shows nothing for it, so taking the album
+      // out of their records is best effort.
+      const filed = photos.filter((photo) => photo.albumIds.includes(albumId));
+      await settleEach(filed, SAVES_AT_ONCE, (photo) =>
+        store.update(withAlbum(photo, albumId, false)),
+      );
+      setAlbums((current) => current.filter((album) => album.id !== albumId));
+      setPhotos((current) => current.map((photo) => withAlbum(photo, albumId, false)));
+    },
+    [photos],
+  );
+
+  const setInAlbum = useCallback(
+    async (photoIds: readonly string[], album: Album, included: boolean) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      const byId = new Map(photos.map((photo) => [photo.id, photo]));
+      const result = await settleEach(photoIds, SAVES_AT_ONCE, async (photoId) => {
+        const photo = byId.get(photoId);
+        if (!photo) throw new FormError('That photo isn’t here anymore.');
+        if (!fitsAlbum(photo, album)) {
+          throw new FormError('Photos can only go in albums of their own library.');
+        }
+        const changed = withAlbum(photo, album.id, included);
+        if (changed !== photo) await store.update(changed);
+      });
+      const done = new Set(result.done);
+      setPhotos((current) =>
+        current.map((photo) => (done.has(photo.id) ? withAlbum(photo, album.id, included) : photo)),
+      );
+      return result;
+    },
+    [photos],
   );
 
   const hideUploads = useCallback(() => {
@@ -257,6 +341,7 @@ export function useLibrary(session: Session): Library {
   return {
     status,
     photos,
+    albums,
     thumbs,
     requestThumbs,
     openOriginal,
@@ -264,6 +349,10 @@ export function useLibrary(session: Session): Library {
     retry,
     uploads,
     addPhotos,
+    createAlbum,
+    renameAlbum,
+    deleteAlbum,
+    setInAlbum,
     hideUploads,
     originals: originalCount,
     deleteOriginals,

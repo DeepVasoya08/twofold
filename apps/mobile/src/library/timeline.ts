@@ -23,8 +23,13 @@ export type TimelineRow =
  * newest first. One list row per grid row keeps the list fast with thousands of photos.
  */
 export function timelineRows(photos: readonly Photo[], columns = COLUMNS): TimelineRow[] {
+  return gridRows(timelinePhotos(photos), columns);
+}
+
+/** Any set of photos (an album's, say) as grid rows by month, without leaving any out. */
+export function gridRows(photos: readonly Photo[], columns = COLUMNS): TimelineRow[] {
   const rows: TimelineRow[] = [];
-  for (const month of groupByMonth(timelinePhotos(photos))) {
+  for (const month of groupByMonth(photos)) {
     rows.push({ kind: 'month', key: month.key, label: month.label, count: month.photos.length });
     for (let start = 0; start < month.photos.length; start += columns) {
       const photoIds = month.photos.slice(start, start + columns).map((photo) => photo.id);

@@ -1,0 +1,373 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AppState,
+  BackHandler,
+  PermissionsAndroid,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+
+import type { Session } from '@arcafold/core/account';
+import { albumPhotos } from '@arcafold/core/library/albums';
+
+import { PhotoPicker } from '../../modules/memory-image';
+import { bottomInset } from '../../modules/system-bars';
+import { lastRun } from '../backup/last-run';
+import { deletedText } from '../library/originals';
+import { timelineOrder, timelineRows } from '../library/timeline';
+import { useLibrary } from '../library/use-library';
+import { useAccount } from '../session/account';
+import { Banner } from '../ui/kit';
+import { NoticeProvider, useNotice } from '../ui/notice';
+import { usePalette } from '../ui/theme';
+import type { Palette } from '../ui/theme';
+import { AlbumScreen } from './AlbumScreen';
+import { NameSheet } from './AlbumSheets';
+import { Albums } from './Albums';
+import { BiometricSheet } from './BiometricSheet';
+import { ChoosePhotos } from './ChoosePhotos';
+import { Settings } from './Settings';
+import { Timeline } from './Timeline';
+import { UploadCard } from './UploadCard';
+import { Viewer } from './Viewer';
+
+type Tab = 'photos' | 'albums';
+
+/** Height of the tab bar above the navigation bar. */
+const TAB_BAR = 58;
+
+/**
+ * Asks (from Android 13, where it's needed) to post the notification that says when photos
+ * finished uploading in the background. Saying no only means no notification.
+ */
+async function askToNotify(): Promise<void> {
+  if (Platform.OS !== 'android' || Platform.Version < 33) return;
+  const permission = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+  if (await PermissionsAndroid.check(permission)) return;
+  await PermissionsAndroid.request(permission).catch(() => undefined);
+}
+
+function TabBar({
+  tab,
+  inset,
+  palette,
+  onChange,
+}: {
+  tab: Tab;
+  inset: number;
+  palette: Palette;
+  onChange: (tab: Tab) => void;
+}) {
+  const tabs: readonly { id: Tab; label: string; glyph: string }[] = [
+    { id: 'photos', label: 'Photos', glyph: '▦' },
+    { id: 'albums', label: 'Albums', glyph: '❐' },
+  ];
+  return (
+    <View
+      accessibilityRole="tablist"
+      style={[
+        styles.tabBar,
+        {
+          height: TAB_BAR + inset,
+          paddingBottom: inset,
+          backgroundColor: palette.surface,
+          borderColor: palette.border,
+        },
+      ]}
+    >
+      {tabs.map((each) => {
+        const selected = each.id === tab;
+        const colour = selected ? palette.accent : palette.muted;
+        return (
+          <Pressable
+            key={each.id}
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            accessibilityLabel={each.label}
+            onPress={() => {
+              onChange(each.id);
+            }}
+            style={styles.tab}
+          >
+            <Text style={[styles.tabGlyph, { color: colour }]}>{each.glyph}</Text>
+            <Text style={[styles.tabLabel, { color: colour }]}>{each.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** What the viewer is swiping through. */
+interface Viewing {
+  from: 'timeline' | 'album';
+  start: number;
+}
+
+/**
+ * The open space: Photos and Albums tabs, an album when one is open, and what shows over
+ * them (the viewer, choosing photos, Settings). The library stays open across all of them.
+ */
+export function Home({ session }: { session: Session }) {
+  const inset = bottomInset();
+  return (
+    <NoticeProvider bottom={TAB_BAR + inset + 16}>
+      <HomeScreens session={session} inset={inset} />
+    </NoticeProvider>
+  );
+}
+
+function HomeScreens({ session, inset }: { session: Session; inset: number }) {
+  const { space, onSystemScreen } = useAccount();
+  const palette = usePalette();
+  const notice = useNotice();
+  const library = useLibrary(session);
+  const [tab, setTab] = useState<Tab>('photos');
+  const [albumId, setAlbumId] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<Viewing | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const [naming, setNaming] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
+  const album = library.albums.find((each) => each.id === albumId);
+  const initial = (session.account.name.trim().at(0) ?? '?').toUpperCase();
+
+  // Photos backed up in the background since the library loaded show when you come back.
+  const { status: libraryStatus, retry } = library;
+  const loadedAt = useRef(0);
+  useEffect(() => {
+    if (libraryStatus === 'ready') loadedAt.current = Date.now();
+  }, [libraryStatus]);
+  useEffect(() => {
+    if (space !== 'main') return;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return;
+      void lastRun().then((run) => {
+        if (run && run.added > 0 && run.at > loadedAt.current) retry();
+      });
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [space, retry]);
+
+  // Back leaves an album, then goes from Albums to Photos. Registered once, first, so
+  // whatever opens over the screens (the viewer, a sheet, Settings) handles back before it.
+  // An album deleted (here or elsewhere) is closed: there's nothing to show.
+  const albumOpen = album !== undefined;
+  const place = useRef({ albumOpen, tab });
+  useEffect(() => {
+    place.current = { albumOpen, tab };
+  }, [albumOpen, tab]);
+  useEffect(() => {
+    const back = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (place.current.albumOpen) {
+        setAlbumId(null);
+        return true;
+      }
+      if (place.current.tab === 'albums') {
+        setTab('photos');
+        return true;
+      }
+      return false;
+    });
+    return () => {
+      back.remove();
+    };
+  }, []);
+
+  const { addPhotos } = library;
+  const pickPhotos = useCallback(
+    (into?: string) => {
+      setPickError(null);
+      onSystemScreen(() => PhotoPicker.pickAsync()).then(
+        (picked) => {
+          addPhotos(picked, into);
+          if (picked.length > 0) void askToNotify();
+        },
+        () => {
+          setPickError('The photo picker couldn’t open. Try again.');
+        },
+      );
+    },
+    [onSystemScreen, addPhotos],
+  );
+  const { deleteOriginals, hideUploads } = library;
+  const removeOriginals = useCallback(() => {
+    setPickError(null);
+    onSystemScreen(() => deleteOriginals((uris) => PhotoPicker.deleteAsync(uris))).then(
+      (result) => {
+        setPickError(deletedText(result));
+        hideUploads();
+      },
+      () => {
+        setPickError(
+          'The photos couldn’t be deleted from the gallery. Delete them in your gallery app.',
+        );
+      },
+    );
+  }, [onSystemScreen, deleteOriginals, hideUploads]);
+
+  // The viewer swipes through the timeline, or the open album, as they are now: a photo
+  // moved away or taken out of the album drops out.
+  const timeline = useMemo(() => {
+    const rows = timelineRows(library.photos);
+    return timelineOrder(library.photos, rows);
+  }, [library.photos]);
+  const inAlbum = useMemo(
+    () => (albumId ? albumPhotos(library.photos, albumId) : []),
+    [library.photos, albumId],
+  );
+  const viewed = viewing?.from === 'album' ? inAlbum : timeline;
+  const lists = useRef({ timeline, inAlbum });
+  useEffect(() => {
+    lists.current = { timeline, inAlbum };
+  }, [timeline, inAlbum]);
+  const openFrom = useCallback(
+    (from: Viewing['from']) => (photoId: string) => {
+      const list = from === 'album' ? lists.current.inAlbum : lists.current.timeline;
+      const start = list.findIndex((photo) => photo.id === photoId);
+      if (start >= 0) setViewing({ from, start });
+    },
+    [],
+  );
+  const openInTimeline = useMemo(() => openFrom('timeline'), [openFrom]);
+  const openInAlbum = useMemo(() => openFrom('album'), [openFrom]);
+  const closeViewer = useCallback(() => {
+    setViewing(null);
+  }, []);
+
+  const openSettings = useCallback(() => {
+    setSettingsOpen(true);
+  }, []);
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false);
+  }, []);
+  const closeAlbum = useCallback(() => {
+    setAlbumId(null);
+  }, []);
+  const changeTab = useCallback((next: Tab) => {
+    setAlbumId(null);
+    setTab(next);
+  }, []);
+
+  const banner = pickError ? (
+    <View style={styles.bannerWrap}>
+      <Banner>{pickError}</Banner>
+    </View>
+  ) : null;
+
+  // An album page covers the tab bar, like a page opened from it; back returns.
+  const showTabs = album === undefined;
+  const bottom = showTabs ? TAB_BAR + inset : inset;
+
+  let screen;
+  if (album) {
+    screen = (
+      <AlbumScreen
+        album={album}
+        library={library}
+        initial={initial}
+        banner={banner}
+        onSettings={openSettings}
+        onBack={closeAlbum}
+        onOpen={openInAlbum}
+        onChoose={() => {
+          setChoosing(true);
+        }}
+        onUpload={() => {
+          pickPhotos(album.id);
+        }}
+      />
+    );
+  } else if (tab === 'albums') {
+    screen = (
+      <Albums
+        library={library}
+        initial={initial}
+        banner={banner}
+        onSettings={openSettings}
+        onNew={() => {
+          setNaming(true);
+        }}
+        onOpen={setAlbumId}
+      />
+    );
+  } else {
+    screen = (
+      <Timeline
+        library={library}
+        initial={initial}
+        banner={banner}
+        onSettings={openSettings}
+        onAdd={() => {
+          pickPhotos();
+        }}
+        onOpen={openInTimeline}
+      />
+    );
+  }
+
+  return (
+    <View style={[styles.fill, { backgroundColor: palette.background }]}>
+      <View style={[styles.fill, { paddingBottom: showTabs ? 0 : inset }]}>{screen}</View>
+      {showTabs ? <TabBar tab={tab} inset={inset} palette={palette} onChange={changeTab} /> : null}
+      <UploadCard
+        library={library}
+        palette={palette}
+        bottom={bottom + 12}
+        onDeleteOriginals={removeOriginals}
+      />
+      {naming ? (
+        <NameSheet
+          title="New album"
+          action="Create album"
+          onSave={async (name) => {
+            const made = await library.createAlbum(name);
+            setNaming(false);
+            notice(`“${name}” created`);
+            setAlbumId(made.id);
+          }}
+          onCancel={() => {
+            setNaming(false);
+          }}
+        />
+      ) : null}
+      {/* Once everything it was showing has gone (moved away, say), it closes itself. */}
+      {viewing ? (
+        <Viewer
+          photos={viewed}
+          start={Math.max(0, Math.min(viewing.start, viewed.length - 1))}
+          library={library}
+          {...(viewing.from === 'album' && album ? { album } : {})}
+          onClose={closeViewer}
+        />
+      ) : null}
+      {choosing && album ? (
+        <ChoosePhotos
+          album={album}
+          library={library}
+          onClose={() => {
+            setChoosing(false);
+          }}
+        />
+      ) : null}
+      {settingsOpen ? (
+        <Settings session={session} onClose={closeSettings} onBackedUp={library.retry} />
+      ) : null}
+      <BiometricSheet />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  bannerWrap: { paddingHorizontal: 16, paddingBottom: 8 },
+  tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  tabGlyph: { fontSize: 20 },
+  tabLabel: { fontSize: 12, fontWeight: '600' },
+});

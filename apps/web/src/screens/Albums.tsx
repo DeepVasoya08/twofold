@@ -17,32 +17,19 @@ import { formatDateRange, photosAndFiles, pluralize } from '../lib/format';
 import type { SmartAlbum } from '@arcafold/core/search/smart-album';
 import { errorMessage } from '@arcafold/core/errors';
 import type { Album } from '@arcafold/core/library/model';
+import { albumsInTab } from '@arcafold/core/library/albums';
+import type { AlbumTab } from '@arcafold/core/library/albums';
+
+export { albumsInTab };
+export type { AlbumTab };
 
 import './albums.css';
-
-/** Which albums the Albums page shows. */
-export type AlbumTab = 'all' | 'with-me' | 'by-me';
 
 const TABS: readonly { id: AlbumTab; label: string }[] = [
   { id: 'all', label: 'All albums' },
   { id: 'with-me', label: 'Shared with me' },
   { id: 'by-me', label: 'Shared by me' },
 ];
-
-/**
- * The albums one tab shows. Shared with me: albums of someone else's, shared whole or as part
- * of their library. Shared by me: your own albums you've shared with at least one person.
- */
-export function albumsInTab(albums: readonly Album[], tab: AlbumTab): Album[] {
-  switch (tab) {
-    case 'all':
-      return [...albums];
-    case 'with-me':
-      return albums.filter((album) => album.library !== undefined);
-    case 'by-me':
-      return albums.filter((album) => (album.sharedWith?.length ?? 0) > 0);
-  }
-}
 
 const EMPTY: Record<AlbumTab, string> = {
   all: 'No albums yet. Make one with New album.',
