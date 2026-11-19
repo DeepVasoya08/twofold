@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { SubmitEvent } from 'react';
 
 import { usePendingInvites } from '../app/invites';
-import { matchRoute, paths } from '../app/routes';
+import { paths } from '../app/routes';
 import { useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { TextField } from '../components/Field';
@@ -10,38 +10,16 @@ import { FormAlert } from '../components/FormAlert';
 import { Icon } from '../components/Icon';
 import { JoinProgressView } from '../components/Invites';
 import { errorMessage } from '@arcafold/core/errors';
+import {
+  NOT_AN_INVITE,
+  isInviteCode,
+  normalizeInviteCode,
+  parseInviteInput,
+} from '@arcafold/core/invite-input';
 
 import './share.css';
 
-/** Normalizes what someone types into the TWO-XXXX-XXXX invite format. */
-export function normalizeInviteCode(input: string): string {
-  const raw = input.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const body = raw.startsWith('TWO') ? raw.slice(3) : raw;
-  return `TWO-${body.slice(0, 4)}-${body.slice(4, 8)}`;
-}
-
-/** Codes never use 0, 1, I or O, so they can't be misread. */
-export function isInviteCode(code: string): boolean {
-  return /^TWO-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(code);
-}
-
-/**
- * What someone pasted or typed: an invite code, or a whole invite link (whose token names the
- * invite the same way). Null if it's neither.
- */
-export function parseInviteInput(input: string): string | null {
-  const trimmed = input.trim();
-  const path = /\/join\/[^/?#\s]+/.exec(trimmed)?.[0];
-  if (path) {
-    const route = matchRoute(path);
-    return route.name === 'join' ? route.token : null;
-  }
-  const code = normalizeInviteCode(trimmed);
-  return isInviteCode(code) ? code : null;
-}
-
-const NOT_A_CODE =
-  'That code doesn’t look right. It’s 8 letters and numbers after TWO, without 0, 1, I or O.';
+export { isInviteCode, normalizeInviteCode, parseInviteInput };
 
 /**
  * Where an invite code someone sent is typed in (or their invite link pasted). Accepting sends
@@ -67,7 +45,7 @@ export function JoinCode() {
     if (busy) return;
     const ref = parseInviteInput(input);
     if (ref === null) {
-      setError(NOT_A_CODE);
+      setError(NOT_AN_INVITE);
       return;
     }
     if (pending.invites.some((each) => each.invite.code === ref || each.invite.link === ref)) {

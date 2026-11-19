@@ -114,20 +114,50 @@ export function DeleteAlbumSheet({
   );
 }
 
-/** An album's menu. */
+/**
+ * An album's menu. Your own albums can be shared, renamed or deleted; one in a library shared
+ * with you can be renamed or deleted; one someone shared with you on its own can be left.
+ */
 export function AlbumMenuSheet({
   album,
+  onShare,
   onRename,
   onDelete,
+  onLeave,
   onCancel,
 }: {
   album: Album;
+  onShare: () => void;
   onRename: () => void;
   onDelete: () => void;
+  onLeave: () => void;
   onCancel: () => void;
 }) {
+  if (album.sharedAlbum) {
+    return (
+      <Sheet title={album.title} onCancel={onCancel}>
+        <SheetOption
+          label="Leave album"
+          detail="It goes from your albums. You’d need a new invite to see it again."
+          danger
+          onPress={onLeave}
+        />
+      </Sheet>
+    );
+  }
   return (
     <Sheet title={album.title} onCancel={onCancel}>
+      {album.library === undefined ? (
+        <SheetOption
+          label="Share"
+          detail={
+            album.sharedWith?.length
+              ? `Shared with ${album.sharedWith.join(', ')}`
+              : 'Invite someone to see it'
+          }
+          onPress={onShare}
+        />
+      ) : null}
       <SheetOption label="Rename" onPress={onRename} />
       <SheetOption
         label="Delete album"
@@ -135,6 +165,46 @@ export function AlbumMenuSheet({
         danger
         onPress={onDelete}
       />
+    </Sheet>
+  );
+}
+
+/** Asks before leaving an album someone shared with you. */
+export function LeaveAlbumSheet({
+  album,
+  onLeave,
+  onCancel,
+}: {
+  album: Album;
+  onLeave: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    onLeave().then(
+      () => {
+        setBusy(false);
+      },
+      (caught: unknown) => {
+        setBusy(false);
+        setError(errorMessage(caught));
+      },
+    );
+  };
+  return (
+    <Sheet
+      title={`Leave “${album.title}”?`}
+      body={`${album.library ?? 'They'} shared it with you. Once you leave, you’d need a new invite to see it again.`}
+      busy={busy}
+      onCancel={onCancel}
+    >
+      {error ? <Banner>{error}</Banner> : null}
+      <Button label="Leave album" busyLabel="Leaving…" busy={busy} onPress={submit} />
+      <Button kind="link" label="Cancel" onPress={busy ? () => undefined : onCancel} />
     </Sheet>
   );
 }

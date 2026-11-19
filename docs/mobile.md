@@ -158,7 +158,20 @@ or a native module.
   as on the web. In the viewer, "Add to album" picks an album (or makes one) and, inside an
   album, "Remove from album" takes the photo out. The rules (which photos fit which album,
   what you can only view) are shared with the web app in `@arcafold/core/library/albums`.
-  Albums shared with you show here and can be viewed; sharing from the phone comes next.
+  Albums shared with you show here and can be viewed, and the Albums tab filters All, Shared
+  with me and Shared by me.
+- Sharing and invites (`src/sharing/invites.tsx`, `screens/ShareScreen.tsx`,
+  `screens/JoinScreen.tsx`, `screens/InviteCards.tsx`, `screens/SharingSettings.tsx`): the same
+  invites as the web app, moved along by the same shared pass (`@arcafold/core/sharing-pass`)
+  when the library opens, when Arcafold comes back on screen, and every few seconds while
+  someone is partway through. An album's ⋯ menu has Share (who has access, remove someone,
+  stop sharing, and an invite); Settings > Sharing shares the whole space (View only or Add
+  and edit), lists who it's shared with (change what they can do, or stop), and the libraries
+  it joined (leave). "Send invite" opens Android's share sheet with the link and the code (no
+  clipboard library); the code is also selectable on screen. "Enter an invite code" takes a
+  code or a pasted link (`@arcafold/core/invite-input`). When someone accepts, the four words
+  and "They match, share" show over the library on any screen; the person who joined sees the
+  same words while they wait. An album someone shared with you can be left from its menu.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

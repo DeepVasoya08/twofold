@@ -12,6 +12,7 @@ import {
 
 import type { Session } from '@arcafold/core/account';
 import { albumPhotos } from '@arcafold/core/library/albums';
+import { leaveJoined } from '@arcafold/core/sharing';
 
 import { PhotoPicker } from '../../modules/memory-image';
 import { bottomInset } from '../../modules/system-bars';
@@ -20,6 +21,7 @@ import { deletedText } from '../library/originals';
 import { timelineOrder, timelineRows } from '../library/timeline';
 import { useLibrary } from '../library/use-library';
 import { useAccount } from '../session/account';
+import { InvitesProvider } from '../sharing/invites';
 import { Banner } from '../ui/kit';
 import { NoticeProvider, useNotice } from '../ui/notice';
 import { usePalette } from '../ui/theme';
@@ -29,7 +31,10 @@ import { NameSheet } from './AlbumSheets';
 import { Albums } from './Albums';
 import { BiometricSheet } from './BiometricSheet';
 import { ChoosePhotos } from './ChoosePhotos';
+import { InviteRequests } from './InviteCards';
+import { JoinScreen } from './JoinScreen';
 import { Settings } from './Settings';
+import { ShareScreen } from './ShareScreen';
 import { Timeline } from './Timeline';
 import { UploadCard } from './UploadCard';
 import { Viewer } from './Viewer';
@@ -131,6 +136,9 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const [choosing, setChoosing] = useState(false);
   const [naming, setNaming] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** The sharing screen: for one album (by id), or for the whole library. */
+  const [sharing, setSharing] = useState<{ albumId: string | null } | null>(null);
+  const [joining, setJoining] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
   const album = library.albums.find((each) => each.id === albumId);
   const initial = (session.account.name.trim().at(0) ?? '?').toUpperCase();
@@ -249,6 +257,26 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const closeAlbum = useCallback(() => {
     setAlbumId(null);
   }, []);
+  const openJoin = useCallback(() => {
+    setJoining(true);
+  }, []);
+  const closeJoin = useCallback(() => {
+    setJoining(false);
+  }, []);
+  const closeShare = useCallback(() => {
+    setSharing(null);
+  }, []);
+  const keys = session.opened.space;
+  const { retry: reload } = library;
+  const leaveAlbum = useCallback(
+    async (joinedId: string | undefined) => {
+      if (!joinedId) throw new Error('That album isn’t one you joined.');
+      await leaveJoined(keys, joinedId);
+      // Its photos leave the open space too.
+      reload();
+    },
+    [keys, reload],
+  );
   const changeTab = useCallback((next: Tab) => {
     setAlbumId(null);
     setTab(next);
@@ -281,6 +309,10 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
         onUpload={() => {
           pickPhotos(album.id);
         }}
+        onShare={() => {
+          setSharing({ albumId: album.id });
+        }}
+        onLeave={() => leaveAlbum(album.joinedId)}
       />
     );
   } else if (tab === 'albums') {
@@ -294,6 +326,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
           setNaming(true);
         }}
         onOpen={setAlbumId}
+        onJoin={openJoin}
       />
     );
   } else {
@@ -312,54 +345,81 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   }
 
   return (
-    <View style={[styles.fill, { backgroundColor: palette.background }]}>
-      <View style={[styles.fill, { paddingBottom: showTabs ? 0 : inset }]}>{screen}</View>
-      {showTabs ? <TabBar tab={tab} inset={inset} palette={palette} onChange={changeTab} /> : null}
-      <UploadCard
-        library={library}
-        palette={palette}
-        bottom={bottom + 12}
-        onDeleteOriginals={removeOriginals}
-      />
-      {naming ? (
-        <NameSheet
-          title="New album"
-          action="Create album"
-          onSave={async (name) => {
-            const made = await library.createAlbum(name);
-            setNaming(false);
-            notice(`“${name}” created`);
-            setAlbumId(made.id);
-          }}
-          onCancel={() => {
-            setNaming(false);
-          }}
-        />
-      ) : null}
-      {/* Once everything it was showing has gone (moved away, say), it closes itself. */}
-      {viewing ? (
-        <Viewer
-          photos={viewed}
-          start={Math.max(0, Math.min(viewing.start, viewed.length - 1))}
+    <InvitesProvider keys={keys} myName={session.account.name} library={library}>
+      <View style={[styles.fill, { backgroundColor: palette.background }]}>
+        <View style={[styles.fill, { paddingBottom: showTabs ? 0 : inset }]}>{screen}</View>
+        {showTabs ? (
+          <TabBar tab={tab} inset={inset} palette={palette} onChange={changeTab} />
+        ) : null}
+        <UploadCard
           library={library}
-          {...(viewing.from === 'album' && album ? { album } : {})}
-          onClose={closeViewer}
+          palette={palette}
+          bottom={bottom + 12}
+          onDeleteOriginals={removeOriginals}
         />
-      ) : null}
-      {choosing && album ? (
-        <ChoosePhotos
-          album={album}
-          library={library}
-          onClose={() => {
-            setChoosing(false);
-          }}
-        />
-      ) : null}
-      {settingsOpen ? (
-        <Settings session={session} onClose={closeSettings} onBackedUp={library.retry} />
-      ) : null}
-      <BiometricSheet />
-    </View>
+        {naming ? (
+          <NameSheet
+            title="New album"
+            action="Create album"
+            onSave={async (name) => {
+              const made = await library.createAlbum(name);
+              setNaming(false);
+              notice(`“${name}” created`);
+              setAlbumId(made.id);
+            }}
+            onCancel={() => {
+              setNaming(false);
+            }}
+          />
+        ) : null}
+        {/* Once everything it was showing has gone (moved away, say), it closes itself. */}
+        {viewing ? (
+          <Viewer
+            photos={viewed}
+            start={Math.max(0, Math.min(viewing.start, viewed.length - 1))}
+            library={library}
+            {...(viewing.from === 'album' && album ? { album } : {})}
+            onClose={closeViewer}
+          />
+        ) : null}
+        {choosing && album ? (
+          <ChoosePhotos
+            album={album}
+            library={library}
+            onClose={() => {
+              setChoosing(false);
+            }}
+          />
+        ) : null}
+        {settingsOpen ? (
+          <Settings
+            session={session}
+            onClose={closeSettings}
+            onBackedUp={library.retry}
+            onShare={() => {
+              setSharing({ albumId: null });
+            }}
+            onJoin={openJoin}
+          />
+        ) : null}
+        {sharing ? (
+          <ShareScreen
+            album={
+              sharing.albumId === null
+                ? null
+                : (library.albums.find((each) => each.id === sharing.albumId) ?? null)
+            }
+            keys={keys}
+            onSharedWith={library.setSharedWith}
+            onStopSharing={library.stopSharingAlbum}
+            onClose={closeShare}
+          />
+        ) : null}
+        {joining ? <JoinScreen onClose={closeJoin} /> : null}
+        <InviteRequests albums={library.albums} showJoins={!joining} />
+        <BiometricSheet />
+      </View>
+    </InvitesProvider>
   );
 }
 

@@ -67,6 +67,15 @@ export interface Library {
     album: Album,
     included: boolean,
   ) => Promise<Settled<string>>;
+  /**
+   * Gets one of your albums ready to share: it gets a key of its own (if it has none), which
+   * is what people it's shared with are given.
+   */
+  shareAlbum: (albumId: string) => Promise<Uint8Array>;
+  /** Stops sharing an album with everyone. */
+  stopSharingAlbum: (albumId: string) => Promise<void>;
+  /** Who an album is shared with, by name, as its card shows. */
+  setSharedWith: (albumId: string, names: string[]) => void;
   /** Hides the upload progress; photos still on their way keep going. */
   hideUploads: () => void;
   /**
@@ -338,6 +347,28 @@ export function useLibrary(session: Session): Library {
     originals.take();
   }, [originals]);
 
+  const shareAlbum = useCallback((albumId: string) => {
+    const store = opened.current;
+    if (!store) return Promise.reject(new Error('The library is closed.'));
+    return store.shareAlbum(albumId);
+  }, []);
+
+  const setSharedWith = useCallback((albumId: string, names: string[]) => {
+    setAlbums((current) =>
+      current.map((album) => (album.id === albumId ? { ...album, sharedWith: names } : album)),
+    );
+  }, []);
+
+  const stopSharingAlbum = useCallback(
+    async (albumId: string) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      await store.stopSharingAlbum(albumId);
+      setSharedWith(albumId, []);
+    },
+    [setSharedWith],
+  );
+
   return {
     status,
     photos,
@@ -353,6 +384,9 @@ export function useLibrary(session: Session): Library {
     renameAlbum,
     deleteAlbum,
     setInAlbum,
+    shareAlbum,
+    stopSharingAlbum,
+    setSharedWith,
     hideUploads,
     originals: originalCount,
     deleteOriginals,

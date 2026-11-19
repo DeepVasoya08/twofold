@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
@@ -29,53 +28,10 @@ import { useAccount } from '../session/account';
 import { AUTO_LOCK_CHOICES, autoLockLabel } from '../session/auto-lock';
 import { biometricsAvailable } from '../session/biometric';
 import { Banner, Button, Field } from '../ui/kit';
+import { Row, Section } from '../ui/rows';
+import { SharingSettings } from './SharingSettings';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
-
-function Section({
-  title,
-  palette,
-  children,
-}: {
-  title: string;
-  palette: Palette;
-  children: ReactNode;
-}) {
-  return (
-    <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: palette.muted }]} accessibilityRole="header">
-        {title}
-      </Text>
-      <View
-        style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}
-      >
-        {children}
-      </View>
-    </View>
-  );
-}
-
-function Row({
-  title,
-  detail,
-  palette,
-  action,
-}: {
-  title: string;
-  detail?: string;
-  palette: Palette;
-  action?: ReactNode;
-}) {
-  return (
-    <View style={styles.row}>
-      <View style={styles.rowText}>
-        <Text style={[styles.rowTitle, { color: palette.text }]}>{title}</Text>
-        {detail ? <Text style={[styles.rowDetail, { color: palette.muted }]}>{detail}</Text> : null}
-      </View>
-      {action}
-    </View>
-  );
-}
 
 /** Every device signed in to the account, this one first; others can be signed out. */
 function Devices({ palette }: { palette: Palette }) {
@@ -357,11 +313,17 @@ export function Settings({
   session,
   onClose,
   onBackedUp,
+  onShare,
+  onJoin,
 }: {
   session: Session;
   onClose: () => void;
   /** Photos were backed up just now, so the library should show them. */
   onBackedUp: () => void;
+  /** Opens the screen for inviting someone to the open space. */
+  onShare: () => void;
+  /** Opens the screen for entering an invite code. */
+  onJoin: () => void;
 }) {
   const {
     space,
@@ -495,6 +457,16 @@ export function Settings({
             <Backup session={session} palette={palette} onBackedUp={onBackedUp} />
           </Section>
         ) : null}
+
+        <Section title="Sharing" palette={palette}>
+          <SharingSettings
+            keys={session.opened.space}
+            palette={palette}
+            onShare={onShare}
+            onJoin={onJoin}
+            onLeft={onBackedUp}
+          />
+        </Section>
 
         <Section title="Devices" palette={palette}>
           <Devices palette={palette} />

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -10,7 +10,8 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-import { albumCover, albumPhotos, albumSharing } from '@arcafold/core/library/albums';
+import { albumCover, albumPhotos, albumSharing, albumsInTab } from '@arcafold/core/library/albums';
+import type { AlbumTab } from '@arcafold/core/library/albums';
 import type { Album, Photo } from '@arcafold/core/library/model';
 
 import { MemoryImage } from '../../modules/memory-image';
@@ -97,6 +98,18 @@ export function albumCards(albums: readonly Album[], photos: readonly Photo[]): 
   }));
 }
 
+const TABS: readonly { id: AlbumTab; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'with-me', label: 'Shared with me' },
+  { id: 'by-me', label: 'Shared by me' },
+];
+
+const EMPTY: Record<Exclude<AlbumTab, 'all'>, string> = {
+  'with-me':
+    'Nothing’s shared with you yet. When someone shares an album with you, it shows up here.',
+  'by-me': 'You haven’t shared any albums. Open an album, then ⋯ and Share, to invite someone.',
+};
+
 /** Your albums, and those shared with you: the Albums tab. */
 export function Albums({
   library,
@@ -105,6 +118,7 @@ export function Albums({
   onSettings,
   onNew,
   onOpen,
+  onJoin,
 }: {
   library: Library;
   initial: string;
@@ -112,13 +126,16 @@ export function Albums({
   onSettings: () => void;
   onNew: () => void;
   onOpen: (albumId: string) => void;
+  /** Opens the screen for entering an invite code. */
+  onJoin: () => void;
 }) {
   const palette = usePalette();
   const { width } = useWindowDimensions();
   const cardWidth = Math.floor((width - GUTTER * 2 - GAP) / 2);
+  const [tab, setTab] = useState<AlbumTab>('all');
   const cards = useMemo(
-    () => albumCards(library.albums, library.photos),
-    [library.albums, library.photos],
+    () => albumCards(albumsInTab(library.albums, tab), library.photos),
+    [library.albums, library.photos, tab],
   );
   const { thumbs, requestThumbs } = library;
 
@@ -129,6 +146,57 @@ export function Albums({
       ) : null}
     </AppHeader>
   );
+
+  const tabs = (
+    <View style={styles.tabs} accessibilityRole="tablist">
+      {TABS.map((each) => {
+        const chosen = each.id === tab;
+        return (
+          <Pressable
+            key={each.id}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: chosen }}
+            onPress={() => {
+              setTab(each.id);
+            }}
+            style={[
+              styles.chip,
+              chosen
+                ? { backgroundColor: palette.accent, borderColor: palette.accent }
+                : { borderColor: palette.border },
+            ]}
+          >
+            <Text style={[styles.chipText, { color: chosen ? palette.onAccent : palette.text }]}>
+              {each.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+  const codeLink =
+    tab === 'with-me' ? (
+      <Pressable accessibilityRole="button" onPress={onJoin} style={styles.codeLink}>
+        <Text style={[styles.meta, { color: palette.muted }]}>
+          Got an invite code from someone?{' '}
+          <Text style={{ color: palette.accent, fontWeight: '600' }}>Enter it here</Text>
+        </Text>
+      </Pressable>
+    ) : null;
+
+  if (library.status === 'ready' && tab !== 'all' && cards.length === 0) {
+    return (
+      <View style={styles.fill}>
+        {header}
+        {banner}
+        {tabs}
+        {codeLink}
+        <View style={styles.centre}>
+          <Note>{EMPTY[tab]}</Note>
+        </View>
+      </View>
+    );
+  }
 
   if (library.status !== 'ready' || cards.length === 0) {
     return (
@@ -148,6 +216,7 @@ export function Albums({
               <Text style={[styles.emptyTitle, { color: palette.text }]}>No albums yet</Text>
               <Note>Gather photos into albums: a trip, a year, the people you love.</Note>
               <Button label="New album" onPress={onNew} />
+              <Button kind="link" label="Enter an invite code" onPress={onJoin} />
             </>
           )}
         </View>
@@ -159,6 +228,8 @@ export function Albums({
     <View style={styles.fill}>
       {header}
       {banner}
+      {tabs}
+      {codeLink}
       <FlatList
         data={cards}
         numColumns={2}
@@ -194,6 +265,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyCover: { fontSize: 32 },
+  tabs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: GUTTER,
+    paddingBottom: 12,
+  },
+  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
+  chipText: { fontSize: 14, fontWeight: '600' },
+  codeLink: { paddingHorizontal: GUTTER, paddingBottom: 12 },
   badge: {
     position: 'absolute',
     left: 8,
