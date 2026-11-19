@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { Photo } from '@arcafold/core/library/model';
 
-import { formatTaken, photosInRows, timelineOrder, timelinePhotos, timelineRows } from './timeline';
+import {
+  formatTaken,
+  gridRows,
+  photosInRows,
+  timelineOrder,
+  timelinePhotos,
+  timelineRows,
+} from './timeline';
 
 function photo(id: string, takenAt: string, extra: Partial<Photo> = {}): Photo {
   return {
@@ -53,6 +60,13 @@ describe('timelineRows', () => {
 
   it('is empty for an empty library', () => {
     expect(timelineRows([])).toEqual([]);
+  });
+});
+
+describe('gridRows', () => {
+  it('keeps photos the timeline leaves out, for an album shared with you', () => {
+    const rows = gridRows([photo('shared', '2026-01-01T00:00:00Z', { sharedAlbum: true })]);
+    expect(photosInRows(rows)).toEqual(['shared']);
   });
 });
 

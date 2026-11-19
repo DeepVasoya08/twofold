@@ -36,6 +36,7 @@ import type {
   UploadStage,
 } from '@arcafold/core/library/space-store';
 import type { Album, Photo } from '@arcafold/core/library/model';
+import { fitsAlbum, isViewOnly, withAlbum } from '@arcafold/core/library/albums';
 
 /**
  * The open space's photos and albums, decrypted in memory. Changes go to the space's store
@@ -141,12 +142,7 @@ export function withDetails(photo: Photo, change: PhotoDetails): Photo {
   if ('favorite' in change) {
     return photo.favorite === change.favorite ? photo : { ...photo, favorite: change.favorite };
   }
-  const has = photo.albumIds.includes(change.albumId);
-  if (has === change.included) return photo;
-  const albumIds = change.included
-    ? [...photo.albumIds, change.albumId]
-    : photo.albumIds.filter((id) => id !== change.albumId);
-  return { ...photo, albumIds };
+  return withAlbum(photo, change.albumId, change.included);
 }
 
 export function vaultReducer(state: VaultState, action: VaultAction): VaultState {
@@ -307,18 +303,7 @@ export function albumPhotos(state: VaultState, albumId: string): Photo[] {
     .sort((a, b) => b.takenAt.localeCompare(a.takenAt));
 }
 
-/**
- * Whether a photo can go in an album: both must be in the same library, and neither can be
- * something you can only view (from an album shared with you, or a view-only library).
- */
-export function fitsAlbum(photo: Photo, album: Album): boolean {
-  return !isViewOnly(photo) && !isViewOnly(album) && photo.library === album.library;
-}
-
-/** Whether a photo or album is someone else's that you can only view and download. */
-export function isViewOnly(item: Pick<Photo, 'sharedAlbum' | 'viewOnly'>): boolean {
-  return item.sharedAlbum === true || item.viewOnly === true;
-}
+export { fitsAlbum, isViewOnly };
 
 /** The album's chosen cover, or else its newest photo. */
 export function albumCover(state: VaultState, album: Album): Photo | undefined {

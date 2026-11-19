@@ -145,6 +145,20 @@ or a native module.
   time, counts and a reason in `backup-last-run.json` (`last-run.ts`; nothing about the
   photos), which Settings shows as "Last backup", and the library reloads on coming back
   when a run added photos after it loaded.
+- Photos and Albums tabs (`screens/Home.tsx`): the library opens once and stays open across
+  both tabs, an open album, the viewer and Settings. The tab bar and the bottom of sheets and
+  the viewer sit above Android's navigation bar, using its height from `modules/system-bars`
+  (the app draws edge to edge). Back leaves an album, then goes from Albums to Photos.
+- Albums (`screens/Albums.tsx`, `screens/AlbumScreen.tsx`, `screens/AlbumSheets.tsx`): album
+  cards with their cover (the chosen one, else the newest photo), count and who shared them;
+  "+ New" names a new album and opens it. An album shows its photos by month with "Add
+  photos": from your library (`screens/ChoosePhotos.tsx`, tick photos that can go in it) or,
+  for your own albums, straight from this phone, uploaded into the album. Its menu renames or
+  deletes it; deleting keeps the photos and takes the album out of their records, best effort,
+  as on the web. In the viewer, "Add to album" picks an album (or makes one) and, inside an
+  album, "Remove from album" takes the photo out. The rules (which photos fit which album,
+  what you can only view) are shared with the web app in `@arcafold/core/library/albums`.
+  Albums shared with you show here and can be viewed; sharing from the phone comes next.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.
