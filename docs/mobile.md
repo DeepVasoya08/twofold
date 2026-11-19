@@ -172,6 +172,10 @@ or a native module.
   code or a pasted link (`@arcafold/core/invite-input`). When someone accepts, the four words
   and "They match, share" show over the library on any screen; the person who joined sees the
   same words while they wait. An album someone shared with you can be left from its menu.
+  An album is shared View only or Add and edit, changed later on its Share screen; with Add
+  and edit, the person adds photos from their phone ("Add photos" in the album) and can take
+  any photo out of it from the viewer, the same as on the web (see docs/security.md,
+  "Sharing one album").
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

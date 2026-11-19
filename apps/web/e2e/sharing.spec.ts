@@ -1,7 +1,17 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
-import { MAIN_PASSWORD, freshEmail, goTo, lock, signUp, unlockWith, uploadPhotos } from './helpers';
+import {
+  MAIN_PASSWORD,
+  choosePhotos,
+  distinctPhotos,
+  freshEmail,
+  goTo,
+  lock,
+  signUp,
+  unlockWith,
+  uploadPhotos,
+} from './helpers';
 
 const decryptedTiles = (page: Page) => page.locator('.photo-tile img');
 
@@ -239,4 +249,78 @@ test('sharing one album with someone, who can only view it, then removing them',
   await unlockWith(bob, MAIN_PASSWORD);
   await goTo(bob, 'Albums');
   await expect(bob.getByText('0 albums')).toBeVisible();
+});
+
+test('sharing one album with add and edit: they add a photo and take one out', async ({
+  browser,
+}) => {
+  const alice = await (await browser.newContext()).newPage();
+  const bob = await (await browser.newContext()).newPage();
+  const [first, second, bobs] = distinctPhotos(3);
+  await signUp(alice, freshEmail(), MAIN_PASSWORD, 'Alice');
+  await uploadPhotos(alice, 2, [first ?? Buffer.alloc(0), second ?? Buffer.alloc(0)]);
+  await expect(alice.getByText('2 photos added to your vault')).toBeVisible();
+  await signUp(bob, freshEmail(), MAIN_PASSWORD, 'Bob');
+
+  // Alice shares both photos in a new album, and lets whoever joins add and edit.
+  const checks = alice.getByRole('button', { name: /^Select photo from / });
+  await checks.nth(0).click();
+  await checks.nth(1).click();
+  await alice
+    .getByRole('toolbar', { name: 'Selected photos' })
+    .getByRole('button', { name: 'Share' })
+    .click();
+  const share = alice.getByRole('dialog', { name: 'Share 2 photos' });
+  await share.getByLabel('New album').fill('Porto');
+  await share.getByRole('button', { name: 'Create and share' }).click();
+  await alice.getByRole('radio', { name: /Add and edit/ }).check();
+  await expect(alice.getByRole('radio', { name: /Add and edit/ })).toBeChecked();
+  const code = alice.getByTestId('invite-code');
+  await expect(code).toHaveText(/^TWO-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+
+  await goTo(bob, 'Settings');
+  await bob.getByRole('button', { name: 'Enter code' }).click();
+  await bob.getByLabel('Invite code').fill((await code.textContent()) ?? '');
+  await bob.getByRole('button', { name: 'Join' }).click();
+  await expect(alice.getByText('Bob wants to join')).toBeVisible();
+  await alice.getByRole('button', { name: 'They match, share' }).click();
+  await expect(alice.getByText('“Porto” is shared with Bob.')).toBeVisible();
+
+  // Bob adds a photo of his own to the album. It stays out of his timeline.
+  await expect(bob.getByText('Alice shared an album with you')).toBeVisible();
+  await bob.getByRole('tab', { name: 'Shared with me' }).click();
+  await bob.getByRole('link', { name: /Porto/ }).click();
+  await expect(bob.getByText('Shared with you by Alice · you can add photos')).toBeVisible();
+  await expect(decryptedTiles(bob)).toHaveCount(2);
+  const added = await choosePhotos(bob, 1, [bobs ?? Buffer.alloc(0)]);
+  await added.getByRole('button', { name: 'Done' }).click();
+  await expect(decryptedTiles(bob)).toHaveCount(3);
+
+  // He takes one of Alice's photos out of it.
+  await bob
+    .getByRole('button', { name: /^Select photo from / })
+    .first()
+    .click();
+  const bar = bob.getByRole('toolbar', { name: 'Selected photos' });
+  await expect(bar.getByRole('button', { name: 'Delete' })).toHaveCount(0);
+  await bar.getByRole('button', { name: 'Remove from album' }).click();
+  await expect(bob.getByText('1 photo removed from “Porto”')).toBeVisible();
+  await expect(decryptedTiles(bob)).toHaveCount(2);
+
+  // Alice sees the album as Bob left it, and keeps the photo he took out in her library.
+  await lock(alice);
+  await unlockWith(alice, MAIN_PASSWORD);
+  await goTo(alice, 'Albums');
+  await alice.getByRole('link', { name: /Porto/ }).click();
+  await expect(decryptedTiles(alice)).toHaveCount(2);
+  await goTo(alice, 'Photos');
+  await expect(decryptedTiles(alice)).toHaveCount(3);
+
+  // She can make him view-only again from the album's Share menu.
+  await goTo(alice, 'Albums');
+  await alice.getByRole('button', { name: 'Actions for Porto' }).click();
+  await alice.getByRole('menuitem', { name: 'Share' }).click();
+  const people = alice.getByRole('dialog', { name: 'Share “Porto”' });
+  await people.getByLabel('What Bob can do').selectOption('view');
+  await expect(alice.getByText('Bob can only view “Porto” now')).toBeVisible();
 });

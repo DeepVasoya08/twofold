@@ -37,16 +37,28 @@ export const ACCESS_LABELS: Record<MemberAccess, { title: string; detail: string
   },
 };
 
-/** Picks what someone invited to the whole library will be able to do. */
+/** What someone given one album can do there, in a few words. */
+export const ALBUM_ACCESS_LABELS: Record<MemberAccess, { title: string; detail: string }> = {
+  view: { title: 'View only', detail: 'They can see and download this album’s photos.' },
+  edit: {
+    title: 'Add and edit',
+    detail: 'They can also add photos to this album and take any photo out of it.',
+  },
+};
+
+/** Picks what someone invited to the library, or to one album, will be able to do. */
 function AccessPicker({
   value,
+  album,
   disabled,
   onChange,
 }: {
   value: MemberAccess;
+  album: boolean;
   disabled: boolean;
   onChange: (access: MemberAccess) => void;
 }) {
+  const labels = album ? ALBUM_ACCESS_LABELS : ACCESS_LABELS;
   return (
     <fieldset className="access-picker" disabled={disabled}>
       <legend className="access-picker__legend">What can they do?</legend>
@@ -62,12 +74,16 @@ function AccessPicker({
             }}
           />
           <span className="access-picker__text">
-            <span className="access-picker__title">{ACCESS_LABELS[access].title}</span>
-            <span className="access-picker__detail">{ACCESS_LABELS[access].detail}</span>
+            <span className="access-picker__title">{labels[access].title}</span>
+            <span className="access-picker__detail">{labels[access].detail}</span>
           </span>
         </label>
       ))}
-      <span className="access-picker__note">You can change this later in Settings.</span>
+      <span className="access-picker__note">
+        {album
+          ? 'You can change this later from the album’s Share menu.'
+          : 'You can change this later in Settings.'}
+      </span>
     </fieldset>
   );
 }
@@ -183,13 +199,12 @@ function InvitePanel({ where, album }: { where: string; album: SharedAlbum | nul
 
   return (
     <div className="share">
-      {album === null && (
-        <AccessPicker
-          value={picked ?? invite?.access ?? 'view'}
-          disabled={!invite || picked !== null}
-          onChange={onAccess}
-        />
-      )}
+      <AccessPicker
+        value={picked ?? invite?.access ?? 'view'}
+        album={album !== null}
+        disabled={!invite || picked !== null}
+        onChange={onAccess}
+      />
       <div className="invite-card">
         <span className="invite-card__label">Invite link</span>
         <span className="invite-card__link" data-testid="invite-link">
@@ -303,7 +318,7 @@ export function Share() {
           }
           subtitle={
             album
-              ? 'Invite someone you trust. They can view and download this album’s photos, including ones you add later, and nothing else.'
+              ? 'Invite someone you trust. They get this album’s photos, including ones you add later, and nothing else.'
               : status === 'loading'
                 ? 'Decrypting your albums…'
                 : 'It may have been deleted, or it isn’t yours to share.'

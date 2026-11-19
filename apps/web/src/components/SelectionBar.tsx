@@ -10,7 +10,7 @@ import { paths } from '../app/routes';
 import { allSelected, batchMessage } from '../app/selection';
 import type { Selection } from '../app/selection';
 import { useToast } from '../app/toast';
-import { isViewOnly, trashNote, useVault } from '../app/vault';
+import { addsByUpload, isViewOnly, trashNote, useVault } from '../app/vault';
 import { pluralize } from '../lib/format';
 import type { Settled } from '../lib/settle-each';
 import { AlbumPicker } from './AlbumPicker';
@@ -196,18 +196,21 @@ export function SelectionBar({
       },
     },
   ];
-  if (album) {
-    actions.push({
-      label: 'Remove from album',
-      icon: 'album-remove',
-      onClick: () => {
-        run(
-          () => vault.setDetails(ids, { album, included: false }),
-          (removed) => `${removed} removed from “${album.title}”`,
-        );
-      },
-    });
-  }
+  const removeFromAlbum: Action[] = album
+    ? [
+        {
+          label: 'Remove from album',
+          icon: 'album-remove',
+          onClick: () => {
+            run(
+              () => vault.setDetails(ids, { album, included: false }),
+              (removed) => `${removed} removed from “${album.title}”`,
+            );
+          },
+        },
+      ]
+    : [];
+  actions.push(...removeFromAlbum);
   if (shareable) {
     actions.push({
       label: 'Share',
@@ -265,7 +268,9 @@ export function SelectionBar({
         },
       ]
     : [];
-  const shown = viewOnly ? [...pageActions, download, ...teach] : [...pageActions, ...actions];
+  // In an album shared with you that you may add to, photos can still be taken out of it.
+  const viewing = album && addsByUpload(album) ? [...removeFromAlbum, download] : [download];
+  const shown = viewOnly ? [...pageActions, ...viewing, ...teach] : [...pageActions, ...actions];
   const shared = photos.some((photo) => photo.library !== undefined);
   const everything = allSelected(selection.selected, allIds);
   return (

@@ -4,7 +4,11 @@
  */
 import type { Album, Photo } from './model';
 
-/** Whether a photo or album is someone else's that you can only view and download. */
+/**
+ * Whether a photo or album is someone else's that you can't change: from an album shared with
+ * you (even one you may add to, whose photos you can only take out of it), or from a
+ * view-only library.
+ */
 export function isViewOnly(item: Pick<Photo, 'sharedAlbum' | 'viewOnly'>): boolean {
   return item.sharedAlbum === true || item.viewOnly === true;
 }
@@ -17,9 +21,25 @@ export function fitsAlbum(photo: Photo, album: Album): boolean {
   return !isViewOnly(photo) && !isViewOnly(album) && photo.library === album.library;
 }
 
-/** Whether an album can be renamed, deleted, or have photos put in or taken out. */
+/** Whether an album can be renamed or deleted. */
 export function canChangeAlbum(album: Album): boolean {
   return !isViewOnly(album);
+}
+
+/**
+ * Whether photos can be put in an album or taken out of it: your own albums, ones in a
+ * library you may edit, and albums shared with you that you may add to.
+ */
+export function canFillAlbum(album: Album): boolean {
+  return album.viewOnly !== true;
+}
+
+/**
+ * Whether you add to this album by uploading new photos only (an album someone shared with you
+ * that you may add to), rather than by choosing photos already in your library.
+ */
+export function addsByUpload(album: Album): boolean {
+  return album.sharedAlbum === true && canFillAlbum(album);
 }
 
 /** The photo put in an album or taken out of it, or the same photo when that changes nothing. */
@@ -78,7 +98,10 @@ export function albumTitle(typed: string): { title: string } | { error: string }
 
 /** Who an album is shared with or by, in a line, or null for one of your own you haven't shared. */
 export function albumSharing(album: Album): string | null {
-  if (album.sharedAlbum) return `Shared with you by ${album.library ?? 'someone'}`;
+  if (album.sharedAlbum) {
+    const by = `Shared with you by ${album.library ?? 'someone'}`;
+    return album.viewOnly ? by : `${by} · you can add photos`;
+  }
   if (album.library !== undefined) {
     return `From ${album.library}’s library${album.viewOnly ? ' · view only' : ''}`;
   }

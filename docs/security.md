@@ -367,12 +367,28 @@ token limited to that album and **the album's own key**, never the space's recor
   that key (`crypto_aead_xchacha20poly1305_ietf`, the same construction and associated data
   as space records): the photo's file key, type, size and date, without its favorite or
   its other albums. `albums.shared_meta` and `album_items` hold those copies.
-- **What the token reaches.** The owner registers the member with `album` set. Requests
+- **What the token reaches.** The owner registers the member with `album` set, and with
+  `access` (View only or Add and edit, which the owner can change at any time). Requests
   with that token only reach `GET /photos` and `/albums` (which return the album key's
   copies instead of the space's records), `/thumbs` and `/photos/:id/:part` (only for
-  photos the album lists), and `DELETE /membership`. Everything else is refused, so they
-  can view and download but not change anything. Their key can't open the space's records,
-  so even a server that handed them other rows couldn't make them readable.
+  photos the album lists), and `DELETE /membership`. Everything else is refused, so a
+  view-only member can view and download but not change anything. Their key can't open the
+  space's records, so even a server that handed them other rows couldn't make them readable.
+- **Add and edit.** A member who may edit the album can also upload photos (`POST /photos`,
+  its files and commit, and abandoning their own unfinished upload), list a photo they just
+  added in the album, once (`PUT /albums/:id/items/:photo`), and take any photo out of it
+  (`DELETE /albums/:id/items/:photo`). They still can't rename, delete or stop sharing the
+  album, see who it's shared with, or change or delete any photo itself. A photo they add is
+  sealed under the album key, the only key they have, and its row is marked
+  `sealed_for_album`. The owner's device (or a library member who may edit) opens it with the
+  album key, seals it again under the records key and saves it, which clears the mark, so
+  it stays readable after the album stops being shared. Stopping sharing and deleting the
+  album wait for that first. Its storage counts toward the account that uploaded it.
+- **Taking a photo out.** When an album member takes a photo out, the server unlists it at
+  once and keeps the album and photo ids in `album_removed`. The owner's device sees them in
+  `GET /albums` (`removed`), takes the album out of the photo's own sealed metadata (which
+  only it can change), and then lets the server forget (`DELETE /albums/:id/removed/:photo`).
+  The photo itself is never deleted: it stays in the owner's library.
 - **Keeping it current.** When the owner (or a library member) puts a photo in a shared
   album, takes it out, or renames the album, the browser updates the album's copies. A
   deleted photo or album is removed from `album_items` by the server, and deleting an album
@@ -385,7 +401,9 @@ token limited to that album and **the album's own key**, never the space's recor
   photos appear under Albums → Shared with me and stay out of the timeline.
 
 What this reveals: for shared albums only, the server can see which photo rows are in the
-album (`album_items` links an album id to photo ids) and how many. It still sees no
+album (`album_items` links an album id to photo ids) and how many, which ones an album
+member added until the owner's device seals them again, and which ones a member took out
+until the owner's device catches up. It still sees no
 contents, titles, dates or keys. Albums that aren't shared, and the private space, reveal
 nothing new. An album shared from the private space is kept in the private space's rows, so
 nothing links it to an account.

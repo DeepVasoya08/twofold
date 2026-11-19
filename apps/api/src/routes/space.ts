@@ -23,6 +23,7 @@ import type {
   PhotoPage,
   ProfilePhotoResponse,
   PutFileResponse,
+  StoredPhoto,
   TrashResponse,
   UploadKeyResponse,
   UploadTokenList,
@@ -30,6 +31,10 @@ import type {
 
 import {
   albumItemIds,
+  albumRemovals,
+  forgetAlbumRemoved,
+  putAddedAlbumItem,
+  removeAlbumItem,
   deleteAlbumItem,
   deleteAlbumSharing,
   isAlbumShared,
@@ -140,7 +145,7 @@ const notFound = 'That photo isn’t here anymore.';
  * reaches the same photos and albums, but not the owner-only routes (sharing, joined
  * libraries, invites in progress, wiping the space), and the owner can revoke it. A view-only
  * member's token can only read. A token given one album reaches only that album's shared
- * photos, and can't change anything.
+ * photos; if its member may edit, it can also add photos to the album and take any out.
  */
 export const space = new Hono<AppEnv>();
 
@@ -181,8 +186,7 @@ const requireSpace = createMiddleware<AppEnv>(async (c, next) => {
   }
   c.set('space', member?.space ?? hash);
   c.set('member', member?.id ?? null);
-  // Someone given one album can only view, whatever their row says.
-  c.set('access', member ? (member.album === null ? member.access : 'view') : 'edit');
+  c.set('access', member ? member.access : 'edit');
   return next();
 });
 
@@ -192,6 +196,19 @@ const ALBUM_ROUTES: readonly { method: string; path: RegExp }[] = [
   { method: 'GET', path: /\/space\/photos\/[^/]+\/(thumb|full)$/ },
   { method: 'GET', path: /\/space\/membership$/ },
   { method: 'DELETE', path: /\/space\/membership$/ },
+];
+
+/**
+ * What a token given one album may also do if its member may edit: upload photos, and list
+ * them in or take any photo out of that album (the route checks it's theirs).
+ */
+const ALBUM_EDIT_ROUTES: readonly { method: string; path: RegExp }[] = [
+  { method: 'POST', path: /\/space\/photos$/ },
+  { method: 'PUT', path: /\/space\/photos\/[^/]+\/(thumb|full)$/ },
+  { method: 'POST', path: /\/space\/photos\/[^/]+\/commit$/ },
+  { method: 'DELETE', path: /\/space\/photos\/[^/]+$/ },
+  { method: 'PUT', path: /\/space\/albums\/[^/]+\/items\/[^/]+$/ },
+  { method: 'DELETE', path: /\/space\/albums\/[^/]+\/items\/[^/]+$/ },
 ];
 
 /** What a phone's upload-only token may do: add photos, and nothing else. */
@@ -217,7 +234,9 @@ const limitMemberTokens = createMiddleware<AppEnv>(async (c, next) => {
     return allowed ? next() : c.json({ error: uploadOnly }, 403);
   }
   if (c.get('album') !== null) {
-    const allowed = ALBUM_ROUTES.some(
+    const routes =
+      c.get('access') === 'edit' ? [...ALBUM_ROUTES, ...ALBUM_EDIT_ROUTES] : ALBUM_ROUTES;
+    const allowed = routes.some(
       (route) => route.method === c.req.method && route.path.test(c.req.path),
     );
     return allowed ? next() : c.json({ error: albumOnly }, 403);
@@ -365,13 +384,21 @@ space.post('/photos', async (c) => {
   if (!reserved && !(await reserve())) {
     return c.json({ error: storageFull }, 413);
   }
-  const sealedForOwner = c.get('access') === 'upload';
-  if (!(await insertPendingPhoto(c.env.DB, tag, body, now, sealedForOwner))) {
+  const album = c.get('album');
+  const sealedFor =
+    c.get('access') === 'upload' ? { owner: true as const } : album === null ? null : { album };
+  if (!(await insertPendingPhoto(c.env.DB, tag, body, now, sealedFor))) {
     await releaseStorage(c.env.DB, accountId, size);
     return c.json({ error: messages.badRequest }, 409);
   }
   return c.body(null, 201);
 });
+
+/** Someone given one album can only upload the files of photos they started for it. */
+function mayUpload(c: Context<AppEnv>, photo: StoredPhoto): boolean {
+  const album = c.get('album');
+  return album === null || photo.sealedForAlbum === album;
+}
 
 function parsePhotoParams(params: { id: string; part?: string }) {
   const id = recordIdSchema.safeParse(params.id);
@@ -390,7 +417,7 @@ space.put('/photos/:id/:part', async (c) => {
   if (!params) return c.json({ error: messages.badRequest }, 400);
   const tag = c.get('space');
   const photo = await findPhoto(c.env.DB, tag, params.id);
-  if (!photo?.pending) return c.json({ error: notFound }, 404);
+  if (!photo?.pending || !mayUpload(c, photo)) return c.json({ error: notFound }, 404);
   const expected = params.part === 'thumb' ? photo.thumbSize : photo.fullSize;
   const length = Number(c.req.header('content-length'));
   const body = c.req.raw.body;
@@ -421,6 +448,10 @@ space.post('/photos/:id/commit', async (c) => {
     return c.json({ error: messages.badRequest }, 400);
   }
   const tag = c.get('space');
+  if (c.get('album') !== null) {
+    const photo = await findPhoto(c.env.DB, tag, id.data);
+    if (!photo || !mayUpload(c, photo)) return c.json({ error: notFound }, 404);
+  }
   // The files' sizes go into the commit itself, so it only succeeds if they match what was
   // declared; the photo is looked up only to say why a commit didn't happen.
   const [thumb, full] = await Promise.all([
@@ -517,17 +548,29 @@ space.delete('/photos/:id', async (c) => {
   }
   const tag = c.get('space');
   const photo = await findPhoto(c.env.DB, tag, id.data);
-  if (!photo) return c.json({ error: notFound }, 404);
+  // Someone given one album can only let go of an upload of theirs that didn't finish.
+  const allowed =
+    photo !== null && (c.get('album') === null || (photo.pending && mayUpload(c, photo)));
+  if (!photo || !allowed) return c.json({ error: notFound }, 404);
   await deletePhotos(c, tag, [{ id: photo.id, size: photo.thumbSize + photo.fullSize }]);
   return c.body(null, 204);
 });
 
 space.get('/albums', async (c) => {
   const album = c.get('album');
-  const albums = album
-    ? await sharedAlbumList(c.env.DB, c.get('space'), album)
-    : await listAlbums(c.env.DB, c.get('space'));
-  return c.json<AlbumList>({ albums });
+  if (album) {
+    return c.json<AlbumList>({ albums: await sharedAlbumList(c.env.DB, c.get('space'), album) });
+  }
+  const [albums, removals] = await Promise.all([
+    listAlbums(c.env.DB, c.get('space')),
+    albumRemovals(c.env.DB, c.get('space')),
+  ]);
+  return c.json<AlbumList>({
+    albums: albums.map((each) => {
+      const removed = removals.get(each.id);
+      return removed ? { ...each, removed } : each;
+    }),
+  });
 });
 
 space.post('/albums', async (c) => {
@@ -612,23 +655,52 @@ function parseItemParams(params: { id: string; photo: string }) {
   return album.success && photo.success ? { album: album.data, photo: photo.data } : null;
 }
 
-/** Lists a photo in a shared album, with its details sealed under the album key. */
+const notListed = 'That album isn’t shared, or the photo isn’t here.';
+
+/**
+ * Lists a photo in a shared album, with its details sealed under the album key. Someone given
+ * the album can only list a photo they just added to it, once.
+ */
 space.put('/albums/:id/items/:photo', async (c) => {
   const params = parseItemParams(c.req.param());
   const body = await readBody(c, updateRecordSchema);
   if (!params || !body) return c.json({ error: messages.badRequest }, 400);
-  if (!(await putAlbumItem(c.env.DB, c.get('space'), { ...params, meta: body.meta }))) {
-    return c.json({ error: 'That album isn’t shared, or the photo isn’t here.' }, 404);
-  }
-  return c.body(null, 204);
+  const album = c.get('album');
+  if (album !== null && album !== params.album) return c.json({ error: albumOnly }, 403);
+  const item = { ...params, meta: body.meta };
+  const listed =
+    album === null
+      ? await putAlbumItem(c.env.DB, c.get('space'), item)
+      : await putAddedAlbumItem(c.env.DB, c.get('space'), item);
+  return listed ? c.body(null, 204) : c.json({ error: notListed }, 404);
 });
 
+/**
+ * Takes a photo out of a shared album. When someone given the album does it, the server
+ * remembers, so the owner's device takes the album out of the photo's own metadata too.
+ */
 space.delete('/albums/:id/items/:photo', async (c) => {
   const params = parseItemParams(c.req.param());
   if (!params || !(await readBody(c, emptySchema))) {
     return c.json({ error: messages.badRequest }, 400);
   }
-  await deleteAlbumItem(c.env.DB, c.get('space'), params.album, params.photo);
+  const album = c.get('album');
+  if (album === null) {
+    await deleteAlbumItem(c.env.DB, c.get('space'), params.album, params.photo);
+  } else {
+    if (album !== params.album) return c.json({ error: albumOnly }, 403);
+    await removeAlbumItem(c.env.DB, c.get('space'), params.album, params.photo);
+  }
+  return c.body(null, 204);
+});
+
+/** The owner's device took the album out of a photo someone given the album took out. */
+space.delete('/albums/:id/removed/:photo', async (c) => {
+  const params = parseItemParams(c.req.param());
+  if (!params || !(await readBody(c, emptySchema))) {
+    return c.json({ error: messages.badRequest }, 400);
+  }
+  await forgetAlbumRemoved(c.env.DB, c.get('space'), params.album, params.photo);
   return c.body(null, 204);
 });
 
@@ -761,8 +833,7 @@ space.post('/members', requireOwner, async (c) => {
   if ((await countPhotos(c.env.DB, tokenHash)) > 0) {
     return c.json({ error: messages.badRequest }, 409);
   }
-  // Someone given one album can only view it; otherwise they get what the owner chose.
-  const access: MemberAccess = album === null ? (body.access ?? 'view') : 'view';
+  const access: MemberAccess = body.access ?? 'view';
   const member = { id: body.id, tokenHash, meta: body.meta, album, access };
   if (!(await insertMember(c.env.DB, tag, member))) {
     return c.json({ error: messages.badRequest }, 409);
@@ -770,7 +841,7 @@ space.post('/members', requireOwner, async (c) => {
   return c.body(null, 201);
 });
 
-/** Changes what someone the whole library is shared with may do. Takes effect at once. */
+/** Changes what someone the library, or one album, is shared with may do. Takes effect at once. */
 space.put('/members/:id', requireOwner, async (c) => {
   const id = recordIdSchema.safeParse(c.req.param('id'));
   const body = await readBody(c, updateMemberSchema);

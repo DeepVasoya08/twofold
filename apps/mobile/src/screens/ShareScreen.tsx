@@ -15,7 +15,7 @@ import type { Session } from '@arcafold/core/account';
 import { errorMessage } from '@arcafold/core/errors';
 import { inviteLinkFor } from '@arcafold/core/invite-input';
 import type { Album } from '@arcafold/core/library/model';
-import { listMembers, removeMember } from '@arcafold/core/sharing';
+import { listMembers, removeMember, updateMemberAccess } from '@arcafold/core/sharing';
 import type { Member } from '@arcafold/core/sharing';
 import type { MemberAccess } from '@arcafold/types';
 
@@ -23,7 +23,12 @@ import { bottomInset } from '../../modules/system-bars';
 import { API_ORIGIN } from '../config';
 import { useAccount } from '../session/account';
 import { useInvites } from '../sharing/invites';
-import { ACCESS_LABELS, inviteMessage, spaceName } from '../sharing/sharing-text';
+import {
+  ACCESS_LABELS,
+  ALBUM_ACCESS_LABELS,
+  inviteMessage,
+  spaceName,
+} from '../sharing/sharing-text';
 import { Banner, Button, Note } from '../ui/kit';
 import { useNotice } from '../ui/notice';
 import { PillButton, Row, Section } from '../ui/rows';
@@ -33,18 +38,21 @@ import { PendingInviteList } from './InviteCards';
 
 type SpaceKeys = Session['opened']['space'];
 
-/** Picks what someone invited to the whole library will be able to do. */
+/** Picks what someone invited to the library, or to one album, will be able to do. */
 function AccessPicker({
   value,
+  album,
   disabled,
   palette,
   onChange,
 }: {
   value: MemberAccess;
+  album: boolean;
   disabled: boolean;
   palette: Palette;
   onChange: (access: MemberAccess) => void;
 }) {
+  const labels = album ? ALBUM_ACCESS_LABELS : ACCESS_LABELS;
   return (
     <View style={styles.access} accessibilityRole="radiogroup">
       <Text style={[styles.label, { color: palette.text }]}>What can they do?</Text>
@@ -72,17 +80,17 @@ function AccessPicker({
             </View>
             <View style={styles.optionText}>
               <Text style={[styles.optionTitle, { color: palette.text }]}>
-                {ACCESS_LABELS[access].title}
+                {labels[access].title}
               </Text>
-              <Text style={[styles.small, { color: palette.muted }]}>
-                {ACCESS_LABELS[access].detail}
-              </Text>
+              <Text style={[styles.small, { color: palette.muted }]}>{labels[access].detail}</Text>
             </View>
           </Pressable>
         );
       })}
       <Text style={[styles.small, { color: palette.muted }]}>
-        You can change this later in Settings.
+        {album
+          ? 'You can change this later on this screen.'
+          : 'You can change this later in Settings.'}
       </Text>
     </View>
   );
@@ -198,14 +206,13 @@ function InvitePanel({ album, palette }: { album: Album | null; palette: Palette
 
   return (
     <View style={styles.panel}>
-      {album === null ? (
-        <AccessPicker
-          value={picked ?? invite?.access ?? 'view'}
-          disabled={!invite || picked !== null}
-          palette={palette}
-          onChange={changeAccess}
-        />
-      ) : null}
+      <AccessPicker
+        value={picked ?? invite?.access ?? 'view'}
+        album={album !== null}
+        disabled={!invite || picked !== null}
+        palette={palette}
+        onChange={changeAccess}
+      />
       <View
         style={[styles.invite, { backgroundColor: palette.surface, borderColor: palette.border }]}
       >
@@ -252,7 +259,10 @@ function useSessionName(): { session: string } {
 
 type People = { state: 'loading' } | { state: 'ready'; members: Member[] } | { state: 'failed' };
 
-/** Who an album is shared with: remove someone, or stop sharing it with everyone. */
+/**
+ * Who an album is shared with: change what someone can do, remove someone, or stop sharing it
+ * with everyone.
+ */
 function AlbumPeople({
   album,
   keys,
@@ -325,29 +335,55 @@ function AlbumPeople({
         <Row title="Only you" palette={palette} />
       ) : (
         members.map((member) => (
-          <Row
-            key={member.id}
-            title={member.name}
-            detail="Can view and download"
-            palette={palette}
-            action={
-              <PillButton
-                label="Remove"
-                accessibilityLabel={`Remove ${member.name}`}
-                danger
-                disabled={busy}
-                palette={palette}
-                onPress={() => {
-                  run(async () => {
-                    await removeMember(keys, member.id);
-                    const left = members.filter((each) => each.id !== member.id);
-                    onSharedWith(left.map((each) => each.name));
-                    return left;
-                  }, `${member.name} can’t see “${album.title}” anymore`);
-                }}
-              />
-            }
-          />
+          <View key={member.id}>
+            <Row
+              title={member.name}
+              detail={ALBUM_ACCESS_LABELS[member.access].detail}
+              palette={palette}
+              action={
+                <PillButton
+                  label="Remove"
+                  accessibilityLabel={`Remove ${member.name}`}
+                  danger
+                  disabled={busy}
+                  palette={palette}
+                  onPress={() => {
+                    run(async () => {
+                      await removeMember(keys, member.id);
+                      const left = members.filter((each) => each.id !== member.id);
+                      onSharedWith(left.map((each) => each.name));
+                      return left;
+                    }, `${member.name} can’t see “${album.title}” anymore`);
+                  }}
+                />
+              }
+            />
+            <View style={styles.accessRow}>
+              {(['view', 'edit'] as const).map((access) => (
+                <PillButton
+                  key={access}
+                  label={`${member.access === access ? '✓ ' : ''}${ALBUM_ACCESS_LABELS[access].title}`}
+                  accessibilityLabel={`${member.name}: ${ALBUM_ACCESS_LABELS[access].title}`}
+                  disabled={busy}
+                  palette={palette}
+                  onPress={() => {
+                    if (member.access === access) return;
+                    run(
+                      async () => {
+                        await updateMemberAccess(keys, member.id, access);
+                        return members.map((each) =>
+                          each.id === member.id ? { ...each, access } : each,
+                        );
+                      },
+                      access === 'edit'
+                        ? `${member.name} can add to “${album.title}” now`
+                        : `${member.name} can only view “${album.title}” now`,
+                    );
+                  }}
+                />
+              ))}
+            </View>
+          </View>
         ))
       )}
       {error ? (
@@ -374,8 +410,8 @@ function AlbumPeople({
 }
 
 /**
- * Invite someone to the open space, or to one of its albums. People given an album can view
- * and download it, including photos added later, and nothing else.
+ * Invite someone to the open space, or to one of its albums. People given an album get it,
+ * including photos added later, and nothing else.
  */
 export function ShareScreen({
   album,
@@ -431,7 +467,7 @@ export function ShareScreen({
       >
         <Text style={[styles.body, { color: palette.muted }]}>
           {album
-            ? 'Invite someone you trust. They can view and download this album’s photos, including ones you add later, and nothing else.'
+            ? 'Invite someone you trust. They get this album’s photos, including ones you add later, and nothing else.'
             : `Invite someone you trust. They’ll see this ${where} and nothing else.`}
         </Text>
         {album ? (
@@ -468,6 +504,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   close: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  accessRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 12 },
   closeText: { fontSize: 22 },
   title: { flex: 1, fontSize: 20, fontWeight: '700' },
   content: { padding: 16, gap: 18 },

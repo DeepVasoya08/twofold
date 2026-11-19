@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAccount } from '../app/account';
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
-import { listMembers, removeMember } from '@arcafold/core/sharing';
+import { listMembers, removeMember, updateMemberAccess } from '@arcafold/core/sharing';
 import type { Member } from '@arcafold/core/sharing';
 import { useToast } from '../app/toast';
 import { useVault } from '../app/vault';
@@ -12,14 +12,15 @@ import { Icon } from './Icon';
 import { PendingInviteList } from './Invites';
 import { errorMessage } from '@arcafold/core/errors';
 import type { Album } from '@arcafold/core/library/model';
+import type { MemberAccess } from '@arcafold/types';
 
 import './album-share-dialog.css';
 
 type People = { state: 'loading' } | { state: 'ready'; members: Member[] } | { state: 'failed' };
 
 /**
- * Who one of your albums is shared with: invite someone, remove someone, or stop sharing it
- * with everyone. People get only this album, to view and download.
+ * Who one of your albums is shared with: invite someone, change what they can do there, remove
+ * someone, or stop sharing it with everyone. People get only this album.
  */
 export function AlbumShareDialog({
   open,
@@ -92,6 +93,32 @@ function AlbumPeople({ album }: { album: Album }) {
       });
   };
 
+  const onAccess = (member: Member, access: MemberAccess) => {
+    if (!keys || busy || access === member.access) return;
+    setBusy(true);
+    updateMemberAccess(keys, member.id, access)
+      .then(
+        () => {
+          const members = people.state === 'ready' ? people.members : [];
+          setPeople({
+            state: 'ready',
+            members: members.map((each) => (each.id === member.id ? { ...each, access } : each)),
+          });
+          toast.show(
+            access === 'edit'
+              ? `${member.name} can add to “${album.title}” now`
+              : `${member.name} can only view “${album.title}” now`,
+          );
+        },
+        (error: unknown) => {
+          toast.show(errorMessage(error));
+        },
+      )
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
   const onStop = () => {
     if (busy) return;
     setBusy(true);
@@ -115,8 +142,9 @@ function AlbumPeople({ album }: { album: Album }) {
   return (
     <div className="album-share">
       <p className="album-share__note">
-        Invite someone to this album. They can view and download its photos, including ones you add
-        later, and nothing else in your {where}.
+        Invite someone to this album. They get its photos, including ones you add later, and nothing
+        else in your {where}. With Add and edit, they can also add photos and take any photo out of
+        it.
       </p>
 
       <section aria-label="People with access">
@@ -136,6 +164,18 @@ function AlbumPeople({ album }: { album: Album }) {
               <li key={member.id} className="album-share__person">
                 <Icon name="users" size={18} />
                 <span className="album-share__name">{member.name}</span>
+                <select
+                  className="select"
+                  aria-label={`What ${member.name} can do`}
+                  value={member.access}
+                  disabled={busy}
+                  onChange={(event) => {
+                    onAccess(member, event.currentTarget.value === 'edit' ? 'edit' : 'view');
+                  }}
+                >
+                  <option value="view">View only</option>
+                  <option value="edit">Add and edit</option>
+                </select>
                 <button
                   type="button"
                   className="btn btn--danger-ghost btn--sm"

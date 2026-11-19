@@ -73,8 +73,8 @@ export async function insertMember(
 }
 
 /**
- * Changes what someone the whole library is shared with may do. Returns false if this space
- * shares its library with no such member (album members can only ever view).
+ * Changes what someone the library, or one album of it, is shared with may do. Returns false
+ * if this space has no such member.
  */
 export async function updateMemberAccess(
   db: D1Database,
@@ -83,7 +83,7 @@ export async function updateMemberAccess(
   access: MemberAccess,
 ): Promise<boolean> {
   const result = await db
-    .prepare('UPDATE members SET access = ? WHERE space = ? AND id = ? AND album IS NULL')
+    .prepare('UPDATE members SET access = ? WHERE space = ? AND id = ?')
     .bind(access, space, id)
     .run();
   return result.meta.changes === 1;
@@ -188,6 +188,7 @@ export async function deleteSharing(db: D1Database, space: string): Promise<void
     db.prepare('DELETE FROM joined WHERE space = ?').bind(space),
     db.prepare('DELETE FROM pending_invites WHERE space = ?').bind(space),
     db.prepare('DELETE FROM album_items WHERE space = ?').bind(space),
+    db.prepare('DELETE FROM album_removed WHERE space = ?').bind(space),
   ]);
 }
 

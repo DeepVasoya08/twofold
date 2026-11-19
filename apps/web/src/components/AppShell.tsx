@@ -7,7 +7,7 @@ import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useUploads } from '../app/uploads';
 import { loadSidebarCollapsed, saveSidebarCollapsed } from '../lib/sidebar';
-import { isViewOnly, useVault } from '../app/vault';
+import { canFillAlbum, useVault } from '../app/vault';
 import { Avatar, LockBadge, Logo, LogoMark } from './Brand';
 import { DownloadDialog } from './DownloadDialog';
 import { DownloadProgress } from './DownloadProgress';
@@ -96,7 +96,7 @@ export function AppShell({ children, uploadAlbumId }: AppShellProps) {
   const { space, state } = useVault();
   // An album you can only view can't take photos, so uploads there go to your timeline.
   const target = state.albums.find((album) => album.id === uploadAlbumId);
-  const uploadTarget = target && isViewOnly(target) ? undefined : uploadAlbumId;
+  const uploadTarget = target && !canFillAlbum(target) ? undefined : uploadAlbumId;
   const { lock: lockAccount } = useAccount();
   const me = useMe();
   const { photo } = useProfile();

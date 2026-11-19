@@ -177,7 +177,7 @@ describe('changing access', () => {
     );
   });
 
-  it('refuses unknown members, other spaces’ members, album members and bad values', async () => {
+  it('refuses unknown members, other spaces’ members and bad values', async () => {
     const member = await share('view');
     expect(
       (await owner.request('PUT', `/space/members/${newId()}`, { access: 'edit' })).status,
@@ -187,18 +187,19 @@ describe('changing access', () => {
     ).toBe(400);
     expect((await owner.request('PUT', `/space/members/${member.id}`, {})).status).toBe(400);
 
-    // Someone given one album can only ever view it.
+    // Someone given one album gets what the owner chose for them, and that can change too.
     const album = await addAlbum();
     expect(
       (await owner.request('PUT', `/space/albums/${album}/shared`, { meta: newMeta() })).status,
     ).toBe(204);
-    const albumMember = { id: newId(), token: random(16), meta: newMeta(), album, access: 'edit' };
+    const albumMember = { id: newId(), token: random(16), meta: newMeta(), album };
     expect((await owner.request('POST', '/space/members', albumMember)).status).toBe(201);
-    expect(
-      (await owner.request('PUT', `/space/members/${albumMember.id}`, { access: 'edit' })).status,
-    ).toBe(404);
     useSpace(guest, albumMember.token);
     expect(await accessOf(guest)).toBe('view');
+    expect(
+      (await owner.request('PUT', `/space/members/${albumMember.id}`, { access: 'edit' })).status,
+    ).toBe(204);
+    expect(await accessOf(guest)).toBe('edit');
 
     // Another space can't change this space's members.
     useSpace(owner, random(16));

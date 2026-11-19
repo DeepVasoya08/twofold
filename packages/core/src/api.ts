@@ -381,8 +381,15 @@ export function spaceApi(token: string) {
         { meta },
         headers,
       ),
+    /**
+     * Takes a photo out of a shared album. Done by someone given the album, the owner's device
+     * hears of it in `listAlbums` (`removed`).
+     */
     deleteAlbumItem: (id: string, photoId: string) =>
       call<undefined>('DELETE', `${album(id)}/items/${encodeURIComponent(photoId)}`, {}, headers),
+    /** The album was taken out of a photo someone given the album took out of it. */
+    forgetAlbumRemoved: (id: string, photoId: string) =>
+      call<undefined>('DELETE', `${album(id)}/removed/${encodeURIComponent(photoId)}`, {}, headers),
     /** Deletes every photo and album in the space. */
     wipe: () => call<undefined>('DELETE', '/space', {}, headers),
     listMembers: () => call<MemberList>('GET', '/space/members', undefined, headers),
@@ -390,7 +397,7 @@ export function spaceApi(token: string) {
       call<undefined>('POST', '/space/members', body, headers),
     removeMember: (id: string) =>
       call<undefined>('DELETE', `/space/members/${encodeURIComponent(id)}`, {}, headers),
-    /** Changes what someone the whole library is shared with may do. */
+    /** Changes what someone the library, or one album, is shared with may do. */
     updateMember: (id: string, access: MemberAccess) =>
       call<undefined>('PUT', `/space/members/${encodeURIComponent(id)}`, { access }, headers),
     /** With a member's token: what it may do there. */

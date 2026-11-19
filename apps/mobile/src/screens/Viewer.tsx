@@ -14,7 +14,7 @@ import {
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import { FormError } from '@arcafold/core/errors';
-import { canChangeAlbum, isViewOnly } from '@arcafold/core/library/albums';
+import { addsByUpload, canChangeAlbum, isViewOnly } from '@arcafold/core/library/albums';
 import type { Album, Photo } from '@arcafold/core/library/model';
 import type { Session } from '@arcafold/core/account';
 
@@ -153,7 +153,12 @@ export function Viewer({
     );
   };
   const canFile = photo !== undefined && !isViewOnly(photo);
-  const canTakeOut = canFile && album !== undefined && canChangeAlbum(album);
+  // Out of your own albums, or out of one shared with you that you may add to.
+  const canTakeOut =
+    photo !== undefined &&
+    album !== undefined &&
+    ((canFile && canChangeAlbum(album)) ||
+      (addsByUpload(album) && photo.library === album.library));
   const { setInAlbum, createAlbum } = library;
   /** Puts the photo in view in an album, or takes it out, and says how that went. */
   const file = (target: Album, included: boolean): Promise<void> => {
@@ -278,7 +283,7 @@ export function Viewer({
           </View>
         </View>
       ) : null}
-      {chrome && photo && space && (canMove || canFile) ? (
+      {chrome && photo && space && (canMove || canFile || canTakeOut) ? (
         <View style={[styles.actions, { paddingBottom: 24 + bottomInset() }]}>
           {moveError ? <Banner>{moveError}</Banner> : null}
           <View style={styles.actionRow}>

@@ -71,8 +71,17 @@ async function putItem(album: string, photo: string, meta = newMeta(), c = owner
 }
 
 /** Gives someone the album: a member row scoped to it, with their own token. */
-async function addAlbumMember(album: string): Promise<{ id: string; token: string }> {
-  const member = { id: newId(), token: random(16), meta: newMeta(), album };
+async function addAlbumMember(
+  album: string,
+  access?: 'view' | 'edit',
+): Promise<{ id: string; token: string }> {
+  const member = {
+    id: newId(),
+    token: random(16),
+    meta: newMeta(),
+    album,
+    ...(access && { access }),
+  };
   expect((await owner.request('POST', '/space/members', member)).status).toBe(201);
   return member;
 }
@@ -265,5 +274,133 @@ describe('sharing an album', () => {
     expect((await putItem(album, added, newMeta(), guest)).status).toBe(204);
     expect(await itemIds(album)).toEqual([added]);
     expect((await guest.request('DELETE', `/space/albums/${album}/shared`, {})).status).toBe(403);
+  });
+});
+
+describe('letting someone add to and edit an album', () => {
+  async function editor(album: string) {
+    const member = await addAlbumMember(album, 'edit');
+    useSpace(guest, member.token);
+    return member;
+  }
+
+  async function removedFrom(album: string): Promise<string[] | undefined> {
+    const albums = await (await owner.request('GET', '/space/albums')).json<AlbumList>();
+    return albums.albums.find((each) => each.id === album)?.removed;
+  }
+
+  it('lets them add a photo, sealed for the album until the owner seals it again', async () => {
+    const album = await addAlbum();
+    await shareAlbum(album);
+    await editor(album);
+    const added = await upload(guest);
+    const itemMeta = newMeta();
+    expect((await putItem(album, added, itemMeta, guest)).status).toBe(204);
+    expect(await photoIds(guest)).toEqual([added]);
+
+    const page = await (await owner.request('GET', '/space/photos')).json<PhotoPage>();
+    expect(page.photos[0]?.sealedForAlbum).toBe(album);
+    expect((await owner.request('PUT', `/space/photos/${added}`, { meta: newMeta() })).status).toBe(
+      204,
+    );
+    const after = await (await owner.request('GET', '/space/photos')).json<PhotoPage>();
+    expect(after.photos[0]?.sealedForAlbum).toBeUndefined();
+    // Their copy in the album is still theirs to see.
+    expect(await photoIds(guest)).toEqual([added]);
+  });
+
+  it('only lets them list a photo they just added, in their own album, once', async () => {
+    const album = await addAlbum();
+    const other = await addAlbum();
+    await shareAlbum(album);
+    await shareAlbum(other);
+    const owners = await upload();
+    await putItem(album, owners);
+    await editor(album);
+    expect((await putItem(album, owners, newMeta(), guest)).status).toBe(404);
+    const added = await upload(guest);
+    expect((await putItem(other, added, newMeta(), guest)).status).toBe(403);
+    expect((await putItem(album, added, newMeta(), guest)).status).toBe(204);
+    // Listed once: replacing its details is for the owner now.
+    expect((await putItem(album, added, newMeta(), guest)).status).toBe(404);
+  });
+
+  it('lets them take any photo out of the album, and tells the owner’s device', async () => {
+    const album = await addAlbum();
+    await shareAlbum(album);
+    const owners = await upload();
+    await putItem(album, owners);
+    await editor(album);
+    expect(
+      (await guest.request('DELETE', `/space/albums/${album}/items/${owners}`, {})).status,
+    ).toBe(204);
+    expect(await photoIds(guest)).toEqual([]);
+    // Only taken out of the album: the photo itself stays in the library.
+    expect(await photoIds(owner)).toEqual([owners]);
+    expect(await removedFrom(album)).toEqual([owners]);
+
+    expect(
+      (await owner.request('DELETE', `/space/albums/${album}/removed/${owners}`, {})).status,
+    ).toBe(204);
+    expect(await removedFrom(album)).toBeUndefined();
+  });
+
+  it('forgets a removal once the photo is listed again', async () => {
+    const album = await addAlbum();
+    await shareAlbum(album);
+    const photo = await upload();
+    await putItem(album, photo);
+    await editor(album);
+    await guest.request('DELETE', `/space/albums/${album}/items/${photo}`, {});
+    expect(await removedFrom(album)).toEqual([photo]);
+    expect((await putItem(album, photo)).status).toBe(204);
+    expect(await removedFrom(album)).toBeUndefined();
+  });
+
+  it('still keeps them from changing anything else', async () => {
+    const album = await addAlbum();
+    await shareAlbum(album);
+    const owners = await upload();
+    await putItem(album, owners);
+    await editor(album);
+    const refused: [string, string, unknown?][] = [
+      ['PUT', `/space/photos/${owners}`, { meta: newMeta() }],
+      ['POST', '/space/albums', { id: newId(), meta: newMeta() }],
+      ['PUT', `/space/albums/${album}`, { meta: newMeta() }],
+      ['DELETE', `/space/albums/${album}`, {}],
+      ['PUT', `/space/albums/${album}/shared`, { meta: newMeta() }],
+      ['DELETE', `/space/albums/${album}/shared`, {}],
+      ['DELETE', `/space/albums/${album}/removed/${owners}`, {}],
+      ['GET', '/space/members'],
+      ['POST', `/space/photos/trash`, { photos: [] }],
+    ];
+    for (const [method, path, body] of refused) {
+      expect((await guest.request(method, path, body)).status, `${method} ${path}`).toBe(403);
+    }
+    // A finished photo isn't theirs to delete, and someone else's upload isn't theirs to fill.
+    expect((await guest.request('DELETE', `/space/photos/${owners}`, {})).status).toBe(404);
+    const pending = { id: newId(), meta: newMeta(), thumbSize: 100, fullSize: 1000 };
+    expect((await owner.request('POST', '/space/photos', pending)).status).toBe(201);
+    expect((await putFile(guest, pending.id, 'thumb', randomBytes(100))).status).toBe(404);
+    expect((await guest.request('POST', `/space/photos/${pending.id}/commit`, {})).status).toBe(
+      404,
+    );
+    expect(await photoIds(owner)).toEqual([owners]);
+  });
+
+  it('lets the owner switch someone between viewing and editing', async () => {
+    const album = await addAlbum();
+    await shareAlbum(album);
+    const member = await addAlbumMember(album);
+    useSpace(guest, member.token);
+    const photo = { id: newId(), meta: newMeta(), thumbSize: 100, fullSize: 1000 };
+    expect((await guest.request('POST', '/space/photos', photo)).status).toBe(403);
+    expect(
+      (await owner.request('PUT', `/space/members/${member.id}`, { access: 'edit' })).status,
+    ).toBe(204);
+    const members = await (await owner.request('GET', '/space/members')).json<MemberList>();
+    expect(members.members[0]?.access).toBe('edit');
+    expect((await guest.request('POST', '/space/photos', photo)).status).toBe(201);
+    expect((await guest.request('DELETE', `/space/photos/${photo.id}`, {})).status).toBe(204);
   });
 });

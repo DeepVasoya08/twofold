@@ -36,7 +36,13 @@ import type {
   UploadStage,
 } from '@arcafold/core/library/space-store';
 import type { Album, Photo } from '@arcafold/core/library/model';
-import { fitsAlbum, isViewOnly, withAlbum } from '@arcafold/core/library/albums';
+import {
+  addsByUpload,
+  canFillAlbum,
+  fitsAlbum,
+  isViewOnly,
+  withAlbum,
+} from '@arcafold/core/library/albums';
 
 /**
  * The open space's photos and albums, decrypted in memory. Changes go to the space's store
@@ -303,7 +309,7 @@ export function albumPhotos(state: VaultState, albumId: string): Photo[] {
     .sort((a, b) => b.takenAt.localeCompare(a.takenAt));
 }
 
-export { fitsAlbum, isViewOnly };
+export { addsByUpload, canFillAlbum, fitsAlbum, isViewOnly };
 
 /** The album's chosen cover, or else its newest photo. */
 export function albumCover(state: VaultState, album: Album): Photo | undefined {
@@ -673,7 +679,17 @@ export function VaultProvider({
           'album' in requested
             ? { albumId: requested.album.id, included: requested.included }
             : requested;
+        // In an album shared with you that you may add to, photos can be taken out.
+        const takingOut =
+          album !== null && 'included' in change && !change.included && addsByUpload(album);
         const result = await settleEach(photoIds, SAVES_AT_ONCE, async (photoId) => {
+          if (takingOut) {
+            const photo = find(photoId);
+            if (photo.library !== album.library) throw new FormError(VIEW_ONLY);
+            const changed = withDetails(photo, change);
+            if (changed !== photo) await store.update(changed);
+            return;
+          }
           const photo = findChangeable(photoId);
           if (album && !fitsAlbum(photo, album)) {
             throw new FormError('Photos can only go in albums of their own library.');

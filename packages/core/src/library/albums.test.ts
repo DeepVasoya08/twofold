@@ -5,8 +5,10 @@ import {
   albumPhotos,
   albumSharing,
   albumTitle,
+  addsByUpload,
   albumsInTab,
   canChangeAlbum,
+  canFillAlbum,
   fitsAlbum,
   isViewOnly,
   withAlbum,
@@ -82,6 +84,20 @@ describe('who can change what', () => {
     expect(canChangeAlbum({ ...trip, library: 'Sam' })).toBe(true);
   });
 
+  it('lets photos into a shared album only if they let you add to it, by uploading', () => {
+    const editable = { ...trip, library: 'Sam', sharedAlbum: true };
+    const viewOnly = { ...editable, viewOnly: true };
+    expect(canFillAlbum(trip)).toBe(true);
+    expect(canFillAlbum(editable)).toBe(true);
+    expect(canFillAlbum(viewOnly)).toBe(false);
+    expect(canFillAlbum({ ...trip, library: 'Sam', viewOnly: true })).toBe(false);
+    expect(addsByUpload(trip)).toBe(false);
+    expect(addsByUpload(editable)).toBe(true);
+    expect(addsByUpload(viewOnly)).toBe(false);
+    // Renaming and deleting stay with its owner either way.
+    expect(canChangeAlbum(editable)).toBe(false);
+  });
+
   it('only lets photos into albums of their own library', () => {
     const mine = photo('a', '2026-01-01T00:00:00Z');
     const theirs = photo('b', '2026-01-01T00:00:00Z', { library: 'Sam' });
@@ -118,8 +134,11 @@ describe('albumSharing', () => {
   it('says who shared an album, or who it is shared with', () => {
     expect(albumSharing(trip)).toBeNull();
     expect(albumSharing({ ...trip, sharedWith: ['Sam', 'Ana'] })).toBe('Shared with Sam, Ana');
-    expect(albumSharing({ ...trip, library: 'Sam', sharedAlbum: true })).toBe(
+    expect(albumSharing({ ...trip, library: 'Sam', sharedAlbum: true, viewOnly: true })).toBe(
       'Shared with you by Sam',
+    );
+    expect(albumSharing({ ...trip, library: 'Sam', sharedAlbum: true })).toBe(
+      'Shared with you by Sam · you can add photos',
     );
     expect(albumSharing({ ...trip, library: 'Sam', viewOnly: true })).toBe(
       'From Sam’s library · view only',
