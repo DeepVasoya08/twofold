@@ -5,7 +5,7 @@ import { spaceOf } from '@arcafold/core/account';
 import type { Session } from '@arcafold/core/account';
 
 type SpaceKeys = NonNullable<Session['otherSpace']>;
-import { addsByUpload, fitsAlbum, withAlbum } from '@arcafold/core/library/albums';
+import { addsByUpload, copiesInto, fitsAlbum, withAlbum } from '@arcafold/core/library/albums';
 import type { Album, Photo } from '@arcafold/core/library/model';
 import { settleEach } from '@arcafold/core/settle-each';
 import type { Settled } from '@arcafold/core/settle-each';
@@ -309,6 +309,19 @@ export function useLibrary(session: Session): Library {
       const store = opened.current;
       if (!store) throw new Error('The library is closed.');
       const byId = new Map(photos.map((photo) => [photo.id, photo]));
+      // Into an album shared with you that you may add to, your photos go as copies.
+      if (included && addsByUpload(album)) {
+        const copies: Photo[] = [];
+        const copied = await settleEach(photoIds, 1, async (photoId) => {
+          const photo = byId.get(photoId);
+          if (!photo || !copiesInto(photo, album)) {
+            throw new FormError('Only your own photos can go in an album shared with you.');
+          }
+          copies.push(await store.add(await store.read(photoId), [album.id]));
+        });
+        setPhotos((current) => [...current, ...copies]);
+        return copied;
+      }
       const result = await settleEach(photoIds, SAVES_AT_ONCE, async (photoId) => {
         const photo = byId.get(photoId);
         if (!photo) throw new FormError('That photo isn’t here anymore.');

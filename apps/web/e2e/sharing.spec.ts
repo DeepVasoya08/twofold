@@ -3,7 +3,6 @@ import type { Page } from '@playwright/test';
 
 import {
   MAIN_PASSWORD,
-  choosePhotos,
   distinctPhotos,
   freshEmail,
   goTo,
@@ -256,11 +255,13 @@ test('sharing one album with add and edit: they add a photo and take one out', a
 }) => {
   const alice = await (await browser.newContext()).newPage();
   const bob = await (await browser.newContext()).newPage();
-  const [first, second, bobs] = distinctPhotos(3);
+  const [first, second, bobs, bobsOwn] = distinctPhotos(4);
   await signUp(alice, freshEmail(), MAIN_PASSWORD, 'Alice');
   await uploadPhotos(alice, 2, [first ?? Buffer.alloc(0), second ?? Buffer.alloc(0)]);
   await expect(alice.getByText('2 photos added to your vault')).toBeVisible();
   await signUp(bob, freshEmail(), MAIN_PASSWORD, 'Bob');
+  await uploadPhotos(bob, 1, [bobsOwn ?? Buffer.alloc(0)]);
+  await expect(bob.getByText('1 photo added to your vault')).toBeVisible();
 
   // Alice shares both photos in a new album, and lets whoever joins add and edit.
   const checks = alice.getByRole('button', { name: /^Select photo from / });
@@ -292,7 +293,13 @@ test('sharing one album with add and edit: they add a photo and take one out', a
   await bob.getByRole('link', { name: /Porto/ }).click();
   await expect(bob.getByText('Shared with you by Alice · you can add photos')).toBeVisible();
   await expect(decryptedTiles(bob)).toHaveCount(2);
-  const added = await choosePhotos(bob, 1, [bobs ?? Buffer.alloc(0)]);
+  await bob.getByRole('button', { name: 'Add photos' }).click();
+  const added = bob.getByRole('dialog', { name: 'Add photos' });
+  await added.getByLabel('Choose photos or files').setInputFiles({
+    name: 'bob.png',
+    mimeType: 'image/png',
+    buffer: bobs ?? Buffer.alloc(0),
+  });
   await added.getByRole('button', { name: 'Done' }).click();
   await expect(decryptedTiles(bob)).toHaveCount(3);
 
@@ -307,14 +314,32 @@ test('sharing one album with add and edit: they add a photo and take one out', a
   await expect(bob.getByText('1 photo removed from “Porto”')).toBeVisible();
   await expect(decryptedTiles(bob)).toHaveCount(2);
 
+  // A photo from his own library goes in as a copy; his own stays where it is.
+  await goTo(bob, 'Photos');
+  await bob
+    .getByRole('button', { name: /^Select photo from / })
+    .first()
+    .click();
+  await bar.getByRole('button', { name: 'Add to album' }).click();
+  await bob
+    .getByRole('dialog', { name: /to an album/ })
+    .getByRole('button', { name: /Porto/ })
+    .click();
+  await expect(bob.getByText('1 photo added to “Porto”')).toBeVisible();
+  await expect(decryptedTiles(bob)).toHaveCount(1);
+  await goTo(bob, 'Albums');
+  await bob.getByRole('tab', { name: 'Shared with me' }).click();
+  await bob.getByRole('link', { name: /Porto/ }).click();
+  await expect(decryptedTiles(bob)).toHaveCount(3);
+
   // Alice sees the album as Bob left it, and keeps the photo he took out in her library.
   await lock(alice);
   await unlockWith(alice, MAIN_PASSWORD);
   await goTo(alice, 'Albums');
   await alice.getByRole('link', { name: /Porto/ }).click();
-  await expect(decryptedTiles(alice)).toHaveCount(2);
-  await goTo(alice, 'Photos');
   await expect(decryptedTiles(alice)).toHaveCount(3);
+  await goTo(alice, 'Photos');
+  await expect(decryptedTiles(alice)).toHaveCount(4);
 
   // She can make him view-only again from the album's Share menu.
   await goTo(alice, 'Albums');

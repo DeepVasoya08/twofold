@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 
-import { albumTitle, fitsAlbum } from '@arcafold/core/library/albums';
+import { albumTitle, copiesInto, fitsAlbum } from '@arcafold/core/library/albums';
 import { errorMessage } from '@arcafold/core/errors';
 import type { Album, Photo } from '@arcafold/core/library/model';
 
@@ -216,7 +216,7 @@ export function AddFromSheet({
   onPhone,
   onCancel,
 }: {
-  /** Whether photos can be uploaded into it from this phone (only into your own albums). */
+  /** Whether photos can be uploaded into it from this phone (not into a library shared with you). */
   canUpload: boolean;
   onLibrary: () => void;
   onPhone: () => void;
@@ -257,7 +257,7 @@ export function PickAlbumSheet({
   onNew: () => void;
   onCancel: () => void;
 }) {
-  const fitting = albums.filter((album) => fitsAlbum(photo, album));
+  const fitting = albums.filter((album) => fitsAlbum(photo, album) || copiesInto(photo, album));
   return (
     <Sheet title="Add to album" onCancel={onCancel}>
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
