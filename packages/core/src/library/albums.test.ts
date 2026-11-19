@@ -9,6 +9,7 @@ import {
   albumsInTab,
   canChangeAlbum,
   canFillAlbum,
+  copiesInto,
   fitsAlbum,
   isViewOnly,
   withAlbum,
@@ -96,6 +97,11 @@ describe('who can change what', () => {
     expect(addsByUpload(viewOnly)).toBe(false);
     // Renaming and deleting stay with its owner either way.
     expect(canChangeAlbum(editable)).toBe(false);
+    const mine = photo('a', '2026-01-01T00:00:00Z');
+    expect(copiesInto(mine, editable)).toBe(true);
+    expect(copiesInto(mine, viewOnly)).toBe(false);
+    expect(copiesInto(mine, trip)).toBe(false);
+    expect(copiesInto({ ...mine, library: 'Sam' }, editable)).toBe(false);
   });
 
   it('only lets photos into albums of their own library', () => {

@@ -84,8 +84,7 @@ export function AlbumScreen({
           kind="secondary"
           label="Add photos"
           onPress={() => {
-            if (uploadOnly) onUpload();
-            else setOpen('add');
+            setOpen('add');
           }}
         />
       ) : null}
@@ -122,8 +121,15 @@ export function AlbumScreen({
             </>
           ) : uploadOnly ? (
             <>
-              <Note>Add photos from this phone. Everyone the album is shared with sees them.</Note>
-              <Button label="Add photos" onPress={onUpload} />
+              <Note>
+                Add photos from your library or this phone. Everyone it’s shared with sees them.
+              </Note>
+              <Button
+                label="Add photos"
+                onPress={() => {
+                  setOpen('add');
+                }}
+              />
             </>
           ) : (
             <Note>Photos added to this album will show up here.</Note>
@@ -195,7 +201,7 @@ export function AlbumScreen({
       ) : null}
       {open === 'add' ? (
         <AddFromSheet
-          canUpload={album.library === undefined}
+          canUpload={album.library === undefined || uploadOnly}
           onLibrary={() => {
             close();
             onChoose();

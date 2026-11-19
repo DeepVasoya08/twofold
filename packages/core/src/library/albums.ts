@@ -35,8 +35,16 @@ export function canFillAlbum(album: Album): boolean {
 }
 
 /**
- * Whether you add to this album by uploading new photos only (an album someone shared with you
- * that you may add to), rather than by choosing photos already in your library.
+ * Whether a photo goes into an album as a copy: a photo of your own, into an album someone
+ * shared with you that you may add to. The copy is theirs to see; your photo stays as it is.
+ */
+export function copiesInto(photo: Photo, album: Album): boolean {
+  return addsByUpload(album) && photo.library === undefined && !isViewOnly(photo) && !photo.file;
+}
+
+/**
+ * Whether photos reach this album as new uploads (an album someone shared with you that you
+ * may add to): from this device, or copies of your own photos, never by filing them.
  */
 export function addsByUpload(album: Album): boolean {
   return album.sharedAlbum === true && canFillAlbum(album);

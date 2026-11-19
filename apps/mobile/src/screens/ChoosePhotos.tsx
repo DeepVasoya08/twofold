@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 
-import { fitsAlbum } from '@arcafold/core/library/albums';
+import { copiesInto, fitsAlbum } from '@arcafold/core/library/albums';
 import type { Album } from '@arcafold/core/library/model';
 
 import { albumChangeText, chosenText } from '../library/album-text';
@@ -33,7 +33,9 @@ export function ChoosePhotos({
   const candidates = useMemo(
     () =>
       timelinePhotos(library.photos).filter(
-        (photo) => fitsAlbum(photo, album) && !photo.albumIds.includes(album.id),
+        (photo) =>
+          (fitsAlbum(photo, album) && !photo.albumIds.includes(album.id)) ||
+          copiesInto(photo, album),
       ),
     [library.photos, album],
   );

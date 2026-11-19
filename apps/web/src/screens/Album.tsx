@@ -3,6 +3,7 @@ import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useSelection } from '../app/selection';
 import { useToast } from '../app/toast';
+import { useUploads } from '../app/uploads';
 import {
   albumCover,
   albumFiles,
@@ -36,6 +37,8 @@ export function Album({ albumId }: { albumId: string }) {
   const selection = useSelection();
   const album = state.albums.find((candidate) => candidate.id === albumId);
   const downloads = useDownloads();
+  // Uploads made while an album is open go into it.
+  const { openDialog: openUpload } = useUploads();
 
   if (!album) {
     return (
@@ -81,6 +84,17 @@ export function Album({ albumId }: { albumId: string }) {
           Albums
         </Link>
         <div className="album-toolbar__actions">
+          {canFillAlbum(album) && (
+            <button
+              type="button"
+              className="btn btn--secondary"
+              aria-label="Add photos"
+              onClick={openUpload}
+            >
+              <Icon name="image-plus" size={18} />
+              <span className="album-toolbar__label">Add photos</span>
+            </button>
+          )}
           {items.length > 0 && (
             <button
               type="button"

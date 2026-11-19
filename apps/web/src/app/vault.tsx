@@ -39,6 +39,7 @@ import type { Album, Photo } from '@arcafold/core/library/model';
 import {
   addsByUpload,
   canFillAlbum,
+  copiesInto,
   fitsAlbum,
   isViewOnly,
   withAlbum,
@@ -309,7 +310,7 @@ export function albumPhotos(state: VaultState, albumId: string): Photo[] {
     .sort((a, b) => b.takenAt.localeCompare(a.takenAt));
 }
 
-export { addsByUpload, canFillAlbum, fitsAlbum, isViewOnly };
+export { addsByUpload, canFillAlbum, copiesInto, fitsAlbum, isViewOnly };
 
 /** The album's chosen cover, or else its newest photo. */
 export function albumCover(state: VaultState, album: Album): Photo | undefined {
@@ -679,6 +680,19 @@ export function VaultProvider({
           'album' in requested
             ? { albumId: requested.album.id, included: requested.included }
             : requested;
+        // Into an album shared with you that you may add to, your photos go as copies.
+        if (album !== null && 'included' in change && change.included && addsByUpload(album)) {
+          const copies: Photo[] = [];
+          const copied = await settleEach(photoIds, 1, async (photoId) => {
+            const photo = find(photoId);
+            if (!copiesInto(photo, album)) {
+              throw new FormError('Only your own photos can go in an album shared with you.');
+            }
+            copies.push(await store.add(await store.read(photoId), [album.id]));
+          });
+          showUploaded(copies);
+          return copied;
+        }
         // In an album shared with you that you may add to, photos can be taken out.
         const takingOut =
           album !== null && 'included' in change && !change.included && addsByUpload(album);

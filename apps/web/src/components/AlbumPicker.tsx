@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
-import { albumCover, albumFiles, albumPhotos, fitsAlbum, useVault } from '../app/vault';
+import { albumCover, albumFiles, albumPhotos, copiesInto, fitsAlbum, useVault } from '../app/vault';
 import { photosAndFiles } from '../lib/format';
 import { Dialog } from './Dialog';
 import { TextField } from './Field';
@@ -12,14 +12,19 @@ import type { Album, Photo } from '@arcafold/core/library/model';
 
 import './album-picker.css';
 
-/** Albums at least one of `photos` can go in, leaving out `except` (the album being viewed). */
+/**
+ * Albums at least one of `photos` can go in, leaving out `except` (the album being viewed):
+ * filed, or copied into an album shared with you that you may add to.
+ */
 export function albumChoices(
   albums: readonly Album[],
   photos: readonly Photo[],
   except?: string,
 ): Album[] {
   return albums.filter(
-    (album) => album.id !== except && photos.some((photo) => fitsAlbum(photo, album)),
+    (album) =>
+      album.id !== except &&
+      photos.some((photo) => fitsAlbum(photo, album) || copiesInto(photo, album)),
   );
 }
 
