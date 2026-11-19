@@ -270,11 +270,22 @@ export interface StoredPhoto {
    * the space's upload key, so only the owner can open it (and seal it again as usual).
    */
   sealedForOwner?: true;
+  /**
+   * Set when someone given this album added the photo to it: its metadata is sealed under
+   * that album's key, which they have, until a device with the space's records key seals it
+   * again as usual.
+   */
+  sealedForAlbum?: string;
 }
 
 export interface StoredAlbum {
   id: string;
   meta: string;
+  /**
+   * For a shared album, as its owner (or a library editor) lists it: photos someone given the
+   * album took out of it, which the album should be taken out of in their own metadata too.
+   */
+  removed?: string[];
 }
 
 /** One page of a space's photos. `next` is the cursor for the following page, if any. */
@@ -313,7 +324,7 @@ export interface AccountStorage {
  * Starts a photo upload. The two files follow with PUT (in either order, or together); the
  * one that lands second makes the photo visible, so a separate commit is only a fallback.
  */
-export type CreatePhotoRequest = Omit<StoredPhoto, 'sealedForOwner'>;
+export type CreatePhotoRequest = Omit<StoredPhoto, 'sealedForOwner' | 'sealedForAlbum'>;
 
 /** A space's upload key: its secret half, sealed under the owner's key, if it has one. */
 export interface UploadKeyResponse {
@@ -442,7 +453,8 @@ export interface GrantRequest {
 
 /**
  * What someone a library is shared with may do: `view` sees and downloads, `edit` also adds,
- * changes and deletes photos and albums. Someone given one album can only ever view.
+ * changes and deletes photos and albums. For someone given one album, `edit` lets them add
+ * photos to it and take any photo out of it, and nothing more.
  */
 export const MEMBER_ACCESS = ['view', 'edit'] as const;
 
@@ -461,7 +473,7 @@ export interface StoredMember {
 
 /**
  * Shares a space, or one album of it: the member's own token (stored hashed) and their
- * sealed details. An album-scoped token reaches only that album's shared photos, read-only.
+ * sealed details. An album-scoped token reaches only that album's shared photos.
  */
 export interface CreateMemberRequest {
   id: string;
@@ -472,7 +484,7 @@ export interface CreateMemberRequest {
   access?: MemberAccess;
 }
 
-/** Changes what someone the library is shared with may do. */
+/** Changes what someone the library, or an album, is shared with may do. */
 export interface UpdateMemberRequest {
   access: MemberAccess;
 }

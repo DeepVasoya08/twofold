@@ -2,7 +2,12 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { albumPhotos, albumSharing, canChangeAlbum } from '@arcafold/core/library/albums';
+import {
+  addsByUpload,
+  albumPhotos,
+  albumSharing,
+  canChangeAlbum,
+} from '@arcafold/core/library/albums';
 import type { Album } from '@arcafold/core/library/model';
 
 import { photoCount } from '../library/album-text';
@@ -59,6 +64,8 @@ export function AlbumScreen({
   const photos = useMemo(() => albumPhotos(library.photos, album.id), [library.photos, album.id]);
   const rows = useMemo(() => gridRows(photos), [photos]);
   const changeable = canChangeAlbum(album);
+  // An album shared with you that you may add to takes new photos from this phone.
+  const uploadOnly = addsByUpload(album);
   // Your own albums, ones in a library you can change, and ones shared with you (to leave).
   const hasMenu = changeable || album.sharedAlbum === true;
   const sharing = albumSharing(album);
@@ -72,12 +79,13 @@ export function AlbumScreen({
         {photos.length === 0 ? 'No photos yet' : photoCount(photos.length)}
         {sharing ? ` · ${sharing}` : ''}
       </Text>
-      {changeable && photos.length > 0 ? (
+      {(changeable || uploadOnly) && photos.length > 0 ? (
         <Button
           kind="secondary"
           label="Add photos"
           onPress={() => {
-            setOpen('add');
+            if (uploadOnly) onUpload();
+            else setOpen('add');
           }}
         />
       ) : null}
@@ -111,6 +119,11 @@ export function AlbumScreen({
                   setOpen('add');
                 }}
               />
+            </>
+          ) : uploadOnly ? (
+            <>
+              <Note>Add photos from this phone. Everyone the album is shared with sees them.</Note>
+              <Button label="Add photos" onPress={onUpload} />
             </>
           ) : (
             <Note>Photos added to this album will show up here.</Note>

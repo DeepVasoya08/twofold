@@ -11,6 +11,15 @@ export const ACCESS_LABELS: Record<MemberAccess, { title: string; detail: string
   },
 };
 
+/** What someone given one album can do there, in a few words. */
+export const ALBUM_ACCESS_LABELS: Record<MemberAccess, { title: string; detail: string }> = {
+  view: { title: 'View only', detail: 'They can see and download this album’s photos.' },
+  edit: {
+    title: 'Add and edit',
+    detail: 'They can also add photos to this album and take any photo out of it.',
+  },
+};
+
 /** Where an invite is from, as the person reading it says it. */
 export function spaceName(space: 'main' | 'private' | null): string {
   return space === 'private' ? 'private space' : 'library';

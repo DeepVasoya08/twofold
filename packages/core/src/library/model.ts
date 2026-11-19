@@ -38,12 +38,13 @@ export interface Photo {
   library?: string;
   /**
    * Set when the photo is here only because someone shared an album with you. You can view
-   * and download it, but not change it, and it stays out of your timeline.
+   * and download it (and, if they let you edit the album, take it out of it), but not change
+   * it, and it stays out of your timeline.
    */
   sharedAlbum?: boolean;
   /**
    * Set when the photo is someone else's and you can only view and download it: it came
-   * through a shared album, or its library was shared with you view-only.
+   * through a library, or an album, shared with you view-only.
    */
   viewOnly?: boolean;
   /** Encrypted bytes it takes up on the server (both files), once it is stored. */
@@ -83,7 +84,10 @@ export interface Album {
   coverPhotoId?: string;
   /** Set when the album is someone else's: whose library it is. */
   library?: string;
-  /** Set when someone shared just this album with you. It can be viewed, not changed. */
+  /**
+   * Set when someone shared just this album with you. You can't rename or delete it, but if
+   * it isn't `viewOnly` you can add photos to it and take them out.
+   */
   sharedAlbum?: boolean;
   /** Set when the album is someone else's and you can only view it. */
   viewOnly?: boolean;

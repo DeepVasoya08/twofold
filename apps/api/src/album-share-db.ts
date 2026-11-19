@@ -47,6 +47,7 @@ export async function deleteAlbumSharing(
       .prepare('UPDATE albums SET shared_meta = NULL WHERE id = ? AND space = ?')
       .bind(album, space),
     db.prepare('DELETE FROM album_items WHERE album = ? AND space = ?').bind(album, space),
+    db.prepare('DELETE FROM album_removed WHERE album = ? AND space = ?').bind(album, space),
     db.prepare('DELETE FROM members WHERE album = ? AND space = ?').bind(album, space),
   ]);
 }
@@ -54,8 +55,42 @@ export async function deleteAlbumSharing(
 /**
  * Adds a photo to what a shared album lists, or replaces its sealed details. Only a committed
  * photo of the same space can go in, and only while the album is shared; false otherwise.
+ * Listing it again forgets that someone took it out.
  */
 export async function putAlbumItem(
+  db: D1Database,
+  space: string,
+  item: { album: string; photo: string; meta: string },
+): Promise<boolean> {
+  const [result] = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO album_items (album, photo, space, meta)
+         SELECT ?1, ?2, ?3, ?4
+          WHERE EXISTS (SELECT 1 FROM albums
+                         WHERE id = ?1 AND space = ?3 AND shared_meta IS NOT NULL)
+            AND EXISTS (SELECT 1 FROM photos
+                         WHERE id = ?2 AND space = ?3 AND pending_since IS NULL)
+         ON CONFLICT (album, photo) DO UPDATE SET meta = excluded.meta
+          WHERE album_items.space = excluded.space`,
+      )
+      .bind(item.album, item.photo, space, item.meta),
+    db
+      .prepare(
+        `DELETE FROM album_removed WHERE album = ?1 AND photo = ?2 AND space = ?3
+           AND EXISTS (SELECT 1 FROM album_items WHERE album = ?1 AND photo = ?2 AND space = ?3)`,
+      )
+      .bind(item.album, item.photo, space),
+  ]);
+  return result?.meta.changes === 1;
+}
+
+/**
+ * Lists a photo someone given the album added, the first time only: once it's listed (or
+ * once the owner's device sealed it again), only the owner or a library editor can replace
+ * its details. False otherwise.
+ */
+export async function putAddedAlbumItem(
   db: D1Database,
   space: string,
   item: { album: string; photo: string; meta: string },
@@ -67,9 +102,9 @@ export async function putAlbumItem(
         WHERE EXISTS (SELECT 1 FROM albums
                        WHERE id = ?1 AND space = ?3 AND shared_meta IS NOT NULL)
           AND EXISTS (SELECT 1 FROM photos
-                       WHERE id = ?2 AND space = ?3 AND pending_since IS NULL)
-       ON CONFLICT (album, photo) DO UPDATE SET meta = excluded.meta
-        WHERE album_items.space = excluded.space`,
+                       WHERE id = ?2 AND space = ?3 AND pending_since IS NULL
+                         AND sealed_for_album = ?1)
+       ON CONFLICT (album, photo) DO NOTHING`,
     )
     .bind(item.album, item.photo, space, item.meta)
     .run();
@@ -82,8 +117,62 @@ export async function deleteAlbumItem(
   album: string,
   photo: string,
 ): Promise<void> {
+  await db.batch([
+    db
+      .prepare('DELETE FROM album_items WHERE album = ? AND photo = ? AND space = ?')
+      .bind(album, photo, space),
+    db
+      .prepare('DELETE FROM album_removed WHERE album = ? AND photo = ? AND space = ?')
+      .bind(album, photo, space),
+  ]);
+}
+
+/**
+ * Takes a photo out of a shared album for someone given the album, and remembers it was taken
+ * out until the owner's device has caught up (`forgetAlbumRemoved`). False if it wasn't listed.
+ */
+export async function removeAlbumItem(
+  db: D1Database,
+  space: string,
+  album: string,
+  photo: string,
+): Promise<boolean> {
+  const [, removed] = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO album_removed (album, photo, space)
+         SELECT album, photo, space FROM album_items
+          WHERE album = ?1 AND photo = ?2 AND space = ?3
+         ON CONFLICT (album, photo) DO NOTHING`,
+      )
+      .bind(album, photo, space),
+    db
+      .prepare('DELETE FROM album_items WHERE album = ? AND photo = ? AND space = ?')
+      .bind(album, photo, space),
+  ]);
+  return removed?.meta.changes === 1;
+}
+
+/** Photos people given an album took out of it, by album, that the owner's device hasn't seen. */
+export async function albumRemovals(db: D1Database, space: string): Promise<Map<string, string[]>> {
+  const { results } = await db
+    .prepare('SELECT album, photo FROM album_removed WHERE space = ? ORDER BY album, photo')
+    .bind(space)
+    .all<{ album: string; photo: string }>();
+  const byAlbum = new Map<string, string[]>();
+  for (const row of results) byAlbum.set(row.album, [...(byAlbum.get(row.album) ?? []), row.photo]);
+  return byAlbum;
+}
+
+/** The owner's device took the album out of the photo's own metadata. */
+export async function forgetAlbumRemoved(
+  db: D1Database,
+  space: string,
+  album: string,
+  photo: string,
+): Promise<void> {
   await db
-    .prepare('DELETE FROM album_items WHERE album = ? AND photo = ? AND space = ?')
+    .prepare('DELETE FROM album_removed WHERE album = ? AND photo = ? AND space = ?')
     .bind(album, photo, space)
     .run();
 }

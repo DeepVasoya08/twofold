@@ -135,6 +135,7 @@ describe('Recently deleted', () => {
       'pending_since',
       'trashed',
       'sealed_for_owner',
+      'sealed_for_album',
     ]);
   });
 

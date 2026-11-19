@@ -12,6 +12,7 @@ interface PhotoRow {
   full_size: number;
   pending_since: number | null;
   sealed_for_owner: number;
+  sealed_for_album: string | null;
 }
 
 function toPhoto(row: PhotoRow): StoredPhoto {
@@ -22,6 +23,7 @@ function toPhoto(row: PhotoRow): StoredPhoto {
     fullSize: row.full_size,
   };
   if (row.sealed_for_owner === 1) photo.sealedForOwner = true;
+  if (row.sealed_for_album !== null) photo.sealedForAlbum = row.sealed_for_album;
   return photo;
 }
 
@@ -48,7 +50,7 @@ export async function listPhotos(
 ): Promise<StoredPhoto[]> {
   const { results } = await db
     .prepare(
-      `SELECT id, meta, thumb_size, full_size, pending_since, sealed_for_owner FROM photos
+      `SELECT id, meta, thumb_size, full_size, pending_since, sealed_for_owner, sealed_for_album FROM photos
         WHERE space = ? AND id > ? AND pending_since IS NULL AND trashed = 0
         ORDER BY id LIMIT ?`,
     )
@@ -64,30 +66,37 @@ export async function findPhoto(
 ): Promise<PhotoRecord | null> {
   const row = await db
     .prepare(
-      'SELECT id, meta, thumb_size, full_size, pending_since, sealed_for_owner FROM photos WHERE space = ? AND id = ?',
+      'SELECT id, meta, thumb_size, full_size, pending_since, sealed_for_owner, sealed_for_album FROM photos WHERE space = ? AND id = ?',
     )
     .bind(space, id)
     .first<PhotoRow>();
   return row ? { ...toPhoto(row), pending: row.pending_since !== null } : null;
 }
 
+/** Who a new photo's metadata is sealed for, when it isn't the space's records key. */
+export type SealedFor = { owner: true } | { album: string } | null;
+
 /**
- * Starts an upload. Returns false if the id is taken (in any space). `sealedForOwner` marks a
- * photo a phone added with an upload-only token.
+ * Starts an upload. Returns false if the id is taken (in any space). `sealedFor` marks a
+ * photo a phone added with an upload-only token (`owner`), or one someone given one album
+ * added to it (`album`).
  */
 export async function insertPendingPhoto(
   db: D1Database,
   space: string,
   photo: StoredPhoto,
   now: number,
-  sealedForOwner = false,
+  sealedFor: SealedFor = null,
 ): Promise<boolean> {
+  const forOwner = sealedFor !== null && 'owner' in sealedFor ? 1 : 0;
+  const forAlbum = sealedFor !== null && 'album' in sealedFor ? sealedFor.album : null;
   const result = await db
     .prepare(
-      `INSERT INTO photos (id, space, meta, thumb_size, full_size, pending_since, sealed_for_owner)
-       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+      `INSERT INTO photos
+         (id, space, meta, thumb_size, full_size, pending_since, sealed_for_owner, sealed_for_album)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
     )
-    .bind(photo.id, space, photo.meta, photo.thumbSize, photo.fullSize, now, sealedForOwner ? 1 : 0)
+    .bind(photo.id, space, photo.meta, photo.thumbSize, photo.fullSize, now, forOwner, forAlbum)
     .run();
   return result.meta.changes === 1;
 }
@@ -159,7 +168,7 @@ export async function listTrashedPhotos(
 ): Promise<StoredPhoto[]> {
   const { results } = await db
     .prepare(
-      `SELECT id, meta, thumb_size, full_size, pending_since, sealed_for_owner FROM photos
+      `SELECT id, meta, thumb_size, full_size, pending_since, sealed_for_owner, sealed_for_album FROM photos
         WHERE space = ? AND trashed = 1 AND id > ?
         ORDER BY id LIMIT ?`,
     )
@@ -183,7 +192,7 @@ export async function setPhotosTrashed(
     photos.map((photo) =>
       db
         .prepare(
-          `UPDATE photos SET meta = ?, trashed = ?, sealed_for_owner = 0
+          `UPDATE photos SET meta = ?, trashed = ?, sealed_for_owner = 0, sealed_for_album = NULL
             WHERE space = ? AND id = ? AND pending_since IS NULL AND trashed = ?`,
         )
         .bind(photo.meta, trashed ? 1 : 0, space, photo.id, trashed ? 0 : 1),
@@ -194,7 +203,7 @@ export async function setPhotosTrashed(
 
 /**
  * Replaces a photo's sealed metadata, which is then sealed the usual way (an owner opening a
- * photo a phone added clears `sealed_for_owner` like this). Returns false if the photo isn't
+ * photo a phone or an album editor added clears `sealed_for_owner` or `sealed_for_album`). Returns false if the photo isn't
  * a committed photo in this space.
  */
 export async function updatePhotoMeta(
@@ -205,7 +214,7 @@ export async function updatePhotoMeta(
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      `UPDATE photos SET meta = ?, sealed_for_owner = 0
+      `UPDATE photos SET meta = ?, sealed_for_owner = 0, sealed_for_album = NULL
         WHERE space = ? AND id = ? AND pending_since IS NULL`,
     )
     .bind(meta, space, id)
@@ -230,6 +239,9 @@ export async function deletePhotoRows<T extends { id: string }>(
     ),
     ...photos.map((photo) =>
       db.prepare('DELETE FROM album_items WHERE photo = ? AND space = ?').bind(photo.id, space),
+    ),
+    ...photos.map((photo) =>
+      db.prepare('DELETE FROM album_removed WHERE photo = ? AND space = ?').bind(photo.id, space),
     ),
   ]);
   return photos.filter((_, index) => results[index]?.meta.changes === 1);

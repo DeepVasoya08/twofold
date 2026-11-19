@@ -5,7 +5,7 @@ import { spaceOf } from '@arcafold/core/account';
 import type { Session } from '@arcafold/core/account';
 
 type SpaceKeys = NonNullable<Session['otherSpace']>;
-import { fitsAlbum, withAlbum } from '@arcafold/core/library/albums';
+import { addsByUpload, fitsAlbum, withAlbum } from '@arcafold/core/library/albums';
 import type { Album, Photo } from '@arcafold/core/library/model';
 import { settleEach } from '@arcafold/core/settle-each';
 import type { Settled } from '@arcafold/core/settle-each';
@@ -312,7 +312,9 @@ export function useLibrary(session: Session): Library {
       const result = await settleEach(photoIds, SAVES_AT_ONCE, async (photoId) => {
         const photo = byId.get(photoId);
         if (!photo) throw new FormError('That photo isn’t here anymore.');
-        if (!fitsAlbum(photo, album)) {
+        // In an album shared with you that you may add to, photos can be taken out of it.
+        const takingOut = !included && addsByUpload(album) && photo.library === album.library;
+        if (!takingOut && !fitsAlbum(photo, album)) {
           throw new FormError('Photos can only go in albums of their own library.');
         }
         const changed = withAlbum(photo, album.id, included);

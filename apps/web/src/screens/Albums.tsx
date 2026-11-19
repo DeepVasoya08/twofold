@@ -6,7 +6,7 @@ import { paths } from '../app/routes';
 import { useSmartAlbum } from '../app/answer';
 import { useSearch } from '../app/search';
 import { useToast } from '../app/toast';
-import { albumCover, albumFiles, albumPhotos, isViewOnly, useVault } from '../app/vault';
+import { albumCover, albumFiles, albumPhotos, useVault } from '../app/vault';
 import { AlbumActions } from '../components/AlbumActions';
 import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
@@ -259,7 +259,7 @@ function SmartAlbumCard({ album }: { album: SmartAlbum }) {
 /** Who an album is shared with or by, for its card. */
 function sharedLine(album: Album): string | null {
   if (album.library !== undefined) {
-    return `From ${album.library}${isViewOnly(album) ? ' · view only' : ''}`;
+    return `From ${album.library}${album.viewOnly ? ' · view only' : ''}`;
   }
   if (album.sharedWith && album.sharedWith.length > 0) {
     return `Shared with ${album.sharedWith.join(', ')}`;

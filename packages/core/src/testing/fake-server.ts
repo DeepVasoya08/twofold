@@ -15,7 +15,8 @@ import type { InviteApi, SpaceApi } from '../api';
 /**
  * An in-memory stand-in for the storage API, holding exactly what the server would. A
  * member's share token reaches its owner's space, but not the owner-only routes. A token
- * given one album reaches only that album's listed photos, read-only.
+ * given one album reaches only that album's listed photos; if it may edit, it can also add
+ * photos to the album and take any out.
  */
 export class FakeServer {
   photos = new Map<
@@ -26,6 +27,8 @@ export class FakeServer {
   albums = new Map<string, { token: string; album: StoredAlbum; shared: string | null }>();
   /** By `album/photo`: a shared album's sealed copy of a photo's details. */
   items = new Map<string, { album: string; photo: string; meta: string }>();
+  /** By `album/photo`: photos someone given the album took out, until the owner catches up. */
+  removed = new Set<string>();
   /**
    * By share token: whose space it opens, the member record, its album if limited, and what
    * it may do.
@@ -90,6 +93,20 @@ export class FakeServer {
       if (scope !== null) throw new ApiError(403, 'Album only');
       if (member?.access === 'view') throw new ApiError(403, 'View only');
     };
+    /** Someone given one album who may edit it. */
+    const albumEditor = scope !== null && member?.access === 'edit';
+    /** Uploading: a library editor, or an album editor (photos sealed for the album). */
+    const mayAdd = () => {
+      if (!albumEditor) writable();
+    };
+    /** An upload an album editor started for their album and hasn't finished. */
+    const ownUpload = (id: string) => {
+      const entry = this.photos.get(id);
+      if (entry?.token !== space || entry.committed || entry.photo.sealedForAlbum !== scope) {
+        throw new ApiError(404, 'Not here');
+      }
+      return entry;
+    };
     // Someone given one album sees only what it lists, and nothing in Recently deleted.
     const listed = (id: string) =>
       scope === null || (this.items.has(`${scope}/${id}`) && !this.photos.get(id)?.trashed);
@@ -109,6 +126,7 @@ export class FakeServer {
         entry.trashed = trashed;
         entry.photo = { ...entry.photo, meta };
         delete entry.photo.sealedForOwner;
+        delete entry.photo.sealedForAlbum;
         moved.push(id);
       }
       return Promise.resolve({ photoIds: moved });
@@ -127,6 +145,7 @@ export class FakeServer {
       const entry = this.albums.get(album);
       if (entry) entry.shared = null;
       for (const [key, item] of this.items) if (item.album === album) this.items.delete(key);
+      for (const key of this.removed) if (key.startsWith(`${album}/`)) this.removed.delete(key);
       for (const [key, each] of this.members) if (each.album === album) this.members.delete(key);
     };
     return {
@@ -140,14 +159,13 @@ export class FakeServer {
                 !entry.trashed &&
                 listed(entry.photo.id),
             )
-            .map((entry) =>
-              scope === null
-                ? entry.photo
-                : {
-                    ...entry.photo,
-                    meta: this.items.get(`${scope}/${entry.photo.id}`)?.meta ?? '',
-                  },
-            ),
+            .map((entry) => {
+              if (scope === null) return entry.photo;
+              // The album's copy, as the server lists it: nothing about how the space keeps it.
+              const { id, thumbSize, fullSize } = entry.photo;
+              const meta = this.items.get(`${scope}/${id}`)?.meta ?? '';
+              return { id, meta, thumbSize, fullSize };
+            }),
           next: null,
         }),
       listAlbums: () =>
@@ -156,17 +174,24 @@ export class FakeServer {
             .filter((entry) =>
               scope === null ? entry.token === space : entry.album.id === scope && entry.shared,
             )
-            .map((entry) =>
-              scope === null ? entry.album : { id: entry.album.id, meta: entry.shared ?? '' },
-            ),
+            .map((entry) => {
+              if (scope !== null) return { id: entry.album.id, meta: entry.shared ?? '' };
+              const removed = [...this.removed]
+                .map((key) => key.split('/'))
+                .filter(([album]) => album === entry.album.id)
+                .map(([, photo]) => photo ?? '');
+              return removed.length > 0 ? { ...entry.album, removed } : entry.album;
+            }),
         }),
       createPhoto: (photo) => {
-        writable();
-        this.photos.set(photo.id, { token: space, photo, committed: false });
+        mayAdd();
+        const stored = scope === null ? photo : { ...photo, sealedForAlbum: scope };
+        this.photos.set(photo.id, { token: space, photo: stored, committed: false });
         return Promise.resolve(undefined);
       },
       putFile: (id: string, part: PhotoPart, bytes: Uint8Array<ArrayBuffer>) => {
-        mine(id);
+        if (albumEditor) ownUpload(id);
+        else mine(id);
         this.files.set(`${id}/${part}`, bytes);
         // Like the server: the second file commits the photo.
         const entry = this.photos.get(id);
@@ -176,7 +201,7 @@ export class FakeServer {
         return Promise.resolve({ committed });
       },
       commitPhoto: (id) => {
-        mine(id).committed = true;
+        (albumEditor ? ownUpload(id) : mine(id)).committed = true;
         return Promise.resolve(undefined);
       },
       getFile: (id, part) => {
@@ -209,13 +234,18 @@ export class FakeServer {
         const entry = mine(id);
         entry.photo = { ...entry.photo, meta };
         delete entry.photo.sealedForOwner;
+        delete entry.photo.sealedForAlbum;
         return Promise.resolve(undefined);
       },
       deletePhoto: (id) => {
-        writable();
-        mine(id);
+        if (albumEditor) ownUpload(id);
+        else {
+          writable();
+          mine(id);
+        }
         this.photos.delete(id);
         for (const [key, item] of this.items) if (item.photo === id) this.items.delete(key);
+        for (const key of this.removed) if (key.endsWith(`/${id}`)) this.removed.delete(key);
         this.files.delete(`${id}/thumb`);
         this.files.delete(`${id}/full`);
         return Promise.resolve(undefined);
@@ -257,18 +287,33 @@ export class FakeServer {
         };
       },
       putAlbumItem: async (id, photoId, meta) => {
-        writable();
+        mayAdd();
         await Promise.resolve();
+        if (scope !== null && id !== scope) throw new ApiError(403, 'Album only');
         const photo = this.photos.get(photoId);
-        if (!ownAlbum(id).shared || photo?.token !== space || !photo.committed) {
+        const key = `${id}/${photoId}`;
+        const allowed =
+          scope === null || (photo?.photo.sealedForAlbum === scope && !this.items.has(key));
+        if (!ownAlbum(id).shared || photo?.token !== space || !photo.committed || !allowed) {
           throw new ApiError(404, 'Not here');
         }
-        this.items.set(`${id}/${photoId}`, { album: id, photo: photoId, meta });
+        this.items.set(key, { album: id, photo: photoId, meta });
+        this.removed.delete(key);
       },
       deleteAlbumItem: async (id, photoId) => {
+        mayAdd();
+        await Promise.resolve();
+        if (scope !== null && id !== scope) throw new ApiError(403, 'Album only');
+        if (this.albums.get(id)?.token !== space) return;
+        const key = `${id}/${photoId}`;
+        if (scope !== null && this.items.has(key)) this.removed.add(key);
+        if (scope === null) this.removed.delete(key);
+        this.items.delete(key);
+      },
+      forgetAlbumRemoved: async (id, photoId) => {
         writable();
         await Promise.resolve();
-        if (this.albums.get(id)?.token === space) this.items.delete(`${id}/${photoId}`);
+        if (this.albums.get(id)?.token === space) this.removed.delete(`${id}/${photoId}`);
       },
       wipe: async () => {
         ownerOnly();
@@ -294,14 +339,14 @@ export class FakeServer {
           id,
           meta,
           album: album ?? null,
-          access: album === undefined ? (access ?? 'view') : 'view',
+          access: access ?? 'view',
         });
       },
       updateMember: async (id, access) => {
         ownerOnly();
         await Promise.resolve();
         const entry = [...this.members.values()].find(
-          (each) => each.space === space && each.id === id && each.album === null,
+          (each) => each.space === space && each.id === id,
         );
         if (!entry) throw new ApiError(404, 'Not a member');
         entry.access = access;

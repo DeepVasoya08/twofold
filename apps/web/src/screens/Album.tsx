@@ -3,7 +3,15 @@ import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useSelection } from '../app/selection';
 import { useToast } from '../app/toast';
-import { albumCover, albumFiles, albumPhotos, isViewOnly, useVault } from '../app/vault';
+import {
+  albumCover,
+  albumFiles,
+  albumPhotos,
+  canFillAlbum,
+  isViewOnly,
+  useVault,
+} from '../app/vault';
+import { albumSharing } from '@arcafold/core/library/albums';
 import { AlbumActions } from '../components/AlbumActions';
 import { PageHeader } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
@@ -63,13 +71,7 @@ export function Album({ albumId }: { albumId: string }) {
       }}
     />
   );
-  const sharing = album.sharedAlbum
-    ? `Shared with you by ${album.library ?? 'someone'}`
-    : album.library !== undefined
-      ? `From ${album.library}’s library${album.viewOnly ? ' · view only' : ''}`
-      : album.sharedWith
-        ? `Shared with ${album.sharedWith.join(', ')}`
-        : null;
+  const sharing = albumSharing(album);
 
   return (
     <div className="page">
@@ -135,9 +137,11 @@ export function Album({ albumId }: { albumId: string }) {
 
       {items.length === 0 ? (
         <EmptyState icon="image-plus" title="Nothing in here yet">
-          {isViewOnly(album)
+          {!canFillAlbum(album)
             ? 'Photos and files added to this album will show up here.'
-            : 'Use Upload to add photos and files straight into this album.'}
+            : album.sharedAlbum
+              ? 'Use Upload to add photos to this album. Everyone it’s shared with will see them.'
+              : 'Use Upload to add photos and files straight into this album.'}
         </EmptyState>
       ) : (
         <>

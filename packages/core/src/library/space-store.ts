@@ -219,6 +219,11 @@ export interface Membership {
   myName: string;
   /** The name of whoever shared the library. */
   ownerName: string;
+  /**
+   * Set when only this album was shared. New photos go into it (and only it), and taking a
+   * photo out of it only unlists it there.
+   */
+  album?: string;
 }
 
 /** A file's name and type, if the record is a file's. */
@@ -239,6 +244,7 @@ function fileOf(meta: PhotoMeta): FileDetails | undefined {
 const NOT_A_PHOTO = 'That’s a file, not a photo. Download it to open it.';
 
 const ALBUM_GONE = 'That album isn’t here anymore.';
+const ALBUM_ONLY = 'In an album shared with you, you can add photos or take them out.';
 
 /** Who added a photo, as this device sees it. The owner's photos carry no `by`. */
 function addedBy(
@@ -459,6 +465,14 @@ export function remoteStore(
         .catch(() => undefined);
     }
   };
+  /** Photos being sealed again, which stopping sharing an album waits for. */
+  let adopting: Promise<void> = Promise.resolve();
+
+  /**
+   * What opens a photo someone given a shared album added to it: that album's key. Waits for
+   * the albums to be opened first, when `albumsOpened` is given.
+   */
+  let albumsOpened: Promise<unknown> = Promise.resolve();
 
   /** Opens every page of photos `listPage` returns, and remembers their keys. */
   const openPhotos = async (listPage: (after?: string) => Promise<PhotoPage>) => {
@@ -467,6 +481,11 @@ export function remoteStore(
     const photos: Photo[] = [];
     const backedUp: { id: string; meta: PhotoMeta }[] = [];
     const open = async (stored: PhotoPage['photos'][number]) => {
+      if (stored.sealedForAlbum !== undefined && membership?.album === undefined) {
+        await albumsOpened;
+        const shared = await sharedAccess(stored.sealedForAlbum);
+        return shared && crypto.openRecord(shared, 'photo', stored.id, stored.meta);
+      }
       if (!stored.sealedForOwner) return crypto.openRecord(keys, 'photo', stored.id, stored.meta);
       const pair = await ownerUploadKey();
       if (!pair) return null;
@@ -478,17 +497,28 @@ export function remoteStore(
       for (const stored of page.photos) {
         // A record that doesn't open was tampered with or isn't ours: leave it out.
         const opened = await open(stored).catch(() => null);
-        const meta = opened && parsePhotoMeta(decodeJson(opened));
+        let meta = opened && parsePhotoMeta(decodeJson(opened));
         const key = meta && crypto.fromBase64Url(meta.key);
         if (!meta || key?.length !== 32) continue;
+        if (stored.sealedForAlbum !== undefined) {
+          // Added to a shared album by someone given it: it's in that album only, and their
+          // fingerprint was taken with the album's key, so it matches nothing here.
+          meta = { ...meta, favorite: false, albumIds: [stored.sealedForAlbum] };
+          delete meta.fp;
+        }
         known.set(stored.id, { key, meta });
-        if (stored.sealedForOwner) backedUp.push({ id: stored.id, meta });
+        if (stored.sealedForOwner || stored.sealedForAlbum !== undefined) {
+          backedUp.push({ id: stored.id, meta });
+        }
         photos.push(toPhoto(stored.id, meta, membership, stored.thumbSize + stored.fullSize));
       }
       after = page.next ?? undefined;
     } while (after);
     // The photos show now; sealing them again carries on behind.
-    if (backedUp.length > 0) void adopt(backedUp);
+    if (backedUp.length > 0) {
+      const previous = adopting;
+      adopting = previous.then(() => adopt(backedUp));
+    }
     return photos;
   };
 
@@ -520,6 +550,34 @@ export function remoteStore(
     return moved;
   };
 
+  /**
+   * Takes shared albums out of photos someone given the album took out of it, in their own
+   * sealed metadata, and then lets the server forget. Best effort: what's left is done next time.
+   */
+  const catchUpRemovals = async (removals: { album: string; photoIds: string[] }[]) => {
+    const api = await remote();
+    const changed = new Set<string>();
+    for (const { album, photoIds } of removals) {
+      for (const photoId of photoIds) {
+        const entry = known.get(photoId);
+        const done = async () => {
+          if (entry?.meta.albumIds.includes(album)) {
+            const meta = {
+              ...entry.meta,
+              albumIds: entry.meta.albumIds.filter((id) => id !== album),
+            };
+            await api.updatePhoto(photoId, await sealPhoto(photoId, meta));
+            known.set(photoId, { ...entry, meta });
+            changed.add(photoId);
+          }
+          await api.forgetAlbumRemoved(album, photoId);
+        };
+        await done().catch(() => undefined);
+      }
+    }
+    return changed;
+  };
+
   return {
     list: async () => {
       const api = await remote();
@@ -528,18 +586,35 @@ export function remoteStore(
       // Albums are asked for alongside the photos, not after them.
       const storedAlbums = api.listAlbums();
       storedAlbums.catch(() => undefined);
-      const photos = await openPhotos((after) => api.listPhotos(after));
       const albums: Album[] = [];
-      for (const stored of (await storedAlbums).albums) {
-        const opened = await crypto
-          .openRecord(keys, 'album', stored.id, stored.meta)
-          .catch(() => null);
-        const meta = opened && parseAlbumMeta(decodeJson(opened));
-        if (!meta) continue;
-        albumMetas.set(stored.id, meta);
-        albums.push({ id: stored.id, title: meta.title });
-      }
-      return { photos, albums };
+      const removals: { album: string; photoIds: string[] }[] = [];
+      const opening = storedAlbums.then(async ({ albums: stored }) => {
+        for (const each of stored) {
+          const opened = await crypto
+            .openRecord(keys, 'album', each.id, each.meta)
+            .catch(() => null);
+          const meta = opened && parseAlbumMeta(decodeJson(opened));
+          if (!meta) continue;
+          albumMetas.set(each.id, meta);
+          albums.push({ id: each.id, title: meta.title });
+          if (each.removed && each.removed.length > 0) {
+            removals.push({ album: each.id, photoIds: each.removed });
+          }
+        }
+      });
+      // Photos added to a shared album by someone given it open with the album's key.
+      albumsOpened = opening.catch(() => undefined);
+      const photos = await openPhotos((after) => api.listPhotos(after));
+      await opening;
+      if (removals.length === 0) return { photos, albums };
+      const changed = await catchUpRemovals(removals);
+      return {
+        photos: photos.map((photo) => {
+          const entry = changed.has(photo.id) ? known.get(photo.id) : undefined;
+          return entry ? { ...photo, albumIds: entry.meta.albumIds } : photo;
+        }),
+        albums,
+      };
     },
 
     image: async (photoId, part) => {
@@ -640,14 +715,18 @@ export function remoteStore(
         if (file.sortedByYou) meta.sorted = 'you';
       }
       if (membership) meta.by = { id: membership.memberId, name: membership.myName };
+      const album = membership?.album;
+      // Someone given one album adds to it only, and keeps nothing else about the photo there.
+      if (album !== undefined) {
+        meta.favorite = false;
+        meta.albumIds = [album];
+        delete meta.words;
+        delete meta.sorted;
+      }
       const api = await remote();
       onStage?.('uploading');
-      await api.createPhoto({
-        id,
-        meta: await sealPhoto(id, meta),
-        thumbSize: thumb.length,
-        fullSize: full.length,
-      });
+      const sealed = await sealPhoto(id, meta);
+      await api.createPhoto({ id, meta: sealed, thumbSize: thumb.length, fullSize: full.length });
       try {
         // Both files go up together. Whichever lands second commits the photo; only if
         // neither saw the other is a separate commit needed. Both settle before any cleanup,
@@ -666,7 +745,9 @@ export function remoteStore(
         throw error;
       }
       known.set(id, { key, meta });
-      await syncShared(id, [], albumIds);
+      // Sealed under the album key already, so the same record is what the album lists.
+      if (album !== undefined) await api.putAlbumItem(album, id, sealed);
+      else await syncShared(id, [], albumIds);
       return toPhoto(
         id,
         meta,
@@ -679,6 +760,15 @@ export function remoteStore(
 
     update: async (photo) => {
       const entry = lookup(photo.id);
+      const album = membership?.album;
+      if (album !== undefined) {
+        // In an album shared with you, the only change is taking a photo out of it.
+        if (photo.albumIds.includes(album)) throw new FormError(ALBUM_ONLY);
+        const api = await remote();
+        await api.deleteAlbumItem(album, photo.id);
+        forget(photo.id);
+        return;
+      }
       const meta: PhotoMeta = { ...entry.meta, favorite: photo.favorite, albumIds: photo.albumIds };
       const category = photo.file?.category;
       if (entry.meta.kind === 'file' && category && photo.file?.sortedByYou) {
@@ -747,6 +837,8 @@ export function remoteStore(
     },
 
     removeAlbum: async (albumId) => {
+      // Photos added to it by people it was shared with must be sealed again before its key goes.
+      await adopting;
       const api = await remote();
       await api.deleteAlbum(albumId);
       albumMetas.delete(albumId);
@@ -782,6 +874,8 @@ export function remoteStore(
     },
 
     stopSharingAlbum: async (albumId) => {
+      // Photos added to it by people it was shared with must be sealed again before its key goes.
+      await adopting;
       const api = await remote();
       const current = albumMetas.get(albumId);
       if (!current) throw new FormError(ALBUM_GONE);
@@ -854,7 +948,10 @@ export interface SharedSource {
   id: string;
   /** Whose library it is. */
   name: string;
-  /** Set when only one album was shared, which can be viewed but not changed. */
+  /**
+   * Set when only one album was shared. Even if you may edit it, you can only add photos to
+   * it and take photos out of it.
+   */
   album?: boolean;
   /**
    * Whether its owner lets you add and change things there. Left out, you can. The server
@@ -880,9 +977,16 @@ export function combinedStore(
   let shared: SharedSource[] = [];
   /** The stores of libraries and albums you can only view. */
   const readOnly = new Set<SpaceStore>();
+  /** The stores of single albums shared with you that you may add to and take out of. */
+  const albumOnly = new Set<SpaceStore>();
   const changeable = (store: SpaceStore) => {
     if (readOnly.has(store)) throw new FormError(VIEW_ONLY_LIBRARY);
     return store;
+  };
+  /** For changes beyond adding to an album and taking photos out of it. */
+  const ownedChange = (store: SpaceStore) => {
+    if (albumOnly.has(store)) throw new FormError(ALBUM_ONLY);
+    return changeable(store);
   };
   const photoStores = new Map<string, SpaceStore>();
   const albumStores = new Map<string, SpaceStore>();
@@ -912,7 +1016,7 @@ export function combinedStore(
             sources.map(async (source) => {
               const editable = (source.editable ?? Promise.resolve(true)).catch(() => false);
               const loaded = await source.store.list().catch(() => null);
-              return { source, loaded, viewOnly: source.album === true || !(await editable) };
+              return { source, loaded, viewOnly: !(await editable) };
             }),
           ),
         );
@@ -920,7 +1024,11 @@ export function combinedStore(
       const loadedShared = await sharedLists;
       shared = loadedShared.map(({ source }) => source);
       readOnly.clear();
-      for (const { source, viewOnly } of loadedShared) if (viewOnly) readOnly.add(source.store);
+      albumOnly.clear();
+      for (const { source, viewOnly } of loadedShared) {
+        if (viewOnly) readOnly.add(source.store);
+        else if (source.album) albumOnly.add(source.store);
+      }
       const photos = [...mine.photos];
       const albums = [...mine.albums];
       const seen = new Map(photos.map((photo, index) => [photo.id, index]));
@@ -999,16 +1107,20 @@ export function combinedStore(
       if (target === own) return added;
       photoStores.set(added.id, target);
       const source = shared.find((candidate) => candidate.store === target);
-      return source ? { ...added, library: source.name } : added;
+      if (!source) return added;
+      // Marked like the rest of where it went, so an album's photo stays out of your timeline.
+      return { ...added, library: source.name, ...(source.album && { sharedAlbum: true }) };
     },
     update: async (photo) => changeable(storeOf(photo.id)).update(photo),
     remove: async (photoId) => {
-      await changeable(storeOf(photoId)).remove(photoId);
+      await ownedChange(storeOf(photoId)).remove(photoId);
       photoStores.delete(photoId);
     },
     listTrash: async () => {
-      // Libraries you can only view keep their Recently deleted to themselves.
-      const sources = shared.filter((source) => !readOnly.has(source.store));
+      // Libraries you can only view, and albums, keep their Recently deleted to themselves.
+      const sources = shared.filter(
+        (source) => !readOnly.has(source.store) && !albumOnly.has(source.store),
+      );
       const [mine, ...theirs] = await Promise.all([
         own.listTrash(),
         ...sources.map((source) => source.store.listTrash().catch(() => [])),
@@ -1023,13 +1135,13 @@ export function combinedStore(
       return photos;
     },
     trash: (photoIds, deletedAt) =>
-      eachStore(photoIds, (store, ids) => changeable(store).trash(ids, deletedAt)),
-    restore: (photoIds) => eachStore(photoIds, (store, ids) => changeable(store).restore(ids)),
+      eachStore(photoIds, (store, ids) => ownedChange(store).trash(ids, deletedAt)),
+    restore: (photoIds) => eachStore(photoIds, (store, ids) => ownedChange(store).restore(ids)),
     createAlbum: (title) => own.createAlbum(title),
     renameAlbum: async (albumId, title) =>
-      changeable(albumStoreOf(albumId)).renameAlbum(albumId, title),
+      ownedChange(albumStoreOf(albumId)).renameAlbum(albumId, title),
     removeAlbum: async (albumId) => {
-      await changeable(albumStoreOf(albumId)).removeAlbum(albumId);
+      await ownedChange(albumStoreOf(albumId)).removeAlbum(albumId);
       albumStores.delete(albumId);
     },
     // Only a space's owner can say who it's shared with, so only your own albums are shared.

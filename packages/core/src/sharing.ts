@@ -89,7 +89,10 @@ export interface Member {
   name: string;
   /** The album they were given, or null for the whole library. */
   album: string | null;
-  /** What they may do. Someone given one album can only view. */
+  /**
+   * What they may do. For someone given one album, `edit` means they can add photos to it and
+   * take any out of it.
+   */
   access: MemberAccess;
 }
 
@@ -151,7 +154,7 @@ interface InviterDetails {
   link: string;
   /** The album shared, or null for the whole library. */
   album: string | null;
-  /** What they'll be able to do in the library. An album can only be viewed. */
+  /** What they'll be able to do in the library or album. */
   access: MemberAccess;
   expiresAt: number;
   /**
@@ -245,7 +248,7 @@ export interface Invite {
   keys: InviteKeys;
   /** The album shared, or null for the whole library. */
   album: string | null;
-  /** What they'll be able to do in the library, once they're in. */
+  /** What they'll be able to do in the library or album, once they're in. */
   access: MemberAccess;
   expiresAt: number;
   /** The joiner's key, once pinned (just before this side's key is revealed). */
@@ -263,8 +266,8 @@ export type InviteProgress =
   | { stage: 'gone' };
 
 /**
- * Starts an invite for the library (`album` null) or one album, and keeps it in `space`. A
- * library invite starts out view-only; `setInviteAccess` changes that until it's confirmed.
+ * Starts an invite for the library (`album` null) or one album, and keeps it in `space`. An
+ * invite starts out view-only; `setInviteAccess` changes that until it's confirmed.
  */
 export async function startInvite(
   space: SpaceKeys,
@@ -351,8 +354,8 @@ async function pinJoiner(
 }
 
 /**
- * Changes what a library invite will let them do, any time before it's confirmed (and on
- * every device, since it's kept in the invite's record). An album can only ever be viewed.
+ * Changes what an invite will let them do, any time before it's confirmed (and on every
+ * device, since it's kept in the invite's record).
  */
 export async function setInviteAccess(
   invite: Invite,
@@ -360,8 +363,6 @@ export async function setInviteAccess(
   space: SpaceKeys,
   apis: SharingApis = defaultApis,
 ): Promise<void> {
-  if (invite.album !== null)
-    throw new FormError('Someone you share an album with can only view it.');
   await keepInvite({ ...invite, access }, space, apis);
   invite.access = access;
 }
@@ -452,7 +453,8 @@ export async function confirmInvite(
       memberId,
       encode({ v: 1, name: joiner.name }),
     ),
-    ...(album ? { album: album.albumId } : { access: invite.access }),
+    ...(album && { album: album.albumId }),
+    access: invite.access,
   });
   const grant: Grant = {
     v: 1,
@@ -478,7 +480,7 @@ export async function confirmInvite(
     id: memberId,
     name: joiner.name,
     album: album?.albumId ?? null,
-    access: album ? 'view' : invite.access,
+    access: invite.access,
   };
 }
 
@@ -719,13 +721,13 @@ export async function listMembers(
       id: stored.id,
       name: name ?? 'Someone',
       album: stored.album,
-      access: stored.album === null ? stored.access : 'view',
+      access: stored.access,
     });
   }
   return members;
 }
 
-/** Changes what someone the whole library is shared with may do. It applies at once. */
+/** Changes what someone the library, or one album, is shared with may do. It applies at once. */
 export async function updateMemberAccess(
   space: SpaceKeys,
   memberId: string,
@@ -825,7 +827,7 @@ export async function joinedStatus(
   return makeApi(library.token)
     .membership()
     .then(
-      ({ access }) => (library.album === undefined ? access : 'view'),
+      ({ access }) => access,
       (error: unknown) => (error instanceof ApiError && error.status === 400 ? 'gone' : 'view'),
     );
 }
@@ -875,7 +877,12 @@ async function sharedSources(
           ? crypto.albumAccess(library.token, key)
           : crypto.memberAccess(library.token, key),
         makeApi,
-        { memberId: library.memberId, myName, ownerName: library.name },
+        {
+          memberId: library.memberId,
+          myName,
+          ownerName: library.name,
+          ...(library.album && { album: library.album }),
+        },
       ),
       editable: Promise.resolve(library.access === 'edit'),
     };
