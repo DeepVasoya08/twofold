@@ -21,29 +21,19 @@ import {
   IDLE_POLL_MS,
   POLL_MS,
   abandonJoin,
-  advanceInvite,
-  advanceJoin,
   cancelInvite,
   confirmInvite,
   defaultApis,
-  finishJoin,
-  forgetPending,
-  listPending,
   setInviteAccess,
   startInvite,
   startJoin,
 } from '@arcafold/core/sharing';
-import type {
-  Invite,
-  InviteProgress,
-  Join,
-  JoinProgress,
-  Member,
-  SharingApis,
-} from '@arcafold/core/sharing';
+import type { Invite, Join, Member, SharingApis } from '@arcafold/core/sharing';
+import { advancePending, grantedText, passInterval } from '@arcafold/core/sharing-pass';
+import type { InviteEntry, JoinEntry } from '@arcafold/core/sharing-pass';
 import { useToast } from './toast';
 import { useVault } from './vault';
-import { FormError, errorMessage } from '@arcafold/core/errors';
+import { FormError } from '@arcafold/core/errors';
 
 /**
  * Invites the open space has in progress, on either side, moved along whenever Arcafold is
@@ -53,15 +43,7 @@ import { FormError, errorMessage } from '@arcafold/core/errors';
  * visit, takes it.
  */
 
-export interface InviteEntry {
-  invite: Invite;
-  progress: InviteProgress;
-}
-
-export interface JoinEntry {
-  join: Join;
-  progress: JoinProgress;
-}
+export type { InviteEntry, JoinEntry };
 
 /** An invite confirmed during this visit, so the screen that made it can say so. */
 export interface FinishedInvite {
@@ -114,11 +96,6 @@ const inert: PendingInvitesValue = {
 };
 
 const PendingInvitesContext = createContext<PendingInvitesValue>(inert);
-
-/** True for errors that end an invite, as opposed to a dropped connection worth retrying. */
-function isFinal(error: unknown): boolean {
-  return error instanceof FormError;
-}
 
 /** True when the screen open is one where invites are made or accepted. */
 function onSharingScreen(pathname: string): boolean {
@@ -202,73 +179,18 @@ function LivePendingInvites({
       joins: new Map(joins.map((entry) => [entry.join.id, entry.progress])),
     };
     runner.current = async () => {
-      const pending = await listPending(keys, sharing);
-      const nextInvites: InviteEntry[] = [];
-      const goneInvites: string[] = [];
-      for (const invite of pending.invites) {
-        if (settled.current.has(invite.id)) continue;
-        try {
-          const progress = await advanceInvite(invite, myName, keys, sharing);
-          if (progress.stage === 'gone') {
-            // Expired, cancelled elsewhere, or finished: the record is no use anymore.
-            await forgetPending(keys, invite.id, sharing);
-            goneInvites.push(invite.id);
-          } else {
-            nextInvites.push({ invite, progress });
-          }
-        } catch (error) {
-          if (!isFinal(error)) {
-            // Offline for a moment: keep showing what was shown.
-            const progress = before.invites.get(invite.id) ?? { stage: 'waiting' };
-            nextInvites.push({ invite, progress });
-            continue;
-          }
-          await cancelInvite(invite, keys, sharing);
-          goneInvites.push(invite.id);
-          toast.show(errorMessage(error));
-        }
-      }
-      const nextJoins: JoinEntry[] = [];
-      const goneJoins: Join[] = [];
-      const granted: { name: string; album: boolean }[] = [];
-      for (const join of pending.joins) {
-        if (settled.current.has(join.id)) continue;
-        try {
-          const progress = await advanceJoin(join, myName, sharing.invites);
-          if (progress.stage === 'gone') {
-            await forgetPending(keys, join.id, sharing);
-            goneJoins.push(join);
-          } else if (progress.stage === 'granted') {
-            await finishJoin(join, progress.grant, keys, sharing);
-            settled.current.add(join.id);
-            granted.push({ name: progress.grant.name, album: progress.grant.album !== undefined });
-          } else {
-            nextJoins.push({ join, progress });
-          }
-        } catch (error) {
-          if (!isFinal(error)) {
-            const progress = before.joins.get(join.id) ?? { stage: 'waiting' };
-            nextJoins.push({ join, progress });
-            continue;
-          }
-          await abandonJoin(join, keys, sharing);
-          goneJoins.push(join);
-          toast.show(errorMessage(error));
-        }
-      }
+      const result = await advancePending(keys, myName, sharing, settled.current, before);
+      for (const each of result.granted) settled.current.add(each.joinId);
+      for (const problem of result.problems) toast.show(problem);
       // Something settled meanwhile (on this device) stays settled.
-      setInvites(nextInvites.filter((entry) => !settled.current.has(entry.invite.id)));
-      setJoins(nextJoins.filter((entry) => !settled.current.has(entry.join.id)));
-      endInvites(goneInvites);
-      endJoins(goneJoins);
+      setInvites(result.invites.filter((entry) => !settled.current.has(entry.invite.id)));
+      setJoins(result.joins.filter((entry) => !settled.current.has(entry.join.id)));
+      endInvites(result.goneInvites);
+      endJoins(result.goneJoins);
       setReady(true);
-      const first = granted[0];
+      const first = result.granted[0];
       if (first) {
-        toast.show(
-          first.album
-            ? `${first.name} shared an album with you`
-            : `You joined ${first.name}’s library`,
-        );
+        toast.show(grantedText(first));
         if (onSharingScreen(pathname)) navigate(first.album ? paths.albums : paths.gallery);
         // Load the open space again, now with what they shared.
         reloadVault();
@@ -308,19 +230,19 @@ function LivePendingInvites({
   }, [check]);
 
   // While in view and something is waiting on the other side (or a sharing screen is open).
-  const busy = watchers > 0 || invites.length > 0 || joins.length > 0;
-  // Someone is partway through: the other side's next step could come at any moment.
-  const midway = joins.length > 0 || invites.some((entry) => entry.progress.stage === 'accepted');
-  const every = watchers > 0 ? POLL_MS : midway ? BACKGROUND_POLL_MS : IDLE_POLL_MS;
+  const every = passInterval(
+    { watching: watchers > 0, invites, joins },
+    { watching: POLL_MS, midway: BACKGROUND_POLL_MS, idle: IDLE_POLL_MS },
+  );
   useEffect(() => {
-    if (!busy) return;
+    if (every === null) return;
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') check();
     }, every);
     return () => {
       clearInterval(timer);
     };
-  }, [busy, every, check]);
+  }, [every, check]);
 
   const albumsRef = useRef(vault.albums);
   useEffect(() => {
