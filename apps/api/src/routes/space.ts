@@ -847,7 +847,7 @@ space.put('/members/:id', requireOwner, async (c) => {
   const body = await readBody(c, updateMemberSchema);
   if (!id.success || !body) return c.json({ error: messages.badRequest }, 400);
   if (!(await updateMemberAccess(c.env.DB, c.get('space'), id.data, body.access))) {
-    return c.json({ error: 'They don’t have access to this library anymore.' }, 404);
+    return c.json({ error: 'They don’t have access anymore.' }, 404);
   }
   return c.body(null, 204);
 });
