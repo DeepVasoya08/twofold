@@ -30,7 +30,7 @@ function setUp(initial: Person[] = []) {
     return found;
   };
   const now = () => people;
-  const keep = (change: { people: Person[] }) => {
+  const keep = <T extends { people: Person[] }>(change: T): T => {
     people = change.people;
     return change;
   };
