@@ -10,8 +10,8 @@ import { PageHeader } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { FaceThumb } from '../components/FaceThumb';
 import { pluralize } from '../lib/format';
+import { aboutPerson, groupName } from '@arcafold/core/people/edits';
 import { MODEL_DOWNLOAD_MB } from '../lib/people/models';
-import type { Group, PersonLabel } from '@arcafold/core/people/grouping';
 
 import './people.css';
 
@@ -34,28 +34,7 @@ export function progressLine(status: PeopleStatus, done: number, total: number):
   }
 }
 
-/** A person's name, or what to call a group nobody has named. */
-export function groupName(group: Group): string {
-  const name = group.person?.name ?? '';
-  return name === '' ? 'Add a name' : name;
-}
-
-export const labelNames: Record<PersonLabel, string> = {
-  friends: 'Friends',
-  family: 'Family',
-  work: 'Work',
-};
-
-/** "You", then any labels, before `rest` (usually the photo count). */
-export function aboutPerson(group: Group, rest: string): string {
-  const person = group.person;
-  const parts = [
-    ...(person?.me ? ['You'] : []),
-    ...(person?.labels ?? []).map((label) => labelNames[label]),
-    rest,
-  ];
-  return parts.join(' · ');
-}
+export { aboutPerson, groupName, labelNames } from '@arcafold/core/people/edits';
 
 /** Turning face grouping on, with what it does and what it downloads. */
 export function TurnOnPeople({ onTurnOn }: { onTurnOn: () => void }) {

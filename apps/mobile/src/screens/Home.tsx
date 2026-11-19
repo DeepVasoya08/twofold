@@ -18,8 +18,9 @@ import { PhotoPicker } from '../../modules/memory-image';
 import { bottomInset } from '../../modules/system-bars';
 import { lastRun } from '../backup/last-run';
 import { deletedText } from '../library/originals';
-import { timelineOrder, timelineRows } from '../library/timeline';
+import { timelineOrder, timelinePhotos, timelineRows } from '../library/timeline';
 import { useLibrary } from '../library/use-library';
+import { personPhotos, usePeople } from '../people/use-people';
 import { useAccount } from '../session/account';
 import { InvitesProvider } from '../sharing/invites';
 import { Banner } from '../ui/kit';
@@ -29,6 +30,8 @@ import type { Palette } from '../ui/theme';
 import { AlbumScreen } from './AlbumScreen';
 import { NameSheet } from './AlbumSheets';
 import { Albums } from './Albums';
+import { People } from './People';
+import { PersonScreen } from './PersonScreen';
 import { BiometricSheet } from './BiometricSheet';
 import { ChoosePhotos } from './ChoosePhotos';
 import { InviteRequests } from './InviteCards';
@@ -39,7 +42,7 @@ import { Timeline } from './Timeline';
 import { UploadCard } from './UploadCard';
 import { Viewer } from './Viewer';
 
-type Tab = 'photos' | 'albums';
+type Tab = 'photos' | 'albums' | 'people';
 
 /** Height of the tab bar above the navigation bar. */
 const TAB_BAR = 58;
@@ -69,6 +72,7 @@ function TabBar({
   const tabs: readonly { id: Tab; label: string; glyph: string }[] = [
     { id: 'photos', label: 'Photos', glyph: '▦' },
     { id: 'albums', label: 'Albums', glyph: '❐' },
+    { id: 'people', label: 'People', glyph: '☺' },
   ];
   return (
     <View
@@ -108,7 +112,7 @@ function TabBar({
 
 /** What the viewer is swiping through. */
 interface Viewing {
-  from: 'timeline' | 'album';
+  from: 'timeline' | 'album' | 'person';
   start: number;
 }
 
@@ -132,6 +136,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const library = useLibrary(session);
   const [tab, setTab] = useState<Tab>('photos');
   const [albumId, setAlbumId] = useState<string | null>(null);
+  const [personId, setPersonId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [choosing, setChoosing] = useState(false);
   const [naming, setNaming] = useState(false);
@@ -141,6 +146,13 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const [joining, setJoining] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
   const album = library.albums.find((each) => each.id === albumId);
+  // People are found in the photos the timeline shows: not files, nor Recently deleted.
+  const peoplePhotos = useMemo(() => timelinePhotos(library.photos), [library.photos]);
+  const people = usePeople(session.opened.space, peoplePhotos, tab === 'people');
+  const person =
+    personId === null
+      ? undefined
+      : [...people.groups, ...people.hidden].find((each) => each.id === personId);
   const initial = (session.account.name.trim().at(0) ?? '?').toUpperCase();
 
   // Photos backed up in the background since the library loaded show when you come back.
@@ -166,17 +178,22 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   // whatever opens over the screens (the viewer, a sheet, Settings) handles back before it.
   // An album deleted (here or elsewhere) is closed: there's nothing to show.
   const albumOpen = album !== undefined;
-  const place = useRef({ albumOpen, tab });
+  const personOpen = person !== undefined;
+  const place = useRef({ albumOpen, personOpen, tab });
   useEffect(() => {
-    place.current = { albumOpen, tab };
-  }, [albumOpen, tab]);
+    place.current = { albumOpen, personOpen, tab };
+  }, [albumOpen, personOpen, tab]);
   useEffect(() => {
     const back = BackHandler.addEventListener('hardwareBackPress', () => {
       if (place.current.albumOpen) {
         setAlbumId(null);
         return true;
       }
-      if (place.current.tab === 'albums') {
+      if (place.current.personOpen) {
+        setPersonId(null);
+        return true;
+      }
+      if (place.current.tab !== 'photos') {
         setTab('photos');
         return true;
       }
@@ -229,14 +246,25 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
     () => (albumId ? albumPhotos(library.photos, albumId) : []),
     [library.photos, albumId],
   );
-  const viewed = viewing?.from === 'album' ? inAlbum : timeline;
-  const lists = useRef({ timeline, inAlbum });
+  const ofPerson = useMemo(
+    () =>
+      person ? personPhotos(person, new Map(library.photos.map((each) => [each.id, each]))) : [],
+    [library.photos, person],
+  );
+  const viewed =
+    viewing?.from === 'album' ? inAlbum : viewing?.from === 'person' ? ofPerson : timeline;
+  const lists = useRef({ timeline, inAlbum, ofPerson });
   useEffect(() => {
-    lists.current = { timeline, inAlbum };
-  }, [timeline, inAlbum]);
+    lists.current = { timeline, inAlbum, ofPerson };
+  }, [timeline, inAlbum, ofPerson]);
   const openFrom = useCallback(
     (from: Viewing['from']) => (photoId: string) => {
-      const list = from === 'album' ? lists.current.inAlbum : lists.current.timeline;
+      const list =
+        from === 'album'
+          ? lists.current.inAlbum
+          : from === 'person'
+            ? lists.current.ofPerson
+            : lists.current.timeline;
       const start = list.findIndex((photo) => photo.id === photoId);
       if (start >= 0) setViewing({ from, start });
     },
@@ -244,6 +272,10 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   );
   const openInTimeline = useMemo(() => openFrom('timeline'), [openFrom]);
   const openInAlbum = useMemo(() => openFrom('album'), [openFrom]);
+  const openOfPerson = useMemo(() => openFrom('person'), [openFrom]);
+  const closePerson = useCallback(() => {
+    setPersonId(null);
+  }, []);
   const closeViewer = useCallback(() => {
     setViewing(null);
   }, []);
@@ -279,6 +311,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   );
   const changeTab = useCallback((next: Tab) => {
     setAlbumId(null);
+    setPersonId(null);
     setTab(next);
   }, []);
 
@@ -288,8 +321,8 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
     </View>
   ) : null;
 
-  // An album page covers the tab bar, like a page opened from it; back returns.
-  const showTabs = album === undefined;
+  // An album or person page covers the tab bar, like a page opened from it; back returns.
+  const showTabs = album === undefined && person === undefined;
   const bottom = showTabs ? TAB_BAR + inset : inset;
 
   let screen;
@@ -313,6 +346,31 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
           setSharing({ albumId: album.id });
         }}
         onLeave={() => leaveAlbum(album.joinedId)}
+      />
+    );
+  } else if (person) {
+    screen = (
+      <PersonScreen
+        group={person}
+        people={people}
+        library={library}
+        initial={initial}
+        banner={banner}
+        onSettings={openSettings}
+        onBack={closePerson}
+        onOpen={openOfPerson}
+        onMoved={setPersonId}
+      />
+    );
+  } else if (tab === 'people') {
+    screen = (
+      <People
+        people={people}
+        library={library}
+        initial={initial}
+        banner={banner}
+        onSettings={openSettings}
+        onOpen={setPersonId}
       />
     );
   } else if (tab === 'albums') {
@@ -379,6 +437,15 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
             start={Math.max(0, Math.min(viewing.start, viewed.length - 1))}
             library={library}
             {...(viewing.from === 'album' && album ? { album } : {})}
+            {...(viewing.from === 'person' && person
+              ? {
+                  notThis: {
+                    label: person.person?.name ? `Not ${person.person.name}` : 'Not this person',
+                    run: async (photoId: string) =>
+                      (await people.removePhotos(person, [photoId])).done.length > 0,
+                  },
+                }
+              : {})}
             onClose={closeViewer}
           />
         ) : null}

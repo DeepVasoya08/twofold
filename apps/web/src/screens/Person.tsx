@@ -22,7 +22,7 @@ import { SelectionBar } from '../components/SelectionBar';
 import { pluralize } from '../lib/format';
 import { PERSON_LABELS } from '@arcafold/core/people/grouping';
 import type { Group, PersonLabel } from '@arcafold/core/people/grouping';
-import { aboutPerson, groupName, labelNames } from './People';
+import { aboutPerson, groupName, labelNames, personTitle } from '@arcafold/core/people/edits';
 import { errorMessage } from '@arcafold/core/errors';
 import type { Photo } from '@arcafold/core/library/model';
 
@@ -149,11 +149,7 @@ export function Person({ groupId }: { groupId: string }) {
   return (
     <div className="page">
       <PageHeader
-        title={
-          group.person?.name === undefined || group.person.name === ''
-            ? 'Someone'
-            : group.person.name
-        }
+        title={personTitle(group)}
         subtitle={aboutPerson(group, pluralize(photos.length, 'photo'))}
         back={back}
         actions={

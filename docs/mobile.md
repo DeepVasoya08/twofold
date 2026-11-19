@@ -148,7 +148,7 @@ or a native module.
 - Photos and Albums tabs (`screens/Home.tsx`): the library opens once and stays open across
   both tabs, an open album, the viewer and Settings. The tab bar and the bottom of sheets and
   the viewer sit above Android's navigation bar, using its height from `modules/system-bars`
-  (the app draws edge to edge). Back leaves an album, then goes from Albums to Photos.
+  (the app draws edge to edge). Back leaves an album or a person, then goes from Albums or People to Photos.
 - Albums (`screens/Albums.tsx`, `screens/AlbumScreen.tsx`, `screens/AlbumSheets.tsx`): album
   cards with their cover (the chosen one, else the newest photo), count and who shared them;
   "+ New" names a new album and opens it. An album shows its photos by month with "Add
@@ -176,6 +176,15 @@ or a native module.
   and edit, the person adds photos from their phone ("Add photos" in the album) and can take
   any photo out of it from the viewer, the same as on the web (see docs/security.md,
   "Sharing one album").
+- People (`src/people/use-people.ts`, `screens/People.tsx`, `screens/PersonScreen.tsx`,
+  `screens/PeopleSheets.tsx`, `screens/FaceThumb.tsx`): the People tab shows the face groups
+  found so far, worked out on the phone from the sealed face results and person records (the
+  same ones the web app saves), with each face cut out of its photo's preview in memory. A
+  person's page lists their photos; its ⋯ menu names them, marks "This is me", sets Friends,
+  Family or Work, merges them with someone, or hides them. In the viewer, "Not <name>" takes
+  a photo out of them. The changes are shared with the web app in `@arcafold/core/people/edits`.
+  The phone doesn't find faces itself yet: faces come from Arcafold in a browser with face
+  grouping on.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.
