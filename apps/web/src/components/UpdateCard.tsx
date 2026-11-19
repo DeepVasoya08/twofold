@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { isNewerBuildLive, loadedEntryScript } from '../lib/app-version';
-import { onVisibleAgain } from '../lib/when-visible';
+import { RECHECK_MS, onVisibleAgain } from '../lib/when-visible';
 import { Icon } from './Icon';
 
 import './upload-progress.css';
@@ -10,9 +10,10 @@ import './upload-progress.css';
 const CHECK_EVERY_MS = 60 * 60 * 1000;
 
 /**
- * True once a newer Arcafold is live than the one this page loaded. Checks when the tab
- * comes back into view, every hour, and when part of the app fails to load (which is how
- * a tab left open across deploys notices first). Only in a built app.
+ * True once a newer Arcafold is live than the one this page loaded. Checks on unlocking
+ * (unless the page only just loaded), when the tab comes back into view, every hour, and when
+ * part of the app fails to load (which is how a tab left open across deploys notices first).
+ * Only in a built app.
  */
 function useNewerBuild(): boolean {
   const [newer, setNewer] = useState(false);
@@ -26,6 +27,9 @@ function useNewerBuild(): boolean {
         if (found && !stopped) setNewer(true);
       });
     };
+    // This mounts on every unlock: a tab left open across a deploy is often just unlocked
+    // again, without ever leaving the screen.
+    if (performance.now() > RECHECK_MS) check();
     const stopWatching = onVisibleAgain(check);
     const timer = window.setInterval(check, CHECK_EVERY_MS);
     window.addEventListener('vite:preloadError', check);
