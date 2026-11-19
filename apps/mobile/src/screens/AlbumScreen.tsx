@@ -11,11 +11,17 @@ import type { Library } from '../library/use-library';
 import { Button, Note } from '../ui/kit';
 import { useNotice } from '../ui/notice';
 import { usePalette } from '../ui/theme';
-import { AddFromSheet, AlbumMenuSheet, DeleteAlbumSheet, NameSheet } from './AlbumSheets';
+import {
+  AddFromSheet,
+  AlbumMenuSheet,
+  DeleteAlbumSheet,
+  LeaveAlbumSheet,
+  NameSheet,
+} from './AlbumSheets';
 import { AppHeader, HeaderButton } from './AppHeader';
 import { PhotoGrid } from './PhotoGrid';
 
-type Open = 'menu' | 'rename' | 'delete' | 'add' | null;
+type Open = 'menu' | 'rename' | 'delete' | 'add' | 'leave' | null;
 
 /** One album's photos, newest first by month, with its menu and a way to add more. */
 export function AlbumScreen({
@@ -28,6 +34,8 @@ export function AlbumScreen({
   onOpen,
   onChoose,
   onUpload,
+  onShare,
+  onLeave,
 }: {
   album: Album;
   library: Library;
@@ -40,6 +48,10 @@ export function AlbumScreen({
   onChoose: () => void;
   /** Opens the phone's photo picker to upload photos into this album. */
   onUpload: () => void;
+  /** Opens the screen for sharing this album. */
+  onShare: () => void;
+  /** Leaves an album someone shared with you. */
+  onLeave: () => Promise<void>;
 }) {
   const palette = usePalette();
   const notice = useNotice();
@@ -47,6 +59,8 @@ export function AlbumScreen({
   const photos = useMemo(() => albumPhotos(library.photos, album.id), [library.photos, album.id]);
   const rows = useMemo(() => gridRows(photos), [photos]);
   const changeable = canChangeAlbum(album);
+  // Your own albums, ones in a library you can change, and ones shared with you (to leave).
+  const hasMenu = changeable || album.sharedAlbum === true;
   const sharing = albumSharing(album);
   const close = () => {
     setOpen(null);
@@ -73,7 +87,7 @@ export function AlbumScreen({
   return (
     <View style={styles.fill}>
       <AppHeader title={album.title} initial={initial} onSettings={onSettings} onBack={onBack}>
-        {changeable ? (
+        {hasMenu ? (
           <HeaderButton
             label="⋯"
             accessibilityLabel="Album options"
@@ -114,6 +128,13 @@ export function AlbumScreen({
       {open === 'menu' ? (
         <AlbumMenuSheet
           album={album}
+          onShare={() => {
+            close();
+            onShare();
+          }}
+          onLeave={() => {
+            setOpen('leave');
+          }}
           onRename={() => {
             setOpen('rename');
           }}
@@ -143,6 +164,17 @@ export function AlbumScreen({
           onDelete={async () => {
             await library.deleteAlbum(album.id);
             notice(`“${album.title}” deleted`);
+            onBack();
+          }}
+          onCancel={close}
+        />
+      ) : null}
+      {open === 'leave' ? (
+        <LeaveAlbumSheet
+          album={album}
+          onLeave={async () => {
+            await onLeave();
+            notice(`You left “${album.title}”`);
             onBack();
           }}
           onCancel={close}

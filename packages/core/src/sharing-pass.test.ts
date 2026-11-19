@@ -45,7 +45,9 @@ describe('advancePending', () => {
     );
 
     bob = await advancePending(w.bob, 'Bob', w.apis, new Set(), NONE);
-    expect(bob.granted).toEqual([{ joinId: expect.any(String), name: 'Alice', album: false }]);
+    expect(bob.granted.map(({ ref, name, album }) => ({ ref, name, album }))).toEqual([
+      { ref: invite.code, name: 'Alice', album: false },
+    ]);
     expect(bob.joins).toEqual([]);
     expect(await listJoined(w.bob, w.apis.space)).toHaveLength(1);
   });

@@ -32,6 +32,8 @@ export interface JoinEntry {
 export interface Granted {
   /** The pending record's id, now the joined record's. */
   joinId: string;
+  /** The code or link token it was accepted with. */
+  ref: string;
   /** Whose library it is. */
   name: string;
   /** Whether one album was shared, rather than the whole library. */
@@ -113,6 +115,7 @@ export async function advancePending(
         await finishJoin(join, progress.grant, keys, apis);
         result.granted.push({
           joinId: join.id,
+          ref: join.ref,
           name: progress.grant.name,
           album: progress.grant.album !== undefined,
         });
