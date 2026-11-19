@@ -32,6 +32,30 @@
   white-space: nowrap;
 }
 
+.selection-bar__spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 10px;
+  vertical-align: -3px;
+  border: 2px solid var(--accent-soft);
+  border-top-color: var(--accent-text);
+  border-radius: 50%;
+  animation: selection-bar-spin 0.8s linear infinite;
+}
+
+@keyframes selection-bar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selection-bar__spinner {
+    animation-duration: 2.4s;
+  }
+}
+
 .selection-bar__all {
   flex: none;
   padding: 6px 10px;

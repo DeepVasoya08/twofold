@@ -71,7 +71,9 @@ export function SelectionBar({
   const { navigate } = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState<Open>(null);
-  const [busy, setBusy] = useState(false);
+  // What's being done to the photos right now, shown in the bar even once its dialog closes.
+  const [working, setWorking] = useState<string | null>(null);
+  const busy = working !== null;
   // What the share dialog works on, fixed when it opens.
   const [chosen, setChosen] = useState<readonly string[]>([]);
   const { space, state } = vault;
@@ -90,12 +92,13 @@ export function SelectionBar({
   const viewOnly = photos.some(isViewOnly);
 
   const run = (
+    doing: string,
     change: () => Promise<Settled<string>>,
     done: (photos: string) => string,
     undo?: (photoIds: readonly string[]) => Promise<unknown>,
   ) => {
     if (busy) return;
-    setBusy(true);
+    setWorking(doing);
     change()
       .then(
         (result) => {
@@ -120,13 +123,14 @@ export function SelectionBar({
         },
       )
       .finally(() => {
-        setBusy(false);
+        setWorking(null);
         setOpen(null);
       });
   };
 
   const addTo = (target: Album) => {
     run(
+      `Adding ${pluralize(count, 'photo')} to “${target.title}”…`,
       () => vault.setDetails(ids, { album: target, included: true }),
       (added) => `${added} added to “${target.title}”`,
     );
@@ -134,6 +138,7 @@ export function SelectionBar({
 
   const move = (keys?: SpaceKeys) => {
     run(
+      `Moving ${pluralize(movable.length, 'photo')} to your ${space === 'private' ? 'library' : 'private space'}…`,
       () => vault.movePhotos(movable, keys),
       (moved) => `${moved} moved to your ${space === 'private' ? 'library' : 'private space'}`,
     );
@@ -145,7 +150,7 @@ export function SelectionBar({
    */
   const shareThrough = (target: Album) => {
     if (busy) return;
-    setBusy(true);
+    setWorking(`Adding ${pluralize(chosen.length, 'photo')} to “${target.title}”…`);
     vault
       .setDetails(chosen, { album: target, included: true })
       .then((result) => {
@@ -161,7 +166,7 @@ export function SelectionBar({
         toast.show(errorMessage(error));
       })
       .finally(() => {
-        setBusy(false);
+        setWorking(null);
       });
   };
 
@@ -203,6 +208,7 @@ export function SelectionBar({
           icon: 'album-remove',
           onClick: () => {
             run(
+              `Removing ${pluralize(count, 'photo')} from “${album.title}”…`,
               () => vault.setDetails(ids, { album, included: false }),
               (removed) => `${removed} removed from “${album.title}”`,
             );
@@ -232,6 +238,7 @@ export function SelectionBar({
     icon: 'heart',
     onClick: () => {
       run(
+        allFavorite ? 'Removing from favorites…' : 'Adding to favorites…',
         () => vault.setDetails(ids, { favorite: !allFavorite }),
         (changed) =>
           allFavorite ? `${changed} removed from favorites` : `${changed} added to favorites`,
@@ -263,7 +270,7 @@ export function SelectionBar({
           label: extra.label,
           icon: extra.icon,
           onClick: () => {
-            run(() => extra.run(ids), extra.done);
+            run('Saving…', () => extra.run(ids), extra.done);
           },
         },
       ]
@@ -285,7 +292,16 @@ export function SelectionBar({
           <Icon name="x" />
         </button>
         <span className="selection-bar__count" aria-live="polite">
-          {count === 0 ? 'Select photos' : `${pluralize(count, 'photo')} selected`}
+          {working !== null ? (
+            <>
+              <span className="selection-bar__spinner" aria-hidden="true" />
+              {working}
+            </>
+          ) : count === 0 ? (
+            'Select photos'
+          ) : (
+            `${pluralize(count, 'photo')} selected`
+          )}
         </span>
         <button
           type="button"
@@ -391,6 +407,7 @@ export function SelectionBar({
             aria-busy={busy}
             onClick={() => {
               run(
+                `Deleting ${pluralize(count, 'photo')}…`,
                 () => vault.deletePhotos(ids),
                 (deleted) => `${deleted} moved to Recently deleted`,
                 (deleted) => vault.restorePhotos(deleted),

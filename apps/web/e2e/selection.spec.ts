@@ -158,3 +158,35 @@ test('download saves decrypted copies of a selection or a whole album', async ({
     .click();
   expect((await download).suggestedFilename()).toMatch(PHOTO_NAME);
 });
+
+test('the bar shows the photos are still being added after the picker closes', async ({ page }) => {
+  await signUp(page);
+  await uploadPhotos(page, 2);
+  await expect(page.getByText('2 photos added to your vault')).toBeVisible();
+
+  // Hold the photo updates, so adding takes a while.
+  let release: () => void = () => undefined;
+  const held = new Promise<undefined>((resolve) => {
+    release = () => {
+      resolve(undefined);
+    };
+  });
+  await page.route('**/api/space/photos/*', async (route) => {
+    if (route.request().method() === 'PUT') await held;
+    await route.fallback();
+  });
+
+  await monthSelect(page).click();
+  await bar(page).getByRole('button', { name: 'Add to album' }).click();
+  const picker = page.getByRole('dialog', { name: 'Add 2 photos to an album' });
+  await picker.getByLabel('New album').fill('Rome');
+  await picker.getByRole('button', { name: 'Create and add' }).click();
+  await page.keyboard.press('Escape');
+  await expect(picker).toBeHidden();
+  await expect(bar(page).getByText('Adding 2 photos to “Rome”…')).toBeVisible();
+  await expect(bar(page).getByRole('button', { name: 'Delete' })).toBeDisabled();
+
+  release();
+  await expect(page.getByText('2 photos added to “Rome”')).toBeVisible();
+  await expect(bar(page)).toBeHidden();
+});
