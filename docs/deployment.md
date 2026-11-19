@@ -21,7 +21,7 @@ It deploys the exact commit CI tested, in this order:
    new `asset-history.json`. Without this, a tab opened before the deploy would ask for
    scripts that are gone (for example Smart search's worker) and that part would stop with a
    404 until a reload. A problem reaching the live site only prints a warning; it never fails
-   the deploy. Open tabs also check for a newer build when they come back into view and
+   the deploy. Open tabs also check for a newer build when unlocked, when they come back into view and
    every hour, and offer a reload ("Arcafold has been updated").
 6. Deploys the `arcafold` Worker (`wrangler deploy` in `apps/api`), which uploads the web
    app's assets and the API code together. One deploy updates both, so the web app and
