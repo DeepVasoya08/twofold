@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 import { Image, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 
@@ -5,9 +6,13 @@ import logo from '../../assets/logo.png';
 import { useAccount } from '../session/account';
 import { usePalette } from '../ui/theme';
 
+/** Opens search; the library's top screens show a search button when it's given. */
+export const OpenSearch = createContext<(() => void) | null>(null);
+
 /**
  * The bar across the top of the library's screens: the logo (or a back button), the
- * screen's title, its own buttons, then Lock and your initial, which opens Settings.
+ * screen's title, its own buttons, search (on the top screens), then Lock and your initial,
+ * which opens Settings.
  */
 export function AppHeader({
   title,
@@ -26,6 +31,7 @@ export function AppHeader({
 }) {
   const { lock } = useAccount();
   const palette = usePalette();
+  const openSearch = useContext(OpenSearch);
   return (
     <View style={[styles.header, { paddingTop: (StatusBar.currentHeight ?? 24) + 12 }]}>
       {onBack ? (
@@ -49,6 +55,17 @@ export function AppHeader({
         {title}
       </Text>
       {children}
+      {openSearch && !onBack ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Search"
+          onPress={openSearch}
+          hitSlop={6}
+          style={[styles.round, { borderColor: palette.border }]}
+        >
+          <Text style={styles.searchGlyph}>🔍</Text>
+        </Pressable>
+      ) : null}
       <Pressable
         accessibilityRole="button"
         onPress={lock}
@@ -124,4 +141,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { fontSize: 15, fontWeight: '700' },
+  round: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchGlyph: { fontSize: 15 },
 });

@@ -72,3 +72,13 @@ export function timelineOrder(photos: readonly Photo[], rows: readonly TimelineR
     return photo ? [photo] : [];
   });
 }
+
+/** Ranked results as grid rows, four across, with no month headings. */
+export function resultRows(photoIds: readonly string[], columns = COLUMNS): TimelineRow[] {
+  const rows: TimelineRow[] = [];
+  for (let start = 0; start < photoIds.length; start += columns) {
+    const ids = photoIds.slice(start, start + columns);
+    rows.push({ kind: 'tiles', key: `r${String(start)}`, photoIds: ids });
+  }
+  return rows;
+}

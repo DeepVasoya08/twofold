@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   onnxruntime-react-native@1.24.3:
-    hash: f6336925c34993cb112a40fa4f89ef5368e625cebf8cbd1a1c65e2fae34911cc
+    hash: 4f4f1837747b31d5d1b1f4178e350fcbb3851a7925ac9ea9af71f8a6b6aa0639
     path: patches/onnxruntime-react-native@1.24.3.patch
   react-native-libsodium@1.7.0:
     hash: 8c3e602a1291b45050cca208b2322054654f3b690eaaa2086c99bcd8798b2e1a
@@ -101,6 +101,9 @@ importers:
       expo-status-bar:
         specifier: ~58.0.4
         version: 58.0.4(expo@58.0.25)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
+      onnxruntime-react-native:
+        specifier: 1.24.3
+        version: 1.24.3(patch_hash=4f4f1837747b31d5d1b1f4178e350fcbb3851a7925ac9ea9af71f8a6b6aa0639)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -158,7 +161,7 @@ importers:
         version: 58.0.4(expo@58.0.25)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
       onnxruntime-react-native:
         specifier: ^1.24.3
-        version: 1.24.3(patch_hash=f6336925c34993cb112a40fa4f89ef5368e625cebf8cbd1a1c65e2fae34911cc)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
+        version: 1.24.3(patch_hash=4f4f1837747b31d5d1b1f4178e350fcbb3851a7925ac9ea9af71f8a6b6aa0639)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -6966,7 +6969,7 @@ snapshots:
 
   onnxruntime-common@1.31.1: {}
 
-  onnxruntime-react-native@1.24.3(patch_hash=f6336925c34993cb112a40fa4f89ef5368e625cebf8cbd1a1c65e2fae34911cc)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.1))(react@19.3.1):
+  onnxruntime-react-native@1.24.3(patch_hash=4f4f1837747b31d5d1b1f4178e350fcbb3851a7925ac9ea9af71f8a6b6aa0639)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.1))(react@19.3.1):
     dependencies:
       onnxruntime-common: 1.24.3
       react: 19.3.1

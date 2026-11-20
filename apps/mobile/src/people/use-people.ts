@@ -13,6 +13,8 @@ import type { Settled } from '@arcafold/core/settle-each';
 
 export interface People {
   status: 'idle' | 'loading' | 'ready' | 'failed';
+  /** The person records: names, "This is me", labels. */
+  people: readonly Person[];
   /** Everyone shown in People, and those hidden from it. */
   groups: Group[];
   hidden: Group[];
@@ -128,6 +130,7 @@ export function usePeople(
 
   return {
     status,
+    people,
     groups,
     hidden,
     reload,

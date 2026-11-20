@@ -6,6 +6,7 @@ import {
   formatTaken,
   gridRows,
   photosInRows,
+  resultRows,
   timelineOrder,
   timelinePhotos,
   timelineRows,
@@ -96,5 +97,16 @@ describe('timelineOrder', () => {
 describe('formatTaken', () => {
   it('shows the day and time the photo was taken', () => {
     expect(formatTaken('2026-11-04T09:41:00Z')).toBe('Wed, Nov 4, 2026 · 9:41 AM');
+  });
+});
+
+describe('resultRows', () => {
+  it('lays ranked results out four across, with no months', () => {
+    const rows = resultRows(['a', 'b', 'c', 'd', 'e']);
+    expect(rows).toEqual([
+      { kind: 'tiles', key: 'r0', photoIds: ['a', 'b', 'c', 'd'] },
+      { kind: 'tiles', key: 'r4', photoIds: ['e'] },
+    ]);
+    expect(resultRows([])).toEqual([]);
   });
 });

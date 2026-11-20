@@ -48,6 +48,50 @@ index c362e6ad71bbe11265efd6beaab614af0632a70f..80f153ff891c968bf6292ee3db092090
        nativeInstall(jsContext.get(), jsCallInvokerHolder);
        return true;
      } catch (Exception e) {
+diff --git a/cpp/SessionUtils.cpp b/cpp/SessionUtils.cpp
+index 3e6672ec546fbac9d1403374c777419c6fff204a..7d02c52b143faad24212798083e370ef997add81 100644
+--- a/cpp/SessionUtils.cpp
++++ b/cpp/SessionUtils.cpp
+@@ -90,6 +90,39 @@ void parseSessionOptions(Runtime& runtime, const Value& optionsValue,
+     }
+ #endif
+ 
++    // Arcafold patch: `extra` session config entries, as onnxruntime-web reads them: nested
++    // objects become dotted keys ({ session: { disable_quant_qdq: '1' } } is
++    // "session.disable_quant_qdq" = "1"). Only string values are passed on.
++    if (options.hasProperty(runtime, "extra")) {
++      auto extraValue = options.getProperty(runtime, "extra");
++      if (extraValue.isObject()) {
++        auto extra = extraValue.asObject(runtime);
++        auto groups = extra.getPropertyNames(runtime);
++        for (size_t i = 0; i < groups.size(runtime); i++) {
++          std::string group =
++              groups.getValueAtIndex(runtime, i).asString(runtime).utf8(runtime);
++          auto groupValue = extra.getProperty(runtime, group.c_str());
++          if (groupValue.isString()) {
++            sessionOptions.AddConfigEntry(
++                group.c_str(), groupValue.asString(runtime).utf8(runtime).c_str());
++          } else if (groupValue.isObject()) {
++            auto entries = groupValue.asObject(runtime);
++            auto keys = entries.getPropertyNames(runtime);
++            for (size_t j = 0; j < keys.size(runtime); j++) {
++              std::string key =
++                  keys.getValueAtIndex(runtime, j).asString(runtime).utf8(runtime);
++              auto value = entries.getProperty(runtime, key.c_str());
++              if (value.isString()) {
++                std::string entry = group + "." + key;
++                sessionOptions.AddConfigEntry(
++                    entry.c_str(), value.asString(runtime).utf8(runtime).c_str());
++              }
++            }
++          }
++        }
++      }
++    }
++
+     // intraOpNumThreads
+     if (options.hasProperty(runtime, "intraOpNumThreads")) {
+       auto prop = options.getProperty(runtime, "intraOpNumThreads");
 diff --git a/unimodule.json b/unimodule.json
 deleted file mode 100644
 index c2bd3c0f071c0cd1ee9ccc88c7491906aed289d4..0000000000000000000000000000000000000000

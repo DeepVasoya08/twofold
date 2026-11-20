@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
 import { useFind } from '../app/find';
-import type { NotLookedAt } from '../app/answer';
+import { notLookedAtLine, notReadyLine } from '@arcafold/core/search/answer';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import { useSearch } from '../app/search';
@@ -30,21 +30,7 @@ export const QUERY_DOWNLOAD_MB = Math.round(
   (SEARCH_RESOURCES.text.size + SEARCH_RESOURCES.words.size) / 1_000_000,
 );
 
-export function notReadyLine(count: number): string {
-  return `${pluralize(count, 'photo')} ${count === 1 ? 'isn’t' : 'aren’t'} ready to search by what’s in ${count === 1 ? 'it' : 'them'} yet.`;
-}
-
-/** Why a search for photos that look like others can't run yet. */
-export function notLookedAtLine({ photo, words }: NotLookedAt): string {
-  const later = 'Smart search looks at photos in the background, so try again soon.';
-  if (photo || words.length === 0) return `This photo hasn’t been looked at yet. ${later}`;
-  const quoted = words.map((name) => `“${name}”`);
-  const named =
-    quoted.length === 1
-      ? quoted.join('')
-      : `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1) ?? ''}`;
-  return `The photos you taught ${named} with haven’t been looked at yet. ${later}`;
-}
+export { notLookedAtLine, notReadyLine } from '@arcafold/core/search/answer';
 
 export function Search() {
   const find = useFind();

@@ -7,7 +7,7 @@ import { answerQueryRequest } from './query-encoder';
 import type { QueryEngine, QueryMessage } from './query-encoder';
 import { SEARCH_RESOURCES, downloadResource } from './resources';
 import { loadTextModel } from './text-model';
-import { clipTokenizer } from './tokenizer';
+import { clipTokenizer } from '@arcafold/core/search/tokenizer';
 
 interface WorkerScope {
   addEventListener(type: 'message', listener: (event: MessageEvent<unknown>) => void): void;

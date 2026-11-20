@@ -139,6 +139,7 @@ export function PhotoGrid({
   onPress,
   chosen,
   header,
+  footer,
   bottomPadding = 48,
 }: {
   rows: readonly TimelineRow[];
@@ -147,6 +148,7 @@ export function PhotoGrid({
   onPress: (photoId: string) => void;
   chosen?: ReadonlySet<string>;
   header?: ReactElement;
+  footer?: ReactElement;
   bottomPadding?: number;
 }) {
   const palette = usePalette();
@@ -189,6 +191,7 @@ export function PhotoGrid({
       extraData={[thumbs, chosen]}
       onViewableItemsChanged={onViewableItemsChanged}
       ListHeaderComponent={header}
+      ListFooterComponent={footer}
       contentContainerStyle={{ paddingBottom: bottomPadding }}
     />
   );

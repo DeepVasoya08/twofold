@@ -185,6 +185,19 @@ or a native module.
   a photo out of them. The changes are shared with the web app in `@arcafold/core/people/edits`.
   The phone doesn't find faces itself yet: faces come from Arcafold in a browser with face
   grouping on.
+- Search (`src/search/use-find.ts`, `src/search/text-encoder.ts`, `src/search/resources.ts`,
+  `screens/SearchScreen.tsx`): the 🔍 button in the header of Photos, Albums and People opens
+  search. A query is read the same way as on the web (`@arcafold/core/search/query`, people,
+  dates, labels, taught words, and words for what's in the photo) and answered by the same
+  code (`@arcafold/core/search/answer`) over the sealed search vectors your browser saved.
+  Tap a part of the search to leave it out; "More like this" in the viewer starts a search
+  from a photo. Words are turned into a vector on the phone with CLIP's text half in ONNX
+  Runtime (`onnxruntime-react-native`, patched to pass `extra` session settings so the 8-bit
+  weights are folded as they load, like the web). The first search with words asks before
+  downloading it and the word list (about 65 MB) from arcafold.com into the app's own files,
+  checked against the SHA-256 pinned in `@arcafold/core/search/resources`. What's typed stays
+  in memory only (the keyboard is asked not to learn it) and goes when search closes. The
+  phone doesn't look at photos for search itself yet.
 - Screenshots: `modules/secure-screen` marks the window `FLAG_SECURE` as Android creates it,
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.

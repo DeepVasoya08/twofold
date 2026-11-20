@@ -21,6 +21,7 @@ import { deletedText } from '../library/originals';
 import { timelineOrder, timelinePhotos, timelineRows } from '../library/timeline';
 import { useLibrary } from '../library/use-library';
 import { personPhotos, usePeople } from '../people/use-people';
+import { useFind } from '../search/use-find';
 import { useAccount } from '../session/account';
 import { InvitesProvider } from '../sharing/invites';
 import { Banner } from '../ui/kit';
@@ -28,10 +29,12 @@ import { NoticeProvider, useNotice } from '../ui/notice';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 import { AlbumScreen } from './AlbumScreen';
+import { OpenSearch } from './AppHeader';
 import { NameSheet } from './AlbumSheets';
 import { Albums } from './Albums';
 import { People } from './People';
 import { PersonScreen } from './PersonScreen';
+import { SearchScreen } from './SearchScreen';
 import { BiometricSheet } from './BiometricSheet';
 import { ChoosePhotos } from './ChoosePhotos';
 import { InviteRequests } from './InviteCards';
@@ -112,7 +115,7 @@ function TabBar({
 
 /** What the viewer is swiping through. */
 interface Viewing {
-  from: 'timeline' | 'album' | 'person';
+  from: 'timeline' | 'album' | 'person' | 'search';
   start: number;
 }
 
@@ -148,7 +151,20 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const album = library.albums.find((each) => each.id === albumId);
   // People are found in the photos the timeline shows: not files, nor Recently deleted.
   const peoplePhotos = useMemo(() => timelinePhotos(library.photos), [library.photos]);
-  const people = usePeople(session.opened.space, peoplePhotos, tab === 'people');
+  const [searching, setSearching] = useState(false);
+  // Search needs people's names, so opening it loads them too.
+  const people = usePeople(session.opened.space, peoplePhotos, tab === 'people' || searching);
+  const allGroups = useMemo(
+    () => [...people.groups, ...people.hidden],
+    [people.groups, people.hidden],
+  );
+  const find = useFind({
+    keys: session.opened.space,
+    photos: peoplePhotos,
+    people: people.people,
+    groups: allGroups,
+    wanted: searching,
+  });
   const person =
     personId === null
       ? undefined
@@ -251,20 +267,25 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
       person ? personPhotos(person, new Map(library.photos.map((each) => [each.id, each]))) : [],
     [library.photos, person],
   );
-  const viewed =
-    viewing?.from === 'album' ? inAlbum : viewing?.from === 'person' ? ofPerson : timeline;
-  const lists = useRef({ timeline, inAlbum, ofPerson });
+  const found = useMemo(() => {
+    const byId = new Map(library.photos.map((each) => [each.id, each]));
+    return find.shownIds.flatMap((id) => {
+      const photo = byId.get(id);
+      return photo ? [photo] : [];
+    });
+  }, [library.photos, find.shownIds]);
+  const lists = useMemo(
+    () => ({ timeline, album: inAlbum, person: ofPerson, search: found }),
+    [timeline, inAlbum, ofPerson, found],
+  );
+  const viewed = lists[viewing?.from ?? 'timeline'];
+  const latest = useRef(lists);
   useEffect(() => {
-    lists.current = { timeline, inAlbum, ofPerson };
-  }, [timeline, inAlbum, ofPerson]);
+    latest.current = lists;
+  }, [lists]);
   const openFrom = useCallback(
     (from: Viewing['from']) => (photoId: string) => {
-      const list =
-        from === 'album'
-          ? lists.current.inAlbum
-          : from === 'person'
-            ? lists.current.ofPerson
-            : lists.current.timeline;
+      const list = latest.current[from];
       const start = list.findIndex((photo) => photo.id === photoId);
       if (start >= 0) setViewing({ from, start });
     },
@@ -273,6 +294,15 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const openInTimeline = useMemo(() => openFrom('timeline'), [openFrom]);
   const openInAlbum = useMemo(() => openFrom('album'), [openFrom]);
   const openOfPerson = useMemo(() => openFrom('person'), [openFrom]);
+  const openFound = useMemo(() => openFrom('search'), [openFrom]);
+  const openSearch = useCallback(() => {
+    setSearching(true);
+  }, []);
+  const { clear: clearSearch, searchLike } = find;
+  const closeSearch = useCallback(() => {
+    setSearching(false);
+    clearSearch();
+  }, [clearSearch]);
   const closePerson = useCallback(() => {
     setPersonId(null);
   }, []);
@@ -404,88 +434,98 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
 
   return (
     <InvitesProvider keys={keys} myName={session.account.name} library={library}>
-      <View style={[styles.fill, { backgroundColor: palette.background }]}>
-        <View style={[styles.fill, { paddingBottom: showTabs ? 0 : inset }]}>{screen}</View>
-        {showTabs ? (
-          <TabBar tab={tab} inset={inset} palette={palette} onChange={changeTab} />
-        ) : null}
-        <UploadCard
-          library={library}
-          palette={palette}
-          bottom={bottom + 12}
-          onDeleteOriginals={removeOriginals}
-        />
-        {naming ? (
-          <NameSheet
-            title="New album"
-            action="Create album"
-            onSave={async (name) => {
-              const made = await library.createAlbum(name);
-              setNaming(false);
-              notice(`“${name}” created`);
-              setAlbumId(made.id);
-            }}
-            onCancel={() => {
-              setNaming(false);
-            }}
-          />
-        ) : null}
-        {/* Once everything it was showing has gone (moved away, say), it closes itself. */}
-        {viewing ? (
-          <Viewer
-            photos={viewed}
-            start={Math.max(0, Math.min(viewing.start, viewed.length - 1))}
+      <OpenSearch value={openSearch}>
+        <View style={[styles.fill, { backgroundColor: palette.background }]}>
+          <View style={[styles.fill, { paddingBottom: showTabs ? 0 : inset }]}>{screen}</View>
+          {showTabs ? (
+            <TabBar tab={tab} inset={inset} palette={palette} onChange={changeTab} />
+          ) : null}
+          <UploadCard
             library={library}
-            {...(viewing.from === 'album' && album ? { album } : {})}
-            {...(viewing.from === 'person' && person
-              ? {
-                  notThis: {
-                    label: person.person?.name ? `Not ${person.person.name}` : 'Not this person',
-                    run: async (photoId: string) =>
-                      (await people.removePhotos(person, [photoId])).done.length > 0,
-                  },
-                }
-              : {})}
-            onClose={closeViewer}
+            palette={palette}
+            bottom={bottom + 12}
+            onDeleteOriginals={removeOriginals}
           />
-        ) : null}
-        {choosing && album ? (
-          <ChoosePhotos
-            album={album}
-            library={library}
-            onClose={() => {
-              setChoosing(false);
-            }}
-          />
-        ) : null}
-        {settingsOpen ? (
-          <Settings
-            session={session}
-            onClose={closeSettings}
-            onBackedUp={library.retry}
-            onShare={() => {
-              setSharing({ albumId: null });
-            }}
-            onJoin={openJoin}
-          />
-        ) : null}
-        {sharing ? (
-          <ShareScreen
-            album={
-              sharing.albumId === null
-                ? null
-                : (library.albums.find((each) => each.id === sharing.albumId) ?? null)
-            }
-            keys={keys}
-            onSharedWith={library.setSharedWith}
-            onStopSharing={library.stopSharingAlbum}
-            onClose={closeShare}
-          />
-        ) : null}
-        {joining ? <JoinScreen onClose={closeJoin} /> : null}
-        <InviteRequests albums={library.albums} showJoins={!joining} />
-        <BiometricSheet />
-      </View>
+          {naming ? (
+            <NameSheet
+              title="New album"
+              action="Create album"
+              onSave={async (name) => {
+                const made = await library.createAlbum(name);
+                setNaming(false);
+                notice(`“${name}” created`);
+                setAlbumId(made.id);
+              }}
+              onCancel={() => {
+                setNaming(false);
+              }}
+            />
+          ) : null}
+          {searching ? (
+            <SearchScreen find={find} library={library} onOpen={openFound} onClose={closeSearch} />
+          ) : null}
+          {/* Once everything it was showing has gone (moved away, say), it closes itself. */}
+          {viewing ? (
+            <Viewer
+              photos={viewed}
+              start={Math.max(0, Math.min(viewing.start, viewed.length - 1))}
+              library={library}
+              {...(viewing.from === 'album' && album ? { album } : {})}
+              {...(viewing.from === 'person' && person
+                ? {
+                    notThis: {
+                      label: person.person?.name ? `Not ${person.person.name}` : 'Not this person',
+                      run: async (photoId: string) =>
+                        (await people.removePhotos(person, [photoId])).done.length > 0,
+                    },
+                  }
+                : {})}
+              onLike={(photoId) => {
+                setViewing(null);
+                setSearching(true);
+                searchLike(photoId);
+              }}
+              onClose={closeViewer}
+            />
+          ) : null}
+          {choosing && album ? (
+            <ChoosePhotos
+              album={album}
+              library={library}
+              onClose={() => {
+                setChoosing(false);
+              }}
+            />
+          ) : null}
+          {settingsOpen ? (
+            <Settings
+              session={session}
+              onClose={closeSettings}
+              onBackedUp={library.retry}
+              onShare={() => {
+                setSharing({ albumId: null });
+              }}
+              onJoin={openJoin}
+            />
+          ) : null}
+          {sharing ? (
+            <ShareScreen
+              album={
+                sharing.albumId === null
+                  ? null
+                  : (library.albums.find((each) => each.id === sharing.albumId) ?? null)
+              }
+              keys={keys}
+              onSharedWith={library.setSharedWith}
+              onStopSharing={library.stopSharingAlbum}
+              onClose={closeShare}
+            />
+          ) : null}
+          {joining ? <JoinScreen onClose={closeJoin} /> : null}
+          <InviteRequests albums={library.albums} showJoins={!joining} />
+          <BiometricSheet />
+        </View>
+      </OpenSearch>
     </InvitesProvider>
   );
 }
