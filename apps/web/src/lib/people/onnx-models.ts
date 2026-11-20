@@ -9,9 +9,9 @@ import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 import type { FaceModels } from './find-faces';
 import { EMBEDDING_LENGTH } from '@arcafold/core/people/vectors';
 
-import { SFACE_SIZE } from './sface';
-import { YUNET_SIZE } from './yunet';
-import type { YunetOutputs } from './yunet';
+import { SFACE_SIZE } from '@arcafold/core/people/sface';
+import { YUNET_SIZE } from '@arcafold/core/people/yunet';
+import type { YunetOutputs } from '@arcafold/core/people/yunet';
 
 ort.env.wasm.wasmPaths = { wasm: wasmUrl };
 ort.env.wasm.numThreads = 1;

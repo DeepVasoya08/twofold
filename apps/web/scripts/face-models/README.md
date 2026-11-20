@@ -1,8 +1,9 @@
 # Face models
 
 The People feature runs two open models from the [OpenCV Zoo](https://github.com/opencv/opencv_zoo)
-in the browser. Both are committed under `src/lib/people/models/`, with their licences, and the
-app checks each file's SHA-256 before using it (`src/lib/people/models.ts`).
+in the browser and in the phone app. Both are committed under `public/resources/faces/`, with
+their licences, served at `/resources/faces/`, and each app checks a file's SHA-256 (pinned in
+`packages/core/src/people/resources.ts`) before using it.
 
 | File                    | Source                                                                                  | Licence    | SHA-256                                                            |
 | ----------------------- | --------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------ |

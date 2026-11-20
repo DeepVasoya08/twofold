@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { sha256, toBase64Url } from '@arcafold/crypto/webcrypto';
 
-import { ModelError, loadModelBytes } from './models';
+import { readFile } from 'node:fs/promises';
+
+import { FACE_RESOURCES } from '@arcafold/core/people/resources';
+
+import { MODEL_FILES, ModelError, loadModelBytes } from './models';
 
 const detector = new Uint8Array([1, 2, 3]);
 const recognizer = new Uint8Array([4, 5, 6]);
@@ -43,5 +47,18 @@ describe('loadModelBytes', () => {
     ).rejects.toThrow(ModelError);
     const offline = (() => Promise.reject(new TypeError('offline'))) as typeof fetch;
     await expect(loadModelBytes(offline, await files())).rejects.toThrow(ModelError);
+  });
+});
+
+describe('MODEL_FILES', () => {
+  it('serves the files in public/resources/faces, which match their pins', async () => {
+    for (const resource of Object.values(FACE_RESOURCES)) {
+      const bytes = await readFile(
+        new URL(`../../../public/resources/faces/${resource.file}`, import.meta.url),
+      );
+      expect(bytes.length).toBe(resource.size);
+      expect(toBase64Url(await sha256(new Uint8Array(bytes)))).toBe(resource.sha256);
+    }
+    expect(MODEL_FILES.detector.url).toBe('/resources/faces/yunet-2023mar.onnx');
   });
 });

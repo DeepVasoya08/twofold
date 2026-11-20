@@ -1,18 +1,28 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SpaceKeys } from '@arcafold/crypto';
 import { peopleEdits, photoOrder } from '@arcafold/core/people/edits';
 import type { PeopleChange } from '@arcafold/core/people/edits';
-import { groupFaces } from '@arcafold/core/people/grouping';
 import type { Group, Person, PersonLabel } from '@arcafold/core/people/grouping';
-import type { FaceResults } from '@arcafold/core/people/segment';
+import type { FaceResults, StoredFace } from '@arcafold/core/people/segment';
 import { remotePeopleStore } from '@arcafold/core/people/store';
 import type { PeopleStore } from '@arcafold/core/people/store';
 import type { Photo } from '@arcafold/core/library/model';
 import type { Settled } from '@arcafold/core/settle-each';
 
+import { shownGroups } from './people-view';
+import { RuntimeError } from '../ai/onnx';
+import { useScan } from '../ai/use-scan';
+import type { ScanInputs, ScanJob, ScanState } from '../ai/use-scan';
+import { ResourceError } from '../search/resources';
+import { FaceFinderError, facesNeedDownload, loadFaceFinder } from './face-finder';
+
+export { noPeopleText, personPhotos, shownGroups } from './people-view';
+
 export interface People {
   status: 'idle' | 'loading' | 'ready' | 'failed';
+  /** The person records: names, "This is me", labels. */
+  people: readonly Person[];
   /** Everyone shown in People, and those hidden from it. */
   groups: Group[];
   hidden: Group[];
@@ -26,50 +36,66 @@ export interface People {
   setLabels: (group: Group, labels: readonly PersonLabel[]) => Promise<string>;
   /** Says these photos aren't this person. */
   removePhotos: (group: Group, photoIds: readonly string[]) => Promise<Settled<string>>;
+  /** How many photos have been looked at for faces (on any device), of how many. */
+  lookedAt: { done: number; total: number };
+  /** Where this phone has got with finding faces. */
+  scan: ScanState;
+  downloadNow: () => void;
+  retryScan: () => void;
+  /** Whether this phone is finding faces now (Smart search waits for it). */
+  active: boolean;
 }
 
-/** What People says when nobody shows yet. */
-export function noPeopleText(hiddenOnly: boolean): string {
-  if (hiddenOnly) return 'Nobody is hidden.';
-  return 'Someone shows up here once their face is found in at least 3 photos. For now, faces are found by Arcafold in your browser, with face grouping on in Settings.';
-}
+/** New faces are grouped and shown at most this often while the phone finds them. */
+const SHOW_EVERY_MS = 5_000;
+/** Saved results are merged once there are more than this many segments. */
+const MERGE_AFTER = 8;
 
-/** Splits groups into those shown and those hidden; groups with no photos left drop out. */
-export function shownGroups(
-  results: FaceResults,
-  people: readonly Person[],
-  photos: readonly Pick<Photo, 'id' | 'takenAt'>[],
-): { groups: Group[]; hidden: Group[] } {
-  const all = groupFaces(results, people, photoOrder(photos)).filter(
-    (group) => group.photoIds.length > 0,
-  );
-  return {
-    groups: all.filter((group) => !group.person?.hidden),
-    hidden: all.filter((group) => group.person?.hidden === true),
-  };
-}
-
-/** A person's photos, in the order they're shown, from the library's photos. */
-export function personPhotos(group: Group, byId: ReadonlyMap<string, Photo>): Photo[] {
-  return group.photoIds.flatMap((id) => {
-    const photo = byId.get(id);
-    return photo ? [photo] : [];
-  });
-}
+const faceJob: ScanJob<StoredFace[]> = {
+  needsDownload: facesNeedDownload,
+  load: async (onProgress) => {
+    const finder = await loadFaceFinder(onProgress);
+    return { look: (picture) => finder.find(picture), release: finder.release };
+  },
+  // A preview that's missing or can't be read has no faces to find.
+  empty: [],
+  explain: (error) =>
+    error instanceof ResourceError ||
+    error instanceof FaceFinderError ||
+    error instanceof RuntimeError
+      ? error.message
+      : 'Finding faces stopped. It will try again next time you unlock.',
+  saveFailed: 'Some face results couldn’t be saved. They’ll be found again later.',
+};
 
 /**
  * The people in the open space: faces found on any of your devices, grouped here, with what
- * you named, merged or hid saved in sealed records. Loaded the first time People is opened
- * (`wanted`), and kept while the space stays open.
+ * you named, merged or hid saved in sealed records. Loaded when this phone finds faces
+ * (`on`) or People is first opened (`wanted`), and kept while the space stays open. While
+ * `on`, this phone finds faces in every photo no device has looked at yet, while the app is
+ * open and nothing else is `busy`.
  */
-export function usePeople(
-  keys: SpaceKeys,
-  photos: readonly Photo[],
-  wanted: boolean,
-  makeStore: (keys: SpaceKeys) => PeopleStore = remotePeopleStore,
-): People {
+export function usePeople({
+  keys,
+  photos,
+  on,
+  wanted,
+  busy,
+  previews,
+  makeStore = remotePeopleStore,
+}: {
+  keys: SpaceKeys;
+  photos: readonly Photo[];
+  on: boolean;
+  wanted: boolean;
+  busy: boolean;
+  previews: ScanInputs<StoredFace[]>['previews'];
+  makeStore?: (keys: SpaceKeys) => PeopleStore;
+}): People {
   const store = useMemo(() => makeStore(keys), [makeStore, keys]);
   const [results, setResults] = useState<FaceResults>(() => new Map());
+  const live = useRef<FaceResults>(new Map());
+  const segments = useRef<string[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [round, setRound] = useState(0);
   /** How the last load of this store went. */
@@ -77,8 +103,8 @@ export function usePeople(
     null,
   );
   // Once People has been opened, the people stay loaded.
-  const [asked, setAsked] = useState(wanted);
-  if (wanted && !asked) setAsked(true);
+  const [asked, setAsked] = useState(on || wanted);
+  if ((on || wanted) && !asked) setAsked(true);
   const last = loaded?.store === store ? loaded : null;
   // A reload keeps showing what loaded before; after a failure it shows loading again.
   const status: People['status'] = !asked
@@ -93,20 +119,22 @@ export function usePeople(
 
   useEffect(() => {
     if (!asked) return;
-    let live = true;
+    let current = true;
     store.load().then(
       (saved) => {
-        if (!live) return;
-        setResults(saved.results);
+        if (!current) return;
+        live.current = saved.results;
+        segments.current = saved.segments;
+        setResults(new Map(saved.results));
         setPeople(saved.people);
         setLoaded({ store, round, ok: true });
       },
       () => {
-        if (live) setLoaded({ store, round, ok: false });
+        if (current) setLoaded({ store, round, ok: false });
       },
     );
     return () => {
-      live = false;
+      current = false;
     };
   }, [store, round, asked]);
 
@@ -119,6 +147,59 @@ export function usePeople(
     setRound((n) => n + 1);
   }, []);
 
+  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastShown = useRef(0);
+  useEffect(
+    () => () => {
+      if (showTimer.current) clearTimeout(showTimer.current);
+    },
+    [],
+  );
+  const ids = useMemo(() => photoOrder(photos), [photos]);
+  const lookedAt = useMemo(
+    () => ({ done: ids.filter((id) => results.has(id)).length, total: ids.length }),
+    [ids, results],
+  );
+  const scan = useScan({
+    job: faceJob,
+    on,
+    ready: status === 'ready' && last?.ok === true,
+    photos: ids,
+    inputs: {
+      pending: () => ids.filter((id) => !live.current.has(id)),
+      previews,
+      onResults: (found) => {
+        for (const [id, faces] of found) live.current.set(id, faces);
+        showTimer.current ??= setTimeout(
+          () => {
+            showTimer.current = null;
+            lastShown.current = Date.now();
+            setResults(new Map(live.current));
+          },
+          Math.max(0, lastShown.current + SHOW_EVERY_MS - Date.now()),
+        );
+      },
+      save: async (found) => {
+        const saved = await store.saveResults(found);
+        segments.current = [...segments.current, ...saved];
+      },
+      afterDone: async () => {
+        setResults(new Map(live.current));
+        // Merge segments, and drop results for photos that are gone, now and then.
+        const present = new Set(ids);
+        const kept: FaceResults = new Map(
+          [...live.current].filter(([photoId]) => present.has(photoId)),
+        );
+        const stale = live.current.size - kept.size;
+        if (segments.current.length > MERGE_AFTER || stale > live.current.size / 5) {
+          const fresh = await store.replaceSegments(kept, segments.current).catch(() => null);
+          if (fresh) segments.current = fresh;
+        }
+      },
+      busy,
+    },
+  });
+
   const edits = useMemo(() => peopleEdits(store), [store]);
   const apply = useCallback(async (change: Promise<PeopleChange>) => {
     const { id, people: after } = await change;
@@ -128,6 +209,7 @@ export function usePeople(
 
   return {
     status,
+    people,
     groups,
     hidden,
     reload,
@@ -141,5 +223,10 @@ export function usePeople(
       if (after) setPeople(after);
       return result;
     },
+    lookedAt,
+    scan: scan.scan,
+    downloadNow: scan.downloadNow,
+    retryScan: scan.retry,
+    active: scan.active,
   };
 }

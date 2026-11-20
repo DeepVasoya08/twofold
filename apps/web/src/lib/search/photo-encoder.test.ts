@@ -95,6 +95,8 @@ describe('answerEncodeRequest', () => {
         makeSurface: () => ({
           getContext: () =>
             ({
+              fillRect: () => undefined,
+              setTransform: () => undefined,
               drawImage: () => undefined,
               getImageData: () => ({ data: pixels }),
             }) as unknown as OffscreenCanvasRenderingContext2D,

@@ -16,6 +16,7 @@ import { createThumbLoader } from '@arcafold/core/library/thumb-loader';
 import type { ThumbLoader } from '@arcafold/core/library/thumb-loader';
 import { sessionStore } from '@arcafold/core/sharing';
 import { Uploader } from '@arcafold/core/upload/uploader';
+import { isUploadRunning } from '@arcafold/core/upload/progress';
 import type { UploaderDeps, UploaderState } from '@arcafold/core/upload/uploader';
 
 import { MemoryImages, PhotoPicker } from '../../modules/memory-image';
@@ -35,6 +36,14 @@ export interface Library {
   /** Asks for photos' previews; those `onScreen` go first. Asking twice is free. */
   requestThumbs: (photoIds: readonly string[], onScreen?: boolean) => void;
   /**
+   * Downloads and decrypts previews for the phone to look at (finding faces, Smart search),
+   * keeping none of them: each reaches `onPreview` once, null if it's missing.
+   */
+  previews: (
+    photoIds: readonly string[],
+    onPreview: (photoId: string, bytes: Uint8Array<ArrayBuffer> | null) => void,
+  ) => Promise<void>;
+  /**
    * Downloads and decrypts a photo's original, for the viewer. Only the latest one is kept:
    * opening another frees the one before.
    */
@@ -48,6 +57,8 @@ export interface Library {
   retry: () => void;
   /** Photos being added from this phone, and whether their progress is showing. */
   uploads: UploaderState;
+  /** Whether photos are on their way up from this phone now. */
+  uploading: boolean;
   /**
    * Encrypts and uploads picked photos, a few at a time, then shows them all together. With
    * `albumId` they go in that album too.
@@ -230,6 +241,12 @@ export function useLibrary(session: Session): Library {
     loader.current?.request(photoIds, onScreen);
   }, []);
 
+  const previews = useCallback<Library['previews']>((photoIds, onPreview) => {
+    const store = opened.current;
+    if (!store) return Promise.reject(new Error('The library is closed.'));
+    return store.previews(photoIds, onPreview);
+  }, []);
+
   const openOriginal = useCallback((photoId: string) => {
     const store = opened.current;
     if (!store) return Promise.reject(new Error('The library is closed.'));
@@ -390,10 +407,12 @@ export function useLibrary(session: Session): Library {
     albums,
     thumbs,
     requestThumbs,
+    previews,
     openOriginal,
     movePhoto,
     retry,
     uploads,
+    uploading: uploads.items.some((item) => isUploadRunning(item.status)),
     addPhotos,
     createAlbum,
     renameAlbum,

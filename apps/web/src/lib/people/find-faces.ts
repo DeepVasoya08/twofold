@@ -1,19 +1,14 @@
 /**
- * Finds the faces in one photo and fingerprints each of them. Runs in the AI worker on the
- * decrypted 640px preview; nothing here keeps pixels after it returns.
+ * The web's side of finding faces: a decoded preview drawn with an OffscreenCanvas in the AI
+ * worker, for the shared face finding in @arcafold/core. Nothing here keeps pixels after it
+ * returns.
  */
-import { alignmentFor, normalize, SFACE_SIZE, sfaceInput } from './sface';
-import { decodeYunet, letterboxScale, YUNET_SIZE, yunetInput } from './yunet';
-import type { DetectedFace, YunetOutputs } from './yunet';
+import { findFaces as findInPicture } from '@arcafold/core/people/find-faces';
+import type { FaceModels, FoundFace } from '@arcafold/core/people/find-faces';
+import type { Picture } from '@arcafold/core/picture';
 
-/** At most this many faces are kept per photo (the largest), to bound the work. */
-export const MAX_FACES_PER_PHOTO = 20;
-
-/** The two models, behind a small interface so tests can stand in for them. */
-export interface FaceModels {
-  detect: (input: Float32Array) => Promise<YunetOutputs>;
-  embed: (input: Float32Array) => Promise<Float32Array>;
-}
+export { MAX_FACES_PER_PHOTO } from '@arcafold/core/people/find-faces';
+export type { FaceModels, FoundFace } from '@arcafold/core/people/find-faces';
 
 /** A 2D canvas to draw on: an OffscreenCanvas in the worker. */
 export interface DrawSurface {
@@ -25,44 +20,31 @@ export interface DrawSurface {
 
 export type SurfaceMaker = (width: number, height: number) => DrawSurface;
 
-export interface FoundFace extends DetectedFace {
-  /** 128 numbers of length 1. */
-  embedding: Float32Array;
-}
-
-function context(surface: DrawSurface): OffscreenCanvasRenderingContext2D {
-  const ctx = surface.getContext('2d', { willReadFrequently: true });
-  if (!ctx) throw new Error('No 2D canvas');
-  return ctx;
+/** A decoded image as a Picture: each draw gets a fresh canvas of the size asked for. */
+export function canvasPicture(image: ImageBitmap, makeSurface: SurfaceMaker): Picture {
+  return {
+    width: image.width,
+    height: image.height,
+    draw: (size, transform, smooth = false) => {
+      const ctx = makeSurface(size, size).getContext('2d', { willReadFrequently: true });
+      if (!ctx) return Promise.reject(new Error('No 2D canvas'));
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, size, size);
+      ctx.imageSmoothingEnabled = true;
+      if (smooth) ctx.imageSmoothingQuality = 'high';
+      ctx.setTransform(...transform);
+      ctx.drawImage(image, 0, 0);
+      return Promise.resolve(ctx.getImageData(0, 0, size, size).data);
+    },
+  };
 }
 
 /** Faces in `image`, largest first, with box and landmarks in the image's pixels. */
-export async function findFaces(
+export function findFaces(
   image: ImageBitmap,
   models: FaceModels,
   makeSurface: SurfaceMaker,
 ): Promise<FoundFace[]> {
-  const scale = letterboxScale(image.width, image.height);
-  const square = context(makeSurface(YUNET_SIZE, YUNET_SIZE));
-  square.fillStyle = '#000';
-  square.fillRect(0, 0, YUNET_SIZE, YUNET_SIZE);
-  square.drawImage(image, 0, 0, image.width * scale, image.height * scale);
-  const pixels = square.getImageData(0, 0, YUNET_SIZE, YUNET_SIZE).data;
-  const detected = decodeYunet(await models.detect(yunetInput(pixels)), scale)
-    .sort((a, b) => b.width * b.height - a.width * a.height)
-    .slice(0, MAX_FACES_PER_PHOTO);
-
-  const crop = context(makeSurface(SFACE_SIZE, SFACE_SIZE));
-  const faces: FoundFace[] = [];
-  for (const face of detected) {
-    const { a, b, tx, ty } = alignmentFor(face.landmarks);
-    crop.setTransform(1, 0, 0, 1, 0, 0);
-    crop.fillStyle = '#000';
-    crop.fillRect(0, 0, SFACE_SIZE, SFACE_SIZE);
-    crop.setTransform(a, b, -b, a, tx, ty);
-    crop.drawImage(image, 0, 0);
-    const facePixels = crop.getImageData(0, 0, SFACE_SIZE, SFACE_SIZE).data;
-    faces.push({ ...face, embedding: normalize(await models.embed(sfaceInput(facePixels))) });
-  }
-  return faces;
+  return findInPicture(canvasPicture(image, makeSurface), models);
 }

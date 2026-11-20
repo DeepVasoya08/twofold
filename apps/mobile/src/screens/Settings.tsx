@@ -30,6 +30,8 @@ import { biometricsAvailable } from '../session/biometric';
 import { Banner, Button, Field } from '../ui/kit';
 import { Row, Section } from '../ui/rows';
 import { SharingSettings } from './SharingSettings';
+import { SmartSettings } from './SmartSettings';
+import type { Smart } from './SmartSettings';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 
@@ -311,12 +313,15 @@ function Backup({
  */
 export function Settings({
   session,
+  smart,
   onClose,
   onBackedUp,
   onShare,
   onJoin,
 }: {
   session: Session;
+  /** Face grouping and Smart search on this phone. */
+  smart: Smart;
   onClose: () => void;
   /** Photos were backed up just now, so the library should show them. */
   onBackedUp: () => void;
@@ -457,6 +462,10 @@ export function Settings({
             <Backup session={session} palette={palette} onBackedUp={onBackedUp} />
           </Section>
         ) : null}
+
+        <Section title="Smart features" palette={palette}>
+          <SmartSettings smart={smart} palette={palette} />
+        </Section>
 
         <Section title="Sharing" palette={palette}>
           <SharingSettings

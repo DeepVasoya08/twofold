@@ -11,7 +11,7 @@ import { EncoderError, EncoderStopped, normalise } from './photo-encoder';
 import type { EncoderWorker } from './photo-encoder';
 import { ResourceError } from './resources';
 import { VECTOR_LENGTH } from '@arcafold/core/search/segment';
-import type { Tokenizer } from './tokenizer';
+import type { Tokenizer } from '@arcafold/core/search/tokenizer';
 
 export interface QueryEncoder {
   /** Downloads and loads what's needed. Rejects with EncoderError if it can't. */

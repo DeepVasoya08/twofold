@@ -75,7 +75,7 @@ export function alignmentFor(landmarks: readonly Point[]): Similarity {
 }
 
 /** Packs RGBA pixels of the 112×112 crop into the model's planar RGB input. */
-export function sfaceInput(rgba: Uint8ClampedArray): Float32Array {
+export function sfaceInput(rgba: ArrayLike<number>): Float32Array {
   const plane = SFACE_SIZE * SFACE_SIZE;
   const input = new Float32Array(3 * plane);
   for (let i = 0; i < plane; i++) {

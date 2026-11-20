@@ -2,6 +2,9 @@ package com.arcafold.memoryimage
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.media.ExifInterface
@@ -69,6 +72,67 @@ object MemoryImages {
       val bitmap = images[id]?.let { decode(it, maxSide) }
       if (bitmap != null && images.containsKey(id)) bitmaps.put(key, bitmap)
       main.post { show(if (images.containsKey(id)) bitmap else null) }
+    }
+  }
+
+  /** The largest side a picture is decoded at for the AI models (previews are 640). */
+  private const val LOOK_SIDE = 2048
+
+  /** The picture for `id`, decoded whole for the AI models, or null. Runs on the caller's thread. */
+  private fun forLooking(id: String): Bitmap? {
+    val key = "$id@look"
+    bitmaps.get(key)?.let { return it }
+    val bitmap = images[id]?.let { decode(it, LOOK_SIDE) } ?: return null
+    if (images.containsKey(id)) bitmaps.put(key, bitmap)
+    return bitmap
+  }
+
+  /** The decoded picture's width and height, upright; null for an unknown id or bad bytes. */
+  fun size(id: String): Pair<Int, Int>? = forLooking(id)?.let { Pair(it.width, it.height) }
+
+  /**
+   * RGBA pixels of a size × size black square with the picture drawn on it through
+   * `transform` (a canvas setTransform's a, b, c, d, e, f), for the AI models. When the
+   * transform shrinks a lot, the picture is first halved step by step, so every pixel counts
+   * (like a browser's high-quality smoothing) instead of a few being sampled.
+   */
+  fun draw(id: String, size: Int, transform: DoubleArray, smooth: Boolean): ByteArray? {
+    var source = forLooking(id) ?: return null
+    var a = transform[0]
+    var b = transform[1]
+    var c = transform[2]
+    var d = transform[3]
+    val halved = mutableListOf<Bitmap>()
+    try {
+      if (smooth) {
+        while (Math.hypot(a, b) < 0.5 && source.width >= 2 && source.height >= 2) {
+          val next = Bitmap.createScaledBitmap(source, source.width / 2, source.height / 2, true)
+          a *= source.width.toDouble() / next.width
+          b *= source.width.toDouble() / next.width
+          c *= source.height.toDouble() / next.height
+          d *= source.height.toDouble() / next.height
+          halved.add(next)
+          source = next
+        }
+      }
+      val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+      val canvas = Canvas(out)
+      canvas.drawColor(Color.BLACK)
+      val matrix = Matrix()
+      matrix.setValues(
+        floatArrayOf(
+          a.toFloat(), c.toFloat(), transform[4].toFloat(),
+          b.toFloat(), d.toFloat(), transform[5].toFloat(),
+          0f, 0f, 1f,
+        )
+      )
+      canvas.drawBitmap(source, matrix, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+      val pixels = ByteBuffer.allocate(size * size * 4)
+      out.copyPixelsToBuffer(pixels)
+      out.recycle()
+      return pixels.array()
+    } finally {
+      for (bitmap in halved) bitmap.recycle()
     }
   }
 

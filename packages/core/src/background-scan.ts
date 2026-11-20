@@ -1,9 +1,9 @@
 /**
  * Looks at every photo that has no result yet, a few at a time, in the background while the
- * vault is unlocked: face grouping and Smart search both use it. Results are shown as they
- * come and saved every so often, so locking or closing the tab loses at most the last few
- * photos' work; the next unlock carries on from there. It waits while `ready` says to
- * (uploads running, tab hidden).
+ * library is unlocked: face grouping and Smart search use it, on the web and on the phone.
+ * Results are shown as they come and saved every so often, so locking or closing the app
+ * loses at most the last few photos' work; the next unlock carries on from there. It waits
+ * while `ready` says to (uploads running, tab hidden, app in the background).
  */
 
 /** Previews downloaded per request. */
@@ -13,9 +13,12 @@ export const SAVE_EVERY = 48;
 /** After a failed download, wait this long before trying again. */
 export const RETRY_MS = 30_000;
 
-/** Works out one photo's result from its preview. Null means the image couldn't be read. */
+/**
+ * Works out one photo's result from its decrypted preview (JPEG bytes). Null means the image
+ * couldn't be read.
+ */
 export interface Looker<T> {
-  look: (image: Blob) => Promise<T | null>;
+  look: (image: Uint8Array<ArrayBuffer>) => Promise<T | null>;
   stop: () => void;
 }
 
@@ -96,9 +99,7 @@ export async function runBackgroundScan<T>(deps: BackgroundScanDeps<T>): Promise
       const found = new Map<string, T>();
       for (const { id, bytes } of previews) {
         if (stopped()) return 'stopped';
-        const result = bytes
-          ? await deps.looker.look(new Blob([bytes], { type: 'image/jpeg' }))
-          : null;
+        const result = bytes ? await deps.looker.look(bytes) : null;
         found.set(id, result ?? deps.empty);
         looked.add(id);
       }

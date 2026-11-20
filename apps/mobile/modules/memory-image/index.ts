@@ -8,6 +8,13 @@ interface MemoryImageModule {
   release(id: string): void;
   /** Forgets every image. */
   clear(): void;
+  /** An image's width and height, upright. Rejects for bytes that aren't a picture. */
+  sizeAsync(id: string): Promise<{ width: number; height: number }>;
+  /**
+   * RGBA pixels of a size × size black square with the image drawn on it through `transform`
+   * (a canvas setTransform's a, b, c, d, e, f), for the AI models; `smooth` shrinks well.
+   */
+  drawAsync(id: string, size: number, transform: number[], smooth: boolean): Promise<ArrayBuffer>;
 }
 
 /**

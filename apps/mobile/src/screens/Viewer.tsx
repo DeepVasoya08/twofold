@@ -97,6 +97,7 @@ export function Viewer({
   library,
   album,
   notThis,
+  onLike,
   onClose,
 }: {
   photos: Photo[];
@@ -118,6 +119,8 @@ export function Viewer({
    * out of their photos. `label` is the button's text ("Not Ada").
    */
   notThis?: { label: string; run: (photoId: string) => Promise<boolean> };
+  /** Starts a search for photos that look like the one in view. */
+  onLike?: (photoId: string) => void;
   onClose: () => void;
 }) {
   const { space, otherSpace } = useAccount();
@@ -290,7 +293,7 @@ export function Viewer({
           </View>
         </View>
       ) : null}
-      {chrome && photo && space && (canMove || canFile || canTakeOut || notThis) ? (
+      {chrome && photo && space && (canMove || canFile || canTakeOut || notThis || onLike) ? (
         <View style={[styles.actions, { paddingBottom: 24 + bottomInset() }]}>
           {moveError ? <Banner>{moveError}</Banner> : null}
           <View style={styles.actionRow}>
@@ -320,6 +323,18 @@ export function Viewer({
                 style={styles.action}
               >
                 <Text style={styles.actionText}>Remove from album</Text>
+              </Pressable>
+            ) : null}
+            {onLike ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={filing !== null || moving !== null}
+                onPress={() => {
+                  onLike(photo.id);
+                }}
+                style={styles.action}
+              >
+                <Text style={styles.actionText}>More like this</Text>
               </Pressable>
             ) : null}
             {notThis ? (

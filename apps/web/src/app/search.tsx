@@ -9,7 +9,7 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
-import { runBackgroundScan } from '../lib/background-scan';
+import { runBackgroundScan } from '@arcafold/core/background-scan';
 import { connection, isPhone } from '../lib/search/device';
 import { photosToIndex, waitForWifi, wipeResults } from '../lib/search/index-plan';
 import { EncoderError, EncoderStopped } from '../lib/search/photo-encoder';
@@ -271,7 +271,7 @@ export function SearchProvider({
         pending,
         previews,
         looker: {
-          look: (image) => encoder.encode(image),
+          look: (bytes) => encoder.encode(new Blob([bytes], { type: 'image/jpeg' })),
           stop: () => {
             encoder.stop();
           },

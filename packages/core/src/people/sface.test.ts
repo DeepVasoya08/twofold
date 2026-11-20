@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cosine } from '@arcafold/core/people/vectors';
+import { cosine } from './vectors';
 
 import { SFACE_SIZE, alignmentFor, fitSimilarity, normalize, sfaceInput } from './sface';
 
