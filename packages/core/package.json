@@ -8,6 +8,8 @@
     "./api": "./src/api.ts",
     "./background-scan": "./src/background-scan.ts",
     "./crypto-loader": "./src/crypto-loader.ts",
+    "./download/names": "./src/download/names.ts",
+    "./download/progress": "./src/download/progress.ts",
     "./errors": "./src/errors.ts",
     "./file-categories": "./src/file-categories.ts",
     "./file-types": "./src/file-types.ts",

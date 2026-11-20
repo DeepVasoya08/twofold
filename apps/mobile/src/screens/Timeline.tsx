@@ -22,6 +22,7 @@ export function Timeline({
   onSettings,
   onAdd,
   onOpen,
+  onSave,
 }: {
   library: Library;
   initial: string;
@@ -30,11 +31,13 @@ export function Timeline({
   onSettings: () => void;
   onAdd: () => void;
   onOpen: (photoId: string) => void;
+  /** Saves copies of photos to the phone's gallery, where it can. */
+  onSave?: (photoIds: readonly string[]) => void;
 }) {
   const { space } = useAccount();
   const palette = usePalette();
   const rows = useMemo(() => timelineRows(library.photos), [library.photos]);
-  const picking = usePickToDelete(library, onOpen);
+  const picking = usePickToDelete(library, onOpen, onSave);
 
   const header = picking.header ?? (
     <AppHeader

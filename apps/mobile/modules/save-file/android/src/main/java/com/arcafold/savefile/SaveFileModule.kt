@@ -6,13 +6,32 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.kotlin.typedarray.Uint8Array
+import java.nio.ByteBuffer
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 private const val SAVE_REQUEST = 0xA5CF
+
+/** Decrypted copies between being handed over and saved: in memory only, wiped once saved. */
+private object Held {
+  private val copies = ConcurrentHashMap<String, ByteArray>()
+
+  fun put(bytes: ByteArray): String {
+    val id = UUID.randomUUID().toString()
+    copies[id] = bytes
+    return id
+  }
+
+  fun take(id: String): ByteArray? = copies.remove(id)
+}
 
 /**
  * Saves a short text file where the person chooses, through Android's own "Save to" screen
  * (ACTION_CREATE_DOCUMENT). The app gets access to that one file only, and needs no storage
  * permission. The text is written straight from memory: no copy is kept in the app's storage.
+ *
+ * Also puts copies of photos into the phone's gallery (GallerySaver), straight from memory.
  */
 class SaveFileModule : Module() {
   private var pending: Pair<Promise, String>? = null
@@ -30,6 +49,28 @@ class SaveFileModule : Module() {
         .setType("text/plain")
         .putExtra(Intent.EXTRA_TITLE, name)
       activity.startActivityForResult(intent, SAVE_REQUEST)
+    }
+
+    // Copying the bytes out of JavaScript has to happen on its thread, so it's a step of its
+    // own; the slow part (writing) then runs in the background.
+    Function("hold") { bytes: Uint8Array ->
+      val copy = ByteArray(bytes.byteLength)
+      bytes.read(copy, 0, bytes.byteLength)
+      Held.put(copy)
+    }
+
+    AsyncFunction("saveToGalleryAsync") { id: String, name: String, type: String, takenAt: Double ->
+      val context = appContext.reactContext
+        ?: throw CodedException("ERR_NO_CONTEXT", "Arcafold isn't running.", null)
+      val bytes = Held.take(id)
+        ?: throw CodedException("ERR_SAVE_FAILED", "The copy isn't in memory anymore.", null)
+      try {
+        GallerySaver.save(context, ByteBuffer.wrap(bytes), name, type, takenAt.toLong())
+      } catch (error: Exception) {
+        throw CodedException("ERR_SAVE_FAILED", "The copy couldn't be saved to the phone.", error)
+      } finally {
+        bytes.fill(0)
+      }
     }
 
     OnActivityResult { activity, payload ->

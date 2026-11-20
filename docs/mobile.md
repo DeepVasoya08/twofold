@@ -202,6 +202,18 @@ or a native module.
   recording when in their sealed metadata as on the web. Recently deleted (at the end of
   Albums) restores photos or deletes them for good, and opening the library deletes for good
   whatever has been there 30 days. Photos shared with you to view can't be deleted.
+- Saving to the phone (`src/library/save-to-phone.ts`, `use-save-to-phone.ts`,
+  `screens/SaveCard.tsx`, `modules/save-file` `GallerySaver`): Save in the selection bar, or
+  Save to phone in the viewer, puts copies of the originals straight into the gallery, in
+  Pictures/Arcafold (a file that isn't a photo or video goes to Download/Arcafold). Originals
+  download and decrypt 4 at a time, as on the web, and each one is handed to native memory
+  (the JavaScript copy wiped) and written through MediaStore as soon as it's ready, so only a
+  few are in memory at once and the app keeps no copy of its own. Copies are named by when
+  they were taken (`@arcafold/core/download/names`, shared with the web), dated then in the
+  gallery, and the gallery tells same-named ones apart. Up to 1 GB at a time; a photo that
+  fails doesn't stop the rest. It keeps going while you move around the app and stops when it
+  locks. Android 10 and newer need no permission; Android 9 and older ask for storage access
+  the first time.
 - Looking at photos (`src/ai/use-scan.ts`, `src/people/face-finder.ts`,
   `src/search/photo-encoder.ts`, `src/search/use-search-index.ts`, `screens/SmartSettings.tsx`):
   with Face grouping and Smart search on (Settings > Smart features, per phone, like the web;

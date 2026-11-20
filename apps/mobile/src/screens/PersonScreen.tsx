@@ -31,6 +31,7 @@ export function PersonScreen({
   onSettings,
   onBack,
   onOpen,
+  onSave,
   onMoved,
 }: {
   group: Group;
@@ -41,11 +42,13 @@ export function PersonScreen({
   onSettings: () => void;
   onBack: () => void;
   onOpen: (photoId: string) => void;
+  /** Saves copies of photos to the phone's gallery, where it can. */
+  onSave?: (photoIds: readonly string[]) => void;
   /** A change made a new person (a group got a name, say): show them from now on. */
   onMoved: (personId: string) => void;
 }) {
   const palette = usePalette();
-  const picking = usePickToDelete(library, onOpen);
+  const picking = usePickToDelete(library, onOpen, onSave);
   const notice = useNotice();
   const [open, setOpen] = useState<Open>(null);
   const byId = useMemo(
