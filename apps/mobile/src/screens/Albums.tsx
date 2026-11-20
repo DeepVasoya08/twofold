@@ -119,6 +119,7 @@ export function Albums({
   onNew,
   onOpen,
   onJoin,
+  onTrash,
 }: {
   library: Library;
   initial: string;
@@ -128,6 +129,8 @@ export function Albums({
   onOpen: (albumId: string) => void;
   /** Opens the screen for entering an invite code. */
   onJoin: () => void;
+  /** Opens Recently deleted. */
+  onTrash: () => void;
 }) {
   const palette = usePalette();
   const { width } = useWindowDimensions();
@@ -184,6 +187,18 @@ export function Albums({
       </Pressable>
     ) : null;
 
+  const trashCount = library.trash?.length ?? 0;
+  const trashLink = (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onTrash}
+      style={[styles.trash, { borderColor: palette.border }]}
+    >
+      <Text style={[styles.trashText, { color: palette.text }]}>Recently deleted</Text>
+      <Text style={[styles.meta, { color: palette.muted }]}>{photoCount(trashCount)} ›</Text>
+    </Pressable>
+  );
+
   if (library.status === 'ready' && tab !== 'all' && cards.length === 0) {
     return (
       <View style={styles.fill}>
@@ -217,6 +232,7 @@ export function Albums({
               <Note>Gather photos into albums: a trip, a year, the people you love.</Note>
               <Button label="New album" onPress={onNew} />
               <Button kind="link" label="Enter an invite code" onPress={onJoin} />
+              {trashCount > 0 ? trashLink : null}
             </>
           )}
         </View>
@@ -237,6 +253,7 @@ export function Albums({
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.list}
         extraData={thumbs}
+        ListFooterComponent={tab === 'all' ? trashLink : undefined}
         renderItem={({ item }) => (
           <AlbumCard
             card={item}
@@ -275,6 +292,15 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
   chipText: { fontSize: 14, fontWeight: '600' },
   codeLink: { paddingHorizontal: GUTTER, paddingBottom: 12 },
+  trash: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 16,
+    marginTop: 4,
+  },
+  trashText: { fontSize: 15, fontWeight: '600' },
   badge: {
     position: 'absolute',
     left: 8,

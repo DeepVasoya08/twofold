@@ -21,6 +21,7 @@ const Tile = memo(function Tile({
   chosen,
   requestThumbs,
   onPress,
+  onLongPress,
 }: {
   photoId: string;
   imageId: string | null;
@@ -30,6 +31,7 @@ const Tile = memo(function Tile({
   chosen: boolean | undefined;
   requestThumbs: (photoIds: readonly string[]) => void;
   onPress: (photoId: string) => void;
+  onLongPress: ((photoId: string) => void) | undefined;
 }) {
   useEffect(() => {
     if (!imageId) requestThumbs([photoId]);
@@ -43,6 +45,13 @@ const Tile = memo(function Tile({
       onPress={() => {
         onPress(photoId);
       }}
+      onLongPress={
+        onLongPress
+          ? () => {
+              onLongPress(photoId);
+            }
+          : undefined
+      }
     >
       <MemoryImage
         imageId={imageId}
@@ -80,6 +89,7 @@ const TileRow = memo(
     palette: Palette;
     requestThumbs: (photoIds: readonly string[]) => void;
     onPress: (photoId: string) => void;
+    onLongPress: ((photoId: string) => void) | undefined;
   }) {
     return (
       <View style={[styles.tileRow, { height: props.size }]}>
@@ -93,6 +103,7 @@ const TileRow = memo(
             palette={props.palette}
             requestThumbs={props.requestThumbs}
             onPress={props.onPress}
+            onLongPress={props.onLongPress}
           />
         ))}
       </View>
@@ -103,6 +114,7 @@ const TileRow = memo(
     before.size === after.size &&
     before.palette === after.palette &&
     before.onPress === after.onPress &&
+    before.onLongPress === after.onLongPress &&
     before.photoIds.length === after.photoIds.length &&
     before.photoIds.every((id, index) => id === after.photoIds[index]) &&
     before.imageIds.every((id, index) => id === after.imageIds[index]) &&
@@ -130,13 +142,15 @@ function MonthHeading({
 
 /**
  * Photos by month, four across, with previews downloaded and decrypted as they come near the
- * screen. Tapping a photo opens it, or, while choosing (`chosen` is set), ticks it.
+ * screen. Tapping a photo opens it, or, while choosing (`chosen` is set), ticks it; a long
+ * press (`onLongPress`) starts selecting.
  */
 export function PhotoGrid({
   rows,
   thumbs,
   requestThumbs,
   onPress,
+  onLongPress,
   chosen,
   header,
   footer,
@@ -146,6 +160,7 @@ export function PhotoGrid({
   thumbs: ReadonlyMap<string, string>;
   requestThumbs: (photoIds: readonly string[], onScreen?: boolean) => void;
   onPress: (photoId: string) => void;
+  onLongPress?: (photoId: string) => void;
   chosen?: ReadonlySet<string>;
   header?: ReactElement;
   footer?: ReactElement;
@@ -177,9 +192,10 @@ export function PhotoGrid({
           palette={palette}
           requestThumbs={requestThumbs}
           onPress={onPress}
+          onLongPress={onLongPress}
         />
       ),
-    [palette, thumbs, chosen, size, requestThumbs, onPress],
+    [palette, thumbs, chosen, size, requestThumbs, onPress, onLongPress],
   );
 
   return (

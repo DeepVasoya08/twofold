@@ -5,7 +5,13 @@ import { spaceOf } from '@arcafold/core/account';
 import type { Session } from '@arcafold/core/account';
 
 type SpaceKeys = NonNullable<Session['otherSpace']>;
-import { addsByUpload, copiesInto, fitsAlbum, withAlbum } from '@arcafold/core/library/albums';
+import {
+  addsByUpload,
+  copiesInto,
+  fitsAlbum,
+  isViewOnly,
+  withAlbum,
+} from '@arcafold/core/library/albums';
 import type { Album, Photo } from '@arcafold/core/library/model';
 import { settleEach } from '@arcafold/core/settle-each';
 import type { Settled } from '@arcafold/core/settle-each';
@@ -14,6 +20,7 @@ import type { SpaceStore } from '@arcafold/core/library/space-store';
 import { FormError } from '@arcafold/core/errors';
 import { createThumbLoader } from '@arcafold/core/library/thumb-loader';
 import type { ThumbLoader } from '@arcafold/core/library/thumb-loader';
+import { GONE, loadTrash, moveAll, removeAll } from '@arcafold/core/library/trash';
 import { sessionStore } from '@arcafold/core/sharing';
 import { Uploader } from '@arcafold/core/upload/uploader';
 import { isUploadRunning } from '@arcafold/core/upload/progress';
@@ -87,6 +94,17 @@ export interface Library {
   stopSharingAlbum: (albumId: string) => Promise<void>;
   /** Who an album is shared with, by name, as its card shows. */
   setSharedWith: (albumId: string, names: string[]) => void;
+  /**
+   * Recently deleted: photos deleted in the last 30 days, newest deletion first; null until
+   * loaded. Loading it deletes for good what's been there 30 days.
+   */
+  trash: Photo[] | null;
+  /** Moves photos to Recently deleted. Photos shared with you to view can't be. */
+  deletePhotos: (photoIds: readonly string[]) => Promise<Settled<string>>;
+  /** Brings photos back from Recently deleted. */
+  restorePhotos: (photoIds: readonly string[]) => Promise<Settled<string>>;
+  /** Deletes photos in Recently deleted for good. */
+  deleteForever: (photoIds: readonly string[]) => Promise<Settled<string>>;
   /** Hides the upload progress; photos still on their way keep going. */
   hideUploads: () => void;
   /**
@@ -102,6 +120,9 @@ export interface Library {
   /** Keeps them in the gallery. */
   keepOriginals: () => void;
 }
+
+/** Why a photo shared with you can't be deleted. */
+const VIEW_ONLY = 'Photos shared with you to view can’t be deleted.';
 
 /** Photo records saved at once when many change together. */
 const SAVES_AT_ONCE = 4;
@@ -155,6 +176,7 @@ export function useLibrary(session: Session): Library {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [thumbs, setThumbs] = useState<ReadonlyMap<string, string>>(new Map());
+  const [trash, setTrash] = useState<Photo[] | null>(null);
   const [attempt, setAttempt] = useState(0);
   const loader = useRef<ThumbLoader | null>(null);
   const opened = useRef<SpaceStore | null>(null);
@@ -205,6 +227,7 @@ export function useLibrary(session: Session): Library {
         setPhotos(loaded.photos);
         setAlbums(loaded.albums);
         setStatus('ready');
+        void loadTrash(store, () => stopped, setTrash);
       },
       () => {
         if (!stopped) setStatus('failed');
@@ -272,6 +295,62 @@ export function useLibrary(session: Session): Library {
     },
     [photos],
   );
+
+  const deletePhotos = useCallback(
+    async (photoIds: readonly string[]) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      const byId = new Map(photos.map((photo) => [photo.id, photo]));
+      const deletedAt = new Date().toISOString();
+      const result = await moveAll(
+        photoIds,
+        (ids) => store.trash(ids, deletedAt),
+        (photoId) => {
+          const photo = byId.get(photoId);
+          if (!photo) throw new FormError(GONE);
+          if (isViewOnly(photo)) throw new FormError(VIEW_ONLY);
+        },
+      );
+      const gone = new Set(result.done);
+      const deleted = result.done.flatMap((photoId) => {
+        const photo = byId.get(photoId);
+        return photo ? [{ ...photo, deletedAt }] : [];
+      });
+      setPhotos((current) => current.filter((photo) => !gone.has(photo.id)));
+      setTrash((current) => [...deleted, ...(current ?? [])]);
+      return result;
+    },
+    [photos],
+  );
+
+  const restorePhotos = useCallback(
+    async (photoIds: readonly string[]) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      const result = await moveAll(photoIds, (ids) => store.restore(ids));
+      const back = new Set(result.done);
+      const restored = (trash ?? [])
+        .filter((photo) => back.has(photo.id))
+        .map((photo) => {
+          const rest = { ...photo };
+          delete rest.deletedAt;
+          return rest;
+        });
+      setTrash((current) => (current ?? []).filter((photo) => !back.has(photo.id)));
+      setPhotos((current) => [...restored, ...current]);
+      return result;
+    },
+    [trash],
+  );
+
+  const deleteForever = useCallback(async (photoIds: readonly string[]) => {
+    const store = opened.current;
+    if (!store) throw new Error('The library is closed.');
+    const result = await removeAll(photoIds, (photoId) => store.remove(photoId));
+    const gone = new Set(result.done);
+    setTrash((current) => (current ?? []).filter((photo) => !gone.has(photo.id)));
+    return result;
+  }, []);
 
   const retry = useCallback(() => {
     setStatus('loading');
@@ -421,6 +500,10 @@ export function useLibrary(session: Session): Library {
     shareAlbum,
     stopSharingAlbum,
     setSharedWith,
+    trash,
+    deletePhotos,
+    restorePhotos,
+    deleteForever,
     hideUploads,
     originals: originalCount,
     deleteOriginals,

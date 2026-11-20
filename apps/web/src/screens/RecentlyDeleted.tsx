@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { allSelected, batchMessage, useSelection } from '../app/selection';
 import { useToast } from '../app/toast';
-import { TRASH_DAYS, trashDaysLeft, useVault } from '../app/vault';
+import { TRASH_DAYS, useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
 import { EmptyState } from '../components/EmptyState';
@@ -11,16 +11,11 @@ import { PhotoGrid } from '../components/PhotoGrid';
 import { photosAndFiles } from '../lib/format';
 import type { Settled } from '../lib/settle-each';
 import { errorMessage } from '@arcafold/core/errors';
-import type { Photo } from '@arcafold/core/library/model';
+import { daysLeftLabel } from '@arcafold/core/library/trash';
+
+export { daysLeftLabel } from '@arcafold/core/library/trash';
 
 import '../components/selection-bar.css';
-
-/** "12 days left", "1 day left", or "Today" on the last day. */
-export function daysLeftLabel(photo: Pick<Photo, 'deletedAt'>, now = Date.now()): string {
-  if (photo.deletedAt === undefined) return '';
-  const days = trashDaysLeft(photo.deletedAt, now);
-  return days <= 1 ? 'Last day' : `${String(days)} days left`;
-}
 
 /**
  * Photos deleted in the last 30 days. They can be restored, or deleted for good now; after

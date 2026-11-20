@@ -25,6 +25,7 @@ import {
 } from './AlbumSheets';
 import { AppHeader, HeaderButton } from './AppHeader';
 import { PhotoGrid } from './PhotoGrid';
+import { usePickToDelete } from './use-pick-to-delete';
 
 type Open = 'menu' | 'rename' | 'delete' | 'add' | 'leave' | null;
 
@@ -59,6 +60,7 @@ export function AlbumScreen({
   onLeave: () => Promise<void>;
 }) {
   const palette = usePalette();
+  const picking = usePickToDelete(library, onOpen);
   const notice = useNotice();
   const [open, setOpen] = useState<Open>(null);
   const photos = useMemo(() => albumPhotos(library.photos, album.id), [library.photos, album.id]);
@@ -93,17 +95,19 @@ export function AlbumScreen({
 
   return (
     <View style={styles.fill}>
-      <AppHeader title={album.title} initial={initial} onSettings={onSettings} onBack={onBack}>
-        {hasMenu ? (
-          <HeaderButton
-            label="⋯"
-            accessibilityLabel="Album options"
-            onPress={() => {
-              setOpen('menu');
-            }}
-          />
-        ) : null}
-      </AppHeader>
+      {picking.header ?? (
+        <AppHeader title={album.title} initial={initial} onSettings={onSettings} onBack={onBack}>
+          {hasMenu ? (
+            <HeaderButton
+              label="⋯"
+              accessibilityLabel="Album options"
+              onPress={() => {
+                setOpen('menu');
+              }}
+            />
+          ) : null}
+        </AppHeader>
+      )}
       {banner}
       {photos.length === 0 ? (
         <View style={styles.centre}>
@@ -140,7 +144,7 @@ export function AlbumScreen({
           rows={rows}
           thumbs={library.thumbs}
           requestThumbs={library.requestThumbs}
-          onPress={onOpen}
+          {...picking.grid}
           header={summary}
         />
       )}
@@ -213,6 +217,7 @@ export function AlbumScreen({
           onCancel={close}
         />
       ) : null}
+      {picking.sheet}
     </View>
   );
 }

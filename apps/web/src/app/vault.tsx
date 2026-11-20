@@ -29,6 +29,15 @@ import {
   initialPrivatePhotos,
 } from '../mock/data';
 import { FormError } from '@arcafold/core/errors';
+import { GONE, loadTrash, moveAll } from '@arcafold/core/library/trash';
+
+export {
+  TRASH_DAYS,
+  loadTrash,
+  trashDaysLeft,
+  trashExpired,
+  trashNote,
+} from '@arcafold/core/library/trash';
 import type {
   NewPhoto,
   Original,
@@ -81,27 +90,6 @@ function sortedIn(state: VaultState, items: readonly Photo[], where: 'start' | '
 /** Every photo and file of the open space, wherever it shows. */
 export function allItems(state: VaultState): Photo[] {
   return [...state.photos, ...(state.files ?? [])];
-}
-
-/** How long a photo stays in Recently deleted before it is deleted for good. */
-export const TRASH_DAYS = 30;
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** What a delete confirmation says about getting photos back. */
-export function trashNote(count: number): string {
-  return `You can restore ${count === 1 ? 'it' : 'them'} from Recently deleted for ${String(TRASH_DAYS)} days.`;
-}
-
-/** Whole days until a photo deleted at `deletedAt` is deleted for good; 0 once it is due. */
-export function trashDaysLeft(deletedAt: string, now = Date.now()): number {
-  const left = Date.parse(deletedAt) + TRASH_DAYS * DAY_MS - now;
-  return Math.max(0, Math.ceil(left / DAY_MS));
-}
-
-/** Whether a deleted photo's 30 days are up. */
-export function trashExpired(photo: Pick<Photo, 'deletedAt'>, now = Date.now()): boolean {
-  return photo.deletedAt !== undefined && trashDaysLeft(photo.deletedAt, now) === 0;
 }
 
 /** A photo back from Recently deleted. */
@@ -349,67 +337,6 @@ const SAVES_AT_ONCE = 4;
 const MOVES_AT_ONCE = 2;
 
 export type VaultStatus = 'loading' | 'ready' | 'failed';
-
-const GONE = 'That photo isn’t in your vault anymore.';
-
-/**
- * Moves photos with one batched call, after `check` lets each through. Photos `check`
- * refuses, or that the call didn't move, are failed.
- */
-async function moveAll(
-  photoIds: readonly string[],
-  move: (photoIds: string[]) => Promise<string[]>,
-  check?: (photoId: string) => unknown,
-): Promise<Settled<string>> {
-  let error: unknown;
-  const allowed = photoIds.filter((photoId) => {
-    try {
-      check?.(photoId);
-      return true;
-    } catch (caught) {
-      error ??= caught;
-      return false;
-    }
-  });
-  let moved = new Set<string>();
-  if (allowed.length > 0) {
-    try {
-      moved = new Set(await move(allowed));
-    } catch (caught) {
-      error ??= caught;
-    }
-  }
-  const settled: Settled<string> = {
-    done: photoIds.filter((photoId) => moved.has(photoId)),
-    failed: photoIds.filter((photoId) => !moved.has(photoId)),
-  };
-  if (settled.failed.length > 0) settled.error = error ?? new FormError(GONE);
-  return settled;
-}
-
-/**
- * Loads Recently deleted after the library, and deletes for good whatever has been there 30
- * days. That only happens on a device that opens the space, since the server never learns
- * when a photo was deleted. Best effort: what fails stays for next time.
- */
-export async function loadTrash(
-  store: Pick<SpaceStore, 'listTrash' | 'remove'>,
-  stopped: () => boolean,
-  done: (trash: Photo[]) => void,
-  now = Date.now(),
-): Promise<void> {
-  const trash = await store.listTrash().catch(() => null);
-  if (!trash || stopped()) return;
-  const expired = trash.filter((photo) => trashExpired(photo, now));
-  const purged = await settleEach(expired, SAVES_AT_ONCE, (photo) => store.remove(photo.id));
-  if (stopped()) return;
-  const gone = new Set(purged.done.map((photo) => photo.id));
-  done(
-    trash
-      .filter((photo) => !gone.has(photo.id))
-      .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? '')),
-  );
-}
 
 interface VaultValue {
   /** Photos and albums of the open space. */

@@ -16,18 +16,21 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { FormError } from '@arcafold/core/errors';
 import { addsByUpload, canChangeAlbum, isViewOnly } from '@arcafold/core/library/albums';
 import type { Album, Photo } from '@arcafold/core/library/model';
+import { GONE, trashNote } from '@arcafold/core/library/trash';
 import type { Session } from '@arcafold/core/account';
 
 import { MemoryImage } from '../../modules/memory-image';
 import { bottomInset } from '../../modules/system-bars';
 import { albumChangeText } from '../library/album-text';
 import { formatTaken } from '../library/timeline';
+import { deleteTitle } from '../library/trash-text';
 import type { Library } from '../library/use-library';
 import { useAccount } from '../session/account';
 import { Banner } from '../ui/kit';
 import { useNotice } from '../ui/notice';
 import { moveLabel } from '../session/forms';
 import { NameSheet, PickAlbumSheet } from './AlbumSheets';
+import { ConfirmSheet } from './ConfirmSheet';
 import { MoveSheet } from './MoveSheet';
 
 type SpaceKeys = NonNullable<Session['otherSpace']>;
@@ -111,6 +114,7 @@ export function Viewer({
     | 'albums'
     | 'setInAlbum'
     | 'createAlbum'
+    | 'deletePhotos'
   >;
   /** The album being swiped through, if it's one: its photos can be taken out of it. */
   album?: Album;
@@ -129,6 +133,7 @@ export function Viewer({
   const [moving, setMoving] = useState<'asking' | 'moving' | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [unlisting, setUnlisting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const { width, height } = useWindowDimensions();
   const maxSide = Math.round(Math.max(width, height) * PixelRatio.get());
   const [index, setIndex] = useState(start);
@@ -362,6 +367,19 @@ export function Viewer({
                 <Text style={styles.actionText}>{unlisting ? 'Saving…' : notThis.label}</Text>
               </Pressable>
             ) : null}
+            {canFile ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={filing !== null || moving !== null}
+                onPress={() => {
+                  setMoveError(null);
+                  setDeleting(true);
+                }}
+                style={styles.action}
+              >
+                <Text style={styles.actionText}>Delete</Text>
+              </Pressable>
+            ) : null}
             {canMove ? (
               <Pressable
                 accessibilityRole="button"
@@ -377,6 +395,25 @@ export function Viewer({
             ) : null}
           </View>
         </View>
+      ) : null}
+      {deleting && photo ? (
+        <ConfirmSheet
+          title={deleteTitle(1)}
+          body={trashNote(1)}
+          action="Delete"
+          busyLabel="Deleting…"
+          onCancel={() => {
+            setDeleting(false);
+          }}
+          onConfirm={async () => {
+            const result = await library.deletePhotos([photo.id]);
+            if (result.done.length === 0) {
+              throw result.error instanceof Error ? result.error : new FormError(GONE);
+            }
+            setDeleting(false);
+            notice('Moved to Recently deleted.');
+          }}
+        />
       ) : null}
       {filing === 'picking' && photo ? (
         <PickAlbumSheet

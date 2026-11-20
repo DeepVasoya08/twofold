@@ -118,7 +118,46 @@ export function HeaderButton({
   );
 }
 
+/**
+ * The bar across the top while photos are selected: how many, a way out, and what can be
+ * done with them (`children`). Back leaves selecting too (the screen handles it).
+ */
+export function SelectionHeader({
+  count,
+  onCancel,
+  children,
+}: {
+  count: number;
+  onCancel: () => void;
+  children?: ReactNode;
+}) {
+  const palette = usePalette();
+  return (
+    <View style={[styles.header, { paddingTop: (StatusBar.currentHeight ?? 24) + 12 }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Stop selecting"
+        onPress={onCancel}
+        hitSlop={10}
+        style={styles.back}
+      >
+        <Text style={[styles.closeText, { color: palette.text }]}>✕</Text>
+      </Pressable>
+      <Text
+        style={[styles.title, { color: palette.text }]}
+        accessibilityRole="header"
+        accessibilityLiveRegion="polite"
+        numberOfLines={1}
+      >
+        {count === 0 ? 'Select photos' : `${count.toLocaleString('en-US')} selected`}
+      </Text>
+      {children}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  closeText: { fontSize: 22, fontWeight: '400' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
