@@ -11,7 +11,9 @@ describe('searchStatus', () => {
   });
 
   it('says where photos are looked at when none have been', () => {
-    expect(searchStatus({ index: 'ready', lookedAt: { done: 0, total: 3 } })).toMatch(/browser/);
+    expect(searchStatus({ index: 'ready', lookedAt: { done: 0, total: 3 } })).toMatch(
+      /Smart search on in Settings/,
+    );
   });
 
   it('says nothing once photos have been looked at, or with no photos', () => {

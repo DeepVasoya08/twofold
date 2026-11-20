@@ -5,7 +5,7 @@ import type { FaceResults } from '@arcafold/core/people/segment';
 import { face, near, photoId, unitVector } from '@arcafold/core/testing/faces';
 import type { Photo } from '@arcafold/core/library/model';
 
-import { noPeopleText, personPhotos, shownGroups } from './use-people';
+import { noPeopleText, personPhotos, shownGroups } from './people-view';
 
 const ada = unitVector(1);
 const ben = unitVector(2);

@@ -13,6 +13,8 @@ interface BackupJobModule {
   status(): BackupJobStatus;
   /** Runs the backup once in the background, as soon as the network rule allows. */
   runSoon(): void;
+  /** Whether the phone is on Wi-Fi (a network that isn't metered) right now. */
+  unmetered(): boolean;
 }
 
 export interface BackupJobStatus {

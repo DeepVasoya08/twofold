@@ -1,22 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { SpaceKeys } from '@arcafold/crypto';
 import { answerQuery, peopleIndex, searchNames, shownPhotos } from '@arcafold/core/search/answer';
 import type { NotLookedAt } from '@arcafold/core/search/answer';
 import { clipPrompt } from '@arcafold/core/search/find';
 import type { Found } from '@arcafold/core/search/find';
 import { parseQuery } from '@arcafold/core/search/query';
 import type { ParsedQuery } from '@arcafold/core/search/query';
-import type { SearchResults } from '@arcafold/core/search/segment';
-import { remoteSearchStore } from '@arcafold/core/search/store';
-import type { SearchStore } from '@arcafold/core/search/store';
-import type { TaughtWord } from '@arcafold/core/search/taught';
-import { photoOrder } from '@arcafold/core/people/edits';
 import type { Group, Person } from '@arcafold/core/people/grouping';
-import type { Photo } from '@arcafold/core/library/model';
 
 import { loadTextEncoder, wordsNeedDownload } from './text-encoder';
 import type { WordsEncoder } from './text-encoder';
+import type { SearchIndex } from './use-search-index';
 
 /** Where turning the words into a search vector has got. */
 export type WordsState =
@@ -28,7 +22,7 @@ export type WordsState =
   | { state: 'failed'; message: string };
 
 export interface Find {
-  /** Whether the search index (photos looked at in your browser) has loaded. */
+  /** Whether the search index (photos looked at so far, on any device) has loaded. */
   index: 'idle' | 'loading' | 'ready' | 'failed';
   /** How many of the photos have been looked at, of how many. */
   lookedAt: { done: number; total: number };
@@ -62,71 +56,24 @@ const SHOW_EVERY_MS = 250;
 /**
  * Searching the open space on the phone: what was typed, what it was read as, and what it
  * found, all held in memory only (never saved), so a search can't be found later; locking
- * forgets it with the library. Photos are found by the vectors your browser worked out and
- * sealed; the words are turned into a vector here, with the text half downloaded once, after
- * you say yes. The index loads the first time search opens (`wanted`).
+ * forgets it with the library. Photos are found by the vectors your devices worked out and
+ * sealed (useSearchIndex); the words are turned into a vector here, with the text half
+ * downloaded once, after you say yes.
  */
 export function useFind({
-  keys,
-  photos,
+  index,
   people,
   groups,
-  wanted,
-  makeStore = remoteSearchStore,
   now = () => new Date(),
 }: {
-  keys: SpaceKeys;
-  /** The photos a search can find. */
-  photos: readonly Photo[];
+  /** What's been looked at so far, and the photos a search can find (useSearchIndex). */
+  index: SearchIndex;
   people: readonly Person[];
   /** Every group, hidden ones too. */
   groups: readonly Group[];
-  wanted: boolean;
-  makeStore?: (keys: SpaceKeys) => SearchStore;
   now?: () => Date;
 }): Find {
-  const store = useMemo(() => makeStore(keys), [makeStore, keys]);
-  const [asked, setAsked] = useState(wanted);
-  if (wanted && !asked) setAsked(true);
-  const [round, setRound] = useState(0);
-  const [loaded, setLoaded] = useState<{
-    store: SearchStore;
-    round: number;
-    ok: boolean;
-    results: SearchResults;
-    words: TaughtWord[];
-  } | null>(null);
-
-  useEffect(() => {
-    if (!asked) return;
-    let live = true;
-    store.load().then(
-      (saved) => {
-        if (live) {
-          setLoaded({ store, round, ok: true, results: saved.results, words: saved.words });
-        }
-      },
-      () => {
-        if (live) setLoaded({ store, round, ok: false, results: new Map(), words: [] });
-      },
-    );
-    return () => {
-      live = false;
-    };
-  }, [store, round, asked]);
-
-  const last = loaded?.store === store ? loaded : null;
-  const index: Find['index'] = !asked
-    ? 'idle'
-    : last?.round === round
-      ? last.ok
-        ? 'ready'
-        : 'failed'
-      : last?.ok
-        ? 'ready'
-        : 'loading';
-  const results = useMemo<SearchResults>(() => last?.results ?? new Map<string, null>(), [last]);
-  const taught = useMemo<TaughtWord[]>(() => last?.words ?? [], [last]);
+  const { results, words: taught, photos: ordered } = index;
 
   const [text, setText] = useState('');
   const [submitted, setSubmitted] = useState<string | null>(null);
@@ -202,13 +149,6 @@ export function useFind({
   }, [what, needsAsk, attempt]);
 
   const whoIsIn = useMemo(() => peopleIndex(groups, people), [groups, people]);
-  const ordered = useMemo(() => {
-    const byId = new Map(photos.map((photo) => [photo.id, photo]));
-    return photoOrder(photos).flatMap((id) => {
-      const photo = byId.get(id);
-      return photo ? [photo] : [];
-    });
-  }, [photos]);
   const wordsVector = vector?.what === what ? vector.vector : null;
   const { found, notLookedAt } = useMemo(
     () =>
@@ -223,14 +163,6 @@ export function useFind({
     [query, wordsVector, ordered, results, taught, whoIsIn],
   );
   const shownIds = useMemo(() => shownPhotos(found, showMore), [found, showMore]);
-  const lookedAt = useMemo(
-    () => ({
-      done: ordered.filter((photo) => results.has(photo.id)).length,
-      total: ordered.length,
-    }),
-    [ordered, results],
-  );
-
   const restart = () => {
     setWords((current) => (current.state === 'failed' ? { state: 'idle' } : current));
     setIgnore(new Set());
@@ -245,8 +177,8 @@ export function useFind({
   }, [text]);
 
   return {
-    index,
-    lookedAt,
+    index: index.status,
+    lookedAt: index.lookedAt,
     text,
     setText,
     submit,
@@ -295,8 +227,6 @@ export function useFind({
       setIgnore(new Set());
       setShowMore(false);
     },
-    reloadIndex: () => {
-      setRound((n) => n + 1);
-    },
+    reloadIndex: index.reload,
   };
 }

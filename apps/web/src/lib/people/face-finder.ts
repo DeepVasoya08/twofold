@@ -7,6 +7,7 @@
 import type { FaceModels, SurfaceMaker } from './find-faces';
 import { findFaces } from './find-faces';
 import { ModelError } from './models';
+import { storedFaces } from '@arcafold/core/people/find-faces';
 import type { StoredFace } from '@arcafold/core/people/segment';
 
 /** What requests still waiting get when the finder is stopped. */
@@ -70,17 +71,8 @@ export async function answerFaceRequest(data: unknown, engine: FaceEngine): Prom
     return { id, ok: false, reason: 'image' };
   }
   try {
-    const { width, height } = bitmap;
     const found = await findFaces(bitmap, models, engine.makeSurface);
-    const faces = found.map((face) => ({
-      x: face.x / width,
-      y: face.y / height,
-      width: face.width / width,
-      height: face.height / height,
-      score: face.score,
-      embedding: face.embedding,
-    }));
-    return { id, ok: true, faces };
+    return { id, ok: true, faces: storedFaces(found, bitmap) };
   } catch {
     return { id, ok: false, reason: 'image' };
   } finally {

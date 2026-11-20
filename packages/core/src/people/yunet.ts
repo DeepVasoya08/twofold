@@ -38,7 +38,7 @@ export function letterboxScale(width: number, height: number): number {
 }
 
 /** Packs RGBA pixels of the 640×640 square into the model's planar BGR input. */
-export function yunetInput(rgba: Uint8ClampedArray): Float32Array {
+export function yunetInput(rgba: ArrayLike<number>): Float32Array {
   const plane = YUNET_SIZE * YUNET_SIZE;
   const input = new Float32Array(3 * plane);
   for (let i = 0; i < plane; i++) {

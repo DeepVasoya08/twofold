@@ -21,7 +21,9 @@ import { deletedText } from '../library/originals';
 import { timelineOrder, timelinePhotos, timelineRows } from '../library/timeline';
 import { useLibrary } from '../library/use-library';
 import { personPhotos, usePeople } from '../people/use-people';
+import { useSmartSettings } from '../ai/smart-settings';
 import { useFind } from '../search/use-find';
+import { useSearchIndex } from '../search/use-search-index';
 import { useAccount } from '../session/account';
 import { InvitesProvider } from '../sharing/invites';
 import { Banner } from '../ui/kit';
@@ -152,19 +154,31 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   // People are found in the photos the timeline shows: not files, nor Recently deleted.
   const peoplePhotos = useMemo(() => timelinePhotos(library.photos), [library.photos]);
   const [searching, setSearching] = useState(false);
-  // Search needs people's names, so opening it loads them too.
-  const people = usePeople(session.opened.space, peoplePhotos, tab === 'people' || searching);
+  const smart = useSmartSettings(session.account.smartFeatures);
+  const ready = smart.loaded && library.status === 'ready';
+  // Search needs people's names, so opening it loads them too. Faces are found first, then
+  // what photos show, and neither while photos upload.
+  const people = usePeople({
+    keys: session.opened.space,
+    photos: peoplePhotos,
+    on: ready && smart.faces,
+    wanted: tab === 'people' || searching,
+    busy: library.uploading,
+    previews: library.previews,
+  });
+  const index = useSearchIndex({
+    keys: session.opened.space,
+    photos: peoplePhotos,
+    on: ready && smart.search,
+    wanted: searching,
+    busy: library.uploading || people.active,
+    previews: library.previews,
+  });
   const allGroups = useMemo(
     () => [...people.groups, ...people.hidden],
     [people.groups, people.hidden],
   );
-  const find = useFind({
-    keys: session.opened.space,
-    photos: peoplePhotos,
-    people: people.people,
-    groups: allGroups,
-    wanted: searching,
-  });
+  const find = useFind({ index, people: people.people, groups: allGroups });
   const person =
     personId === null
       ? undefined
@@ -500,6 +514,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
           {settingsOpen ? (
             <Settings
               session={session}
+              smart={{ settings: smart, people, index }}
               onClose={closeSettings}
               onBackedUp={library.retry}
               onShare={() => {

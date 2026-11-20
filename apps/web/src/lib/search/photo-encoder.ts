@@ -132,7 +132,7 @@ export async function answerEncodeRequest(
     return { kind: 'reply', id, ok: false, reason: 'image' };
   }
   try {
-    const vector = normalise(await model.embed(clipInput(bitmap, engine.makeSurface)));
+    const vector = normalise(await model.embed(await clipInput(bitmap, engine.makeSurface)));
     return { kind: 'reply', id, ok: true, vector };
   } catch {
     return { kind: 'reply', id, ok: false, reason: 'image' };

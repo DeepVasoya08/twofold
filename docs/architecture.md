@@ -30,7 +30,11 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
   bundled from `@arcafold/crypto/file-crypto-worker`, upload previews are drawn in
   `lib/thumbnail-worker.ts` (an OffscreenCanvas), and face grouping runs its two ONNX
   models (YuNet, SFace) with ONNX Runtime Web's WebAssembly backend in
-  `lib/people/face-worker.ts`. The model files are bundled assets, pinned by SHA-256.
+  `lib/people/face-worker.ts`. The model files are served from `/resources/faces/`
+  (`apps/web/public`, so the phone app downloads the same files), pinned by SHA-256 in
+  `@arcafold/core/people/resources`. Face finding, CLIP's photo input and the background
+  scan are shared with the phone app in `@arcafold/core` (people/find-faces,
+  search/clip-input, background-scan), drawn through a small `Picture` interface.
   Smart search's two halves (OpenCLIP ViT-B/32, about 89 MB and 65 MB) are built at
   deploy time and served as 24 MiB chunks from `/resources/search/`; `lib/search/resources.ts`
   joins them and checks the pinned SHA-256. The photo half runs in

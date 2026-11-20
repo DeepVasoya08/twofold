@@ -1,12 +1,14 @@
 /**
  * The face model files. They're served from Arcafold's own origin like the rest of the app
- * (the CSP allows nothing else), and each is checked against the SHA-256 it was released
- * with before it's used, so a changed file is never run. See scripts/face-models/README.md.
+ * (the CSP allows nothing else), at /resources/faces/ so the phone app can download the same
+ * files, and each is checked against the SHA-256 pinned in @arcafold/core before it's used,
+ * so a changed file is never run. See scripts/face-models/README.md.
  */
 import { sha256, toBase64Url } from '@arcafold/crypto/webcrypto';
 
-import recognizerUrl from './models/sface-2021dec-w8.onnx?url';
-import detectorUrl from './models/yunet-2023mar.onnx?url';
+import { FACE_RESOURCE_PATH, FACE_RESOURCES } from '@arcafold/core/people/resources';
+import type { FaceResource } from '@arcafold/core/people/resources';
+
 import type { ModelBytes } from './onnx-models';
 
 export interface ModelFile {
@@ -16,15 +18,14 @@ export interface ModelFile {
 
 export type ModelFiles = Record<keyof ModelBytes, ModelFile>;
 
+const served = (resource: FaceResource): ModelFile => ({
+  url: `${FACE_RESOURCE_PATH}/${resource.file}`,
+  sha256: resource.sha256,
+});
+
 export const MODEL_FILES: ModelFiles = {
-  detector: {
-    url: detectorUrl,
-    sha256: 'jyOD5N08-7RVPqhxgQf8BCMhDclk-fQoBgSATtJVL6Q',
-  },
-  recognizer: {
-    url: recognizerUrl,
-    sha256: 'PPdPcIQNYBbO_ZiLBtaIS774lYO6J0Eh_sFZiNF0X0g',
-  },
+  detector: served(FACE_RESOURCES.detector),
+  recognizer: served(FACE_RESOURCES.recognizer),
 };
 
 /**
