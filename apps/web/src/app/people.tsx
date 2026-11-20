@@ -12,12 +12,9 @@ import type { ReactNode } from 'react';
 import type { FaceFinder } from '../lib/people/face-finder';
 import { runScan } from '../lib/people/face-scan';
 import { faceGroupingOn, loadFaceSetting, saveFaceSetting } from '../lib/people/face-setting';
-import {
-  confirmedFaces,
-  groupFaces,
-  meChanges,
-  withRejected,
-} from '@arcafold/core/people/grouping';
+import { peopleEdits, photoOrder as photosNewestFirst } from '@arcafold/core/people/edits';
+import type { PeopleChange } from '@arcafold/core/people/edits';
+import { groupFaces } from '@arcafold/core/people/grouping';
 import type { Group, Person, PersonLabel } from '@arcafold/core/people/grouping';
 import type { FaceResults } from '@arcafold/core/people/segment';
 import type { Settled } from '../lib/settle-each';
@@ -67,9 +64,7 @@ const PeopleContext = createContext<PeopleValue | null>(null);
 
 /** Every photo of the open space that can have faces, newest first. */
 export function photoOrder(state: VaultState): string[] {
-  return [...state.photos]
-    .sort((a, b) => b.takenAt.localeCompare(a.takenAt) || (a.id < b.id ? -1 : 1))
-    .map((photo) => photo.id);
+  return photosNewestFirst(state.photos);
 }
 
 const browserStorage = () => (typeof localStorage === 'undefined' ? undefined : localStorage);
@@ -225,21 +220,12 @@ export function PeopleProvider({
           : 'ready';
 
   const value = useMemo<PeopleValue>(() => {
-    const save = async (person: Person) => {
-      await store.savePerson(person);
-      setPeople((current) => [...current.filter((each) => each.id !== person.id), person]);
-      return person.id;
+    const edits = peopleEdits(store);
+    const apply = async (change: Promise<PeopleChange>) => {
+      const { id, people: after } = await change;
+      setPeople(after);
+      return id;
     };
-    const personFor = async (group: Group): Promise<Person> =>
-      group.person ?? {
-        id: await store.newId(),
-        name: '',
-        faces: confirmedFaces(group.faces.map((face) => face.ref)),
-        rejected: [],
-        hidden: false,
-        me: false,
-        labels: [],
-      };
     return {
       enabled,
       setEnabled,
@@ -247,46 +233,15 @@ export function PeopleProvider({
       error,
       results,
       people,
-      name: async (group, name) => save({ ...(await personFor(group)), name: name.trim() }),
-      merge: async (from, into) => {
-        // Someone with a name keeps it; a group with none joins them.
-        const [keep, other] = !into.person && from.person ? [from, into] : [into, from];
-        const person = await personFor(keep);
-        const otherFaces = other.person?.faces ?? other.faces.map((face) => face.ref);
-        const merged: Person = {
-          ...person,
-          name: person.name || (other.person?.name ?? ''),
-          faces: confirmedFaces(person.faces, otherFaces),
-          hidden: person.hidden && (other.person?.hidden ?? false),
-          me: person.me || (other.person?.me ?? false),
-          labels: [...new Set([...person.labels, ...(other.person?.labels ?? [])])],
-        };
-        await save(merged);
-        if (other.person) {
-          const gone = other.person.id;
-          await store.deletePerson(gone);
-          setPeople((current) => current.filter((each) => each.id !== gone));
-        }
-        return merged.id;
-      },
-      setHidden: async (group, hidden) => save({ ...(await personFor(group)), hidden }),
-      setMe: async (group, me) => {
-        let id = group.id;
-        for (const changed of meChanges(people, await personFor(group), me))
-          id = await save(changed);
-        return id;
-      },
-      setLabels: async (group, labels) =>
-        save({ ...(await personFor(group)), labels: [...new Set(labels)] }),
+      name: (group, name) => apply(edits.name(people, group, name)),
+      merge: (from, into) => apply(edits.merge(people, from, into)),
+      setHidden: (group, hidden) => apply(edits.setHidden(people, group, hidden)),
+      setMe: (group, me) => apply(edits.setMe(people, group, me)),
+      setLabels: (group, labels) => apply(edits.setLabels(people, group, labels)),
       removePhotos: async (group, photoIds) => {
-        const chosen = new Set(photoIds);
-        const refs = group.faces.filter((face) => chosen.has(face.photoId)).map((face) => face.ref);
-        try {
-          await save(withRejected(await personFor(group), refs));
-          return { done: [...photoIds], failed: [] };
-        } catch (error: unknown) {
-          return { done: [], failed: [...photoIds], error };
-        }
+        const { result, people: after } = await edits.removePhotos(people, group, photoIds);
+        if (after) setPeople(after);
+        return result;
       },
       forget: async () => {
         await store.forget();

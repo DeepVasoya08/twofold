@@ -96,6 +96,7 @@ export function Viewer({
   start,
   library,
   album,
+  notThis,
   onClose,
 }: {
   photos: Photo[];
@@ -112,6 +113,11 @@ export function Viewer({
   >;
   /** The album being swiped through, if it's one: its photos can be taken out of it. */
   album?: Album;
+  /**
+   * When swiping through someone's photos: says the photo in view isn't them, which takes it
+   * out of their photos. `label` is the button's text ("Not Ada").
+   */
+  notThis?: { label: string; run: (photoId: string) => Promise<boolean> };
   onClose: () => void;
 }) {
   const { space, otherSpace } = useAccount();
@@ -119,6 +125,7 @@ export function Viewer({
   const [filing, setFiling] = useState<'picking' | 'naming' | 'saving' | null>(null);
   const [moving, setMoving] = useState<'asking' | 'moving' | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [unlisting, setUnlisting] = useState(false);
   const { width, height } = useWindowDimensions();
   const maxSide = Math.round(Math.max(width, height) * PixelRatio.get());
   const [index, setIndex] = useState(start);
@@ -283,7 +290,7 @@ export function Viewer({
           </View>
         </View>
       ) : null}
-      {chrome && photo && space && (canMove || canFile || canTakeOut) ? (
+      {chrome && photo && space && (canMove || canFile || canTakeOut || notThis) ? (
         <View style={[styles.actions, { paddingBottom: 24 + bottomInset() }]}>
           {moveError ? <Banner>{moveError}</Banner> : null}
           <View style={styles.actionRow}>
@@ -313,6 +320,31 @@ export function Viewer({
                 style={styles.action}
               >
                 <Text style={styles.actionText}>Remove from album</Text>
+              </Pressable>
+            ) : null}
+            {notThis ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ busy: unlisting }}
+                disabled={unlisting || filing !== null || moving !== null}
+                onPress={() => {
+                  setUnlisting(true);
+                  setMoveError(null);
+                  notThis.run(photo.id).then(
+                    (done) => {
+                      setUnlisting(false);
+                      if (!done)
+                        setMoveError('That didn’t save. Check your connection and try again.');
+                    },
+                    () => {
+                      setUnlisting(false);
+                      setMoveError('That didn’t save. Check your connection and try again.');
+                    },
+                  );
+                }}
+                style={styles.action}
+              >
+                <Text style={styles.actionText}>{unlisting ? 'Saving…' : notThis.label}</Text>
               </Pressable>
             ) : null}
             {canMove ? (

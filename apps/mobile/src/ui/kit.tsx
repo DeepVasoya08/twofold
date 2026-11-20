@@ -169,12 +169,15 @@ export function Button({
   label,
   busyLabel,
   busy = false,
+  disabled = false,
   kind = 'primary',
   onPress,
 }: {
   label: string;
   busyLabel?: string;
   busy?: boolean;
+  /** Greyed out until something is chosen. */
+  disabled?: boolean;
   kind?: 'primary' | 'secondary' | 'link';
   onPress: () => void;
 }) {
@@ -189,15 +192,15 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ busy, disabled: busy }}
+      accessibilityState={{ busy, disabled: busy || disabled }}
       onPress={onPress}
-      disabled={busy}
+      disabled={busy || disabled}
       style={[
         styles.button,
         kind === 'secondary'
           ? { borderWidth: 1.5, borderColor: palette.accent }
           : { backgroundColor: palette.accent },
-        { opacity: busy ? 0.7 : 1 },
+        { opacity: disabled ? 0.45 : busy ? 0.7 : 1 },
       ]}
     >
       {busy ? (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { faceCrop } from './FaceThumb';
+import { faceCrop } from './edits';
 
 describe('faceCrop', () => {
   it('centers the face in the square with room around it', () => {
