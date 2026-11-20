@@ -18,6 +18,7 @@
     "./library/months": "./src/library/months.ts",
     "./library/space-store": "./src/library/space-store.ts",
     "./library/thumb-loader": "./src/library/thumb-loader.ts",
+    "./library/trash": "./src/library/trash.ts",
     "./password": "./src/password.ts",
     "./people/edits": "./src/people/edits.ts",
     "./people/find-faces": "./src/people/find-faces.ts",

@@ -36,6 +36,7 @@ import { NameSheet } from './AlbumSheets';
 import { Albums } from './Albums';
 import { People } from './People';
 import { PersonScreen } from './PersonScreen';
+import { RecentlyDeleted } from './RecentlyDeleted';
 import { SearchScreen } from './SearchScreen';
 import { BiometricSheet } from './BiometricSheet';
 import { ChoosePhotos } from './ChoosePhotos';
@@ -149,6 +150,10 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   /** The sharing screen: for one album (by id), or for the whole library. */
   const [sharing, setSharing] = useState<{ albumId: string | null } | null>(null);
   const [joining, setJoining] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
+  const closeTrash = useCallback(() => {
+    setTrashOpen(false);
+  }, []);
   const [pickError, setPickError] = useState<string | null>(null);
   const album = library.albums.find((each) => each.id === albumId);
   // People are found in the photos the timeline shows: not files, nor Recently deleted.
@@ -429,6 +434,9 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
         }}
         onOpen={setAlbumId}
         onJoin={openJoin}
+        onTrash={() => {
+          setTrashOpen(true);
+        }}
       />
     );
   } else {
@@ -477,6 +485,14 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
           ) : null}
           {searching ? (
             <SearchScreen find={find} library={library} onOpen={openFound} onClose={closeSearch} />
+          ) : null}
+          {trashOpen ? (
+            <RecentlyDeleted
+              library={library}
+              initial={initial}
+              onSettings={openSettings}
+              onClose={closeTrash}
+            />
           ) : null}
           {/* Once everything it was showing has gone (moved away, say), it closes itself. */}
           {viewing ? (

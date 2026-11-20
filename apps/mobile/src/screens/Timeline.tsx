@@ -9,8 +9,12 @@ import { Button, Note } from '../ui/kit';
 import { usePalette } from '../ui/theme';
 import { AppHeader, HeaderButton } from './AppHeader';
 import { PhotoGrid } from './PhotoGrid';
+import { usePickToDelete } from './use-pick-to-delete';
 
-/** The open space's photos, newest first, by month: the Photos tab. */
+/**
+ * The open space's photos, newest first, by month: the Photos tab. A long press starts
+ * selecting photos to delete.
+ */
 export function Timeline({
   library,
   initial,
@@ -30,8 +34,9 @@ export function Timeline({
   const { space } = useAccount();
   const palette = usePalette();
   const rows = useMemo(() => timelineRows(library.photos), [library.photos]);
+  const picking = usePickToDelete(library, onOpen);
 
-  const header = (
+  const header = picking.header ?? (
     <AppHeader
       title={space === 'private' ? 'Private space' : 'Library'}
       initial={initial}
@@ -82,8 +87,9 @@ export function Timeline({
         rows={rows}
         thumbs={library.thumbs}
         requestThumbs={library.requestThumbs}
-        onPress={onOpen}
+        {...picking.grid}
       />
+      {picking.sheet}
     </View>
   );
 }

@@ -196,6 +196,12 @@ or a native module.
   downloading it and the word list (about 65 MB) from arcafold.com into the app's own files,
   checked against the SHA-256 pinned in `@arcafold/core/search/resources`. What's typed stays
   in memory only (the keyboard is asked not to learn it) and goes when search closes.
+- Deleting and Recently deleted (`screens/use-pick-to-delete.tsx`, `screens/RecentlyDeleted.tsx`,
+  `@arcafold/core/library/trash`): a long press on a photo in Photos, an album or a person
+  starts selecting; Delete (there, or in the viewer) moves photos to Recently deleted,
+  recording when in their sealed metadata as on the web. Recently deleted (at the end of
+  Albums) restores photos or deletes them for good, and opening the library deletes for good
+  whatever has been there 30 days. Photos shared with you to view can't be deleted.
 - Looking at photos (`src/ai/use-scan.ts`, `src/people/face-finder.ts`,
   `src/search/photo-encoder.ts`, `src/search/use-search-index.ts`, `screens/SmartSettings.tsx`):
   with Face grouping and Smart search on (Settings > Smart features, per phone, like the web;

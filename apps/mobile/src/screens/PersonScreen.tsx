@@ -17,6 +17,7 @@ import { AppHeader, HeaderButton } from './AppHeader';
 import { FaceThumb } from './FaceThumb';
 import { LabelsSheet, MergeSheet, PersonMenuSheet, PersonNameSheet } from './PeopleSheets';
 import { PhotoGrid } from './PhotoGrid';
+import { usePickToDelete } from './use-pick-to-delete';
 
 type Open = 'menu' | 'name' | 'labels' | 'merge' | null;
 
@@ -44,6 +45,7 @@ export function PersonScreen({
   onMoved: (personId: string) => void;
 }) {
   const palette = usePalette();
+  const picking = usePickToDelete(library, onOpen);
   const notice = useNotice();
   const [open, setOpen] = useState<Open>(null);
   const byId = useMemo(
@@ -103,20 +105,22 @@ export function PersonScreen({
 
   return (
     <View style={styles.fill}>
-      <AppHeader
-        title={personTitle(group)}
-        initial={initial}
-        onSettings={onSettings}
-        onBack={onBack}
-      >
-        <HeaderButton
-          label="⋯"
-          accessibilityLabel="Person options"
-          onPress={() => {
-            setOpen('menu');
-          }}
-        />
-      </AppHeader>
+      {picking.header ?? (
+        <AppHeader
+          title={personTitle(group)}
+          initial={initial}
+          onSettings={onSettings}
+          onBack={onBack}
+        >
+          <HeaderButton
+            label="⋯"
+            accessibilityLabel="Person options"
+            onPress={() => {
+              setOpen('menu');
+            }}
+          />
+        </AppHeader>
+      )}
       {banner}
       {photos.length === 0 ? (
         <View style={styles.centre}>
@@ -128,7 +132,7 @@ export function PersonScreen({
           rows={rows}
           thumbs={library.thumbs}
           requestThumbs={library.requestThumbs}
-          onPress={onOpen}
+          {...picking.grid}
           header={summary}
         />
       )}
@@ -182,6 +186,7 @@ export function PersonScreen({
           onCancel={close}
         />
       ) : null}
+      {picking.sheet}
     </View>
   );
 }
