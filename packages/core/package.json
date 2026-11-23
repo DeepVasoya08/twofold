@@ -13,6 +13,7 @@
     "./errors": "./src/errors.ts",
     "./file-categories": "./src/file-categories.ts",
     "./file-types": "./src/file-types.ts",
+    "./format-bytes": "./src/format-bytes.ts",
     "./invite-input": "./src/invite-input.ts",
     "./keywords": "./src/keywords.ts",
     "./library/albums": "./src/library/albums.ts",

@@ -1,6 +1,6 @@
 import type { DownloadProgress } from '@arcafold/core/download/progress';
 
-import { SAVED_PLACE } from './save-to-phone';
+import { FILE_PLACE, PHOTO_PLACE } from './save-to-phone';
 import type { SaveJob } from './save-to-phone';
 import { batchText } from './trash-text';
 
@@ -19,5 +19,14 @@ export function saveOutcome(job: SaveJob): string | null {
   if (job.state === 'too-large') {
     return `That’s ${megabytes(job.bytes)}. Save up to 1 GB at a time: pick fewer photos.`;
   }
-  return batchText(job.result, (photos) => `${photos} saved to ${SAVED_PLACE}`);
+  const { photos, files } = job.saved;
+  if (files === 0) return batchText(job.result, (done) => `${done} saved to ${PHOTO_PLACE}`);
+  if (photos === 0) {
+    return batchText(job.result, (done) => `${done} saved to ${FILE_PLACE}`, 'file');
+  }
+  return batchText(
+    job.result,
+    (done) => `${done} saved to ${PHOTO_PLACE} and ${FILE_PLACE}`,
+    'file',
+  );
 }

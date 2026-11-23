@@ -1,7 +1,8 @@
 import type { UploadStatus } from '@arcafold/core/upload/progress';
 import type { UploaderState } from '@arcafold/core/upload/uploader';
 
-import { uploadHeadline } from './upload-text';
+import { uploadHeadline, uploadNoun } from './upload-text';
+import type { UploadNoun } from './upload-text';
 
 /** The native side: a foreground service with a progress notification, and a done one. */
 export interface UploadServiceLike {
@@ -31,6 +32,8 @@ export class BackgroundUploads {
   private done = 0;
   private failed = 0;
   private shown = '';
+  /** What the latest uploads were, for the notification's wording. */
+  private noun: UploadNoun = 'photo';
 
   constructor(
     private readonly service: UploadServiceLike,
@@ -54,6 +57,7 @@ export class BackgroundUploads {
 
   private update(uploader: Watched): void {
     const { items } = uploader.getState();
+    if (items.length > 0) this.noun = uploadNoun(items);
     const before = this.seen.get(uploader) ?? new Map<number, UploadStatus>();
     const now = new Map<number, UploadStatus>();
     let running = 0;
@@ -104,13 +108,16 @@ export class BackgroundUploads {
     if (finished > 0 && !this.onScreen()) {
       this.service.notifyFinished(
         'Arcafold',
-        uploadHeadline({
-          total: finished,
-          done: this.done,
-          failed: this.failed,
-          running: 0,
-          percent: 100,
-        }),
+        uploadHeadline(
+          {
+            total: finished,
+            done: this.done,
+            failed: this.failed,
+            running: 0,
+            percent: 100,
+          },
+          this.noun,
+        ),
       );
     }
   }

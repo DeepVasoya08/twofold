@@ -214,6 +214,19 @@ or a native module.
   fails doesn't stop the rest. It keeps going while you move around the app and stops when it
   locks. Android 10 and newer need no permission; Android 9 and older ask for storage access
   the first time.
+- Files (`screens/Files.tsx`, `src/library/files.ts`, `prepare.ts`, `use-open-file.ts`,
+  `modules/save-file` `OpenFileProvider`): the Files tab lists everything that isn't a photo
+  by month, with the categories files were sorted into (on the web) as filters. "+ Add" opens
+  Android's file picker; a file is read into memory and stored like the web stores one (its
+  own name and type, dated when it was last changed, a padded stand-in preview, or for a PDF
+  its first page drawn by Android's `PdfRenderer` in memory). Files added from the phone
+  aren't sorted, so they show under Other. Tapping a file downloads and decrypts it into
+  memory and offers it to the apps that open its type ("Open with"), through a content
+  provider that serves it from memory: an anonymous in-memory file (`memfd`) on Android 11
+  and newer, which apps can seek through, or a pipe before that. Only the chosen app gets
+  permission to read that one address; the copy is wiped when another file opens or the app
+  locks. What the other app does with it is up to that app. A long press selects files to
+  save to the phone (Download/Arcafold) or delete.
 - Looking at photos (`src/ai/use-scan.ts`, `src/people/face-finder.ts`,
   `src/search/photo-encoder.ts`, `src/search/use-search-index.ts`, `screens/SmartSettings.tsx`):
   with Face grouping and Smart search on (Settings > Smart features, per phone, like the web;

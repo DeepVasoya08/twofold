@@ -3,6 +3,7 @@ package com.arcafold.savefile
 import android.app.Activity
 import android.content.Intent
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -72,6 +73,32 @@ class SaveFileModule : Module() {
         bytes.fill(0)
       }
     }
+
+    /**
+     * Offers a held file to the apps that can open it, read straight from memory through
+     * OpenFileProvider. False when no app on the phone opens that kind of file.
+     */
+    AsyncFunction("openAsync") { id: String, name: String, type: String ->
+      val activity = appContext.currentActivity
+        ?: throw CodedException("ERR_NO_ACTIVITY", "Arcafold isn't on screen.", null)
+      val bytes = Held.take(id)
+        ?: throw CodedException("ERR_OPEN_FAILED", "The file isn't in memory anymore.", null)
+      val uri = OpenedFile.hold("${activity.packageName}.openfile", bytes, name, type)
+      val view = Intent(Intent.ACTION_VIEW)
+        .setDataAndType(uri, type)
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      if (view.resolveActivity(activity.packageManager) == null) {
+        OpenedFile.forget()
+        return@AsyncFunction false
+      }
+      activity.startActivity(
+        Intent.createChooser(view, null).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+      )
+      true
+    }.runOnQueue(Queues.MAIN)
+
+    /** Wipes the file last opened in another app, as when Arcafold locks. */
+    Function("forgetOpened") { OpenedFile.forget() }
 
     OnActivityResult { activity, payload ->
       if (payload.requestCode != SAVE_REQUEST) return@OnActivityResult

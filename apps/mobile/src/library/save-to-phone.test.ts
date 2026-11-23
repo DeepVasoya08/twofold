@@ -42,6 +42,7 @@ describe('Saver', () => {
     expect(saver.getJob()).toEqual({
       state: 'done',
       result: { done: ['a', 'file-1'], failed: [] },
+      saved: { photos: 1, files: 1 },
     });
   });
 

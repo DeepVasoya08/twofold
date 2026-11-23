@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MAX_FILE_NAME,
+  PREVIEW_MIN_BYTES,
   cleanFileName,
   cleanFileType,
   fileExtension,
@@ -9,6 +10,7 @@ import {
   fileKindOf,
   isJpeg,
   isVideoFile,
+  padPreview,
   photoTypeOf,
   placeholderPreview,
 } from './file-types';
@@ -114,5 +116,15 @@ describe('isJpeg', () => {
     expect(isJpeg(new Uint8Array([0xff, 0xd8, 0xff, 0xdb]))).toBe(true);
     expect(isJpeg(new Uint8Array(20_000))).toBe(false);
     expect(isJpeg(new TextEncoder().encode('<svg>'))).toBe(false);
+  });
+});
+
+describe('padPreview', () => {
+  it('pads a small JPEG to the smallest preview size, leaving a large one be', () => {
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 1]);
+    const padded = padPreview(jpeg);
+    expect(padded).toHaveLength(PREVIEW_MIN_BYTES);
+    expect(isJpeg(padded)).toBe(true);
+    expect(padPreview(new Uint8Array(PREVIEW_MIN_BYTES + 1))).toHaveLength(PREVIEW_MIN_BYTES + 1);
   });
 });

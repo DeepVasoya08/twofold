@@ -1,3 +1,5 @@
+import { padPreview } from '@arcafold/core/file-types';
+
 /**
  * Previews of files that aren't photos, made to suit the device. A PDF's first page becomes
  * its preview once, on the device that uploads it, and is stored encrypted like a photo's;
@@ -23,8 +25,7 @@ export const TILE_SIDE: Record<PreviewTier, number> = { full: 480, light: 240 };
 /** Longest a preview may take before the upload goes ahead with an icon instead. */
 export const TILE_BUDGET_MS: Record<PreviewTier, number> = { full: 8000, light: 3000 };
 
-/** Smallest stored preview, so a real one looks like any other (see placeholderPreview). */
-export const PREVIEW_MIN_BYTES = 16 * 1024;
+export { PREVIEW_MIN_BYTES, padPreview } from '@arcafold/core/file-types';
 
 /** Set once a preview here ran out of time: this device draws less from then on. */
 let ranSlow = false;
@@ -81,20 +82,6 @@ export async function withinBudget<T>(work: Promise<T>, ms: number): Promise<T |
   } finally {
     clearTimeout(timer);
   }
-}
-
-/**
- * A JPEG padded with zeros after its end, which image decoders ignore, up to `min` bytes:
- * so a small preview is as big as a stand-in one and the server can't tell them apart.
- */
-export function padPreview(
-  jpeg: Uint8Array<ArrayBuffer>,
-  min: number = PREVIEW_MIN_BYTES,
-): Uint8Array<ArrayBuffer> {
-  if (jpeg.length >= min) return jpeg;
-  const padded = new Uint8Array(min);
-  padded.set(jpeg);
-  return padded;
 }
 
 /**

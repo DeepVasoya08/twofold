@@ -40,6 +40,7 @@ import { PersonScreen } from './PersonScreen';
 import { RecentlyDeleted } from './RecentlyDeleted';
 import { SearchScreen } from './SearchScreen';
 import { BiometricSheet } from './BiometricSheet';
+import { Files } from './Files';
 import { ChoosePhotos } from './ChoosePhotos';
 import { InviteRequests } from './InviteCards';
 import { JoinScreen } from './JoinScreen';
@@ -50,7 +51,7 @@ import { SaveCard } from './SaveCard';
 import { UploadCard } from './UploadCard';
 import { Viewer } from './Viewer';
 
-type Tab = 'photos' | 'albums' | 'people';
+type Tab = 'photos' | 'albums' | 'files' | 'people';
 
 /** Height of the tab bar above the navigation bar. */
 const TAB_BAR = 58;
@@ -80,6 +81,7 @@ function TabBar({
   const tabs: readonly { id: Tab; label: string; glyph: string }[] = [
     { id: 'photos', label: 'Photos', glyph: '▦' },
     { id: 'albums', label: 'Albums', glyph: '❐' },
+    { id: 'files', label: 'Files', glyph: '▤' },
     { id: 'people', label: 'People', glyph: '☺' },
   ];
   return (
@@ -259,6 +261,18 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
     },
     [onSystemScreen, addPhotos],
   );
+  const pickFiles = useCallback(() => {
+    setPickError(null);
+    onSystemScreen(() => PhotoPicker.pickFilesAsync()).then(
+      (picked) => {
+        addPhotos(picked);
+        if (picked.length > 0) void askToNotify();
+      },
+      () => {
+        setPickError('The file picker couldn’t open. Try again.');
+      },
+    );
+  }, [onSystemScreen, addPhotos]);
   const { deleteOriginals, hideUploads } = library;
   const removeOriginals = useCallback(() => {
     setPickError(null);
@@ -426,6 +440,17 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
         banner={banner}
         onSettings={openSettings}
         onOpen={setPersonId}
+      />
+    );
+  } else if (tab === 'files') {
+    screen = (
+      <Files
+        library={library}
+        initial={initial}
+        banner={banner}
+        onSettings={openSettings}
+        onAdd={pickFiles}
+        {...(onSave ? { onSave } : {})}
       />
     );
   } else if (tab === 'albums') {

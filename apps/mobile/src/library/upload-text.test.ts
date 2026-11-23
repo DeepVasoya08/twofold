@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { summarizeUploads } from '@arcafold/core/upload/progress';
 import type { UploadItem } from '@arcafold/core/upload/uploader';
 
-import { firstFailure, uploadHeadline } from './upload-text';
+import { firstFailure, uploadHeadline, uploadNoun } from './upload-text';
 
 describe('uploadHeadline', () => {
   it('counts up while photos are on their way', () => {
@@ -40,5 +40,18 @@ describe('firstFailure', () => {
 
   it('is null when nothing failed', () => {
     expect(firstFailure([item('done')])).toBeNull();
+  });
+});
+
+describe('uploadNoun', () => {
+  it('says photos, files, or items for some of each', () => {
+    expect(uploadNoun([{ name: 'IMG_1.heic' }, { name: 'a.jpg' }])).toBe('photo');
+    expect(uploadNoun([{ name: 'Lease.pdf' }])).toBe('file');
+    expect(uploadNoun([{ name: 'Lease.pdf' }, { name: 'a.jpg' }])).toBe('item');
+  });
+
+  it('words the headline to match', () => {
+    expect(uploadHeadline(summarizeUploads(['done', 'done']), 'file')).toBe('2 files added');
+    expect(uploadHeadline(summarizeUploads(['done']), 'item')).toBe('1 item added');
   });
 });

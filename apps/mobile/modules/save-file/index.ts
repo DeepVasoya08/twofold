@@ -7,6 +7,10 @@ interface SaveFileModule {
   hold(bytes: Uint8Array): string;
   /** Writes held bytes into the gallery (or Download/Arcafold), then wipes them. */
   saveToGalleryAsync(id: string, name: string, type: string, takenAt: number): Promise<void>;
+  /** Offers held bytes to the apps that open their type; false when none does. */
+  openAsync(id: string, name: string, type: string): Promise<boolean>;
+  /** Wipes the file last opened in another app. */
+  forgetOpened(): void;
 }
 
 const native = requireOptionalNativeModule<SaveFileModule>('ArcafoldSaveFile');
@@ -47,4 +51,26 @@ export async function saveToGallery(copy: PhoneCopy): Promise<void> {
     copy.bytes.fill(0);
   }
   await native.saveToGalleryAsync(id, copy.name, copy.type, copy.takenAt);
+}
+
+/**
+ * Offers a decrypted file to the apps that can open it (Android's "Open with"), read
+ * straight from memory: no copy is written to disk. The JavaScript copy of the bytes is
+ * wiped once it's handed over; the native one stays until another file opens or the app
+ * locks. Resolves false when no app on the phone opens that kind of file.
+ */
+export async function openInApp(file: { bytes: Uint8Array; name: string; type: string }) {
+  if (!native) throw new Error('This phone can’t open files yet.');
+  let id: string;
+  try {
+    id = native.hold(file.bytes);
+  } finally {
+    file.bytes.fill(0);
+  }
+  return native.openAsync(id, file.name, file.type);
+}
+
+/** Wipes the file last opened in another app, as when the library closes. */
+export function forgetOpened(): void {
+  native?.forgetOpened();
 }

@@ -7,7 +7,9 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
+import android.graphics.Color
 import android.graphics.Matrix
+import android.graphics.pdf.PdfRenderer
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
@@ -25,6 +27,7 @@ import java.nio.ByteBuffer
 private const val PICK_REQUEST = 0xA5D0
 private const val PICK_MAX = 100
 private const val DELETE_REQUEST = 0xA5D1
+private const val PICK_FILES_REQUEST = 0xA5D2
 private const val PICKER_AUTHORITY = "com.android.providers.media.photopicker"
 
 /**
@@ -34,6 +37,8 @@ private const val PICKER_AUTHORITY = "com.android.providers.media.photopicker"
  */
 class PhotoPickerModule : Module() {
   private var pending: Promise? = null
+  /** Someone waiting on the file picker. */
+  private var pendingFiles: Promise? = null
   /** A delete Android is asking about: who's waiting, and how many it asks to delete. */
   private var pendingDelete: Pair<Promise, Int>? = null
   /** Of the photos in that delete, how many Android can't delete. */
@@ -63,6 +68,34 @@ class PhotoPickerModule : Module() {
             .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
         }
       activity.startActivityForResult(intent, PICK_REQUEST)
+    }
+
+    /**
+     * Opens Android's file picker for any kind of file (documents, PDFs, anything). The app
+     * sees only the files picked, and reads them later the same way as photos.
+     */
+    AsyncFunction("pickFilesAsync") { promise: Promise ->
+      val activity = appContext.currentActivity
+        ?: throw CodedException("ERR_NO_ACTIVITY", "Arcafold isn't on screen.", null)
+      pendingFiles?.resolve(emptyList<Map<String, Any>>())
+      pendingFiles = promise
+      val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        .addCategory(Intent.CATEGORY_OPENABLE)
+        .setType("*/*")
+        .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+      activity.startActivityForResult(intent, PICK_FILES_REQUEST)
+    }
+
+    /**
+     * A JPEG of a picked PDF's first page, no larger than `maxSide`, on white, made in memory;
+     * null when Android can't draw it (it's protected, broken, or not a PDF it can open).
+     */
+    AsyncFunction("pdfPreviewAsync") { uri: String, maxSide: Int, quality: Int ->
+      val jpeg = drawFirstPage(Uri.parse(uri), maxSide, quality) ?: return@AsyncFunction null
+      val buffer = ByteBuffer.allocateDirect(jpeg.size).put(jpeg)
+      jpeg.fill(0)
+      buffer.flip()
+      ArrayBuffer(buffer)
     }
 
     /**
@@ -98,6 +131,21 @@ class PhotoPickerModule : Module() {
         // Android deletes all of them or, if you say no, none.
         val deleted = if (payload.resultCode == Activity.RESULT_OK) asked else 0
         promise.resolve(mapOf("deleted" to deleted, "kept" to deleteKept + asked - deleted))
+        return@OnActivityResult
+      }
+      if (payload.requestCode == PICK_FILES_REQUEST) {
+        val promise = pendingFiles ?: return@OnActivityResult
+        pendingFiles = null
+        val data = payload.data
+        if (payload.resultCode != Activity.RESULT_OK || data == null) {
+          promise.resolve(emptyList<Map<String, Any>>())
+          return@OnActivityResult
+        }
+        try {
+          promise.resolve(urisOf(data).map { describe(it) })
+        } catch (error: Exception) {
+          promise.reject(CodedException("ERR_PICK", "The files couldn't be read.", error))
+        }
         return@OnActivityResult
       }
       if (payload.requestCode != PICK_REQUEST) return@OnActivityResult
@@ -178,13 +226,23 @@ class PhotoPickerModule : Module() {
   private fun describe(uri: Uri): Map<String, Any> {
     var name = "photo"
     var size = 0L
-    resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
+    var modified = 0L
+    // Only documents say when they were last changed; asking anything else for it may fail.
+    val columns =
+      if (DocumentsContract.isDocumentUri(appContext.reactContext, uri)) {
+        arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE, DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+      } else {
+        arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
+      }
+    resolver.query(uri, columns, null, null, null)
       ?.use { cursor ->
         if (cursor.moveToFirst()) {
           val nameAt = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
           val sizeAt = cursor.getColumnIndex(OpenableColumns.SIZE)
+          val modifiedAt = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
           if (nameAt >= 0 && !cursor.isNull(nameAt)) name = cursor.getString(nameAt)
           if (sizeAt >= 0 && !cursor.isNull(sizeAt)) size = cursor.getLong(sizeAt)
+          if (modifiedAt >= 0 && !cursor.isNull(modifiedAt)) modified = cursor.getLong(modifiedAt)
         }
       }
     return mapOf(
@@ -192,7 +250,33 @@ class PhotoPickerModule : Module() {
       "name" to name,
       "type" to (resolver.getType(uri) ?: "application/octet-stream"),
       "size" to size.toDouble(),
+      "modified" to modified.toDouble(),
     )
+  }
+
+  private fun drawFirstPage(uri: Uri, maxSide: Int, quality: Int): ByteArray? {
+    return try {
+      val descriptor = resolver.openFileDescriptor(uri, "r") ?: return null
+      PdfRenderer(descriptor).use { renderer ->
+        if (renderer.pageCount < 1) return null
+        renderer.openPage(0).use { page ->
+          val longest = maxOf(page.width, page.height).coerceAtLeast(1)
+          val scale = maxSide.toFloat() / longest
+          val width = (page.width * scale).toInt().coerceAtLeast(1)
+          val height = (page.height * scale).toInt().coerceAtLeast(1)
+          val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+          // Pages are drawn transparent; a JPEG would turn that black.
+          bitmap.eraseColor(Color.WHITE)
+          page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+          val out = ByteArrayOutputStream()
+          bitmap.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(1, 100), out)
+          bitmap.recycle()
+          out.toByteArray()
+        }
+      }
+    } catch (error: Exception) {
+      null
+    }
   }
 
   /** The picture at most `maxSide` on its longer side, upright, and the photo's full size. */
