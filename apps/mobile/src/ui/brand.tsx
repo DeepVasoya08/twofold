@@ -1,54 +1,49 @@
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, View } from 'react-native';
 
 import archDay from '../../assets/arch-day.png';
 import archNight from '../../assets/arch-night.png';
 import { usePalette } from './theme';
 
 /**
- * The logo mark, as on the web (components/Brand.tsx): an arch with a smaller arch inside it,
- * a private space within your library. Drawn with views so it takes the palette's colours.
- * `size` is its height; `behind` is the colour it sits on, which shows through the doorway.
+ * The logo mark, as on the web (components/Brand.tsx): two arches folded over each other,
+ * your library with a private space tucked in front. Drawn with views so it takes the
+ * palette's colours. `size` is its height; `behind` is the colour it sits on, which draws the
+ * thin gap between the arches.
  */
 export function LogoMark({ size = 28, behind }: { size?: number; behind?: string }) {
   const palette = usePalette();
-  // The mark is 20 by 24.5 units: the outer arch's radius is 10, the doorway's 4.5 and the
-  // inner arch's 2.5.
-  const unit = size / 24.5;
+  // A 28-unit square: the back arch is 16 wide and 22 tall, the front one 16 by 18, both
+  // with round tops, and the gap between them 1.5 units.
+  const unit = size / 28;
   const at = (n: number) => n * unit;
+  const gap = at(1.5);
   return (
-    <View style={{ width: at(20), height: size }} accessible={false}>
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor: palette.accent,
-            borderTopLeftRadius: at(10),
-            borderTopRightRadius: at(10),
-          },
-        ]}
-      />
+    <View style={{ width: size, height: size }} accessible={false}>
       <View
         style={{
           position: 'absolute',
-          left: at(5.5),
-          top: at(11),
-          width: at(9),
-          height: at(13.5),
-          backgroundColor: behind ?? palette.background,
-          borderTopLeftRadius: at(4.5),
-          borderTopRightRadius: at(4.5),
+          left: at(1),
+          top: at(3),
+          width: at(16),
+          height: at(22),
+          backgroundColor: palette.accent,
+          borderTopLeftRadius: at(8),
+          borderTopRightRadius: at(8),
         }}
       />
       <View
         style={{
           position: 'absolute',
-          left: at(7.5),
-          top: at(13.4),
-          width: at(5),
-          height: at(11.1),
-          backgroundColor: palette.accentSoft,
-          borderTopLeftRadius: at(2.5),
-          borderTopRightRadius: at(2.5),
+          left: at(11) - gap,
+          top: at(7) - gap,
+          width: at(16) + gap * 2,
+          height: at(18) + gap,
+          backgroundColor: palette.text,
+          borderColor: behind ?? palette.background,
+          borderWidth: gap,
+          borderBottomWidth: 0,
+          borderTopLeftRadius: at(8) + gap,
+          borderTopRightRadius: at(8) + gap,
         }}
       />
     </View>

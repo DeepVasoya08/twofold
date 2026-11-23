@@ -552,8 +552,9 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
   (`apps/mobile/src/ui/icons.tsx`), so it needs no icon font or SVG library.
   The private space is always night: deep navy with lavender light. The theme follows the
   device; Settings can force light or dark.
-- The arch is the signature shape: the logo (an arch with a smaller arch inside it, a
-  private space within your library), album covers, and the artwork on sign-in, sign-up and
+- The arch is the signature shape: the logo ("Fold": two arches folded over each
+  other, your library with a private space tucked in front, the front one cut out of the
+  back by a thin gap), album covers, and the artwork on sign-in, sign-up and
   unlock (a day arch with a small night one in its corner). That artwork is Arcafold's own,
   never a user's photo: nothing is decrypted before unlocking, and the screen must look the
   same whichever password is typed next.

@@ -8,7 +8,17 @@ import { segment } from './segment';
  * Android draws in colour, in its own style). Each fits a `size` square with a stroke of
  * about a twelfth of it, like the web's icons.
  */
-export type IconName = 'search' | 'photos' | 'albums' | 'files' | 'people';
+export type IconName =
+  | 'search'
+  | 'photos'
+  | 'albums'
+  | 'files'
+  | 'people'
+  | 'upload'
+  | 'grid'
+  | 'compact'
+  | 'uncropped'
+  | 'check';
 
 export function Icon({ name, size = 22, color }: { name: IconName; size?: number; color: string }) {
   const stroke = Math.max(1.5, Math.round((size / 12) * 2) / 2);
@@ -101,6 +111,67 @@ export function Icon({ name, size = 22, color }: { name: IconName; size?: number
           backgroundColor: color,
           borderRadius: stroke,
         },
+      ];
+      break;
+    case 'upload':
+      // An arrow up out of a tray.
+      parts = [
+        segment(at(12), at(3.5), at(12), at(15), stroke, color),
+        segment(at(7), at(8.5), at(12), at(3.5), stroke, color),
+        segment(at(12), at(3.5), at(17), at(8.5), stroke, color),
+        {
+          ...line,
+          left: at(4),
+          top: at(13),
+          width: at(16),
+          height: at(8),
+          borderTopWidth: 0,
+          borderBottomLeftRadius: at(2.5),
+          borderBottomRightRadius: at(2.5),
+        },
+      ];
+      break;
+    case 'grid':
+    case 'compact': {
+      const across = name === 'grid' ? 2 : 3;
+      const cell = (18 - (across - 1) * 2) / across;
+      parts = [];
+      for (let row = 0; row < across; row += 1) {
+        for (let column = 0; column < across; column += 1) {
+          parts.push({
+            position: 'absolute',
+            left: at(3 + column * (cell + 2)),
+            top: at(3 + row * (cell + 2)),
+            width: at(cell),
+            height: at(cell),
+            borderRadius: at(1.5),
+            backgroundColor: color,
+          });
+        }
+      }
+      break;
+    }
+    case 'uncropped':
+      // Rows of differently shaped tiles.
+      parts = [
+        [3, 4, 10.5],
+        [15.5, 4, 5.5],
+        [3, 13, 6],
+        [11, 13, 10],
+      ].map(([left = 0, top = 0, width = 0]) => ({
+        position: 'absolute' as const,
+        left: at(left),
+        top: at(top),
+        width: at(width),
+        height: at(7),
+        borderRadius: at(1.5),
+        backgroundColor: color,
+      }));
+      break;
+    case 'check':
+      parts = [
+        segment(at(4.5), at(12.5), at(9.5), at(17.5), stroke, color),
+        segment(at(9.5), at(17.5), at(19.5), at(6.5), stroke, color),
       ];
       break;
     case 'people':

@@ -75,7 +75,7 @@ or a native module.
   password gets the same answer as having no private space at all. A moved photo is
   re-encrypted in the other space under a new key and id, and arrives in no album. Photos
   shared with you can't be moved.
-- Moving photos from the phone's gallery into the private space: photos added with `+ Add`
+- Moving photos from the phone's gallery into the private space: photos added with the floating Add button
   in the private space are remembered (their gallery addresses only, in memory, by
   `library/originals.ts`) once each is stored, never before, so a photo that failed is never
   offered. When the last is in, the upload card offers "Delete from gallery" or "Keep them
@@ -85,7 +85,10 @@ or a native module.
   only in a cloud service can't be deleted from here and is counted as kept. Locking forgets
   the list. The main library never offers this, since it backs up rather than moves; a photo
   automatic backup already copied into the main library stays there.
-- Adding photos (`+ Add` on the timeline): Android's own photo picker (`ACTION_PICK_IMAGES`
+- Photos tab: the header's View button picks Grid (four across), Compact (six across) or
+  Uncropped (each photo in its own shape) for every photo grid, saved per phone with the
+  theme (Settings > Appearance: phone setting, light or dark) in `appearance.json`.
+- Adding photos (the floating Add button on the timeline, hidden while selecting): Android's own photo picker (`ACTION_PICK_IMAGES`
   from Android 13, the document picker before that), so the app needs no storage permission
   and sees only the photos picked, up to 100 at a time. `PhotoPicker` in
   `modules/memory-image` reads each photo's bytes and makes its 640 px JPEG preview, upright,

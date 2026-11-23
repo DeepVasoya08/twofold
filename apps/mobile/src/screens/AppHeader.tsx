@@ -6,6 +6,7 @@ import { useAccount } from '../session/account';
 import { fonts } from '../theme';
 import { LogoMark } from '../ui/brand';
 import { Icon } from '../ui/icons';
+import type { IconName } from '../ui/icons';
 import { usePalette } from '../ui/theme';
 
 /** Opens search; the library's top screens show a search button when it's given. */
@@ -88,6 +89,30 @@ export function AppHeader({
         <Text style={[styles.avatarText, { color: palette.text }]}>{initial}</Text>
       </Pressable>
     </View>
+  );
+}
+
+/** A round icon button in the header, like search. */
+export function HeaderIconButton({
+  icon,
+  accessibilityLabel,
+  onPress,
+}: {
+  icon: IconName;
+  accessibilityLabel: string;
+  onPress: () => void;
+}) {
+  const palette = usePalette();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      hitSlop={6}
+      style={[styles.round, { borderColor: palette.border }]}
+    >
+      <Icon name={icon} size={17} color={palette.text} />
+    </Pressable>
   );
 }
 

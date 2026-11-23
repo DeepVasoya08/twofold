@@ -130,6 +130,26 @@ function TabBar({
   );
 }
 
+/**
+ * The floating Add button over the Photos tab: uploads from the phone, in the corner where a
+ * thumb reaches it, so the header keeps room for the title. It sits under any upload card.
+ */
+function AddButton({ palette, onPress }: { palette: Palette; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Add photos"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.fab,
+        { backgroundColor: palette.accent, transform: [{ scale: pressed ? 0.94 : 1 }] },
+      ]}
+    >
+      <Icon name="upload" size={24} color={palette.onAccent} />
+    </Pressable>
+  );
+}
+
 /** What the viewer is swiping through. */
 interface Viewing {
   from: 'timeline' | 'album' | 'person' | 'search' | 'smart';
@@ -183,6 +203,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
     setTrashOpen(false);
   }, []);
   const [pickError, setPickError] = useState<string | null>(null);
+  const [timelinePicking, setTimelinePicking] = useState(false);
   const album = library.albums.find((each) => each.id === albumId);
   // People are found in the photos the timeline shows: not files, nor Recently deleted.
   const peoplePhotos = useMemo(() => timelinePhotos(library.photos), [library.photos]);
@@ -447,6 +468,8 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const bottom = showTabs ? TAB_BAR + inset : inset;
 
   let screen;
+  /** Whether the Photos timeline is showing, which has the floating Add button. */
+  let onTimeline = false;
   if (smartAlbum && smartAnswer) {
     screen = (
       <SmartAlbumScreen
@@ -553,8 +576,10 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
       />
     );
   } else {
+    onTimeline = true;
     screen = (
       <Timeline
+        onPicking={setTimelinePicking}
         {...(onSave ? { onSave } : {})}
         {...(onTeach ? { onTeach } : {})}
         library={library}
@@ -581,6 +606,14 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
             <View pointerEvents="box-none" style={[styles.cards, { bottom: bottom + 12 }]}>
               <SaveCard saving={saving} palette={palette} />
               <UploadCard library={library} palette={palette} onDeleteOriginals={removeOriginals} />
+              {onTimeline && showTabs && !timelinePicking && library.status === 'ready' ? (
+                <AddButton
+                  palette={palette}
+                  onPress={() => {
+                    pickPhotos();
+                  }}
+                />
+              ) : null}
             </View>
             {naming ? (
               <NameSheet
@@ -762,6 +795,20 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   cards: { position: 'absolute', left: 12, right: 12, gap: 8 },
+  fab: {
+    alignSelf: 'flex-end',
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+    elevation: 6,
+    shadowColor: '#0b0e24',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
   bannerWrap: { paddingHorizontal: 16, paddingBottom: 8 },
   tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
