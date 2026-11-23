@@ -6,6 +6,8 @@ import type { Photo } from '@arcafold/core/library/model';
 import type { SearchResults } from '@arcafold/core/search/segment';
 import { remoteSearchStore } from '@arcafold/core/search/store';
 import type { SearchStore } from '@arcafold/core/search/store';
+import type { SmartAlbum } from '@arcafold/core/search/smart-album';
+import { centroid, vectorsOf } from '@arcafold/core/search/taught';
 import type { TaughtWord } from '@arcafold/core/search/taught';
 
 import { RuntimeError } from '../ai/onnx';
@@ -21,8 +23,16 @@ export interface SearchIndex {
   photos: readonly Photo[];
   /** Every vector so far; a new map each time more are shown. */
   results: SearchResults;
-  /** Words taught to search (on the web, for now). */
+  /** Words taught to search, on any device. */
   words: readonly TaughtWord[];
+  /** Searches saved as albums, on any device. */
+  smartAlbums: readonly SmartAlbum[];
+  /** Teaches search a word from a few photos that show it. */
+  teach: (name: string, photoIds: readonly string[]) => Promise<TaughtWord>;
+  forgetWord: (id: string) => Promise<void>;
+  /** Saves a smart album: a new one without `id`, or changes to one with it. */
+  saveSmartAlbum: (album: Omit<SmartAlbum, 'id'> & { id?: string }) => Promise<SmartAlbum>;
+  deleteSmartAlbum: (id: string) => Promise<void>;
   /** How many of the photos have been looked at, of how many. */
   lookedAt: { done: number; total: number };
   reload: () => void;
@@ -96,6 +106,7 @@ export function useSearchIndex({
     round: number;
     ok: boolean;
     words: TaughtWord[];
+    smartAlbums: SmartAlbum[];
   } | null>(null);
   const [shown, setShown] = useState<{ store: SearchStore; results: SearchResults } | null>(null);
   const live = useRef<SearchResults>(new Map());
@@ -111,10 +122,16 @@ export function useSearchIndex({
         live.current = saved.results;
         segments.current = saved.segments;
         setShown({ store, results: new Map(saved.results) });
-        setLoaded({ store, round, ok: true, words: saved.words });
+        setLoaded({
+          store,
+          round,
+          ok: true,
+          words: saved.words,
+          smartAlbums: saved.smartAlbums,
+        });
       },
       () => {
-        if (current) setLoaded({ store, round, ok: false, words: [] });
+        if (current) setLoaded({ store, round, ok: false, words: [], smartAlbums: [] });
       },
     );
     return () => {
@@ -145,6 +162,18 @@ export function useSearchIndex({
     [shown, store],
   );
   const words = useMemo<TaughtWord[]>(() => last?.words ?? [], [last]);
+  const smartAlbums = useMemo<SmartAlbum[]>(() => last?.smartAlbums ?? [], [last]);
+  /** Changes what's loaded for this store, once it has loaded. */
+  const change = (
+    edit: (current: { words: TaughtWord[]; smartAlbums: SmartAlbum[] }) => {
+      words: TaughtWord[];
+      smartAlbums: SmartAlbum[];
+    },
+  ) => {
+    setLoaded((current) =>
+      current?.store === store && current.ok ? { ...current, ...edit(current) } : current,
+    );
+  };
 
   const ordered = useMemo(() => {
     const byId = new Map(photos.map((photo) => [photo.id, photo]));
@@ -216,6 +245,40 @@ export function useSearchIndex({
     photos: ordered,
     results,
     words,
+    smartAlbums,
+    teach: async (name, photoIds) => {
+      const word: TaughtWord = {
+        id: await store.newId(),
+        name: name.trim(),
+        photos: [...photoIds],
+        vector: centroid(vectorsOf(photoIds, live.current)),
+      };
+      await store.saveWord(word);
+      change((current) => ({ ...current, words: [...current.words, word] }));
+      return word;
+    },
+    forgetWord: async (id) => {
+      await store.deleteWord(id);
+      change((current) => ({ ...current, words: current.words.filter((word) => word.id !== id) }));
+    },
+    saveSmartAlbum: async (changes) => {
+      const album: SmartAlbum = { ...changes, id: changes.id ?? (await store.newId()) };
+      await store.saveSmartAlbum(album);
+      change((current) => ({
+        ...current,
+        smartAlbums: current.smartAlbums.some((each) => each.id === album.id)
+          ? current.smartAlbums.map((each) => (each.id === album.id ? album : each))
+          : [...current.smartAlbums, album],
+      }));
+      return album;
+    },
+    deleteSmartAlbum: async (id) => {
+      await store.deleteSmartAlbum(id);
+      change((current) => ({
+        ...current,
+        smartAlbums: current.smartAlbums.filter((album) => album.id !== id),
+      }));
+    },
     lookedAt,
     reload: () => {
       setRound((n) => n + 1);

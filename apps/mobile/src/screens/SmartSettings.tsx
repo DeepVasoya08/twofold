@@ -1,10 +1,14 @@
+import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Switch, Text, View } from 'react-native';
+
+import { errorMessage } from '@arcafold/core/errors';
 
 import { scanText } from '../ai/scan-text';
 import type { useSmartSettings } from '../ai/smart-settings';
 import type { People } from '../people/use-people';
 import type { SearchIndex } from '../search/use-search-index';
 import { Button, Note } from '../ui/kit';
+import { useNotice } from '../ui/notice';
 import { Row } from '../ui/rows';
 import type { Palette } from '../ui/theme';
 
@@ -12,7 +16,52 @@ import type { Palette } from '../ui/theme';
 export interface Smart {
   settings: ReturnType<typeof useSmartSettings>;
   people: Pick<People, 'scan' | 'lookedAt' | 'downloadNow' | 'retryScan'>;
-  index: Pick<SearchIndex, 'scan' | 'lookedAt' | 'downloadNow' | 'retryScan'>;
+  index: Pick<
+    SearchIndex,
+    'scan' | 'lookedAt' | 'downloadNow' | 'retryScan' | 'words' | 'forgetWord'
+  >;
+}
+
+/** The words taught to search, each with a way to forget it. */
+function TaughtWords({ index, palette }: { index: Smart['index']; palette: Palette }) {
+  const notice = useNotice();
+  const [forgetting, setForgetting] = useState<string | null>(null);
+  if (index.words.length === 0) return null;
+  return (
+    <View style={styles.words}>
+      <Text style={[styles.heading, { color: palette.text }]}>Words you taught search</Text>
+      {index.words.map((word) => (
+        <Row
+          key={word.id}
+          title={word.name}
+          detail={
+            word.photos.length === 1 ? 'From 1 photo' : `From ${String(word.photos.length)} photos`
+          }
+          palette={palette}
+          action={
+            <Button
+              kind="link"
+              label={forgetting === word.id ? 'Forgetting…' : 'Forget'}
+              onPress={() => {
+                if (forgetting) return;
+                setForgetting(word.id);
+                index.forgetWord(word.id).then(
+                  () => {
+                    setForgetting(null);
+                    notice(`Search forgot “${word.name}”`);
+                  },
+                  (caught: unknown) => {
+                    setForgetting(null);
+                    notice(errorMessage(caught));
+                  },
+                );
+              }}
+            />
+          }
+        />
+      ))}
+    </View>
+  );
 }
 
 function Feature({
@@ -27,7 +76,7 @@ function Feature({
   detail: string;
   on: boolean;
   onChange: (on: boolean) => void;
-  progress: Smart['index'];
+  progress: Smart['people'];
   palette: Palette;
 }) {
   const { scan } = progress;
@@ -104,6 +153,7 @@ export function SmartSettings({ smart, palette }: { smart: Smart; palette: Palet
         progress={smart.index}
         palette={palette}
       />
+      {settings.search ? <TaughtWords index={smart.index} palette={palette} /> : null}
     </>
   );
 }
@@ -113,4 +163,6 @@ const styles = StyleSheet.create({
   line: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   grow: { flex: 1 },
   text: { flex: 1, fontSize: 13, lineHeight: 18 },
+  words: { paddingBottom: 8 },
+  heading: { fontSize: 15, fontWeight: '700', paddingHorizontal: 16, paddingTop: 8 },
 });

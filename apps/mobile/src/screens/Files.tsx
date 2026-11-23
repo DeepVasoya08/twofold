@@ -173,7 +173,7 @@ export function Files({
     },
     [byId, open],
   );
-  const picking = usePickToDelete(library, openById, onSave, 'file');
+  const picking = usePickToDelete(library, openById, { onSave, noun: 'file' });
   const { thumbs, requestThumbs } = library;
   const { chosen } = picking.grid;
 
