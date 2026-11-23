@@ -29,6 +29,9 @@ import { AUTO_LOCK_CHOICES, autoLockLabel } from '../session/auto-lock';
 import { biometricsAvailable } from '../session/biometric';
 import { Banner, Button, Field } from '../ui/kit';
 import { Row, Section } from '../ui/rows';
+import { useAppearance } from '../ui/appearance';
+import type { ThemeChoice } from '../ui/appearance-settings';
+import type { PhotoView } from '../library/layout';
 import { SharingSettings } from './SharingSettings';
 import { SmartSettings } from './SmartSettings';
 import type { Smart } from './SmartSettings';
@@ -307,6 +310,91 @@ function Backup({
   );
 }
 
+const THEMES: readonly { id: ThemeChoice; label: string }[] = [
+  { id: 'system', label: 'Phone setting' },
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+];
+
+const VIEWS: readonly { id: PhotoView; label: string }[] = [
+  { id: 'grid', label: 'Grid' },
+  { id: 'compact', label: 'Compact' },
+  { id: 'uncropped', label: 'Uncropped' },
+];
+
+/** A row of rounded choices, one of them picked. */
+function Choices<T extends string>({
+  choices,
+  value,
+  palette,
+  onChange,
+}: {
+  choices: readonly { id: T; label: string }[];
+  value: T;
+  palette: Palette;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <View style={styles.choices} accessibilityRole="radiogroup">
+      {choices.map((choice) => {
+        const chosen = choice.id === value;
+        return (
+          <Pressable
+            key={choice.id}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: chosen }}
+            onPress={() => {
+              onChange(choice.id);
+            }}
+            style={[
+              styles.choice,
+              chosen
+                ? { backgroundColor: palette.text, borderColor: palette.text }
+                : { borderColor: palette.border },
+            ]}
+          >
+            <Text
+              style={[styles.choiceText, { color: chosen ? palette.background : palette.text }]}
+            >
+              {choice.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * Theme and photo view, for this phone. The private space stays night whatever the theme,
+ * so you always know where you are.
+ */
+function Appearance({ palette }: { palette: Palette }) {
+  const { theme, photoView, setTheme, setPhotoView } = useAppearance();
+  return (
+    <>
+      <View style={styles.row}>
+        <View style={styles.rowText}>
+          <Text style={[styles.rowTitle, { color: palette.text }]}>Theme</Text>
+          <Text style={[styles.rowDetail, { color: palette.muted }]}>
+            The private space always uses its night colours.
+          </Text>
+          <Choices choices={THEMES} value={theme} palette={palette} onChange={setTheme} />
+        </View>
+      </View>
+      <View style={styles.row}>
+        <View style={styles.rowText}>
+          <Text style={[styles.rowTitle, { color: palette.text }]}>Photo view</Text>
+          <Text style={[styles.rowDetail, { color: palette.muted }]}>
+            Square tiles, smaller squares, or each photo in its own shape.
+          </Text>
+          <Choices choices={VIEWS} value={photoView} palette={palette} onChange={setPhotoView} />
+        </View>
+      </View>
+    </>
+  );
+}
+
 /**
  * The phone's settings, over the timeline (in the app's own window, so screenshot blocking
  * covers it): the account, fingerprint unlock and auto-lock, devices, and signing out.
@@ -395,6 +483,10 @@ export function Settings({
             <Text style={[styles.rowDetail, { color: palette.muted }]}>{email}</Text>
           </View>
         </View>
+
+        <Section title="Appearance" palette={palette}>
+          <Appearance palette={palette} />
+        </Section>
 
         <Section title="Security" palette={palette}>
           {showFingerprint ? (

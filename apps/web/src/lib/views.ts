@@ -61,12 +61,4 @@ export function saveView(
   }
 }
 
-/**
- * Widths for the uncropped view: each photo keeps its shape, so a tile's share of its row
- * is its width over its height (1 when the size isn't known). Kept within 1:3 and 3:1 so a
- * panorama or a long screenshot doesn't take over a row.
- */
-export function aspectOf(width: number, height: number): number {
-  if (!(width > 0) || !(height > 0)) return 1;
-  return Math.min(3, Math.max(1 / 3, width / height));
-}
+export { aspectOf } from '@arcafold/core/library/aspect';

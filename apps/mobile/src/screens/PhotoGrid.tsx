@@ -1,13 +1,16 @@
 import { FlashList } from '@shopify/flash-list';
 import type { ViewToken } from '@shopify/flash-list';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { MemoryImage } from '../../modules/memory-image';
-import { COLUMNS, photosInRows } from '../library/timeline';
+import { layOut } from '../library/layout';
+import type { LaidOutRow } from '../library/layout';
+import { photosInRows } from '../library/timeline';
 import type { TimelineRow } from '../library/timeline';
 import { fonts } from '../theme';
+import { PhotoAspects, useAppearance } from '../ui/appearance';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 
@@ -17,7 +20,8 @@ const GAP = 2;
 const Tile = memo(function Tile({
   photoId,
   imageId,
-  size,
+  width,
+  height,
   palette,
   chosen,
   requestThumbs,
@@ -26,7 +30,8 @@ const Tile = memo(function Tile({
 }: {
   photoId: string;
   imageId: string | null;
-  size: number;
+  width: number;
+  height: number;
   palette: Palette;
   /** Set while choosing photos: whether this one is chosen. */
   chosen: boolean | undefined;
@@ -55,9 +60,9 @@ const Tile = memo(function Tile({
           : undefined
       }
     >
-      <View style={{ width: size, height: size, backgroundColor: palette.track }}>
+      <View style={{ width, height, backgroundColor: palette.track }}>
         {imageId ? null : <Placeholder palette={palette} />}
-        <MemoryImage imageId={imageId} reveal={reveal} style={{ width: size, height: size }} />
+        <MemoryImage imageId={imageId} reveal={reveal} style={{ width, height }} />
       </View>
       {choosing ? (
         <>
@@ -148,21 +153,23 @@ const TileRow = memo(
     photoIds: string[];
     imageIds: (string | null)[];
     chosen: (boolean | undefined)[];
-    size: number;
+    widths: number[];
+    height: number;
     palette: Palette;
     requestThumbs: (photoIds: readonly string[]) => void;
     onPress: (photoId: string) => void;
     onLongPress: ((photoId: string) => void) | undefined;
   }) {
     return (
-      <View style={[styles.tileRow, { height: props.size }]}>
+      <View style={[styles.tileRow, { height: props.height }]}>
         {props.photoIds.map((photoId, index) => (
           <Tile
             key={photoId}
             photoId={photoId}
             imageId={props.imageIds[index] ?? null}
             chosen={props.chosen[index]}
-            size={props.size}
+            width={props.widths[index] ?? props.height}
+            height={props.height}
             palette={props.palette}
             requestThumbs={props.requestThumbs}
             onPress={props.onPress}
@@ -174,7 +181,8 @@ const TileRow = memo(
   },
   // A row only redraws when one of its own previews arrives or is chosen, not on every change.
   (before, after) =>
-    before.size === after.size &&
+    before.height === after.height &&
+    before.widths.every((each, index) => each === after.widths[index]) &&
     before.palette === after.palette &&
     before.onPress === after.onPress &&
     before.onLongPress === after.onLongPress &&
@@ -204,7 +212,7 @@ function MonthHeading({
 }
 
 /**
- * Photos by month, four across, with previews downloaded and decrypted as they come near the
+ * Photos by month, laid out as chosen in Settings (Grid, Compact or Uncropped), with previews downloaded and decrypted as they come near the
  * screen. Tapping a photo opens it, or, while choosing (`chosen` is set), ticks it; a long
  * press (`onLongPress`) starts selecting.
  */
@@ -231,11 +239,16 @@ export function PhotoGrid({
 }) {
   const palette = usePalette();
   const { width } = useWindowDimensions();
-  const size = Math.floor((width - GAP * (COLUMNS - 1)) / COLUMNS);
+  const { photoView } = useAppearance();
+  const aspect = useContext(PhotoAspects);
+  const laid = useMemo(
+    () => layOut(rows, photoView, width, GAP, aspect),
+    [rows, photoView, width, aspect],
+  );
 
   // Previews actually on screen jump the queue ahead of those just drawn off screen.
   const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken<TimelineRow>[] }) => {
+    ({ viewableItems }: { viewableItems: ViewToken<LaidOutRow>[] }) => {
       const onScreen = photosInRows(viewableItems.map((token) => token.item));
       if (onScreen.length > 0) requestThumbs(onScreen, true);
     },
@@ -243,7 +256,7 @@ export function PhotoGrid({
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: TimelineRow }) =>
+    ({ item }: { item: LaidOutRow }) =>
       item.kind === 'month' ? (
         <MonthHeading row={item} palette={palette} />
       ) : (
@@ -251,19 +264,20 @@ export function PhotoGrid({
           photoIds={item.photoIds}
           imageIds={item.photoIds.map((photoId) => thumbs.get(photoId) ?? null)}
           chosen={item.photoIds.map((photoId) => (chosen ? chosen.has(photoId) : undefined))}
-          size={size}
+          widths={item.widths}
+          height={item.height}
           palette={palette}
           requestThumbs={requestThumbs}
           onPress={onPress}
           onLongPress={onLongPress}
         />
       ),
-    [palette, thumbs, chosen, size, requestThumbs, onPress, onLongPress],
+    [palette, thumbs, chosen, requestThumbs, onPress, onLongPress],
   );
 
   return (
     <FlashList
-      data={rows}
+      data={laid}
       renderItem={renderItem}
       keyExtractor={(row) => row.key}
       getItemType={(row) => row.kind}

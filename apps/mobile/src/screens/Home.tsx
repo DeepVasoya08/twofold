@@ -12,6 +12,7 @@ import {
 
 import type { Session } from '@arcafold/core/account';
 import { albumPhotos } from '@arcafold/core/library/albums';
+import { aspectOf } from '@arcafold/core/library/aspect';
 import { shownPhotos } from '@arcafold/core/search/answer';
 import { MAX_SMART_TITLE, suggestTitle } from '@arcafold/core/search/smart-album';
 import { MAX_WORD_NAME } from '@arcafold/core/search/taught';
@@ -32,6 +33,7 @@ import { useSmartAlbum } from '../search/use-smart-album';
 import { searchToSave, smartTitleCheck, teachCountProblem, wordCheck } from '../search/smart-text';
 import { useAccount } from '../session/account';
 import { InvitesProvider } from '../sharing/invites';
+import { PhotoAspects } from '../ui/appearance';
 import { Icon } from '../ui/icons';
 import { Banner, Button } from '../ui/kit';
 import { Sheet } from '../ui/sheet';
@@ -152,6 +154,13 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const palette = usePalette();
   const notice = useNotice();
   const library = useLibrary(session);
+  // Each photo's shape, for the uncropped view.
+  const photoAspect = useMemo(() => {
+    const shapes = new Map(
+      library.photos.map((photo) => [photo.id, aspectOf(photo.width, photo.height)]),
+    );
+    return (photoId: string) => shapes.get(photoId) ?? 1;
+  }, [library.photos]);
   const saving = useSaveToPhone(library, notice);
   const onSave = saving.available ? saving.save : undefined;
   const [tab, setTab] = useState<Tab>('photos');
@@ -562,186 +571,190 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
 
   return (
     <InvitesProvider keys={keys} myName={session.account.name} library={library}>
-      <OpenSearch value={openSearch}>
-        <View style={[styles.fill, { backgroundColor: palette.background }]}>
-          <View style={[styles.fill, { paddingBottom: showTabs ? 0 : inset }]}>{screen}</View>
-          {showTabs ? (
-            <TabBar tab={tab} inset={inset} palette={palette} onChange={changeTab} />
-          ) : null}
-          <View pointerEvents="box-none" style={[styles.cards, { bottom: bottom + 12 }]}>
-            <SaveCard saving={saving} palette={palette} />
-            <UploadCard library={library} palette={palette} onDeleteOriginals={removeOriginals} />
-          </View>
-          {naming ? (
-            <NameSheet
-              title="New album"
-              action="Create album"
-              onSave={async (name) => {
-                const made = await library.createAlbum(name);
-                setNaming(false);
-                notice(`“${name}” created`);
-                setAlbumId(made.id);
-              }}
-              onCancel={() => {
-                setNaming(false);
-              }}
-            />
-          ) : null}
-          {teaching ? (
-            teachCountProblem(teaching.length) === null ? (
+      <PhotoAspects value={photoAspect}>
+        <OpenSearch value={openSearch}>
+          <View style={[styles.fill, { backgroundColor: palette.background }]}>
+            <View style={[styles.fill, { paddingBottom: showTabs ? 0 : inset }]}>{screen}</View>
+            {showTabs ? (
+              <TabBar tab={tab} inset={inset} palette={palette} onChange={changeTab} />
+            ) : null}
+            <View pointerEvents="box-none" style={[styles.cards, { bottom: bottom + 12 }]}>
+              <SaveCard saving={saving} palette={palette} />
+              <UploadCard library={library} palette={palette} onDeleteOriginals={removeOriginals} />
+            </View>
+            {naming ? (
               <NameSheet
-                title="Teach search a word"
-                action="Teach"
-                label="Word"
-                placeholder="Biscuit, the cabin…"
-                note="Name what these photos show, like a pet’s name or a favorite place. Then search for it by name."
-                maxLength={MAX_WORD_NAME}
-                check={wordCheck({
-                  people: people.people.map((each) => each.name),
-                  words: index.words.map((word) => word.name),
-                })}
+                title="New album"
+                action="Create album"
                 onSave={async (name) => {
-                  const word = await index.teach(name, teaching);
-                  setTeaching(null);
-                  notice(`Search learned “${word.name}”`);
+                  const made = await library.createAlbum(name);
+                  setNaming(false);
+                  notice(`“${name}” created`);
+                  setAlbumId(made.id);
                 }}
                 onCancel={() => {
-                  setTeaching(null);
+                  setNaming(false);
                 }}
               />
-            ) : (
-              <Sheet
-                title="Teach search a word"
-                body={teachCountProblem(teaching.length) ?? ''}
-                onCancel={() => {
-                  setTeaching(null);
-                }}
-              >
-                <Button
-                  label="OK"
-                  onPress={() => {
+            ) : null}
+            {teaching ? (
+              teachCountProblem(teaching.length) === null ? (
+                <NameSheet
+                  title="Teach search a word"
+                  action="Teach"
+                  label="Word"
+                  placeholder="Biscuit, the cabin…"
+                  note="Name what these photos show, like a pet’s name or a favorite place. Then search for it by name."
+                  maxLength={MAX_WORD_NAME}
+                  check={wordCheck({
+                    people: people.people.map((each) => each.name),
+                    words: index.words.map((word) => word.name),
+                  })}
+                  onSave={async (name) => {
+                    const word = await index.teach(name, teaching);
+                    setTeaching(null);
+                    notice(`Search learned “${word.name}”`);
+                  }}
+                  onCancel={() => {
                     setTeaching(null);
                   }}
                 />
-              </Sheet>
-            )
-          ) : null}
-          {searching ? (
-            <SearchScreen
-              find={find}
-              library={library}
-              onOpen={openFound}
-              onClose={closeSearch}
-              {...(searchOn
-                ? {
-                    onSaveAlbum: () => {
-                      setSavingSearch(true);
-                    },
-                  }
-                : {})}
-            />
-          ) : null}
-          {trashOpen ? (
-            <RecentlyDeleted
-              library={library}
-              initial={initial}
-              onSettings={openSettings}
-              onClose={closeTrash}
-            />
-          ) : null}
-          {savingSearch && find.query ? (
-            <NameSheet
-              title="Save as album"
-              action="Save album"
-              initial={suggestTitle(find.query.chips)}
-              note="It fills itself with photos that match, as they’re added. Only you see it."
-              maxLength={MAX_SMART_TITLE}
-              check={smartTitleCheck(searchToSave(find))}
-              onSave={async (title) => {
-                const stored = await index.saveSmartAlbum({ ...searchToSave(find), title });
-                setSavingSearch(false);
-                notice(`“${stored.title}” saved to Albums`);
-                closeSearch();
-                setAlbumId(null);
-                setPersonId(null);
-                setSmartMore(false);
-                setSmartId(stored.id);
-              }}
-              onCancel={() => {
-                setSavingSearch(false);
-              }}
-            />
-          ) : null}
-          {/* Once everything it was showing has gone (moved away, say), it closes itself. */}
-          {viewing ? (
-            <Viewer
-              photos={viewed}
-              start={Math.max(0, Math.min(viewing.start, viewed.length - 1))}
-              library={library}
-              {...(onSave
-                ? {
-                    onSave: (photoId: string) => {
-                      onSave([photoId]);
-                    },
-                  }
-                : {})}
-              {...(viewing.from === 'album' && album ? { album } : {})}
-              {...(viewing.from === 'person' && person
-                ? {
-                    notThis: {
-                      label: person.person?.name ? `Not ${person.person.name}` : 'Not this person',
-                      run: async (photoId: string) =>
-                        (await people.removePhotos(person, [photoId])).done.length > 0,
-                    },
-                  }
-                : {})}
-              onLike={(photoId) => {
-                setViewing(null);
-                setSearching(true);
-                searchLike(photoId);
-              }}
-              onClose={closeViewer}
-            />
-          ) : null}
-          {choosing && album ? (
-            <ChoosePhotos
-              album={album}
-              library={library}
-              onClose={() => {
-                setChoosing(false);
-              }}
-            />
-          ) : null}
-          {settingsOpen ? (
-            <Settings
-              session={session}
-              smart={{ settings: smart, people, index }}
-              onClose={closeSettings}
-              onBackedUp={library.retry}
-              onShare={() => {
-                setSharing({ albumId: null });
-              }}
-              onJoin={openJoin}
-            />
-          ) : null}
-          {sharing ? (
-            <ShareScreen
-              album={
-                sharing.albumId === null
-                  ? null
-                  : (library.albums.find((each) => each.id === sharing.albumId) ?? null)
-              }
-              keys={keys}
-              onSharedWith={library.setSharedWith}
-              onStopSharing={library.stopSharingAlbum}
-              onClose={closeShare}
-            />
-          ) : null}
-          {joining ? <JoinScreen onClose={closeJoin} /> : null}
-          <InviteRequests albums={library.albums} showJoins={!joining} />
-          <BiometricSheet />
-        </View>
-      </OpenSearch>
+              ) : (
+                <Sheet
+                  title="Teach search a word"
+                  body={teachCountProblem(teaching.length) ?? ''}
+                  onCancel={() => {
+                    setTeaching(null);
+                  }}
+                >
+                  <Button
+                    label="OK"
+                    onPress={() => {
+                      setTeaching(null);
+                    }}
+                  />
+                </Sheet>
+              )
+            ) : null}
+            {searching ? (
+              <SearchScreen
+                find={find}
+                library={library}
+                onOpen={openFound}
+                onClose={closeSearch}
+                {...(searchOn
+                  ? {
+                      onSaveAlbum: () => {
+                        setSavingSearch(true);
+                      },
+                    }
+                  : {})}
+              />
+            ) : null}
+            {trashOpen ? (
+              <RecentlyDeleted
+                library={library}
+                initial={initial}
+                onSettings={openSettings}
+                onClose={closeTrash}
+              />
+            ) : null}
+            {savingSearch && find.query ? (
+              <NameSheet
+                title="Save as album"
+                action="Save album"
+                initial={suggestTitle(find.query.chips)}
+                note="It fills itself with photos that match, as they’re added. Only you see it."
+                maxLength={MAX_SMART_TITLE}
+                check={smartTitleCheck(searchToSave(find))}
+                onSave={async (title) => {
+                  const stored = await index.saveSmartAlbum({ ...searchToSave(find), title });
+                  setSavingSearch(false);
+                  notice(`“${stored.title}” saved to Albums`);
+                  closeSearch();
+                  setAlbumId(null);
+                  setPersonId(null);
+                  setSmartMore(false);
+                  setSmartId(stored.id);
+                }}
+                onCancel={() => {
+                  setSavingSearch(false);
+                }}
+              />
+            ) : null}
+            {/* Once everything it was showing has gone (moved away, say), it closes itself. */}
+            {viewing ? (
+              <Viewer
+                photos={viewed}
+                start={Math.max(0, Math.min(viewing.start, viewed.length - 1))}
+                library={library}
+                {...(onSave
+                  ? {
+                      onSave: (photoId: string) => {
+                        onSave([photoId]);
+                      },
+                    }
+                  : {})}
+                {...(viewing.from === 'album' && album ? { album } : {})}
+                {...(viewing.from === 'person' && person
+                  ? {
+                      notThis: {
+                        label: person.person?.name
+                          ? `Not ${person.person.name}`
+                          : 'Not this person',
+                        run: async (photoId: string) =>
+                          (await people.removePhotos(person, [photoId])).done.length > 0,
+                      },
+                    }
+                  : {})}
+                onLike={(photoId) => {
+                  setViewing(null);
+                  setSearching(true);
+                  searchLike(photoId);
+                }}
+                onClose={closeViewer}
+              />
+            ) : null}
+            {choosing && album ? (
+              <ChoosePhotos
+                album={album}
+                library={library}
+                onClose={() => {
+                  setChoosing(false);
+                }}
+              />
+            ) : null}
+            {settingsOpen ? (
+              <Settings
+                session={session}
+                smart={{ settings: smart, people, index }}
+                onClose={closeSettings}
+                onBackedUp={library.retry}
+                onShare={() => {
+                  setSharing({ albumId: null });
+                }}
+                onJoin={openJoin}
+              />
+            ) : null}
+            {sharing ? (
+              <ShareScreen
+                album={
+                  sharing.albumId === null
+                    ? null
+                    : (library.albums.find((each) => each.id === sharing.albumId) ?? null)
+                }
+                keys={keys}
+                onSharedWith={library.setSharedWith}
+                onStopSharing={library.stopSharingAlbum}
+                onClose={closeShare}
+              />
+            ) : null}
+            {joining ? <JoinScreen onClose={closeJoin} /> : null}
+            <InviteRequests albums={library.albums} showJoins={!joining} />
+            <BiometricSheet />
+          </View>
+        </OpenSearch>
+      </PhotoAspects>
     </InvitesProvider>
   );
 }
