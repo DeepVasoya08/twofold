@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
 import type { ViewToken } from '@shopify/flash-list';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
@@ -37,7 +37,7 @@ const Tile = memo(function Tile({
   useEffect(() => {
     if (!imageId) requestThumbs([photoId]);
   }, [photoId, imageId, requestThumbs]);
-  const fade = useFadeIn(photoId, imageId);
+  const reveal = useReveal(photoId, imageId);
   const choosing = chosen !== undefined;
   return (
     <Pressable
@@ -56,9 +56,8 @@ const Tile = memo(function Tile({
       }
     >
       <View style={{ width: size, height: size, backgroundColor: palette.surface }}>
-        <Animated.View style={{ opacity: fade }}>
-          <MemoryImage imageId={imageId} style={{ width: size, height: size }} />
-        </Animated.View>
+        {imageId ? null : <Placeholder palette={palette} />}
+        <MemoryImage imageId={imageId} reveal={reveal} style={{ width: size, height: size }} />
       </View>
       {choosing ? (
         <>
@@ -84,24 +83,64 @@ const Tile = memo(function Tile({
 });
 
 /**
- * A preview fades in as it's decrypted, the phone's version of the web's soft focus. Only
- * when it arrives while on screen: a tile reused for another photo, or one whose preview was
- * already there, shows at once.
+ * Whether this tile's preview should come into focus when it arrives (MemoryImage `reveal`):
+ * only when it arrives while on screen. A tile reused for another photo, or one whose preview
+ * was already there, shows at once.
  */
-function useFadeIn(photoId: string, imageId: string | null): Animated.Value {
-  const [fade] = useState(() => new Animated.Value(imageId ? 1 : 0));
-  const seen = useRef({ photoId, hadImage: imageId !== null });
+function useReveal(photoId: string, imageId: string | null): boolean {
+  const [seen, setSeen] = useState({ photoId, waited: imageId === null });
+  if (seen.photoId !== photoId) {
+    const next = { photoId, waited: imageId === null };
+    setSeen(next);
+    return next.waited;
+  }
+  return seen.waited;
+}
+
+/**
+ * While previews load, every waiting tile breathes together, so the grid reads as loading
+ * rather than empty. One shared animation, running only while some tile is waiting.
+ */
+const pulse = new Animated.Value(0);
+let waiting = 0;
+let pulsing: Animated.CompositeAnimation | null = null;
+
+function startWaiting(): void {
+  waiting += 1;
+  if (pulsing) return;
+  pulsing = Animated.loop(
+    Animated.sequence([
+      Animated.timing(pulse, { toValue: 1, duration: 750, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0, duration: 750, useNativeDriver: true }),
+    ]),
+  );
+  pulsing.start();
+}
+
+function stopWaiting(): void {
+  waiting = Math.max(0, waiting - 1);
+  if (waiting > 0 || !pulsing) return;
+  pulsing.stop();
+  pulsing = null;
+  pulse.setValue(0);
+}
+
+function Placeholder({ palette }: { palette: Palette }) {
   useEffect(() => {
-    if (seen.current.photoId !== photoId) {
-      seen.current = { photoId, hadImage: imageId !== null };
-      fade.setValue(imageId ? 1 : 0);
-      return;
-    }
-    if (!imageId || seen.current.hadImage) return;
-    seen.current.hadImage = true;
-    Animated.timing(fade, { toValue: 1, duration: 320, useNativeDriver: true }).start();
-  }, [photoId, imageId, fade]);
-  return fade;
+    startWaiting();
+    return stopWaiting;
+  }, []);
+  return (
+    <Animated.View
+      style={[
+        StyleSheet.absoluteFill,
+        {
+          backgroundColor: palette.track,
+          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
+        },
+      ]}
+    />
+  );
 }
 
 const TileRow = memo(

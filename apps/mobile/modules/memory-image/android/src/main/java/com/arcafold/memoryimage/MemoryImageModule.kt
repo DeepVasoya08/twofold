@@ -46,6 +46,7 @@ class MemoryImageModule : Module() {
       Prop("maxSide") { view: MemoryImageView, side: Int -> view.setMaxSide(side) }
       Prop("fit") { view: MemoryImageView, fit: String -> view.setFit(fit) }
       Prop("zoomable") { view: MemoryImageView, zoomable: Boolean -> view.setZoomable(zoomable) }
+      Prop("reveal") { view: MemoryImageView, reveal: Boolean -> view.setReveal(reveal) }
     }
   }
 }

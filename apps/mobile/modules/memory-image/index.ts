@@ -34,6 +34,8 @@ interface MemoryImageProps extends ViewProps {
    * a single tap reaches `onTap`, and `onZoom` says when it's zoomed in or back out.
    */
   zoomable?: boolean;
+  /** A picture that arrives comes into focus from a soft blur instead of appearing at once. */
+  reveal?: boolean;
   onTap?: () => void;
   onZoom?: (event: { nativeEvent: { zoomed: boolean } }) => void;
 }
