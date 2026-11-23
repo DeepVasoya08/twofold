@@ -12,13 +12,16 @@ import { HeaderButton, SelectionHeader } from './AppHeader';
 import { ConfirmSheet } from './ConfirmSheet';
 
 /**
- * Selecting photos on a grid and deleting them: a long press starts selecting, taps pick,
- * and the header turns into the selection's bar with Delete. Deleted photos go to Recently
- * deleted. Back stops selecting before it does anything else.
+ * Selecting photos on a grid and deleting them or saving them to the phone: a long press
+ * starts selecting, taps pick, and the header turns into the selection's bar with Save and
+ * Delete. Deleted photos go to Recently deleted. Back stops selecting before it does
+ * anything else.
  */
 export function usePickToDelete(
   library: Pick<Library, 'deletePhotos'>,
   open: (photoId: string) => void,
+  /** Saves copies to the phone's gallery, where it can. */
+  onSave?: (photoIds: readonly string[]) => void,
 ): {
   /** The header to show instead of the screen's own while selecting; null otherwise. */
   header: ReactElement | null;
@@ -51,6 +54,15 @@ export function usePickToDelete(
   return {
     header: selected ? (
       <SelectionHeader count={picked.length} onCancel={clear}>
+        {picked.length > 0 && onSave ? (
+          <HeaderButton
+            label="Save"
+            onPress={() => {
+              onSave(picked);
+              clear();
+            }}
+          />
+        ) : null}
         {picked.length > 0 ? (
           <HeaderButton
             label="Delete"

@@ -20,6 +20,7 @@ import { lastRun } from '../backup/last-run';
 import { deletedText } from '../library/originals';
 import { timelineOrder, timelinePhotos, timelineRows } from '../library/timeline';
 import { useLibrary } from '../library/use-library';
+import { useSaveToPhone } from '../library/use-save-to-phone';
 import { personPhotos, usePeople } from '../people/use-people';
 import { useSmartSettings } from '../ai/smart-settings';
 import { useFind } from '../search/use-find';
@@ -45,6 +46,7 @@ import { JoinScreen } from './JoinScreen';
 import { Settings } from './Settings';
 import { ShareScreen } from './ShareScreen';
 import { Timeline } from './Timeline';
+import { SaveCard } from './SaveCard';
 import { UploadCard } from './UploadCard';
 import { Viewer } from './Viewer';
 
@@ -140,6 +142,8 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const palette = usePalette();
   const notice = useNotice();
   const library = useLibrary(session);
+  const saving = useSaveToPhone(library, notice);
+  const onSave = saving.available ? saving.save : undefined;
   const [tab, setTab] = useState<Tab>('photos');
   const [albumId, setAlbumId] = useState<string | null>(null);
   const [personId, setPersonId] = useState<string | null>(null);
@@ -378,6 +382,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   if (album) {
     screen = (
       <AlbumScreen
+        {...(onSave ? { onSave } : {})}
         album={album}
         library={library}
         initial={initial}
@@ -400,6 +405,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   } else if (person) {
     screen = (
       <PersonScreen
+        {...(onSave ? { onSave } : {})}
         group={person}
         people={people}
         library={library}
@@ -442,6 +448,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   } else {
     screen = (
       <Timeline
+        {...(onSave ? { onSave } : {})}
         library={library}
         initial={initial}
         banner={banner}
@@ -462,12 +469,10 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
           {showTabs ? (
             <TabBar tab={tab} inset={inset} palette={palette} onChange={changeTab} />
           ) : null}
-          <UploadCard
-            library={library}
-            palette={palette}
-            bottom={bottom + 12}
-            onDeleteOriginals={removeOriginals}
-          />
+          <View pointerEvents="box-none" style={[styles.cards, { bottom: bottom + 12 }]}>
+            <SaveCard saving={saving} palette={palette} />
+            <UploadCard library={library} palette={palette} onDeleteOriginals={removeOriginals} />
+          </View>
           {naming ? (
             <NameSheet
               title="New album"
@@ -500,6 +505,13 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
               photos={viewed}
               start={Math.max(0, Math.min(viewing.start, viewed.length - 1))}
               library={library}
+              {...(onSave
+                ? {
+                    onSave: (photoId: string) => {
+                      onSave([photoId]);
+                    },
+                  }
+                : {})}
               {...(viewing.from === 'album' && album ? { album } : {})}
               {...(viewing.from === 'person' && person
                 ? {
@@ -563,6 +575,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  cards: { position: 'absolute', left: 12, right: 12, gap: 8 },
   bannerWrap: { paddingHorizontal: 16, paddingBottom: 8 },
   tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },

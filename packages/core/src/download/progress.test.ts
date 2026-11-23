@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { DOWNLOADS_AT_ONCE, downloadAll, progressPercent } from './download-progress';
-import type { DownloadProgress } from './download-progress';
+import { DOWNLOADS_AT_ONCE, downloadAll, progressPercent } from './progress';
+import type { DownloadProgress } from './progress';
 
 /** A download that finishes when the test says so. */
 function controlled() {

@@ -10,19 +10,17 @@ import { Button } from '../ui/kit';
 import type { Palette } from '../ui/theme';
 
 /**
- * How the photos being added are getting on, over the bottom of the timeline. Once photos
- * picked into the private space are all in, it offers to delete them from the gallery.
+ * How the photos being added are getting on, in the cards over the bottom of the screen.
+ * Once photos picked into the private space are all in, it offers to delete them from the
+ * gallery.
  */
 export function UploadCard({
   library,
   palette,
-  bottom,
   onDeleteOriginals,
 }: {
   library: Library;
   palette: Palette;
-  /** How far above the bottom edge it sits, clear of the tab bar. */
-  bottom: number;
   onDeleteOriginals: () => void;
 }) {
   const { items } = library.uploads;
@@ -32,10 +30,7 @@ export function UploadCard({
   const offer = summary.running === 0 && library.originals > 0;
   return (
     <View
-      style={[
-        styles.uploadCard,
-        { bottom, backgroundColor: palette.surface, borderColor: palette.border },
-      ]}
+      style={[styles.uploadCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
       accessibilityLiveRegion="polite"
     >
       <View style={styles.uploadTop}>
@@ -87,9 +82,6 @@ export function UploadCard({
 
 const styles = StyleSheet.create({
   uploadCard: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,

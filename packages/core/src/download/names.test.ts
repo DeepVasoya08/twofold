@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { copyNames, takenName, zipName } from './copy-names';
+import { copyName, copyNames, takenName, zipName } from './names';
 
 /** An ISO time for a local date and time, as the browser would show it. */
 const local = (...parts: [number, number, number, number, number, number]) =>
@@ -55,5 +55,26 @@ describe('copyNames for files', () => {
 describe('zipName', () => {
   it('names the zip after today, never after a space', () => {
     expect(zipName(new Date(2026, 9, 21, 23, 59))).toBe('Arcafold 2026-10-21.zip');
+  });
+});
+
+describe('copyName', () => {
+  it('names a photo by when it was taken, with its type’s extension', () => {
+    expect(copyName({ takenAt: local(2026, 10, 19, 14, 32, 5), type: 'image/jpeg' })).toBe(
+      '2026-10-19 14.32.05.jpg',
+    );
+  });
+
+  it('keeps a file’s own name', () => {
+    expect(copyName({ takenAt: 'x', type: 'application/pdf', name: 'Lease.pdf' })).toBe(
+      'Lease.pdf',
+    );
+  });
+
+  it('leaves telling same-named copies apart to the device', () => {
+    const at = local(2026, 1, 2, 3, 4, 5);
+    expect(copyName({ takenAt: at, type: 'image/png' })).toBe(
+      copyName({ takenAt: at, type: 'image/png' }),
+    );
   });
 });

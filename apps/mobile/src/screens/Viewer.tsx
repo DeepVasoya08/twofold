@@ -101,6 +101,7 @@ export function Viewer({
   album,
   notThis,
   onLike,
+  onSave,
   onClose,
 }: {
   photos: Photo[];
@@ -125,6 +126,8 @@ export function Viewer({
   notThis?: { label: string; run: (photoId: string) => Promise<boolean> };
   /** Starts a search for photos that look like the one in view. */
   onLike?: (photoId: string) => void;
+  /** Saves a copy of the photo in view to the phone's gallery. */
+  onSave?: (photoId: string) => void;
   onClose: () => void;
 }) {
   const { space, otherSpace } = useAccount();
@@ -298,7 +301,10 @@ export function Viewer({
           </View>
         </View>
       ) : null}
-      {chrome && photo && space && (canMove || canFile || canTakeOut || notThis || onLike) ? (
+      {chrome &&
+      photo &&
+      space &&
+      (canMove || canFile || canTakeOut || notThis || onLike || onSave) ? (
         <View style={[styles.actions, { paddingBottom: 24 + bottomInset() }]}>
           {moveError ? <Banner>{moveError}</Banner> : null}
           <View style={styles.actionRow}>
@@ -316,6 +322,17 @@ export function Viewer({
                 <Text style={styles.actionText}>
                   {filing === 'saving' ? 'Saving…' : 'Add to album'}
                 </Text>
+              </Pressable>
+            ) : null}
+            {onSave ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  onSave(photo.id);
+                }}
+                style={styles.action}
+              >
+                <Text style={styles.actionText}>Save to phone</Text>
               </Pressable>
             ) : null}
             {canTakeOut ? (

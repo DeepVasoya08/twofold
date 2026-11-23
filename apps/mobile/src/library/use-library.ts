@@ -16,7 +16,7 @@ import type { Album, Photo } from '@arcafold/core/library/model';
 import { settleEach } from '@arcafold/core/settle-each';
 import type { Settled } from '@arcafold/core/settle-each';
 import { remoteStore } from '@arcafold/core/library/space-store';
-import type { SpaceStore } from '@arcafold/core/library/space-store';
+import type { Original, SpaceStore } from '@arcafold/core/library/space-store';
 import { FormError } from '@arcafold/core/errors';
 import { createThumbLoader } from '@arcafold/core/library/thumb-loader';
 import type { ThumbLoader } from '@arcafold/core/library/thumb-loader';
@@ -55,6 +55,11 @@ export interface Library {
    * opening another frees the one before.
    */
   openOriginal: (photoId: string) => Promise<string>;
+  /**
+   * Downloads and decrypts a photo's original as bytes, to save a copy to the phone. Nothing
+   * is kept: the bytes are the caller's, in memory only.
+   */
+  original: (photoId: string) => Promise<Original>;
   /**
    * Moves a photo to the other space, whose keys it needs. It is re-encrypted there under a
    * new key and id, so nothing ties the two copies together, and arrives in no album
@@ -276,6 +281,12 @@ export function useLibrary(session: Session): Library {
     return store.image(photoId, 'full');
   }, []);
 
+  const original = useCallback((photoId: string) => {
+    const store = opened.current;
+    if (!store) return Promise.reject(new Error('The library is closed.'));
+    return store.original(photoId);
+  }, []);
+
   const movePhoto = useCallback(
     async (photoId: string, otherSpace: SpaceKeys) => {
       const store = opened.current;
@@ -488,6 +499,7 @@ export function useLibrary(session: Session): Library {
     requestThumbs,
     previews,
     openOriginal,
+    original,
     movePhoto,
     retry,
     uploads,

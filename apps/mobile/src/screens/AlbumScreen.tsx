@@ -38,6 +38,7 @@ export function AlbumScreen({
   onSettings,
   onBack,
   onOpen,
+  onSave,
   onChoose,
   onUpload,
   onShare,
@@ -50,6 +51,8 @@ export function AlbumScreen({
   onSettings: () => void;
   onBack: () => void;
   onOpen: (photoId: string) => void;
+  /** Saves copies of photos to the phone's gallery, where it can. */
+  onSave?: (photoIds: readonly string[]) => void;
   /** Opens the library to choose photos to put in this album. */
   onChoose: () => void;
   /** Opens the phone's photo picker to upload photos into this album. */
@@ -60,7 +63,7 @@ export function AlbumScreen({
   onLeave: () => Promise<void>;
 }) {
   const palette = usePalette();
-  const picking = usePickToDelete(library, onOpen);
+  const picking = usePickToDelete(library, onOpen, onSave);
   const notice = useNotice();
   const [open, setOpen] = useState<Open>(null);
   const photos = useMemo(() => albumPhotos(library.photos, album.id), [library.photos, album.id]);
