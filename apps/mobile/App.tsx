@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { View, useColorScheme } from 'react-native';
+import { View } from 'react-native';
 
 import { Home } from './src/screens/Home';
 import { RecoveryWords } from './src/screens/RecoveryWords';
@@ -48,11 +48,10 @@ function Routes() {
 function Shell() {
   const { touched } = useAccount();
   const palette = usePalette();
-  const scheme = useColorScheme();
   return (
     <View style={{ flex: 1, backgroundColor: palette.background }} onTouchStart={touched}>
       <Routes />
-      <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
+      <StatusBar style={palette.dark ? 'light' : 'dark'} />
     </View>
   );
 }

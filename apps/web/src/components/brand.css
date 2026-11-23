@@ -6,10 +6,10 @@
 }
 
 .logo__word {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .logo-mark__a {
@@ -18,12 +18,6 @@
 
 .logo-mark__b {
   fill: var(--logo-b);
-  opacity: 0.9;
-}
-
-.logo-mark__fold {
-  fill: #fff;
-  opacity: 0.55;
 }
 
 .avatar {
@@ -49,11 +43,11 @@
 }
 
 .avatar--me:not(.avatar--photo) {
-  background: linear-gradient(135deg, #f0917b, #d9586a);
+  background: linear-gradient(135deg, #5b72ff, #2f4bf0);
 }
 
 .avatar--contact {
-  background: linear-gradient(135deg, #9a72c4, #5b3a78);
+  background: linear-gradient(135deg, #3d4a63, #1f2737);
 }
 
 .avatar--sm {

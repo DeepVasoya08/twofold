@@ -7,7 +7,7 @@
  * Set PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH to use a preinstalled Chromium.
  */
 import { execFileSync } from 'node:child_process';
-import { rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,39 +16,57 @@ import { chromium } from '@playwright/test';
 import { landscapeDataUri } from '../src/mock/art.ts';
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
+/** The phone app's images (apps/mobile/assets): its icons, splash and sign-in artwork. */
+const phoneDir = join(publicDir, '..', '..', 'mobile', 'assets');
 
-/** The logo mark, as in components/Brand.tsx, in the dark theme's colors. */
-const mark = (size) => `
-  <svg width="${String(size)}" height="${String(size)}" viewBox="2 2 28 28">
-    <circle cx="12" cy="16" r="9" fill="#ef7d88" />
-    <circle cx="20" cy="16" r="9" fill="#9c78c2" opacity="0.9" />
-    <path d="M16 8.6a9 9 0 0 1 0 14.8 9 9 0 0 1 0-14.8z" fill="#fff" opacity="0.55" />
+/** The arch mark's shapes, as in components/Brand.tsx (a 32-unit view box). */
+const ARCH_OUTER = 'M6 29V14.5a10 10 0 0 1 20 0V29zM11.5 29v-9a4.5 4.5 0 0 1 9 0v9z';
+const ARCH_INNER = 'M13.5 29v-8.6a2.5 2.5 0 0 1 5 0V29z';
+
+/** The logo mark: an arch with a smaller arch inside it. */
+const mark = (size, { outer = '#2f4bf0', inner = '#7d8fff' } = {}) => `
+  <svg width="${String(size)}" height="${String(size)}" viewBox="4 2 24 28">
+    <path d="${ARCH_OUTER}" fill="${outer}" fill-rule="evenodd" />
+    <path d="${ARCH_INNER}" fill="${inner}" />
   </svg>`;
 
-const background = 'radial-gradient(120% 90% at 20% 0%, #3b2740, #1a131c 70%)';
+/** On cobalt, the mark is white with a lavender inner arch. */
+const onCobalt = { outer: '#ffffff', inner: '#a9b5ff' };
+const background = 'radial-gradient(120% 90% at 30% 0%, #4a63ff, #2f4bf0 55%, #2238c9)';
 
-/** A square icon: the mark on the dark background, `inset` of the size left around it. */
+/** A square icon: the mark on cobalt, `inset` of the size left around it. */
 function icon(size, { inset, radius }) {
-  return `<div style="width:${String(size)}px;height:${String(size)}px;display:grid;place-items:center;background:${background};border-radius:${radius}">${mark(Math.round(size * (1 - 2 * inset)))}</div>`;
+  return `<div style="width:${String(size)}px;height:${String(size)}px;display:grid;place-items:center;background:${background};border-radius:${radius}">${mark(Math.round(size * (1 - 2 * inset)), onCobalt)}</div>`;
 }
 
-function photo(seed, palette, width, height, style) {
-  const src = landscapeDataUri({ seed, palette, width, height });
-  return `<figure style="position:absolute;margin:0;padding:10px;border-radius:22px;background:#fffdf9;box-shadow:0 30px 60px -20px rgb(0 0 0 / 60%);${style}"><img src="${src}" style="display:block;width:100%;height:100%;border-radius:13px;object-fit:cover" /></figure>`;
+const font = (await readFile(join(publicDir, 'fonts', 'bricolage-grotesque.woff2'))).toString(
+  'base64',
+);
+const fontFace = `<style>@font-face{font-family:'Bricolage Grotesque';font-weight:500 800;src:url(data:font/woff2;base64,${font}) format('woff2')}</style>`;
+
+/** A landscape in an arch-shaped window, like the sign-in screens. */
+function arch(seed, palette, style) {
+  const src = landscapeDataUri({ seed, palette, width: 640, height: 800 });
+  return `<img src="${src}" style="position:absolute;object-fit:cover;border-radius:999px 999px 24px 24px;box-shadow:0 40px 80px -30px rgb(0 0 0 / 60%);${style}" />`;
 }
 
 const card = `
-  <div style="position:relative;width:1200px;height:630px;overflow:hidden;background:${background};color:#f6eee8;font-family:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif">
-    <div style="position:absolute;left:84px;top:84px;display:flex;align-items:center;gap:18px">
-      ${mark(64)}<span style="font-size:46px;font-weight:600">Arcafold</span>
+  ${fontFace}
+  <div style="position:relative;width:1200px;height:630px;overflow:hidden;background:#f6f6f3;color:#15171c;font-family:'Bricolage Grotesque',system-ui,sans-serif">
+    <div style="position:absolute;left:84px;top:84px;display:flex;align-items:center;gap:16px">
+      ${mark(60)}<span style="font-size:44px;font-weight:700;letter-spacing:-0.02em">Arcafold</span>
     </div>
-    <h1 style="position:absolute;left:84px;top:210px;margin:0;font-size:84px;line-height:1.02;font-weight:600;letter-spacing:-0.02em">Your photos.<br />Truly private.</h1>
-    <p style="position:absolute;left:84px;top:430px;margin:0;width:520px;font:500 28px/1.4 system-ui,sans-serif;color:#c0b2c2">An end-to-end encrypted photo library. Encrypted on your device before it's uploaded.</p>
-    ${photo(11, 'dusk', 600, 800, 'left:700px;top:70px;width:250px;height:330px;transform:rotate(-7deg)')}
-    ${photo(23, 'dawn', 800, 600, 'left:900px;top:50px;width:280px;height:210px;transform:rotate(5deg)')}
-    ${photo(37, 'forest', 800, 800, 'left:850px;top:270px;width:280px;height:280px;transform:rotate(-2deg)')}
-    ${photo(41, 'sunset', 800, 600, 'left:690px;top:420px;width:220px;height:165px;transform:rotate(4deg)')}
+    <h1 style="position:absolute;left:84px;top:210px;margin:0;font-size:84px;line-height:1;font-weight:700;letter-spacing:-0.035em">Your photos.<br />Truly private.</h1>
+    <p style="position:absolute;left:84px;top:430px;margin:0;width:540px;font:500 28px/1.4 system-ui,sans-serif;color:#565a63">An end-to-end encrypted photo library. Encrypted on your device before it's uploaded.</p>
+    ${arch(23, 'golden', 'left:770px;top:70px;width:330px;height:420px')}
+    ${arch(7, 'night', 'left:1010px;top:330px;width:150px;height:190px;border:8px solid #f6f6f3;border-radius:999px 999px 16px 16px')}
   </div>`;
+
+/** A plain landscape for the phone's sign-in screens, which cut it into an arch themselves. */
+function landscape(seed, palette, width, height) {
+  const src = landscapeDataUri({ seed, palette, width, height });
+  return `<img src="${src}" style="display:block;width:${String(width)}px;height:${String(height)}px" />`;
+}
 
 const outputs = [
   { file: 'icon-192.png', size: 192, html: icon(192, { inset: 0.16, radius: '22%' }) },
@@ -68,16 +86,54 @@ const outputs = [
     html: `<div style="width:16px;height:16px">${mark(16)}</div>`,
   },
   { file: 'og-image.png', size: [1200, 630], html: card },
+  // The phone app. Android's adaptive icon keeps the mark inside the middle 66%.
+  { dir: phoneDir, file: 'icon.png', size: 1024, html: icon(1024, { inset: 0.16, radius: '0' }) },
+  {
+    dir: phoneDir,
+    file: 'splash-icon.png',
+    size: 1024,
+    html: `<div style="width:1024px;height:1024px;display:grid;place-items:center">${mark(400)}</div>`,
+  },
+  {
+    dir: phoneDir,
+    file: 'android-icon-foreground.png',
+    size: 432,
+    html: `<div style="width:432px;height:432px;display:grid;place-items:center">${mark(220, onCobalt)}</div>`,
+  },
+  {
+    dir: phoneDir,
+    file: 'android-icon-background.png',
+    size: 432,
+    html: `<div style="width:432px;height:432px;background:${background}"></div>`,
+  },
+  {
+    dir: phoneDir,
+    file: 'android-icon-monochrome.png',
+    size: 432,
+    html: `<div style="width:432px;height:432px;display:grid;place-items:center">${mark(220, { outer: '#fff', inner: '#fff' })}</div>`,
+  },
+  {
+    dir: phoneDir,
+    file: 'arch-day.png',
+    size: [480, 600],
+    html: landscape(23, 'golden', 480, 600),
+  },
+  {
+    dir: phoneDir,
+    file: 'arch-night.png',
+    size: [240, 300],
+    html: landscape(7, 'night', 240, 300),
+  },
 ];
 
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 const browser = await chromium.launch(executablePath ? { executablePath } : {});
 try {
-  for (const { file, size, html } of outputs) {
+  for (const { dir = publicDir, file, size, html } of outputs) {
     const [width, height] = Array.isArray(size) ? size : [size, size];
     const page = await browser.newPage({ viewport: { width, height } });
     await page.setContent(`<body style="margin:0;background:transparent">${html}</body>`);
-    await page.screenshot({ path: join(publicDir, file), omitBackground: true });
+    await page.screenshot({ path: join(dir, file), omitBackground: true });
     await page.close();
   }
 } finally {

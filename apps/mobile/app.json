@@ -6,11 +6,11 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#161117",
+    "backgroundColor": "#111214",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#161117"
+      "backgroundColor": "#111214"
     },
     "updates": {
       "enabled": false
@@ -23,7 +23,7 @@
       "package": "com.arcafold.app",
       "allowBackup": false,
       "adaptiveIcon": {
-        "backgroundColor": "#161117",
+        "backgroundColor": "#2f4bf0",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

@@ -19,6 +19,7 @@ import {
 import type { FileRow, Shown } from '../library/files';
 import type { Library } from '../library/use-library';
 import { useOpenFile } from '../library/use-open-file';
+import { fonts } from '../theme';
 import { Button, Note } from '../ui/kit';
 import { useNotice } from '../ui/notice';
 import { usePalette } from '../ui/theme';
@@ -309,7 +310,7 @@ export function Files({
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centre: { flex: 1, justifyContent: 'center', padding: 24, gap: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '700' },
+  emptyTitle: { fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.3 },
   chipBar: { flexGrow: 0 },
   chips: { paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },

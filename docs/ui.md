@@ -22,8 +22,9 @@ exists but is low-key (Settings → Sharing).
 - The main library never reveals whether a private space exists: Settings always offers
   "Set up", and the move dialog gives the same answer for a wrong password and for no
   private space.
-- Inside the private space the app is re-tinted violet (`data-space="private"` on `<html>`,
-  tokens in `styles/base.css`) and shows a small "Private" label, so you know where you are.
+- Inside the private space the app turns to "night", deep navy and lavender whatever the
+  light or dark setting (`data-space="private"` on `<html>`, tokens in `styles/base.css`),
+  and shows a small "Private" label, so you know where you are.
 - **Move to private space** (photo viewer, main library) asks for the private password the
   first time after unlocking, then moves straight in until Arcafold locks. Right after
   setting up a private space it doesn't ask at all.
@@ -520,11 +521,12 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
   account check, so the prerendered page doesn't flash blank; the landing page then sends
   an unlocked account on to its photos. App screens are served from `app.html`, marked
   `noindex`.
-- Icons: `public/favicon.svg` (the logo mark, lighter in dark mode), `favicon.ico`,
+- Icons: `public/favicon.svg` (the arch mark, lighter in dark mode), `favicon.ico`,
   `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png` (listed
   in `site.webmanifest`) and the 1200×630 link preview `og-image.png`. The PNGs and the
   .ico are rendered by `node scripts/render-images.mjs` (Playwright's Chromium and
-  ImageMagick); rerun it after changing the logo.
+  ImageMagick), which also writes the phone app's icons, splash and sign-in artwork into
+  `apps/mobile/assets`; rerun it after changing the logo.
 
 ## Structure (`apps/web/src`)
 
@@ -535,16 +537,27 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
 - `components/` — layout (`AppShell`, `AuthLayout`) and shared pieces (fields, dialog,
   photo grid, upload dialog, icons, logo).
 - `screens/` — one file per screen, each with its own stylesheet.
-- `styles/base.css` — design tokens, light and dark themes, the private-space tint, buttons
-  and forms.
+- `styles/base.css` — design tokens, light and dark themes, the private space's night
+  colours, the headings' font, buttons and forms. `styles/tokens.test.ts` checks every
+  theme's text and buttons stay readable (WCAG contrast).
 
 ## Visual language
 
-- Warm ivory with a rose-coral accent in light mode, deep plum in dark mode; cooler violet
-  in the private space. The theme follows the device; Settings can force light or dark
-  (kept in memory only).
-- Serif headings (system serif stack) over a system sans body. No web fonts, so the CSP's
-  `default-src 'self'` needs no exceptions.
+- The look is called "Arch". A calm, near-colourless interface (paper white in light mode,
+  graphite in dark) so the photos carry the colour, with one cobalt accent kept for the main
+  action on screen, links and the logo. Strong but secondary buttons are ink (`btn--ink`).
+  The private space is always night: deep navy with lavender light. The theme follows the
+  device; Settings can force light or dark.
+- The arch is the signature shape: the logo (an arch with a smaller arch inside it, a
+  private space within your library), album covers, and the artwork on sign-in, sign-up and
+  unlock (a day arch with a small night one in its corner). That artwork is Arcafold's own,
+  never a user's photo: nothing is decrypted before unlocking, and the screen must look the
+  same whichever password is typed next.
+- Photos come first: tight grids (4px gaps, 6px corners), edge to edge with 2px gaps on
+  phones. Each preview comes into focus from a soft blur as it's decrypted.
+- Headings use Bricolage Grotesque (SIL Open Font License), self-hosted at
+  `public/fonts/bricolage-grotesque.woff2` so the CSP's `default-src 'self'` needs no
+  exceptions and no font service sees who opens Arcafold. Body text is the system sans.
 - Plain CSS with custom properties; no CSS-in-JS and no `<style>` injection, so
   `style-src 'self'` holds. The only inline style is the upload progress width, set
   through the CSSOM, which the CSP allows.

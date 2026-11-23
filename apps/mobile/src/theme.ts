@@ -6,69 +6,84 @@ export interface Palette {
   muted: string;
   accent: string;
   onAccent: string;
+  /** The logo's inner arch, and other soft touches of the accent. */
+  accentSoft: string;
   error: string;
   errorSoft: string;
-  /** How strongly the sign-in screens' glow shows. */
-  glow: number;
   warning: string;
   success: string;
   track: string;
+  /** Whether this palette is dark, for the status bar and anything drawn over photos. */
+  dark: boolean;
 }
 
-/** The app's colours, the same as the web app's light and dark themes (styles/base.css). */
+/**
+ * The app's colours, the same as the web app's light and dark themes (styles/base.css): a
+ * calm, near-colourless interface so photos carry the colour, with one cobalt accent kept for
+ * the main action and the logo.
+ */
 export const colors: { dark: Palette; light: Palette } = {
   dark: {
-    background: '#161117',
-    surface: '#1c151e',
-    border: '#3a2f3d',
-    text: '#f6eee8',
-    muted: '#c0b2c2',
-    accent: '#ef7d88',
-    onAccent: '#161117',
+    background: '#111214',
+    surface: '#1b1c20',
+    border: '#2c2d33',
+    text: '#ececea',
+    muted: '#a8abb2',
+    accent: '#7d8fff',
+    onAccent: '#0b0e24',
+    accentSoft: '#2f4bf0',
     error: '#ff8a8a',
     errorSoft: '#3e1f1d',
-    /** How strongly the sign-in screens' glow shows. */
-    glow: 0.9,
     warning: '#d9902e',
     success: '#6fcf9a',
-    track: '#2a222c',
+    track: '#232429',
+    dark: true,
   },
   light: {
-    background: '#fbf7f2',
-    surface: '#f5ede4',
-    border: '#d9cdd3',
-    text: '#2b2030',
-    muted: '#6b5c6f',
-    accent: '#d9586a',
+    background: '#f6f6f3',
+    surface: '#ffffff',
+    border: '#e0e0da',
+    text: '#15171c',
+    muted: '#565a63',
+    accent: '#2f4bf0',
     onAccent: '#ffffff',
+    accentSoft: '#7d8fff',
     error: '#b3261e',
     errorSoft: '#fbe4e1',
-    glow: 0.35,
     warning: '#b86f12',
-    success: '#2f8a5b',
-    track: '#e8ddd6',
+    success: '#2a7a52',
+    track: '#e8e8e3',
+    dark: false,
   },
 };
 
 /**
- * The private space: the same layout in cooler violet tones, as on the web, so you always
- * know where you are. Only shown once the private space is open.
+ * The private space is always "night", whatever the phone's light or dark setting: the same
+ * layout in deep navy and lavender, so you always know where you are. Only shown once the
+ * private space is open; the lock screen looks the same for both passwords.
  */
-export const privateColors: { dark: Partial<Palette>; light: Partial<Palette> } = {
-  dark: {
-    background: '#120f1a',
-    surface: '#1d1828',
-    border: '#2e2840',
-    accent: '#b39cf2',
-    onAccent: '#160f24',
-    track: '#30293f',
-  },
-  light: {
-    background: '#f4f1f8',
-    surface: '#efeaf5',
-    border: '#e2dbec',
-    accent: '#7a5bc4',
-    onAccent: '#ffffff',
-    track: '#e5ddef',
-  },
+export const nightColors: Palette = {
+  background: '#0c1130',
+  surface: '#141b44',
+  border: '#232c62',
+  text: '#e9ebff',
+  muted: '#a9afd8',
+  accent: '#8c9cff',
+  onAccent: '#0c1130',
+  accentSoft: '#c9d0ff',
+  error: '#ff8f8f',
+  errorSoft: '#3a1a2a',
+  warning: '#e0a85a',
+  success: '#6fcf9a',
+  track: '#1a2250',
+  dark: true,
 };
+
+/**
+ * The headings' typeface, bundled with the app (modules/brand-fonts). On Android a bundled
+ * font is picked by its file name, so each weight is its own family; leave fontWeight unset.
+ */
+export const fonts = {
+  display: 'BricolageGrotesque-Bold',
+  displaySemi: 'BricolageGrotesque-SemiBold',
+} as const;

@@ -4,7 +4,10 @@ import { Icon } from './Icon';
 
 import './brand.css';
 
-/** The mark: two overlapping circles, two spaces folded into one app. */
+/**
+ * The mark: an arch with a smaller arch inside it, a private space within your library.
+ * "Arca" is Latin for a chest or vault, and the arch is the shape the app is built around.
+ */
 export function LogoMark({ size = 32 }: { size?: number }) {
   return (
     <svg
@@ -15,12 +18,16 @@ export function LogoMark({ size = 32 }: { size?: number }) {
       aria-hidden="true"
       focusable="false"
     >
-      <circle className="logo-mark__a" cx="12" cy="16" r="9" />
-      <circle className="logo-mark__b" cx="20" cy="16" r="9" />
-      <path className="logo-mark__fold" d="M16 8.6a9 9 0 0 1 0 14.8 9 9 0 0 1 0-14.8z" />
+      <path className="logo-mark__a" d={ARCH_OUTER} fillRule="evenodd" />
+      <path className="logo-mark__b" d={ARCH_INNER} />
     </svg>
   );
 }
+
+/** The outer arch, with the doorway cut out of it. */
+const ARCH_OUTER = 'M6 29V14.5a10 10 0 0 1 20 0V29zM11.5 29v-9a4.5 4.5 0 0 1 9 0v9z';
+/** The inner arch that fills the doorway. */
+const ARCH_INNER = 'M13.5 29v-8.6a2.5 2.5 0 0 1 5 0V29z';
 
 export function Logo({ size = 32 }: { size?: number }) {
   return (

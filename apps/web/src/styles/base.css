@@ -1,49 +1,66 @@
 /* Design tokens, reset and shared primitives (buttons, forms, layout helpers). */
 
+/*
+ * The look ("Arch"): a calm, near-colourless interface so photos carry the colour, one
+ * cobalt accent kept for the main action and the logo, and Bricolage Grotesque for
+ * headings. The private space is always "night": deep navy with lavender light.
+ */
+
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url('/fonts/bricolage-grotesque.woff2') format('woff2');
+}
+
 :root {
   color-scheme: light;
 
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-serif:
-    'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, ui-serif, serif;
+  --font-display: 'Bricolage Grotesque', var(--font-sans);
 
-  --bg: #fbf7f2;
-  --bg-tint: #f5ede4;
+  --bg: #f6f6f3;
+  --bg-tint: #f0f0ec;
   --surface: #ffffff;
-  --surface-2: #f6efe8;
-  --surface-3: #efe5db;
-  --text: #2b2030;
-  --text-2: #6b5c6f;
-  --text-3: #9c8e9e;
-  --border: #ebe1d7;
-  --border-strong: #dccfc2;
+  --surface-2: #eeeee9;
+  --surface-3: #e4e4de;
+  --text: #15171c;
+  --text-2: #565a63;
+  --text-3: #8a8d95;
+  --border: #e4e4de;
+  --border-strong: #d2d2cb;
 
-  --accent: #d9586a;
-  --accent-hover: #c84a5c;
-  --accent-text: #b13f51;
-  --accent-soft: #fbe5e3;
+  --accent: #2f4bf0;
+  --accent-hover: #2138d4;
+  --accent-text: #2a40d4;
+  --accent-soft: #e7eafe;
   --on-accent: #ffffff;
-  --plum: #5b3a78;
-  --plum-soft: #ece4f3;
+  /* A second, quieter tint for notes and callouts. */
+  --plum: #2f4bf0;
+  --plum-soft: #eceefb;
 
   --danger: #c0392b;
   --danger-soft: #fbe4e1;
-  --success: #2f8a5b;
+  --success: #2a7a52;
 
-  --logo-a: #e2707b;
-  --logo-b: #6c4a8c;
+  /* The arch logo, and the soft light behind it on larger brand moments. */
+  --logo-a: #2f4bf0;
+  --logo-b: #7d8fff;
 
   --radius-sm: 10px;
   --radius: 14px;
-  --radius-lg: 22px;
-  --radius-xl: 28px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  /* An arch: fully round on top, gently rounded at the foot. */
+  --arch: 999px 999px var(--radius) var(--radius);
 
-  --shadow-sm: 0 1px 2px rgb(43 32 48 / 6%);
-  --shadow: 0 1px 2px rgb(43 32 48 / 5%), 0 8px 24px -8px rgb(43 32 48 / 14%);
-  --shadow-lg: 0 2px 6px rgb(43 32 48 / 6%), 0 24px 60px -16px rgb(43 32 48 / 28%);
+  --shadow-sm: 0 1px 2px rgb(21 23 28 / 6%);
+  --shadow: 0 1px 2px rgb(21 23 28 / 5%), 0 8px 24px -8px rgb(21 23 28 / 14%);
+  --shadow-lg: 0 2px 6px rgb(21 23 28 / 6%), 0 24px 60px -16px rgb(21 23 28 / 26%);
 
-  --focus: 0 0 0 3px rgb(217 88 106 / 35%);
+  --focus: 0 0 0 3px rgb(47 75 240 / 30%);
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 
   --sidebar: 248px;
@@ -53,114 +70,98 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #161117;
-    --bg-tint: #1c151e;
-    --surface: #211a23;
-    --surface-2: #2a212d;
-    --surface-3: #342937;
-    --text: #f6eee8;
-    --text-2: #c0b2c2;
-    --text-3: #8e7f92;
-    --border: #352b38;
-    --border-strong: #46394a;
-    --accent: #ef7d88;
-    --accent-hover: #f592a0;
-    --accent-text: #f59aa4;
-    --accent-soft: #3c2228;
-    --on-accent: #23131a;
-    --plum: #c7a8e6;
-    --plum-soft: #2e2238;
+    --bg: #111214;
+    --bg-tint: #15161a;
+    --surface: #1b1c20;
+    --surface-2: #232429;
+    --surface-3: #2c2d33;
+    --text: #ececea;
+    --text-2: #a8abb2;
+    --text-3: #767981;
+    --border: #26272c;
+    --border-strong: #35363d;
+    --accent: #7d8fff;
+    --accent-hover: #95a4ff;
+    --accent-text: #9aa8ff;
+    --accent-soft: #1e2342;
+    --on-accent: #0b0e24;
+    --plum: #9aa8ff;
+    --plum-soft: #1c2036;
     --danger: #f08070;
     --danger-soft: #3e1f1d;
     --success: #6fcf9a;
-    --logo-a: #ef7d88;
-    --logo-b: #9c78c2;
+    --logo-a: #7d8fff;
+    --logo-b: #2f4bf0;
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%);
     --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 30px -10px rgb(0 0 0 / 50%);
     --shadow-lg: 0 2px 6px rgb(0 0 0 / 30%), 0 30px 70px -20px rgb(0 0 0 / 70%);
-    --focus: 0 0 0 3px rgb(239 125 136 / 40%);
+    --focus: 0 0 0 3px rgb(125 143 255 / 40%);
   }
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #161117;
-  --bg-tint: #1c151e;
-  --surface: #211a23;
-  --surface-2: #2a212d;
-  --surface-3: #342937;
-  --text: #f6eee8;
-  --text-2: #c0b2c2;
-  --text-3: #8e7f92;
-  --border: #352b38;
-  --border-strong: #46394a;
-  --accent: #ef7d88;
-  --accent-hover: #f592a0;
-  --accent-text: #f59aa4;
-  --accent-soft: #3c2228;
-  --on-accent: #23131a;
-  --plum: #c7a8e6;
-  --plum-soft: #2e2238;
+  --bg: #111214;
+  --bg-tint: #15161a;
+  --surface: #1b1c20;
+  --surface-2: #232429;
+  --surface-3: #2c2d33;
+  --text: #ececea;
+  --text-2: #a8abb2;
+  --text-3: #767981;
+  --border: #26272c;
+  --border-strong: #35363d;
+  --accent: #7d8fff;
+  --accent-hover: #95a4ff;
+  --accent-text: #9aa8ff;
+  --accent-soft: #1e2342;
+  --on-accent: #0b0e24;
+  --plum: #9aa8ff;
+  --plum-soft: #1c2036;
   --danger: #f08070;
   --danger-soft: #3e1f1d;
   --success: #6fcf9a;
-  --logo-a: #ef7d88;
-  --logo-b: #9c78c2;
+  --logo-a: #7d8fff;
+  --logo-b: #2f4bf0;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%);
   --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 30px -10px rgb(0 0 0 / 50%);
   --shadow-lg: 0 2px 6px rgb(0 0 0 / 30%), 0 30px 70px -20px rgb(0 0 0 / 70%);
-  --focus: 0 0 0 3px rgb(239 125 136 / 40%);
+  --focus: 0 0 0 3px rgb(125 143 255 / 40%);
 }
 
-/* The private space: same layout, cooler violet tones, so you always know where you are. */
-
+/*
+ * The private space is always night, whatever the light or dark setting: the same layout in
+ * deep navy and lavender, so you always know where you are. It comes after the theme blocks
+ * so it wins over both.
+ */
 :root[data-space='private'] {
-  --bg: #f4f1f8;
-  --bg-tint: #ebe5f2;
-  --surface-2: #efeaf5;
-  --surface-3: #e5ddef;
-  --border: #e2dbec;
-  --border-strong: #d3c8e2;
-  --accent: #7a5bc4;
-  --accent-hover: #6a4bb4;
-  --accent-text: #6243ad;
-  --accent-soft: #ebe3f8;
-  --on-accent: #ffffff;
-  --focus: 0 0 0 3px rgb(122 91 196 / 35%);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root[data-space='private']:not([data-theme='light']) {
-    --bg: #120f1a;
-    --bg-tint: #17131f;
-    --surface: #1d1828;
-    --surface-2: #262033;
-    --surface-3: #30293f;
-    --border: #2e2840;
-    --border-strong: #3d3552;
-    --accent: #b39cf2;
-    --accent-hover: #c4b1f6;
-    --accent-text: #c1aef5;
-    --accent-soft: #2d2445;
-    --on-accent: #160f24;
-    --focus: 0 0 0 3px rgb(179 156 242 / 40%);
-  }
-}
-
-:root[data-space='private'][data-theme='dark'] {
-  --bg: #120f1a;
-  --bg-tint: #17131f;
-  --surface: #1d1828;
-  --surface-2: #262033;
-  --surface-3: #30293f;
-  --border: #2e2840;
-  --border-strong: #3d3552;
-  --accent: #b39cf2;
-  --accent-hover: #c4b1f6;
-  --accent-text: #c1aef5;
-  --accent-soft: #2d2445;
-  --on-accent: #160f24;
-  --focus: 0 0 0 3px rgb(179 156 242 / 40%);
+  color-scheme: dark;
+  --bg: #0c1130;
+  --bg-tint: #0f1537;
+  --surface: #141b44;
+  --surface-2: #1a2250;
+  --surface-3: #222b5e;
+  --text: #e9ebff;
+  --text-2: #a9afd8;
+  --text-3: #7a81b4;
+  --border: #1f2756;
+  --border-strong: #2b356c;
+  --accent: #8c9cff;
+  --accent-hover: #a3b0ff;
+  --accent-text: #a9b5ff;
+  --accent-soft: #1f2860;
+  --on-accent: #0c1130;
+  --plum: #a9b5ff;
+  --plum-soft: #18204f;
+  --danger: #ff8f8f;
+  --danger-soft: #3a1a2a;
+  --success: #6fcf9a;
+  --logo-a: #8c9cff;
+  --logo-b: #c9d0ff;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 35%);
+  --shadow: 0 1px 2px rgb(0 0 0 / 35%), 0 10px 30px -10px rgb(0 0 0 / 55%);
+  --shadow-lg: 0 2px 6px rgb(0 0 0 / 35%), 0 30px 70px -20px rgb(0 0 0 / 75%);
+  --focus: 0 0 0 3px rgb(140 156 255 / 40%);
 }
 
 /* Reset */
@@ -341,7 +342,17 @@ a:hover {
 .btn--primary {
   background: var(--accent);
   color: var(--on-accent);
-  box-shadow: 0 6px 16px -8px var(--accent);
+  box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* A strong but colourless button, so cobalt stays for the one main action on screen. */
+.btn--ink {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.btn--ink:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 85%, var(--bg));
 }
 
 .btn--primary:hover:not(:disabled) {

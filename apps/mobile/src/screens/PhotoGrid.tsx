@@ -1,12 +1,13 @@
 import { FlashList } from '@shopify/flash-list';
 import type { ViewToken } from '@shopify/flash-list';
-import { memo, useCallback, useEffect } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { MemoryImage } from '../../modules/memory-image';
 import { COLUMNS, photosInRows } from '../library/timeline';
 import type { TimelineRow } from '../library/timeline';
+import { fonts } from '../theme';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 
@@ -36,6 +37,7 @@ const Tile = memo(function Tile({
   useEffect(() => {
     if (!imageId) requestThumbs([photoId]);
   }, [photoId, imageId, requestThumbs]);
+  const fade = useFadeIn(photoId, imageId);
   const choosing = chosen !== undefined;
   return (
     <Pressable
@@ -53,10 +55,11 @@ const Tile = memo(function Tile({
           : undefined
       }
     >
-      <MemoryImage
-        imageId={imageId}
-        style={{ width: size, height: size, backgroundColor: palette.surface }}
-      />
+      <View style={{ width: size, height: size, backgroundColor: palette.surface }}>
+        <Animated.View style={{ opacity: fade }}>
+          <MemoryImage imageId={imageId} style={{ width: size, height: size }} />
+        </Animated.View>
+      </View>
       {choosing ? (
         <>
           {chosen ? (
@@ -79,6 +82,27 @@ const Tile = memo(function Tile({
     </Pressable>
   );
 });
+
+/**
+ * A preview fades in as it's decrypted, the phone's version of the web's soft focus. Only
+ * when it arrives while on screen: a tile reused for another photo, or one whose preview was
+ * already there, shows at once.
+ */
+function useFadeIn(photoId: string, imageId: string | null): Animated.Value {
+  const [fade] = useState(() => new Animated.Value(imageId ? 1 : 0));
+  const seen = useRef({ photoId, hadImage: imageId !== null });
+  useEffect(() => {
+    if (seen.current.photoId !== photoId) {
+      seen.current = { photoId, hadImage: imageId !== null };
+      fade.setValue(imageId ? 1 : 0);
+      return;
+    }
+    if (!imageId || seen.current.hadImage) return;
+    seen.current.hadImage = true;
+    Animated.timing(fade, { toValue: 1, duration: 320, useNativeDriver: true }).start();
+  }, [photoId, imageId, fade]);
+  return fade;
+}
 
 const TileRow = memo(
   function TileRow(props: {
@@ -222,7 +246,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 10,
   },
-  monthLabel: { fontSize: 17, fontWeight: '700' },
+  monthLabel: { fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.3 },
   monthCount: { fontSize: 13 },
   tileRow: { flexDirection: 'row', gap: GAP, marginBottom: GAP },
   chosenFrame: { borderWidth: 3 },

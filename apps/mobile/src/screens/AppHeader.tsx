@@ -1,9 +1,10 @@
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
-import { Image, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 
-import logo from '../../assets/logo.png';
 import { useAccount } from '../session/account';
+import { fonts } from '../theme';
+import { LogoMark } from '../ui/brand';
 import { usePalette } from '../ui/theme';
 
 /** Opens search; the library's top screens show a search button when it's given. */
@@ -45,7 +46,9 @@ export function AppHeader({
           <Text style={[styles.backText, { color: palette.text }]}>‹</Text>
         </Pressable>
       ) : (
-        <Image source={logo} style={styles.logo} accessible={false} />
+        <View style={styles.logo}>
+          <LogoMark size={24} />
+        </View>
       )}
       <Text
         style={[styles.title, { color: palette.text }]}
@@ -165,10 +168,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
   },
-  logo: { width: 28, height: 28 },
+  logo: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   back: { width: 28, height: 34, alignItems: 'center', justifyContent: 'center' },
   backText: { fontSize: 34, lineHeight: 36, fontWeight: '300' },
-  title: { flex: 1, fontSize: 22, fontWeight: '700' },
+  title: { flex: 1, fontFamily: fonts.display, fontSize: 24, letterSpacing: -0.5 },
   pill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
   pillText: { fontSize: 14, fontWeight: '600' },
   avatar: {

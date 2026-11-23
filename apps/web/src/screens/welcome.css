@@ -45,7 +45,7 @@
 }
 
 .welcome__title {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: clamp(42px, 6vw, 76px);
   font-weight: 600;
   line-height: 1.02;
@@ -185,7 +185,7 @@
 }
 
 .section-title {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: clamp(30px, 4vw, 46px);
   font-weight: 600;
   line-height: 1.1;
@@ -315,7 +315,7 @@
 }
 
 .mock-unlock__title {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 20px;
   font-weight: 600;
 }
@@ -477,7 +477,7 @@
 }
 
 .mock-album__title {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 22px;
   font-weight: 600;
 }
@@ -593,7 +593,7 @@
   top: 22px;
   right: 26px;
   color: var(--border-strong);
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 40px;
   font-weight: 600;
   line-height: 1;
@@ -602,7 +602,7 @@
 .how__title,
 .feature__title {
   margin-top: 6px;
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 21px;
   font-weight: 600;
 }

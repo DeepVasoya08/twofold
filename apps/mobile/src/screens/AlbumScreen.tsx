@@ -13,6 +13,7 @@ import type { Album } from '@arcafold/core/library/model';
 import { photoCount } from '../library/album-text';
 import { gridRows } from '../library/timeline';
 import type { Library } from '../library/use-library';
+import { fonts } from '../theme';
 import { Button, Note } from '../ui/kit';
 import { useNotice } from '../ui/notice';
 import { usePalette } from '../ui/theme';
@@ -231,7 +232,7 @@ export function AlbumScreen({
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centre: { flex: 1, justifyContent: 'center', padding: 24, gap: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '700' },
+  emptyTitle: { fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.3 },
   summary: { paddingHorizontal: 16, paddingTop: 4, gap: 12 },
   meta: { fontSize: 14 },
 });
