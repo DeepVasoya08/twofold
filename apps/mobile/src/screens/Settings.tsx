@@ -529,14 +529,14 @@ export function Settings({
                       style={[
                         styles.choice,
                         chosen
-                          ? { backgroundColor: palette.accent, borderColor: palette.accent }
+                          ? { backgroundColor: palette.text, borderColor: palette.text }
                           : { borderColor: palette.border },
                       ]}
                     >
                       <Text
                         style={[
                           styles.choiceText,
-                          { color: chosen ? palette.onAccent : palette.text },
+                          { color: chosen ? palette.background : palette.text },
                         ]}
                       >
                         {minutes} min
