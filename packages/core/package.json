@@ -7,6 +7,7 @@
     "./account": "./src/account.ts",
     "./api": "./src/api.ts",
     "./background-scan": "./src/background-scan.ts",
+    "./contrast": "./src/contrast.ts",
     "./crypto-loader": "./src/crypto-loader.ts",
     "./download/names": "./src/download/names.ts",
     "./download/progress": "./src/download/progress.ts",

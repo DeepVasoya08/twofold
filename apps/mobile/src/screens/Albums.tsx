@@ -18,6 +18,7 @@ import type { SmartAlbum } from '@arcafold/core/search/smart-album';
 import { MemoryImage } from '../../modules/memory-image';
 import { photoCount } from '../library/album-text';
 import type { Library } from '../library/use-library';
+import { fonts } from '../theme';
 import { Button, Note } from '../ui/kit';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
@@ -62,9 +63,21 @@ const AlbumCard = memo(function AlbumCard({
       }}
       style={{ width }}
     >
-      <View style={[styles.cover, { width, height: width, backgroundColor: palette.surface }]}>
+      <View
+        style={[
+          styles.cover,
+          {
+            width,
+            height: width * 1.25,
+            // An arch, as on the web: Arcafold's shape, so albums stand out at a glance.
+            borderTopLeftRadius: width / 2,
+            borderTopRightRadius: width / 2,
+            backgroundColor: palette.surface,
+          },
+        ]}
+      >
         {coverId ? (
-          <MemoryImage imageId={imageId} style={{ width, height: width }} />
+          <MemoryImage imageId={imageId} style={{ width, height: width * 1.25 }} />
         ) : (
           <Text style={[styles.emptyCover, { color: palette.muted }]}>＋</Text>
         )}
@@ -318,11 +331,12 @@ export function Albums({
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centre: { flex: 1, justifyContent: 'center', padding: 24, gap: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '700' },
+  emptyTitle: { fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.3 },
   list: { paddingHorizontal: GUTTER, paddingTop: 4, paddingBottom: 32, gap: 20 },
   row: { gap: GAP },
   cover: {
-    borderRadius: 14,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -339,7 +353,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 14, fontWeight: '600' },
   codeLink: { paddingHorizontal: GUTTER, paddingBottom: 12 },
   smart: { gap: 4, paddingBottom: 16 },
-  smartHeading: { fontSize: 17, fontWeight: '700', paddingBottom: 6 },
+  smartHeading: { fontFamily: fonts.display, fontSize: 18, paddingBottom: 6 },
   smartRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -367,6 +381,6 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
-  title: { fontSize: 15, fontWeight: '600', marginTop: 8 },
+  title: { fontFamily: fonts.display, fontSize: 16, letterSpacing: -0.2, marginTop: 10 },
   meta: { fontSize: 13, marginTop: 1 },
 });

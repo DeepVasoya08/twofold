@@ -64,7 +64,7 @@ export function SearchBar({ inputRef }: { inputRef: RefObject<HTMLInputElement |
           find.setText(event.currentTarget.value);
         }}
       />
-      <button type="submit" className="btn btn--primary btn--sm">
+      <button type="submit" className="btn btn--ink btn--sm">
         Search
       </button>
     </form>

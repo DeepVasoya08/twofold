@@ -140,23 +140,7 @@ export function Albums() {
                 <Link to={paths.album(album.id)} className="album-card">
                   <span className="album-card__cover">
                     {cover ? (
-                      <>
-                        <PhotoImage
-                          photoId={cover.id}
-                          preload={photos[1] && !photos[1].src ? [photos[1].id] : undefined}
-                          src={cover.src}
-                          alt=""
-                          loading="lazy"
-                        />
-                        {photos[1]?.src && (
-                          <img
-                            className="album-card__peek"
-                            src={photos[1].src}
-                            alt=""
-                            loading="lazy"
-                          />
-                        )}
-                      </>
+                      <PhotoImage photoId={cover.id} src={cover.src} alt="" loading="lazy" />
                     ) : (
                       <span className="album-card__empty">
                         <Icon name="image-plus" size={28} />

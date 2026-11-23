@@ -1,0 +1,14 @@
+// Bundles the headings' typeface (Bricolage Grotesque, SIL Open Font License, see
+// src/main/assets/fonts/OFL.txt). Its assets merge into the app's, where React Native finds
+// fonts/<family>.ttf by the fontFamily name.
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.arcafold'
+version = '0.0.1'
+
+android {
+  namespace "com.arcafold.brandfonts"
+}

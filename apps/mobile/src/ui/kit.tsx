@@ -16,19 +16,19 @@ import type { TextInputInstance, TextInputProps } from 'react-native';
 import { errorMessage } from '@arcafold/core/errors';
 import { passwordStrength } from '@arcafold/core/password';
 
-import backdrop from '../../assets/backdrop.png';
 import eyeOff from '../../assets/eye-off.png';
 import eye from '../../assets/eye.png';
-import logo from '../../assets/logo.png';
 import { strengthTone } from '../session/forms';
+import { fonts } from '../theme';
+import { ArchArt, LogoMark } from './brand';
 import { usePalette } from './theme';
 
 /**
  * A full screen with a title. It shrinks to the space above the keyboard and scrolls, so the
  * field being typed in stays in view on any screen size. (The app draws edge to edge on
  * Android, where the system no longer resizes the window for the keyboard, so this does.)
- * A `branded` screen (sign-in, sign-up, unlock) has the mark's glow behind its top, the logo
- * and name, and its form on a card.
+ * A `branded` screen (sign-in, sign-up, unlock) has the arch artwork and the logo at its top,
+ * and its form on a card.
  */
 export function Screen({
   title,
@@ -47,19 +47,14 @@ export function Screen({
       style={[styles.fill, { backgroundColor: palette.background }]}
       behavior="padding"
     >
-      {branded ? (
-        <Image
-          source={backdrop}
-          style={[styles.backdrop, { opacity: palette.glow }]}
-          resizeMode="cover"
-          accessible={false}
-        />
-      ) : null}
       <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
         {branded ? (
           <View style={styles.brand}>
-            <Image source={logo} style={styles.logo} accessible={false} />
-            <Text style={[styles.brandName, { color: palette.text }]}>Arcafold</Text>
+            <ArchArt />
+            <View style={styles.wordmark}>
+              <LogoMark size={20} />
+              <Text style={[styles.brandName, { color: palette.text }]}>Arcafold</Text>
+            </View>
           </View>
         ) : null}
         <Text
@@ -315,11 +310,10 @@ export function useSubmit() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   screen: { flexGrow: 1, justifyContent: 'center', padding: 24, paddingTop: 56, gap: 16 },
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, width: '100%', height: 420 },
-  brand: { alignItems: 'center', gap: 6, marginBottom: 8 },
-  logo: { width: 64, height: 64 },
-  brandName: { fontSize: 15, fontWeight: '700', letterSpacing: 2.4, textTransform: 'uppercase' },
-  title: { fontSize: 28, fontWeight: '700' },
+  brand: { alignItems: 'center', gap: 22, marginBottom: 8 },
+  wordmark: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brandName: { fontFamily: fonts.display, fontSize: 20, letterSpacing: -0.3 },
+  title: { fontFamily: fonts.display, fontSize: 30, letterSpacing: -0.6 },
   titleCentred: { textAlign: 'center' },
   body: { fontSize: 16, lineHeight: 22 },
   bodyCentred: { textAlign: 'center', marginBottom: 4 },

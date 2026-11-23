@@ -32,8 +32,8 @@ or a native module.
   background, so coming back checks it too. Android's photo picker gets
   up to three minutes instead (`onSystemScreen` in `session/account.tsx`); away longer than
   that, it locks the moment it's back.
-- Sign-in, sign-up and unlock have the mark's glow and the logo at the top and their form
-  on a card. Password fields have an eye button to show what's typed. A form's problem
+- Sign-in, sign-up and unlock have the arch artwork and the logo at the top
+  (`ui/brand.tsx`, the same artwork as the web) and their form on a card. Password fields have an eye button to show what's typed. A form's problem
   shows in a red banner by the button, and sign-up takes you back to the first field that
   needs fixing.
 - The recovery key: "Download key", or ticking "I've saved my recovery key", saves it as
@@ -66,7 +66,9 @@ or a native module.
   again at up to 4096 px so it stays sharp, the swap from preview to original keeps the zoom,
   and one finger pans the photo instead of swiping to the next.
 - The private space works as on the web. The same password field opens either space, and
-  the private space shows in the web app's violet tones. In the viewer, "Move to private
+  the private space shows in the web app's night colours (`nightColors` in `theme.ts`).
+  Headings use Bricolage Grotesque, bundled by `modules/brand-fonts` (its Android assets
+  merge into the app's `fonts/`, where React Native finds a family by file name). In the viewer, "Move to private
   space" (or "Move to library") asks for the other space's password the first time after
   unlocking (`screens/MoveSheet.tsx`, drawn in the app's own window so screenshot blocking
   covers it). The keys then stay in memory until the app locks. From the library, a wrong

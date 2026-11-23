@@ -66,7 +66,7 @@
 }
 
 .profile__name {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 20px;
   font-weight: 600;
 }
@@ -168,19 +168,19 @@
 }
 
 .theme-picker__swatch--system {
-  background: linear-gradient(135deg, #fbf7f2 50%, #211a23 50%);
-  color: #9c8e9e;
+  background: linear-gradient(135deg, #f6f6f3 50%, #1b1c20 50%);
+  color: #8a8d95;
 }
 
 .theme-picker__swatch--light {
-  background: #fbf7f2;
-  color: #2b2030;
-  box-shadow: inset 0 0 0 1px #ebe1d7;
+  background: #f6f6f3;
+  color: #15171c;
+  box-shadow: inset 0 0 0 1px #e4e4de;
 }
 
 .theme-picker__swatch--dark {
-  background: #211a23;
-  color: #f6eee8;
+  background: #1b1c20;
+  color: #ececea;
 }
 
 .settings-footer {

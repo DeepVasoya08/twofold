@@ -1,7 +1,7 @@
 .photo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 6px;
+  gap: 4px;
 }
 
 .photo-tile {
@@ -9,7 +9,7 @@
   display: block;
   overflow: hidden;
   aspect-ratio: 1;
-  border-radius: 12px;
+  border-radius: 6px;
   background: var(--surface-3);
 }
 
@@ -18,6 +18,26 @@
   height: 100%;
   object-fit: cover;
   transition: transform 0.4s var(--ease);
+  /* Each photo comes into focus as it's decrypted. */
+  animation: photo-unseal 0.5s var(--ease);
+}
+
+@keyframes photo-unseal {
+  from {
+    filter: blur(14px) saturate(0.6);
+    opacity: 0.4;
+  }
+}
+
+/* Waiting for its preview: a soft pulse, so the grid reads as loading, not empty. */
+.photo-tile .photo-placeholder {
+  animation: photo-waiting 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes photo-waiting {
+  to {
+    opacity: 0.55;
+  }
 }
 
 .photo-tile:hover img {
@@ -98,13 +118,15 @@
 }
 
 @media (max-width: 860px) {
+  /* Edge to edge on phones, with hairline gaps. */
   .photo-grid {
     grid-template-columns: repeat(3, 1fr);
-    gap: 3px;
+    gap: 2px;
+    margin-inline: -16px;
   }
 
   .photo-tile {
-    border-radius: 6px;
+    border-radius: 0;
   }
 
   /* Small tiles: the icon alone; the name is in the tile's label and the viewer. */
@@ -198,7 +220,7 @@
 }
 
 .photo-grid--compact .photo-tile {
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 /*
@@ -211,7 +233,7 @@
 
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .photo-grid--uncropped::after {
@@ -235,12 +257,12 @@
   }
 
   .photo-grid--compact .photo-tile {
-    border-radius: 3px;
+    border-radius: 0;
   }
 
   .photo-grid--uncropped {
     --row: 120px;
 
-    gap: 3px;
+    gap: 2px;
   }
 }

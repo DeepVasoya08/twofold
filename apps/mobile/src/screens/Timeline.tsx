@@ -5,6 +5,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { timelineRows } from '../library/timeline';
 import type { Library } from '../library/use-library';
 import { useAccount } from '../session/account';
+import { fonts } from '../theme';
 import { Button, Note } from '../ui/kit';
 import { usePalette } from '../ui/theme';
 import { AppHeader, HeaderButton } from './AppHeader';
@@ -103,5 +104,5 @@ export function Timeline({
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centre: { flex: 1, justifyContent: 'center', padding: 24, gap: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '700' },
+  emptyTitle: { fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.3 },
 });

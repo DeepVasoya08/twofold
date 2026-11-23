@@ -2,15 +2,29 @@ import type { ReactNode } from 'react';
 
 import { Link } from '../app/router';
 import { paths } from '../app/routes';
-import { initialPhotos } from '../mock/data';
+import { landscapeDataUri } from '../mock/art';
 import { Logo } from './Brand';
 import { Icon } from './Icon';
 
 import './auth-layout.css';
 
-const collage = ['p006', 'p016', 'p013']
-  .map((id) => initialPhotos.find((photo) => photo.id === id))
-  .filter((photo) => photo !== undefined);
+/*
+ * Arcafold's own artwork, never a user's photo: nothing is decrypted before unlocking, and the
+ * screen must look the same whichever password is typed next. Two arches: a day one for the
+ * library, and a small night one tucked inside it for the private space.
+ */
+const DAY = landscapeDataUri({ seed: 23, palette: 'golden', width: 640, height: 800 });
+const NIGHT = landscapeDataUri({ seed: 7, palette: 'night', width: 320, height: 400 });
+
+/** The arch windows, large beside the form on wide screens and small above it on phones. */
+function ArchArt({ small = false }: { small?: boolean }) {
+  return (
+    <span className={`arch-art${small ? ' arch-art--small' : ''}`} aria-hidden="true">
+      <img className="arch-art__day" src={DAY} alt="" />
+      <img className="arch-art__night" src={NIGHT} alt="" />
+    </span>
+  );
+}
 
 interface AuthLayoutProps {
   title: string;
@@ -26,13 +40,7 @@ export function AuthLayout({ title, subtitle, children, footer, step }: AuthLayo
   return (
     <div className="auth">
       <aside className="auth__aside" aria-hidden="true">
-        <div className="auth__collage">
-          {collage.map((photo, index) => (
-            <figure key={photo.id} className={`auth__polaroid auth__polaroid--${String(index)}`}>
-              <img src={photo.src} alt="" />
-            </figure>
-          ))}
-        </div>
+        <ArchArt />
         <blockquote className="auth__quote">
           <p>Every photo is locked on your device before it leaves. Only you hold the key.</p>
           <span className="auth__quote-mark">
@@ -52,6 +60,7 @@ export function AuthLayout({ title, subtitle, children, footer, step }: AuthLayo
           )}
         </header>
         <div className="auth__panel">
+          <ArchArt small />
           <h1 className="auth__title">{title}</h1>
           {subtitle && <p className="auth__subtitle">{subtitle}</p>}
           {children}

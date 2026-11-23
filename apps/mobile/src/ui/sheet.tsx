@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { BackHandler, KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { bottomInset } from '../../modules/system-bars';
+import { fonts } from '../theme';
 import { usePalette } from './theme';
 
 /**
@@ -114,7 +115,7 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
   },
   handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2 },
-  title: { fontSize: 20, fontWeight: '700' },
+  title: { fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.3 },
   body: { fontSize: 15, lineHeight: 21 },
   option: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14 },
   optionLabel: { fontSize: 16, fontWeight: '600' },

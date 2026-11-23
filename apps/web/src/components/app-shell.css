@@ -21,12 +21,17 @@
   padding: 24px 18px;
   overflow: hidden auto;
   border-right: 1px solid var(--border);
-  background: var(--bg-tint);
+  background: var(--bg);
   transition: width 0.2s var(--ease);
 }
 
 .shell__brand {
   padding: 4px 8px;
+}
+
+/* Leaves room for the Private label beside it. */
+.shell__brand .logo__word {
+  font-size: 20px;
 }
 
 .shell__brand:hover {
@@ -59,9 +64,12 @@
 }
 
 .shell__nav-link.is-active {
-  background: var(--surface);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.shell__nav-link.is-active svg {
   color: var(--accent-text);
-  box-shadow: var(--shadow-sm);
 }
 
 .shell__brand-row {
@@ -252,11 +260,11 @@
 }
 
 .page-header__title {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 40px;
-  font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: -0.015em;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
 }
 
 .page-header__subtitle {
@@ -340,10 +348,15 @@
   }
 
   .shell__tab.is-active {
+    color: var(--text);
+  }
+
+  .shell__tab.is-active svg {
     color: var(--accent-text);
   }
 
   .page-header {
+    flex-wrap: wrap;
     align-items: center;
     margin-bottom: 20px;
   }
