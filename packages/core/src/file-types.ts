@@ -182,6 +182,23 @@ export function placeholderPreview(random: () => number = Math.random): Uint8Arr
   return new Uint8Array(PLACEHOLDER_MIN + Math.floor(random() * PLACEHOLDER_SPREAD));
 }
 
+/** Smallest stored preview, so a real one looks like any other (see placeholderPreview). */
+export const PREVIEW_MIN_BYTES = 16 * 1024;
+
+/**
+ * A JPEG padded with zeros after its end, which image decoders ignore, up to `min` bytes:
+ * so a small preview is as big as a stand-in one and the server can't tell them apart.
+ */
+export function padPreview(
+  jpeg: Uint8Array<ArrayBuffer>,
+  min: number = PREVIEW_MIN_BYTES,
+): Uint8Array<ArrayBuffer> {
+  if (jpeg.length >= min) return jpeg;
+  const padded = new Uint8Array(min);
+  padded.set(jpeg);
+  return padded;
+}
+
 /** Whether bytes start like a JPEG: the only thing a file's preview may ever be. */
 export function isJpeg(bytes: Uint8Array): boolean {
   return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;

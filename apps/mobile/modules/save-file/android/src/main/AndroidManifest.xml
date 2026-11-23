@@ -3,4 +3,22 @@
   <uses-permission
     android:name="android.permission.WRITE_EXTERNAL_STORAGE"
     android:maxSdkVersion="28" />
+
+  <!-- Apps can see which apps open a file type, to offer them (Android 11 and newer). -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:mimeType="*/*" />
+    </intent>
+  </queries>
+
+  <application>
+    <!-- Hands a file being opened to another app from memory. Not exported: only an app
+         given one file's address, with permission to read it, can reach it. -->
+    <provider
+      android:name="com.arcafold.savefile.OpenFileProvider"
+      android:authorities="${applicationId}.openfile"
+      android:exported="false"
+      android:grantUriPermissions="true" />
+  </application>
 </manifest>

@@ -1,5 +1,8 @@
 import { STORAGE_SIZES } from '@arcafold/types';
+import { formatBytes } from '@arcafold/core/format-bytes';
 import type { Photo } from '@arcafold/core/library/model';
+
+export { formatBytes };
 
 /**
  * What the open space takes up: the encrypted size of its own photos, as listed. Photos in
@@ -18,20 +21,6 @@ export function spaceBytes(photos: readonly Photo[]): number {
 /** How much of the account's limit `bytes` is, from 0 to 1. */
 export function usedFraction(bytes: number): number {
   return Math.min(1, Math.max(0, bytes / STORAGE_SIZES.accountQuota));
-}
-
-const UNITS = ['B', 'KB', 'MB', 'GB'] as const;
-
-/** "0 B", "740 KB", "12.4 MB", "1 GB": binary units, as the limit is counted. */
-export function formatBytes(bytes: number): string {
-  let value = Math.max(0, bytes);
-  let unit = 0;
-  while (value >= 1024 && unit < UNITS.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  const rounded = value < 100 && unit > 0 ? Math.round(value * 10) / 10 : Math.round(value);
-  return `${rounded.toLocaleString('en-US')} ${UNITS[unit] ?? 'GB'}`;
 }
 
 /**

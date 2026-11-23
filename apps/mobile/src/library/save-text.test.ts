@@ -20,19 +20,34 @@ describe('savingText', () => {
 
 describe('saveOutcome', () => {
   it('says where the copies went, and how many didn’t', () => {
-    expect(saveOutcome({ state: 'done', result: { done: ['a', 'b'], failed: [] } })).toBe(
-      '2 photos saved to Pictures/Arcafold.',
+    const photos = (count: number) => ({ photos: count, files: 0 });
+    expect(
+      saveOutcome({ state: 'done', result: { done: ['a', 'b'], failed: [] }, saved: photos(2) }),
+    ).toBe('2 photos saved to Pictures/Arcafold.');
+    expect(
+      saveOutcome({ state: 'done', result: { done: ['a'], failed: ['b'] }, saved: photos(1) }),
+    ).toBe('1 photo saved to Pictures/Arcafold. 1 photo didn’t go through.');
+  });
+
+  it('says files went to Download', () => {
+    const result = { done: ['a', 'b'], failed: [] };
+    expect(saveOutcome({ state: 'done', result, saved: { photos: 0, files: 2 } })).toBe(
+      '2 files saved to Download/Arcafold.',
     );
-    expect(saveOutcome({ state: 'done', result: { done: ['a'], failed: ['b'] } })).toBe(
-      '1 photo saved to Pictures/Arcafold. 1 photo didn’t go through.',
+    expect(saveOutcome({ state: 'done', result, saved: { photos: 1, files: 1 } })).toBe(
+      '2 files saved to Pictures/Arcafold and Download/Arcafold.',
     );
   });
 
   it('says why when none were saved', () => {
     const error = new FormError('No room left on this phone.');
-    expect(saveOutcome({ state: 'done', result: { done: [], failed: ['a'], error } })).toBe(
-      error.message,
-    );
+    expect(
+      saveOutcome({
+        state: 'done',
+        result: { done: [], failed: ['a'], error },
+        saved: { photos: 0, files: 0 },
+      }),
+    ).toBe(error.message);
   });
 
   it('turns down more than 1 GB at once', () => {

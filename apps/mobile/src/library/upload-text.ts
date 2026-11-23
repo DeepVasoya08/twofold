@@ -1,10 +1,21 @@
 import type { UploadItem } from '@arcafold/core/upload/uploader';
 import type { UploadSummary } from '@arcafold/core/upload/progress';
+import { photoTypeOf } from '@arcafold/core/file-types';
 
-const photos = (count: number): string => (count === 1 ? '1 photo' : `${String(count)} photos`);
+/** What's being added: photos, files, or some of each. */
+export type UploadNoun = 'photo' | 'file' | 'item';
+
+/** Photos, files, or items when it's some of each, judged by the names being added. */
+export function uploadNoun(items: readonly Pick<UploadItem, 'name'>[]): UploadNoun {
+  const photo = items.map((item) => photoTypeOf({ name: item.name, type: '' }) !== null);
+  if (photo.every(Boolean)) return 'photo';
+  return photo.some(Boolean) ? 'item' : 'file';
+}
 
 /** The line on the upload card: how far along it is, or how it went. */
-export function uploadHeadline(summary: UploadSummary): string {
+export function uploadHeadline(summary: UploadSummary, noun: UploadNoun = 'photo'): string {
+  const photos = (count: number): string =>
+    count === 1 ? `1 ${noun}` : `${String(count)} ${noun}s`;
   if (summary.running > 0) {
     return `Adding ${photos(summary.total)}… ${String(summary.done)} done`;
   }
@@ -13,7 +24,7 @@ export function uploadHeadline(summary: UploadSummary): string {
   return `${photos(summary.done)} added, ${String(summary.failed)} couldn’t be`;
 }
 
-/** Why the first photo that failed did, when one did. */
+/** Why the first one that failed did, when one did. */
 export function firstFailure(items: readonly UploadItem[]): string | null {
   const failed = items.find((item) => item.status === 'failed');
   if (!failed) return null;

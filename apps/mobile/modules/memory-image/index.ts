@@ -49,6 +49,8 @@ export interface PickedPhoto {
   type: string;
   /** Its size in bytes; 0 when Android doesn't say. */
   size: number;
+  /** When it was last changed, in milliseconds; 0 when Android doesn't say. */
+  modified: number;
 }
 
 /** How a request to delete photos from the phone went. */
@@ -62,6 +64,10 @@ export interface DeleteResult {
 interface PhotoPickerModule {
   /** Opens Android's photo picker; resolves with what was picked (none if cancelled). */
   pickAsync(): Promise<PickedPhoto[]>;
+  /** Opens Android's file picker, for any kind of file; none if cancelled. */
+  pickFilesAsync(): Promise<PickedPhoto[]>;
+  /** A JPEG of a picked PDF's first page, made in memory; null if it can't be drawn. */
+  pdfPreviewAsync(uri: string, maxSide: number, quality: number): Promise<ArrayBuffer | null>;
   /** The photo's own bytes, untouched. */
   readAsync(uri: string): Promise<ArrayBuffer>;
   /** A JPEG preview made in memory, upright, and the photo's own width and height. */

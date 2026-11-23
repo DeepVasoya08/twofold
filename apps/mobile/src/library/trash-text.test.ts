@@ -12,6 +12,9 @@ describe('batchText', () => {
     expect(batchText({ done: ['a'], failed: ['b'] }, (p) => `${p} restored`)).toBe(
       '1 photo restored. 1 photo didn’t go through.',
     );
+    expect(batchText({ done: ['a'], failed: ['b'] }, (p) => `${p} deleted`, 'file')).toBe(
+      '1 file deleted. 1 file didn’t go through.',
+    );
   });
 
   it('says why when nothing went through', () => {
@@ -26,5 +29,7 @@ describe('titles', () => {
     expect(deleteTitle(1200)).toBe('Delete 1,200 photos?');
     expect(deleteForeverTitle(3, false)).toBe('Delete 3 photos for good?');
     expect(deleteForeverTitle(3, true)).toBe('Empty Recently deleted?');
+    expect(deleteTitle(1, 'file')).toBe('Delete this file?');
+    expect(deleteTitle(2, 'file')).toBe('Delete 2 files?');
   });
 });

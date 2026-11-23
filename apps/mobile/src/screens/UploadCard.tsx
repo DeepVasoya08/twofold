@@ -4,7 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { summarizeUploads } from '@arcafold/core/upload/progress';
 
 import { originalsText } from '../library/originals';
-import { firstFailure, uploadHeadline } from '../library/upload-text';
+import { firstFailure, uploadHeadline, uploadNoun } from '../library/upload-text';
 import type { Library } from '../library/use-library';
 import { Button } from '../ui/kit';
 import type { Palette } from '../ui/theme';
@@ -34,7 +34,9 @@ export function UploadCard({
       accessibilityLiveRegion="polite"
     >
       <View style={styles.uploadTop}>
-        <Text style={[styles.uploadTitle, { color: palette.text }]}>{uploadHeadline(summary)}</Text>
+        <Text style={[styles.uploadTitle, { color: palette.text }]}>
+          {uploadHeadline(summary, uploadNoun(items))}
+        </Text>
         {summary.running > 0 ? (
           <ActivityIndicator color={palette.accent} />
         ) : offer ? null : (

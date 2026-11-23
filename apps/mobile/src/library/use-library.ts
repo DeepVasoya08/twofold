@@ -28,6 +28,7 @@ import type { UploaderDeps, UploaderState } from '@arcafold/core/upload/uploader
 
 import { MemoryImages, PhotoPicker } from '../../modules/memory-image';
 import type { DeleteResult, PickedPhoto } from '../../modules/memory-image';
+import { forgetOpened } from '../../modules/save-file';
 import { UploadService } from '../../modules/upload-service';
 import { BackgroundUploads } from './background-uploads';
 import { Originals } from './originals';
@@ -208,7 +209,8 @@ export function useLibrary(session: Session): Library {
     opened.current = store;
     const prepare: UploaderDeps<PickedPhoto>['prepare'] = async (picked) => {
       const photo = await preparePicked(picked, PhotoPicker);
-      if (moving) originals.prepared(photo, picked.uri);
+      // Only photos are offered for deleting from the gallery afterwards, never files.
+      if (moving && !photo.file) originals.prepared(photo, picked.uri);
       return photo;
     };
     const upload: UploaderDeps<PickedPhoto>['upload'] = async (photo, albumId, onStage) => {
@@ -244,6 +246,7 @@ export function useLibrary(session: Session): Library {
       opened.current = null;
       thumbLoader.stop();
       MemoryImages.clear();
+      forgetOpened();
       const close = () => {
         uploader.dispose();
         uploader.connect(CLOSED);

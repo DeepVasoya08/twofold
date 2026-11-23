@@ -5,6 +5,7 @@ import { BackHandler } from 'react-native';
 import { trashNote } from '@arcafold/core/library/trash';
 
 import { batchText, deleteTitle } from '../library/trash-text';
+import type { Noun } from '../library/trash-text';
 import type { Library } from '../library/use-library';
 import { useNotice } from '../ui/notice';
 import { useSelection } from '../ui/selection';
@@ -22,6 +23,8 @@ export function usePickToDelete(
   open: (photoId: string) => void,
   /** Saves copies to the phone's gallery, where it can. */
   onSave?: (photoIds: readonly string[]) => void,
+  /** What's being picked, for the wording. */
+  noun: Noun = 'photo',
 ): {
   /** The header to show instead of the screen's own while selecting; null otherwise. */
   header: ReactElement | null;
@@ -76,7 +79,7 @@ export function usePickToDelete(
     ) : null,
     sheet: confirming ? (
       <ConfirmSheet
-        title={deleteTitle(picked.length)}
+        title={deleteTitle(picked.length, noun)}
         body={trashNote(picked.length)}
         action="Delete"
         busyLabel="Deleting…"
@@ -86,7 +89,7 @@ export function usePickToDelete(
         onConfirm={async () => {
           const result = await library.deletePhotos(picked);
           setConfirming(false);
-          notice(batchText(result, (photos) => `${photos} moved to Recently deleted`));
+          notice(batchText(result, (done) => `${done} moved to Recently deleted`, noun));
           if (result.failed.length > 0) selection.replace(result.failed);
           else clear();
         }}

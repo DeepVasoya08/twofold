@@ -17,12 +17,23 @@ import type { Settled } from '@arcafold/core/settle-each';
 /** Most bytes saved at once, as on the web: an account's whole quota. */
 export const SAVE_MAX_BYTES = STORAGE_SIZES.accountQuota;
 
-/** Where the copies are, for saying so. */
-export const SAVED_PLACE = 'Pictures/Arcafold';
+/** Where copies go: photos (and videos) to the gallery, other files to Download. */
+export const PHOTO_PLACE = 'Pictures/Arcafold';
+export const FILE_PLACE = 'Download/Arcafold';
+
+/** Whether a copy of this type goes to the gallery (rather than Download). */
+export function isMedia(type: string): boolean {
+  return type.startsWith('image/') || type.startsWith('video/');
+}
 
 export type SaveJob =
   | { state: 'saving'; progress: DownloadProgress }
-  | { state: 'done'; result: Settled<string> }
+  | {
+      state: 'done';
+      result: Settled<string>;
+      /** How many of those saved were photos (to the gallery) and other files. */
+      saved: { photos: number; files: number };
+    }
   | { state: 'too-large'; bytes: number };
 
 export interface SaverDeps {
@@ -83,10 +94,13 @@ export class Saver {
     };
     this.set({ state: 'saving', progress: { ...progress } });
     const items = photoIds.map((id, index) => ({ id, size: sizes[index] ?? 0 }));
+    const saved = { photos: 0, files: 0 };
     void settleEach(items, DOWNLOADS_AT_ONCE, async ({ id, size }) => {
       signal.throwIfAborted();
       try {
-        await this.saveOne(id, signal);
+        const type = await this.saveOne(id, signal);
+        if (isMedia(type)) saved.photos += 1;
+        else saved.files += 1;
       } finally {
         progress.done += 1;
         progress.bytesDone += size;
@@ -98,7 +112,7 @@ export class Saver {
       const ids = (list: readonly { id: string }[]) => list.map((item) => item.id);
       const result: Settled<string> = { done: ids(settled.done), failed: ids(settled.failed) };
       if (settled.failed.length > 0) result.error = settled.error;
-      this.set({ state: 'done', result });
+      this.set({ state: 'done', result, saved });
     });
     return true;
   };
@@ -122,7 +136,8 @@ export class Saver {
     this.job = null;
   }
 
-  private async saveOne(photoId: string, signal: AbortSignal): Promise<void> {
+  /** Saves one copy and returns its type. */
+  private async saveOne(photoId: string, signal: AbortSignal): Promise<string> {
     const original = await this.deps.original(photoId);
     if (signal.aborted) {
       original.full.fill(0);
@@ -135,6 +150,7 @@ export class Saver {
       type: original.type,
       takenAt: Number.isNaN(taken) ? 0 : taken,
     });
+    return original.type;
   }
 
   private set(job: SaveJob | null): void {
