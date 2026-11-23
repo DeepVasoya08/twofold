@@ -49,7 +49,10 @@ export function Timeline({
   onSave?: (photoIds: readonly string[]) => void;
   /** Teaches search a word from picked photos, while Smart search is on. */
   onTeach?: (photoIds: readonly string[]) => void;
-  /** Says when selecting starts and stops, so the floating Add button can step aside. */
+  /**
+   * Says when selecting or the View sheet starts and stops, so the floating Add button can
+   * step aside.
+   */
   onPicking?: (picking: boolean) => void;
 }) {
   const { space } = useAccount();
@@ -60,8 +63,8 @@ export function Timeline({
   const [choosingView, setChoosingView] = useState(false);
   const selecting = picking.header !== null;
   useEffect(() => {
-    onPicking?.(selecting);
-  }, [selecting, onPicking]);
+    onPicking?.(selecting || choosingView);
+  }, [selecting, choosingView, onPicking]);
 
   const header = picking.header ?? (
     <AppHeader
