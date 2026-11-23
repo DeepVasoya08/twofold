@@ -55,7 +55,7 @@ const Tile = memo(function Tile({
           : undefined
       }
     >
-      <View style={{ width: size, height: size, backgroundColor: palette.surface }}>
+      <View style={{ width: size, height: size, backgroundColor: palette.track }}>
         {imageId ? null : <Placeholder palette={palette} />}
         <MemoryImage imageId={imageId} reveal={reveal} style={{ width: size, height: size }} />
       </View>
@@ -135,8 +135,8 @@ function Placeholder({ palette }: { palette: Palette }) {
       style={[
         StyleSheet.absoluteFill,
         {
-          backgroundColor: palette.track,
-          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
+          backgroundColor: palette.muted,
+          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0, 0.16] }),
         },
       ]}
     />
