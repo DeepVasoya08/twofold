@@ -257,7 +257,8 @@ or a native module.
   so screenshots and recordings come out black and the app switcher shows a blank card. The
   recovery key is never put on the clipboard.
 
-Build it the same way as the spike (below), from `apps/mobile`.
+Build it the same way as the spike (below), from `apps/mobile`. To try a build without a
+phone, run it on a cloud emulator: [Testing on Revyl emulators](testing-on-revyl.md).
 
 ## Phase 0 spike (`apps/mobile-spike`)
 
@@ -329,9 +330,12 @@ Needs the Android SDK (Gradle downloads the NDK and build tools it wants) and JD
 ```sh
 cd apps/mobile-spike
 npx expo prebuild --platform android --no-install
-cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64
 # app/build/outputs/apk/release/app-release.apk, signed with the debug key: test phones only
 ```
+
+`x86_64` is there so the same APK also opens on cloud emulators; an `arm64-v8a`-only build
+closes at launch on them. See [Testing on Revyl emulators](testing-on-revyl.md).
 
 Regenerate the fixtures with `pnpm --filter @arcafold/mobile-spike exec vitest run --config
 vitest.fixture.config.mts` (crypto), `python3 apps/mobile-spike/scripts/make_ml_inputs.py`
