@@ -5,6 +5,7 @@ import { Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAccount } from '../session/account';
 import { fonts } from '../theme';
 import { LogoMark } from '../ui/brand';
+import { Icon } from '../ui/icons';
 import { usePalette } from '../ui/theme';
 
 /** Opens search; the library's top screens show a search button when it's given. */
@@ -54,6 +55,8 @@ export function AppHeader({
         style={[styles.title, { color: palette.text }]}
         accessibilityRole="header"
         numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
       >
         {title}
       </Text>
@@ -66,7 +69,7 @@ export function AppHeader({
           hitSlop={6}
           style={[styles.round, { borderColor: palette.border }]}
         >
-          <Text style={styles.searchGlyph}>🔍</Text>
+          <Icon name="search" size={17} color={palette.text} />
         </Pressable>
       ) : null}
       <Pressable
@@ -88,16 +91,21 @@ export function AppHeader({
   );
 }
 
-/** A rounded button in the header: filled for the screen's main action. */
+/**
+ * A rounded button in the header: filled for the screen's main action, red for one that
+ * deletes (which always asks first), so the accent stays for adding and opening.
+ */
 export function HeaderButton({
   label,
   accessibilityLabel,
   filled = false,
+  danger = false,
   onPress,
 }: {
   label: string;
   accessibilityLabel?: string;
   filled?: boolean;
+  danger?: boolean;
   onPress: () => void;
 }) {
   const palette = usePalette();
@@ -109,12 +117,19 @@ export function HeaderButton({
       hitSlop={6}
       style={[
         styles.pill,
-        filled
-          ? { borderWidth: 0, backgroundColor: palette.accent }
-          : { borderColor: palette.border },
+        danger
+          ? { borderColor: palette.error }
+          : filled
+            ? { borderWidth: 0, backgroundColor: palette.accent }
+            : { borderColor: palette.border },
       ]}
     >
-      <Text style={[styles.pillText, { color: filled ? palette.onAccent : palette.text }]}>
+      <Text
+        style={[
+          styles.pillText,
+          { color: danger ? palette.error : filled ? palette.onAccent : palette.text },
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -191,5 +206,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  searchGlyph: { fontSize: 15 },
 });

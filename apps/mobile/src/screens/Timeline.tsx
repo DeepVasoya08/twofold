@@ -45,7 +45,7 @@ export function Timeline({
 
   const header = picking.header ?? (
     <AppHeader
-      title={space === 'private' ? 'Private space' : 'Library'}
+      title={space === 'private' ? 'Private' : 'Library'}
       initial={initial}
       onSettings={onSettings}
     >

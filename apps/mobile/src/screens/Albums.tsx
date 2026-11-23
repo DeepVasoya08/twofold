@@ -184,11 +184,11 @@ export function Albums({
             style={[
               styles.chip,
               chosen
-                ? { backgroundColor: palette.accent, borderColor: palette.accent }
+                ? { backgroundColor: palette.text, borderColor: palette.text }
                 : { borderColor: palette.border },
             ]}
           >
-            <Text style={[styles.chipText, { color: chosen ? palette.onAccent : palette.text }]}>
+            <Text style={[styles.chipText, { color: chosen ? palette.background : palette.text }]}>
               {each.label}
             </Text>
           </Pressable>

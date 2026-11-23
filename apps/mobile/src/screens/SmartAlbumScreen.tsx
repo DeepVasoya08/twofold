@@ -160,6 +160,7 @@ export function SmartAlbumScreen({
         <HeaderButton
           label="Delete"
           accessibilityLabel="Delete smart album"
+          danger
           onPress={() => {
             setOpen('delete');
           }}

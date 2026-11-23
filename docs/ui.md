@@ -545,7 +545,11 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
 
 - The look is called "Arch". A calm, near-colourless interface (paper white in light mode,
   graphite in dark) so the photos carry the colour, with one cobalt accent kept for the main
-  action on screen, links and the logo. Strong but secondary buttons are ink (`btn--ink`).
+  action on screen, links and the logo. Strong but secondary buttons and the chosen filter
+  chip are ink (`btn--ink`; on the phone, text colour on background). Delete buttons are
+  red outlines, never the accent. Icons are thin line drawings in the text colour, never
+  emoji (Android draws emoji in colour); the phone draws them with views
+  (`apps/mobile/src/ui/icons.tsx`), so it needs no icon font or SVG library.
   The private space is always night: deep navy with lavender light. The theme follows the
   device; Settings can force light or dark.
 - The arch is the signature shape: the logo (an arch with a smaller arch inside it, a

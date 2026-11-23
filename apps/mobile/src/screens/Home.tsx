@@ -32,6 +32,7 @@ import { useSmartAlbum } from '../search/use-smart-album';
 import { searchToSave, smartTitleCheck, teachCountProblem, wordCheck } from '../search/smart-text';
 import { useAccount } from '../session/account';
 import { InvitesProvider } from '../sharing/invites';
+import { Icon } from '../ui/icons';
 import { Banner, Button } from '../ui/kit';
 import { Sheet } from '../ui/sheet';
 import { NoticeProvider, useNotice } from '../ui/notice';
@@ -85,11 +86,11 @@ function TabBar({
   palette: Palette;
   onChange: (tab: Tab) => void;
 }) {
-  const tabs: readonly { id: Tab; label: string; glyph: string }[] = [
-    { id: 'photos', label: 'Photos', glyph: '▦' },
-    { id: 'albums', label: 'Albums', glyph: '❐' },
-    { id: 'files', label: 'Files', glyph: '▤' },
-    { id: 'people', label: 'People', glyph: '☺' },
+  const tabs: readonly { id: Tab; label: string }[] = [
+    { id: 'photos', label: 'Photos' },
+    { id: 'albums', label: 'Albums' },
+    { id: 'files', label: 'Files' },
+    { id: 'people', label: 'People' },
   ];
   return (
     <View
@@ -118,7 +119,7 @@ function TabBar({
             }}
             style={styles.tab}
           >
-            <Text style={[styles.tabGlyph, { color: colour }]}>{each.glyph}</Text>
+            <Icon name={each.id} size={22} color={colour} />
             <Text style={[styles.tabLabel, { color: colour }]}>{each.label}</Text>
           </Pressable>
         );
@@ -751,6 +752,5 @@ const styles = StyleSheet.create({
   bannerWrap: { paddingHorizontal: 16, paddingBottom: 8 },
   tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  tabGlyph: { fontSize: 20 },
   tabLabel: { fontSize: 12, fontWeight: '600' },
 });
