@@ -30,11 +30,14 @@ export function SearchScreen({
   library,
   onOpen,
   onClose,
+  onSaveAlbum,
 }: {
   find: Find;
   library: Library;
   onOpen: (photoId: string) => void;
   onClose: () => void;
+  /** Saves the search on screen as a smart album, while Smart search is on here. */
+  onSaveAlbum?: () => void;
 }) {
   const palette = usePalette();
   useEffect(() => {
@@ -118,6 +121,9 @@ export function SearchScreen({
       ) : null}
       {find.notLookedAt.photo || find.notLookedAt.words.length > 0 ? (
         <Note>{notLookedAtLine(find.notLookedAt)}</Note>
+      ) : null}
+      {found && onSaveAlbum && query && query.chips.length > 0 ? (
+        <Button kind="secondary" label="Save as album" onPress={onSaveAlbum} />
       ) : null}
       {found ? (
         <Text style={[styles.count, { color: palette.text }]} accessibilityLiveRegion="polite">

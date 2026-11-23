@@ -23,6 +23,7 @@ export function Timeline({
   onAdd,
   onOpen,
   onSave,
+  onTeach,
 }: {
   library: Library;
   initial: string;
@@ -33,11 +34,13 @@ export function Timeline({
   onOpen: (photoId: string) => void;
   /** Saves copies of photos to the phone's gallery, where it can. */
   onSave?: (photoIds: readonly string[]) => void;
+  /** Teaches search a word from picked photos, while Smart search is on. */
+  onTeach?: (photoIds: readonly string[]) => void;
 }) {
   const { space } = useAccount();
   const palette = usePalette();
   const rows = useMemo(() => timelineRows(library.photos), [library.photos]);
-  const picking = usePickToDelete(library, onOpen, onSave);
+  const picking = usePickToDelete(library, onOpen, { onSave, onTeach });
 
   const header = picking.header ?? (
     <AppHeader

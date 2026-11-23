@@ -9,11 +9,19 @@ import { photoCount } from '../library/album-text';
 import { Banner, Button, Field } from '../ui/kit';
 import { Sheet, SheetOption } from '../ui/sheet';
 
-/** Names a new album, or renames one. Resolves once saved; a failure shows in the sheet. */
+/**
+ * Names a new album, or renames one (or names anything else, given its own `label` and
+ * `check`). Resolves once saved; a failure shows in the sheet.
+ */
 export function NameSheet({
   title,
   action,
   initial = '',
+  label = 'Album name',
+  placeholder = 'Our trip to…',
+  note,
+  maxLength = 80,
+  check = albumTitle,
   onSave,
   onCancel,
 }: {
@@ -21,6 +29,13 @@ export function NameSheet({
   /** The button's label: "Create album", "Rename". */
   action: string;
   initial?: string;
+  label?: string;
+  placeholder?: string;
+  /** A line under the title saying what the name is for. */
+  note?: string;
+  maxLength?: number;
+  /** The name to save, or why it can't be saved. */
+  check?: (name: string) => { title: string } | { error: string };
   onSave: (name: string) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -29,7 +44,7 @@ export function NameSheet({
   const [busy, setBusy] = useState(false);
   const submit = () => {
     if (busy) return;
-    const checked = albumTitle(name);
+    const checked = check(name);
     if ('error' in checked) {
       setError(checked.error);
       return;
@@ -46,12 +61,12 @@ export function NameSheet({
     );
   };
   return (
-    <Sheet title={title} busy={busy} onCancel={onCancel}>
+    <Sheet title={title} busy={busy} onCancel={onCancel} {...(note ? { body: note } : {})}>
       <Field
-        label="Album name"
-        placeholder="Our trip to…"
+        label={label}
+        placeholder={placeholder}
         value={name}
-        maxLength={80}
+        maxLength={maxLength}
         autoFocus
         returnKeyType="done"
         onSubmitEditing={submit}

@@ -32,6 +32,7 @@ export function PersonScreen({
   onBack,
   onOpen,
   onSave,
+  onTeach,
   onMoved,
 }: {
   group: Group;
@@ -44,11 +45,13 @@ export function PersonScreen({
   onOpen: (photoId: string) => void;
   /** Saves copies of photos to the phone's gallery, where it can. */
   onSave?: (photoIds: readonly string[]) => void;
+  /** Teaches search a word from picked photos, while Smart search is on. */
+  onTeach?: (photoIds: readonly string[]) => void;
   /** A change made a new person (a group got a name, say): show them from now on. */
   onMoved: (personId: string) => void;
 }) {
   const palette = usePalette();
-  const picking = usePickToDelete(library, onOpen, onSave);
+  const picking = usePickToDelete(library, onOpen, { onSave, onTeach });
   const notice = useNotice();
   const [open, setOpen] = useState<Open>(null);
   const byId = useMemo(

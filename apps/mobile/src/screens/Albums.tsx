@@ -13,6 +13,7 @@ import {
 import { albumCover, albumPhotos, albumSharing, albumsInTab } from '@arcafold/core/library/albums';
 import type { AlbumTab } from '@arcafold/core/library/albums';
 import type { Album, Photo } from '@arcafold/core/library/model';
+import type { SmartAlbum } from '@arcafold/core/search/smart-album';
 
 import { MemoryImage } from '../../modules/memory-image';
 import { photoCount } from '../library/album-text';
@@ -120,6 +121,8 @@ export function Albums({
   onOpen,
   onJoin,
   onTrash,
+  smartAlbums = [],
+  onOpenSmart,
 }: {
   library: Library;
   initial: string;
@@ -131,6 +134,9 @@ export function Albums({
   onJoin: () => void;
   /** Opens Recently deleted. */
   onTrash: () => void;
+  /** Searches saved as albums, while Smart search is on here: yours alone, never shared. */
+  smartAlbums?: readonly SmartAlbum[];
+  onOpenSmart?: (albumId: string) => void;
 }) {
   const palette = usePalette();
   const { width } = useWindowDimensions();
@@ -187,6 +193,39 @@ export function Albums({
       </Pressable>
     ) : null;
 
+  // Smart albums are your own and can't be shared, so only All lists them.
+  const smart = tab === 'all' && onOpenSmart ? smartAlbums : [];
+  const smartList =
+    smart.length > 0 && onOpenSmart ? (
+      <View style={styles.smart}>
+        <Text style={[styles.smartHeading, { color: palette.text }]} accessibilityRole="header">
+          Smart albums
+        </Text>
+        {smart.map((album) => (
+          <Pressable
+            key={album.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${album.title}, smart album`}
+            onPress={() => {
+              onOpenSmart(album.id);
+            }}
+            style={[styles.smartRow, { borderColor: palette.border }]}
+          >
+            <Text style={[styles.smartGlyph, { color: palette.accent }]}>✦</Text>
+            <View style={styles.smartText}>
+              <Text style={[styles.trashText, { color: palette.text }]} numberOfLines={1}>
+                {album.title}
+              </Text>
+              <Text style={[styles.meta, { color: palette.muted }]}>
+                Fills itself from a search
+              </Text>
+            </View>
+            <Text style={[styles.meta, { color: palette.muted }]}>›</Text>
+          </Pressable>
+        ))}
+      </View>
+    ) : null;
+
   const trashCount = library.trash?.length ?? 0;
   const trashLink = (
     <Pressable
@@ -213,7 +252,7 @@ export function Albums({
     );
   }
 
-  if (library.status !== 'ready' || cards.length === 0) {
+  if (library.status !== 'ready' || cards.length + smart.length === 0) {
     return (
       <View style={styles.fill}>
         {header}
@@ -253,7 +292,14 @@ export function Albums({
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.list}
         extraData={thumbs}
-        ListFooterComponent={tab === 'all' ? trashLink : undefined}
+        ListFooterComponent={
+          tab === 'all' ? (
+            <>
+              {smartList}
+              {trashLink}
+            </>
+          ) : undefined
+        }
         renderItem={({ item }) => (
           <AlbumCard
             card={item}
@@ -292,6 +338,17 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
   chipText: { fontSize: 14, fontWeight: '600' },
   codeLink: { paddingHorizontal: GUTTER, paddingBottom: 12 },
+  smart: { gap: 4, paddingBottom: 16 },
+  smartHeading: { fontSize: 17, fontWeight: '700', paddingBottom: 6 },
+  smartRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  smartGlyph: { fontSize: 20 },
+  smartText: { flex: 1, gap: 2 },
   trash: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -45,6 +45,11 @@ export interface Find {
   setShowMore: (on: boolean) => void;
   /** The photos on screen, in order. */
   shownIds: readonly string[];
+  /** What a smart album keeps of this search: what was typed, the parts left out, and the
+   * photo "More like this" started from. */
+  saved: { text: string; ignore: string[]; like: string | null };
+  /** The words' search vector, once worked out (kept with a smart album). */
+  wordsVector: Float32Array | null;
   /** Forgets the search (closing the search screen). */
   clear: () => void;
   reloadIndex: () => void;
@@ -217,6 +222,8 @@ export function useFind({
     },
     found,
     notLookedAt,
+    saved: { text: submitted ?? '', ignore: [...ignore], like },
+    wordsVector,
     showMore,
     setShowMore,
     shownIds,

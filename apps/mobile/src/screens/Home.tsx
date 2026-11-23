@@ -12,6 +12,9 @@ import {
 
 import type { Session } from '@arcafold/core/account';
 import { albumPhotos } from '@arcafold/core/library/albums';
+import { shownPhotos } from '@arcafold/core/search/answer';
+import { MAX_SMART_TITLE, suggestTitle } from '@arcafold/core/search/smart-album';
+import { MAX_WORD_NAME } from '@arcafold/core/search/taught';
 import { leaveJoined } from '@arcafold/core/sharing';
 
 import { PhotoPicker } from '../../modules/memory-image';
@@ -25,15 +28,19 @@ import { personPhotos, usePeople } from '../people/use-people';
 import { useSmartSettings } from '../ai/smart-settings';
 import { useFind } from '../search/use-find';
 import { useSearchIndex } from '../search/use-search-index';
+import { useSmartAlbum } from '../search/use-smart-album';
+import { searchToSave, smartTitleCheck, teachCountProblem, wordCheck } from '../search/smart-text';
 import { useAccount } from '../session/account';
 import { InvitesProvider } from '../sharing/invites';
-import { Banner } from '../ui/kit';
+import { Banner, Button } from '../ui/kit';
+import { Sheet } from '../ui/sheet';
 import { NoticeProvider, useNotice } from '../ui/notice';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 import { AlbumScreen } from './AlbumScreen';
 import { OpenSearch } from './AppHeader';
 import { NameSheet } from './AlbumSheets';
+import { SmartAlbumScreen } from './SmartAlbumScreen';
 import { Albums } from './Albums';
 import { People } from './People';
 import { PersonScreen } from './PersonScreen';
@@ -122,7 +129,7 @@ function TabBar({
 
 /** What the viewer is swiping through. */
 interface Viewing {
-  from: 'timeline' | 'album' | 'person' | 'search';
+  from: 'timeline' | 'album' | 'person' | 'search' | 'smart';
   start: number;
 }
 
@@ -157,6 +164,11 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const [sharing, setSharing] = useState<{ albumId: string | null } | null>(null);
   const [joining, setJoining] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [smartId, setSmartId] = useState<string | null>(null);
+  const [smartMore, setSmartMore] = useState(false);
+  /** Photos picked to teach search a word from, while that sheet is open. */
+  const [teaching, setTeaching] = useState<readonly string[] | null>(null);
+  const [savingSearch, setSavingSearch] = useState(false);
   const closeTrash = useCallback(() => {
     setTrashOpen(false);
   }, []);
@@ -190,6 +202,25 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
     [people.groups, people.hidden],
   );
   const find = useFind({ index, people: people.people, groups: allGroups });
+  // Smart albums and teaching words come with Smart search, as on the web.
+  const searchOn = ready && smart.search;
+  const smartAlbum =
+    smartId === null ? undefined : index.smartAlbums.find((each) => each.id === smartId);
+  const smartAnswer = useSmartAlbum({
+    album: smartAlbum,
+    index,
+    people: people.people,
+    groups: allGroups,
+  });
+  const smartIds = useMemo(
+    () => shownPhotos(smartAnswer?.found ?? null, smartMore),
+    [smartAnswer, smartMore],
+  );
+  const onTeach = searchOn
+    ? (photoIds: readonly string[]) => {
+        setTeaching(photoIds);
+      }
+    : undefined;
   const person =
     personId === null
       ? undefined
@@ -311,9 +342,16 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
       return photo ? [photo] : [];
     });
   }, [library.photos, find.shownIds]);
+  const inSmart = useMemo(() => {
+    const byId = new Map(library.photos.map((each) => [each.id, each]));
+    return smartIds.flatMap((id) => {
+      const photo = byId.get(id);
+      return photo ? [photo] : [];
+    });
+  }, [library.photos, smartIds]);
   const lists = useMemo(
-    () => ({ timeline, album: inAlbum, person: ofPerson, search: found }),
-    [timeline, inAlbum, ofPerson, found],
+    () => ({ timeline, album: inAlbum, person: ofPerson, search: found, smart: inSmart }),
+    [timeline, inAlbum, ofPerson, found, inSmart],
   );
   const viewed = lists[viewing?.from ?? 'timeline'];
   const latest = useRef(lists);
@@ -332,6 +370,11 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const openInAlbum = useMemo(() => openFrom('album'), [openFrom]);
   const openOfPerson = useMemo(() => openFrom('person'), [openFrom]);
   const openFound = useMemo(() => openFrom('search'), [openFrom]);
+  const openInSmart = useMemo(() => openFrom('smart'), [openFrom]);
+  const closeSmart = useCallback(() => {
+    setSmartId(null);
+    setSmartMore(false);
+  }, []);
   const openSearch = useCallback(() => {
     setSearching(true);
   }, []);
@@ -378,6 +421,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   );
   const changeTab = useCallback((next: Tab) => {
     setAlbumId(null);
+    setSmartId(null);
     setPersonId(null);
     setTab(next);
   }, []);
@@ -389,14 +433,40 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   ) : null;
 
   // An album or person page covers the tab bar, like a page opened from it; back returns.
-  const showTabs = album === undefined && person === undefined;
+  const showTabs = album === undefined && person === undefined && smartAlbum === undefined;
   const bottom = showTabs ? TAB_BAR + inset : inset;
 
   let screen;
-  if (album) {
+  if (smartAlbum && smartAnswer) {
+    screen = (
+      <SmartAlbumScreen
+        album={smartAlbum}
+        answer={smartAnswer}
+        shownIds={smartIds}
+        showMore={smartMore}
+        setShowMore={setSmartMore}
+        lookedAt={index.lookedAt}
+        searchOn={searchOn}
+        library={library}
+        initial={initial}
+        banner={banner}
+        onSettings={openSettings}
+        onBack={closeSmart}
+        onOpen={openInSmart}
+        onSave={async (changed) => {
+          await index.saveSmartAlbum(changed);
+        }}
+        onDelete={async () => {
+          await index.deleteSmartAlbum(smartAlbum.id);
+          closeSmart();
+        }}
+      />
+    );
+  } else if (album) {
     screen = (
       <AlbumScreen
         {...(onSave ? { onSave } : {})}
+        {...(onTeach ? { onTeach } : {})}
         album={album}
         library={library}
         initial={initial}
@@ -420,6 +490,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
     screen = (
       <PersonScreen
         {...(onSave ? { onSave } : {})}
+        {...(onTeach ? { onTeach } : {})}
         group={person}
         people={people}
         library={library}
@@ -468,12 +539,14 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
         onTrash={() => {
           setTrashOpen(true);
         }}
+        {...(searchOn ? { smartAlbums: index.smartAlbums, onOpenSmart: setSmartId } : {})}
       />
     );
   } else {
     screen = (
       <Timeline
         {...(onSave ? { onSave } : {})}
+        {...(onTeach ? { onTeach } : {})}
         library={library}
         initial={initial}
         banner={banner}
@@ -513,8 +586,59 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
               }}
             />
           ) : null}
+          {teaching ? (
+            teachCountProblem(teaching.length) === null ? (
+              <NameSheet
+                title="Teach search a word"
+                action="Teach"
+                label="Word"
+                placeholder="Biscuit, the cabin…"
+                note="Name what these photos show, like a pet’s name or a favorite place. Then search for it by name."
+                maxLength={MAX_WORD_NAME}
+                check={wordCheck({
+                  people: people.people.map((each) => each.name),
+                  words: index.words.map((word) => word.name),
+                })}
+                onSave={async (name) => {
+                  const word = await index.teach(name, teaching);
+                  setTeaching(null);
+                  notice(`Search learned “${word.name}”`);
+                }}
+                onCancel={() => {
+                  setTeaching(null);
+                }}
+              />
+            ) : (
+              <Sheet
+                title="Teach search a word"
+                body={teachCountProblem(teaching.length) ?? ''}
+                onCancel={() => {
+                  setTeaching(null);
+                }}
+              >
+                <Button
+                  label="OK"
+                  onPress={() => {
+                    setTeaching(null);
+                  }}
+                />
+              </Sheet>
+            )
+          ) : null}
           {searching ? (
-            <SearchScreen find={find} library={library} onOpen={openFound} onClose={closeSearch} />
+            <SearchScreen
+              find={find}
+              library={library}
+              onOpen={openFound}
+              onClose={closeSearch}
+              {...(searchOn
+                ? {
+                    onSaveAlbum: () => {
+                      setSavingSearch(true);
+                    },
+                  }
+                : {})}
+            />
           ) : null}
           {trashOpen ? (
             <RecentlyDeleted
@@ -522,6 +646,29 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
               initial={initial}
               onSettings={openSettings}
               onClose={closeTrash}
+            />
+          ) : null}
+          {savingSearch && find.query ? (
+            <NameSheet
+              title="Save as album"
+              action="Save album"
+              initial={suggestTitle(find.query.chips)}
+              note="It fills itself with photos that match, as they’re added. Only you see it."
+              maxLength={MAX_SMART_TITLE}
+              check={smartTitleCheck(searchToSave(find))}
+              onSave={async (title) => {
+                const stored = await index.saveSmartAlbum({ ...searchToSave(find), title });
+                setSavingSearch(false);
+                notice(`“${stored.title}” saved to Albums`);
+                closeSearch();
+                setAlbumId(null);
+                setPersonId(null);
+                setSmartMore(false);
+                setSmartId(stored.id);
+              }}
+              onCancel={() => {
+                setSavingSearch(false);
+              }}
             />
           ) : null}
           {/* Once everything it was showing has gone (moved away, say), it closes itself. */}

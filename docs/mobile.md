@@ -196,6 +196,16 @@ or a native module.
   downloading it and the word list (about 65 MB) from arcafold.com into the app's own files,
   checked against the SHA-256 pinned in `@arcafold/core/search/resources`. What's typed stays
   in memory only (the keyboard is asked not to learn it) and goes when search closes.
+- Teaching words and smart albums (`search/smart-text.ts`, `search/use-smart-album.ts`,
+  `screens/SmartAlbumScreen.tsx`), while Smart search is on, as on the web: select 3 to 5
+  photos and tap Teach to name what they show ("Biscuit"); the word (its name, photos and
+  their average search vector) is sealed in the same owner record the web uses, and works on
+  every device. Settings > Smart features lists taught words, each with Forget. On the
+  search screen, Save as album keeps the search (what was typed, the parts left out, "More
+  like this", when it was saved and the words' vector) as a smart album, listed under Smart
+  albums at the end of Albums > All; opening one runs the search again over every photo
+  looked at so far, reading dates as of when it was saved. Rename and Delete change only the
+  saved search.
 - Deleting and Recently deleted (`screens/use-pick-to-delete.tsx`, `screens/RecentlyDeleted.tsx`,
   `@arcafold/core/library/trash`): a long press on a photo in Photos, an album or a person
   starts selecting; Delete (there, or in the viewer) moves photos to Recently deleted,
