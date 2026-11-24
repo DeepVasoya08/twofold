@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Icon } from './icons';
+import type { IconName } from './icons';
 import type { Palette } from './theme';
 
 /** A titled card of rows, as in Settings. */
@@ -27,20 +29,35 @@ export function Section({
   );
 }
 
-/** One line of a section: a title, a detail under it, and something to do on the right. */
+/** A row's small tinted square with its icon. */
+export function IconTile({ icon, palette }: { icon: IconName; palette: Palette }) {
+  return (
+    <View style={[rowStyles.tile, { backgroundColor: palette.accentWash }]}>
+      <Icon name={icon} size={18} color={palette.accent} />
+    </View>
+  );
+}
+
+/**
+ * One line of a section: its icon, a title, a detail under it, and something to do on the
+ * right.
+ */
 export function Row({
   title,
   detail,
+  icon,
   palette,
   action,
 }: {
   title: string;
   detail?: string;
+  icon?: IconName;
   palette: Palette;
   action?: ReactNode;
 }) {
   return (
     <View style={rowStyles.row}>
+      {icon ? <IconTile icon={icon} palette={palette} /> : null}
       <View style={rowStyles.rowText}>
         <Text style={[rowStyles.rowTitle, { color: palette.text }]}>{title}</Text>
         {detail ? (
@@ -89,14 +106,15 @@ export function PillButton({
 
 export const rowStyles = StyleSheet.create({
   section: { gap: 8 },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginLeft: 4,
+  sectionTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2, marginLeft: 4 },
+  card: { borderWidth: 1, borderRadius: 22, paddingVertical: 4, overflow: 'hidden' },
+  tile: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  card: { borderWidth: 1, borderRadius: 18, paddingVertical: 4 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -106,8 +124,8 @@ export const rowStyles = StyleSheet.create({
   },
   rowPad: { paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
   rowText: { flex: 1, gap: 2 },
-  rowTitle: { fontSize: 16, fontWeight: '600' },
-  rowDetail: { fontSize: 14, lineHeight: 20 },
+  rowTitle: { fontSize: 15, fontWeight: '600' },
+  rowDetail: { fontSize: 13, lineHeight: 18 },
   pill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
   pillText: { fontSize: 14, fontWeight: '600' },
 });

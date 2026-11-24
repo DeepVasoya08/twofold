@@ -158,12 +158,14 @@ export function SharingSettings({
     <>
       <Row
         title={`Share your ${where}`}
+        icon="people"
         detail={lists ? sharedWithLine(lists.members) : 'Invite someone you trust.'}
         palette={palette}
         action={<PillButton label="Invite" palette={palette} onPress={onShare} />}
       />
       <Row
         title="Enter an invite code"
+        icon="plus"
         detail="Someone sent you a code or link."
         palette={palette}
         action={<PillButton label="Enter" palette={palette} onPress={onJoin} />}

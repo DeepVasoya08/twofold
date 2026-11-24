@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { memo, useCallback, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   BackHandler,
   FlatList,
@@ -23,12 +24,23 @@ import { MemoryImage } from '../../modules/memory-image';
 import { bottomInset } from '../../modules/system-bars';
 import { albumChangeText } from '../library/album-text';
 import { formatTaken } from '../library/timeline';
+import {
+  barActions,
+  photoAlbums,
+  photoFacts,
+  viewerDay,
+  viewerPlace,
+} from '../library/viewer-text';
 import { deleteTitle } from '../library/trash-text';
 import type { Library } from '../library/use-library';
 import { useAccount } from '../session/account';
+import { fonts } from '../theme';
+import { Icon } from '../ui/icons';
 import { Banner } from '../ui/kit';
 import { useNotice } from '../ui/notice';
 import { moveLabel } from '../session/forms';
+import { Sheet, SheetOption } from '../ui/sheet';
+import { usePalette } from '../ui/theme';
 import { NameSheet, PickAlbumSheet } from './AlbumSheets';
 import { ConfirmSheet } from './ConfirmSheet';
 import { MoveSheet } from './MoveSheet';
@@ -40,6 +52,37 @@ const SETTLE_MS = 250;
 
 /** The sharpest the original is decoded while zoomed in, so it doesn't blur. */
 const ZOOMED_MAX_SIDE = 4096;
+
+/** The viewer's red, readable on black, for Delete. */
+const DANGER = '#ff8a80';
+/** A favorite's heart. */
+const FAVORITE = '#ff6b8a';
+
+/** A round see-through button over the photo. */
+function RoundButton({
+  label,
+  selected,
+  onPress,
+  children,
+}: {
+  label: string;
+  selected?: boolean;
+  onPress: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      {...(selected === undefined ? {} : { accessibilityState: { selected } })}
+      onPress={onPress}
+      hitSlop={6}
+      style={({ pressed }) => [styles.round, pressed ? styles.pressed : null]}
+    >
+      {children}
+    </Pressable>
+  );
+}
 
 const Page = memo(function Page({
   photo,
@@ -114,6 +157,7 @@ export function Viewer({
     | 'movePhoto'
     | 'albums'
     | 'setInAlbum'
+    | 'setFavorite'
     | 'createAlbum'
     | 'deletePhotos'
   >;
@@ -137,6 +181,9 @@ export function Viewer({
   const [moveError, setMoveError] = useState<string | null>(null);
   const [unlisting, setUnlisting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /** The photo whose Details sheet is open: moving on to another closes it. */
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
+  const palette = usePalette();
   const { width, height } = useWindowDimensions();
   const maxSide = Math.round(Math.max(width, height) * PixelRatio.get());
   const [index, setIndex] = useState(start);
@@ -196,6 +243,14 @@ export function Viewer({
       },
     );
   };
+
+  const actions = barActions({
+    save: onSave !== undefined,
+    file: canFile,
+    similar: onLike !== undefined,
+    move: canMove,
+  });
+  const inAlbums = photo ? photoAlbums(photo, library.albums) : [];
 
   const move = () => {
     if (!photo || !space) return;
@@ -282,136 +337,192 @@ export function Viewer({
         )}
       />
       {chrome && photo ? (
-        <View style={[styles.bar, { paddingTop: (SystemBars.currentHeight ?? 24) + 8 }]}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            onPress={onClose}
-            hitSlop={12}
-            style={styles.close}
-          >
-            <Text style={styles.closeText}>✕</Text>
-          </Pressable>
-          <View style={styles.barText}>
-            <Text style={styles.date}>{formatTaken(photo.takenAt)}</Text>
-            <Text style={styles.count}>
-              {String(index + 1)} of {String(photos.length)}
-              {failed === photo.id ? ' · The full photo couldn’t be loaded' : ''}
+        <View style={[styles.top, { paddingTop: (SystemBars.currentHeight ?? 24) + 8 }]}>
+          <RoundButton label="Close" onPress={onClose}>
+            <Icon name="back" size={20} color="#ffffff" />
+          </RoundButton>
+          <View style={styles.topText}>
+            <Text style={styles.day} numberOfLines={1}>
+              {viewerDay(photo.takenAt)}
+            </Text>
+            <Text style={styles.place} numberOfLines={1}>
+              {viewerPlace(photo.takenAt, Math.min(index, last), photos.length)}
+              {failed === photo.id ? ' · Full photo couldn’t load' : ''}
             </Text>
           </View>
+          {canFile ? (
+            <RoundButton
+              label={photo.favorite ? 'Remove from favorites' : 'Add to favorites'}
+              selected={photo.favorite}
+              onPress={() => {
+                setMoveError(null);
+                library.setFavorite(photo.id, !photo.favorite).catch(() => {
+                  setMoveError('That didn’t save. Check your connection and try again.');
+                });
+              }}
+            >
+              <Icon name="heart" size={20} color={photo.favorite ? FAVORITE : '#9c9ea6'} />
+            </RoundButton>
+          ) : null}
+          <RoundButton
+            label="Details"
+            onPress={() => {
+              setDetailsFor(photo.id);
+            }}
+          >
+            <Icon name="more" size={20} color="#ffffff" />
+          </RoundButton>
         </View>
       ) : null}
-      {chrome &&
-      photo &&
-      space &&
-      (canMove || canFile || canTakeOut || notThis || onLike || onSave) ? (
-        <View style={[styles.actions, { paddingBottom: 24 + bottomInset() }]}>
+      {chrome && photo && space ? (
+        <View style={[styles.bottom, { paddingBottom: 14 + bottomInset() }]}>
           {moveError ? <Banner>{moveError}</Banner> : null}
-          <View style={styles.actionRow}>
-            {canFile ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ busy: filing === 'saving' }}
-                disabled={filing !== null || moving !== null}
-                onPress={() => {
-                  setMoveError(null);
-                  setFiling('picking');
-                }}
-                style={styles.action}
-              >
-                <Text style={styles.actionText}>
-                  {filing === 'saving' ? 'Saving…' : 'Add to album'}
-                </Text>
-              </Pressable>
-            ) : null}
-            {onSave ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  onSave(photo.id);
-                }}
-                style={styles.action}
-              >
-                <Text style={styles.actionText}>Save to phone</Text>
-              </Pressable>
-            ) : null}
-            {canTakeOut ? (
-              <Pressable
-                accessibilityRole="button"
-                disabled={filing !== null || moving !== null}
-                onPress={() => {
-                  void file(album, false);
-                }}
-                style={styles.action}
-              >
-                <Text style={styles.actionText}>Remove from album</Text>
-              </Pressable>
-            ) : null}
-            {onLike ? (
-              <Pressable
-                accessibilityRole="button"
-                disabled={filing !== null || moving !== null}
-                onPress={() => {
-                  onLike(photo.id);
-                }}
-                style={styles.action}
-              >
-                <Text style={styles.actionText}>More like this</Text>
-              </Pressable>
-            ) : null}
-            {notThis ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ busy: unlisting }}
-                disabled={unlisting || filing !== null || moving !== null}
-                onPress={() => {
-                  setUnlisting(true);
-                  setMoveError(null);
-                  notThis.run(photo.id).then(
-                    (done) => {
-                      setUnlisting(false);
-                      if (!done)
-                        setMoveError('That didn’t save. Check your connection and try again.');
+          {actions.length > 0 ? (
+            <View style={styles.bar}>
+              {actions.map((action) => {
+                const busy = filing !== null || moving !== null;
+                const item = {
+                  save: {
+                    label: 'Save',
+                    icon: 'download' as const,
+                    run: () => {
+                      onSave?.(photo.id);
                     },
-                    () => {
-                      setUnlisting(false);
-                      setMoveError('That didn’t save. Check your connection and try again.');
+                  },
+                  album: {
+                    label: filing === 'saving' ? 'Saving…' : 'Album',
+                    icon: 'albums' as const,
+                    run: () => {
+                      setMoveError(null);
+                      setFiling('picking');
                     },
-                  );
-                }}
-                style={styles.action}
-              >
-                <Text style={styles.actionText}>{unlisting ? 'Saving…' : notThis.label}</Text>
-              </Pressable>
-            ) : null}
-            {canFile ? (
-              <Pressable
-                accessibilityRole="button"
-                disabled={filing !== null || moving !== null}
-                onPress={() => {
-                  setMoveError(null);
-                  setDeleting(true);
-                }}
-                style={styles.action}
-              >
-                <Text style={styles.actionText}>Delete</Text>
-              </Pressable>
-            ) : null}
-            {canMove ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ busy: moving === 'moving' }}
-                disabled={moving !== null || filing !== null}
-                onPress={move}
-                style={styles.action}
-              >
-                <Text style={styles.actionText}>
-                  {moving === 'moving' ? 'Moving…' : moveLabel(space)}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
+                  },
+                  similar: {
+                    label: 'Similar',
+                    icon: 'similar' as const,
+                    run: () => {
+                      onLike?.(photo.id);
+                    },
+                  },
+                  move: {
+                    label:
+                      moving === 'moving'
+                        ? 'Moving…'
+                        : space === 'private'
+                          ? 'To library'
+                          : 'Private',
+                    icon: space === 'private' ? ('unlock' as const) : ('lock' as const),
+                    run: move,
+                  },
+                  delete: {
+                    label: 'Delete',
+                    icon: 'trash' as const,
+                    run: () => {
+                      setMoveError(null);
+                      setDeleting(true);
+                    },
+                  },
+                }[action];
+                const ink = action === 'delete' ? DANGER : '#ffffff';
+                return (
+                  <Pressable
+                    key={action}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      action === 'move'
+                        ? moveLabel(space)
+                        : action === 'similar'
+                          ? 'More like this'
+                          : action === 'save'
+                            ? 'Save to phone'
+                            : action === 'album'
+                              ? 'Add to album'
+                              : item.label
+                    }
+                    disabled={action !== 'save' && action !== 'similar' && busy}
+                    onPress={item.run}
+                    style={({ pressed }) => [styles.action, pressed ? styles.pressed : null]}
+                  >
+                    <Icon name={item.icon} size={22} color={ink} />
+                    <Text style={[styles.actionText, { color: ink }]} numberOfLines={1}>
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
         </View>
+      ) : null}
+      {detailsFor !== null && detailsFor === photo?.id ? (
+        <Sheet
+          title="Details"
+          busy={unlisting}
+          onCancel={() => {
+            setDetailsFor(null);
+          }}
+        >
+          <View style={styles.facts}>
+            {photoFacts(photo).map((fact) => (
+              <View key={fact.label} style={[styles.fact, { backgroundColor: palette.background }]}>
+                <Text style={[styles.factLabel, { color: palette.muted }]}>{fact.label}</Text>
+                <Text style={[styles.factValue, { color: palette.text }]} numberOfLines={2}>
+                  {fact.value}
+                </Text>
+              </View>
+            ))}
+          </View>
+          {inAlbums.length > 0 ? (
+            <View style={styles.chips}>
+              {inAlbums.map((title) => (
+                <Text
+                  key={title}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: palette.accentWash, color: palette.accent },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {title}
+                </Text>
+              ))}
+            </View>
+          ) : null}
+          {canTakeOut ? (
+            <SheetOption
+              label="Remove from this album"
+              detail="The photo stays in your library"
+              disabled={filing !== null || moving !== null}
+              onPress={() => {
+                setDetailsFor(null);
+                void file(album, false);
+              }}
+            />
+          ) : null}
+          {notThis ? (
+            <SheetOption
+              label={unlisting ? 'Saving…' : notThis.label}
+              disabled={unlisting}
+              onPress={() => {
+                setUnlisting(true);
+                setMoveError(null);
+                notThis.run(photo.id).then(
+                  (done) => {
+                    setUnlisting(false);
+                    setDetailsFor(null);
+                    if (!done)
+                      setMoveError('That didn’t save. Check your connection and try again.');
+                  },
+                  () => {
+                    setUnlisting(false);
+                    setDetailsFor(null);
+                    setMoveError('That didn’t save. Check your connection and try again.');
+                  },
+                );
+              }}
+            />
+          ) : null}
+        </Sheet>
       ) : null}
       {deleting && photo ? (
         <ConfirmSheet
@@ -475,39 +586,61 @@ export function Viewer({
 
 const styles = StyleSheet.create({
   viewer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: '#000' },
-  bar: {
+  top: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  close: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  closeText: { color: '#fff', fontSize: 22 },
-  barText: { flex: 1 },
-  date: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  count: { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 2 },
-  actions: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     gap: 10,
-    padding: 16,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 14,
+    paddingBottom: 16,
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  actionRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10 },
-  action: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.6)',
-    borderRadius: 999,
-    paddingHorizontal: 16,
+  round: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  pressed: { opacity: 0.6 },
+  topText: { flex: 1, gap: 2 },
+  day: { color: '#fff', fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.3 },
+  place: { color: 'rgba(255,255,255,0.72)', fontSize: 13 },
+  bottom: { position: 'absolute', left: 12, right: 12, bottom: 0, gap: 10 },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 76,
+    borderRadius: 30,
+    paddingHorizontal: 6,
+    backgroundColor: 'rgba(28,30,36,0.82)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  action: { flex: 1, height: 64, alignItems: 'center', justifyContent: 'center', gap: 5 },
+  actionText: { fontSize: 12, fontWeight: '600' },
+  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  fact: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
+    gap: 2,
   },
-  actionText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  factLabel: { fontSize: 12, fontWeight: '600' },
+  factValue: { fontSize: 15, fontWeight: '600' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    fontSize: 14,
+    fontWeight: '600',
+    overflow: 'hidden',
+  },
 });

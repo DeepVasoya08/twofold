@@ -10,6 +10,7 @@ import type { SearchIndex } from '../search/use-search-index';
 import { Button, Note } from '../ui/kit';
 import { useNotice } from '../ui/notice';
 import { Row } from '../ui/rows';
+import type { IconName } from '../ui/icons';
 import type { Palette } from '../ui/theme';
 
 /** What Settings needs to show and change the smart features. */
@@ -67,6 +68,7 @@ function TaughtWords({ index, palette }: { index: Smart['index']; palette: Palet
 function Feature({
   title,
   detail,
+  icon,
   on,
   onChange,
   progress,
@@ -74,6 +76,7 @@ function Feature({
 }: {
   title: string;
   detail: string;
+  icon: IconName;
   on: boolean;
   onChange: (on: boolean) => void;
   progress: Smart['people'];
@@ -85,6 +88,7 @@ function Feature({
       <Row
         title={title}
         detail={detail}
+        icon={icon}
         palette={palette}
         action={
           <Switch
@@ -139,6 +143,7 @@ export function SmartSettings({ smart, palette }: { smart: Smart; palette: Palet
     <>
       <Feature
         title="Face grouping"
+        icon="people"
         detail="Finds faces in your photos on this phone and groups them into People. Faces never leave your devices unencrypted."
         on={settings.faces}
         onChange={settings.setFaces}
@@ -147,6 +152,7 @@ export function SmartSettings({ smart, palette }: { smart: Smart; palette: Palet
       />
       <Feature
         title="Smart search"
+        icon="similar"
         detail="Looks at what your photos show on this phone, so you can search for things like “beach”. It all stays encrypted."
         on={settings.search}
         onChange={settings.setSearch}

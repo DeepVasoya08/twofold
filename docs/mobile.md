@@ -64,7 +64,12 @@ or a native module.
   next one opens. Tapping hides the bar; Back closes it. Pinch, double-tap and pan zoom up to
   5x (`zoomable` on `MemoryImageView`, native gestures). Zoomed in, the original is decoded
   again at up to 4096 px so it stays sharp, the swap from preview to original keeps the zoom,
-  and one finger pans the photo instead of swiping to the next.
+  and one finger pans the photo instead of swiping to the next. A round back button, the
+  day and "time · N of M" sit on top, with a favourite heart (saved in the photo's sealed
+  record, the same flag the web uses) and ⋯, which opens a Details sheet: when it was taken,
+  its size, the stored size, place and who added it, the albums it is in, and "Remove from
+  this album" or "Not <name>" where they apply. Below it a floating bar holds Save, Album,
+  Similar, Private (To library in the private space) and Delete, each an icon with a label.
 - The private space works as on the web. The same password field opens either space, and
   the private space shows in the web app's night colours (`nightColors` in `theme.ts`).
   Headings use Bricolage Grotesque, bundled by `modules/brand-fonts` (its Android assets
@@ -120,11 +125,13 @@ or a native module.
   `@arcafold/core/account`), so the private space always needs its password, and nothing kept
   says whether there is one. Signing out, forgetting the account, being signed out from
   another device, a changed password or changed fingerprints all turn it off.
-- Settings (`screens/Settings.tsx`, the round initial at the top right): the account's name
-  and email; fingerprint unlock on or off (shown only in the main library; turning it on
+- Settings (`screens/Settings.tsx`, the round initial at the top right): a cobalt card
+  with the account's name, email and storage used ("X of 1 GB", the same account total in
+  both spaces); rows with small icon tiles for fingerprint unlock on or off (shown only in the main library; turning it on
   asks for the main password, so the private space's password is never kept); the auto-lock
   time; this account's devices, with "Sign out" for any other one (`/api/account/devices`,
-  like the web app's Settings); and Lock now, Sign out, and Sign out and forget this account.
+  like the web app's Settings); and Lock now and Sign out as two buttons at the bottom, with
+  Sign out and forget this account under them.
 - Automatic backup, step one (`src/backup`, Settings > Backup, main library only). Turning
   it on asks to see all the phone's photos (READ_MEDIA_IMAGES; "Select photos" isn't
   enough), sets up this phone's upload-only token (see "Upload-only keys" in
