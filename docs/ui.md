@@ -504,9 +504,13 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
 ## Landing page, legal pages and SEO
 
 - The landing page (`screens/Welcome.tsx`) leads with privacy without overselling, and
-  never presents Arcafold as a couples app. Its illustrations are small static copies of
-  real screens drawn with the mock landscape art: the unlock box opening either the library
-  or the private space, and an album shared with "Estrella" with the four-word check. Its
+  never presents Arcafold as a couples app. It uses the Arch look: an arch-framed photo
+  beside a phone showing the library in the hero, the private space section in "night"
+  navy, an "On your device" section (`#device`, "Smart search" in the nav) with cards for
+  Smart search, People and Files, a compact features grid, a two-column FAQ and a cobalt
+  arch to close. Its illustrations are small static copies of real screens drawn with the
+  mock landscape art: the unlock box opening either the library or the private space, and
+  an album shared with "Estrella" with the four-word check. Its
   FAQ (`site/faq.ts`) is honest about the trade-offs: no password reset, no recovery for the
   private space, 1 GB per account.
 - The Privacy Policy and Terms of Use (`screens/Privacy.tsx`, `screens/Terms.tsx`) describe
