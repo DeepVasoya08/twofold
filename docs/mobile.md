@@ -91,7 +91,7 @@ or a native module.
   across. Files: find by name, a list or a grid of previews. People: find by name, faces
   three or four across. The choices are saved per phone with the theme (Settings >
   Appearance: phone setting, light or dark) in `appearance.json`.
-- Adding photos (the floating Add button beside the tab bar on Photos, hidden while
+- Adding photos (the floating Add button above the tab bar on Photos, hidden while
   selecting; on Files it adds files, on Albums it starts a new album): Android's own photo picker (`ACTION_PICK_IMAGES`
   from Android 13, the document picker before that), so the app needs no storage permission
   and sees only the photos picked, up to 100 at a time. `PhotoPicker` in

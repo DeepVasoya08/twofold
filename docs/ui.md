@@ -576,7 +576,7 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
   which looks inside photos; on Albums, Files and People it finds by name as you type
   (`library/match.ts`: every word, any order, ignoring case and accents). The tab bar is a
   floating island over the content: the open tab is an accent pill with its name, the
-  others icons only. The Add button floats beside it (upload on Photos and Files, a new
+  others icons only. The Add button floats above its right end (upload on Photos and Files, a new
   album on Albums; People has none, as people are found in photos). Both step aside while
   selecting, while a sheet is open and while the keyboard is up. Sheets are cards floating
   clear of the screen's edges with large rounded corners and a close button; the View

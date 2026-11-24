@@ -73,6 +73,8 @@ const FAB = 58;
 const EDGE = 16;
 /** Room the floating bar takes at the bottom of a tab, above the navigation bar. */
 const FLOATING = TAB_BAR + TAB_LIFT + 12;
+/** The Add button floats this far above the bar's top, at the right edge. */
+const FAB_GAP = 12;
 
 /**
  * Asks (from Android 13, where it's needed) to post the notification that says when photos
@@ -86,20 +88,18 @@ async function askToNotify(): Promise<void> {
 }
 
 /**
- * The tab bar, floating over the screen as a rounded island: the open tab is an accent pill
- * with its name, the others just their icons. It leaves room on the right for the tab's Add
- * button, so the two read as one control.
+ * The tab bar, floating over the screen as a rounded island across its whole width: the open
+ * tab is an accent pill with its name, the others just their icons. The tab's Add button
+ * floats above its right end.
  */
 function TabBar({
   tab,
   inset,
-  withAdd,
   palette,
   onChange,
 }: {
   tab: Tab;
   inset: number;
-  withAdd: boolean;
   palette: Palette;
   onChange: (tab: Tab) => void;
 }) {
@@ -116,7 +116,6 @@ function TabBar({
         styles.tabBar,
         {
           bottom: inset + TAB_LIFT,
-          right: withAdd ? EDGE + FAB + 10 : EDGE,
           backgroundColor: palette.surface,
           borderColor: palette.border,
         },
@@ -149,8 +148,8 @@ function TabBar({
 }
 
 /**
- * The floating Add button beside the tab bar: uploads photos or files, or starts a new album,
- * in the corner where a thumb reaches it, so the header keeps room for the title.
+ * The floating Add button above the tab bar's right end: uploads photos or files, or starts a
+ * new album, where a thumb reaches it, so the header keeps room for the title.
  */
 function AddButton({
   icon,
@@ -173,7 +172,7 @@ function AddButton({
       style={({ pressed }) => [
         styles.fab,
         {
-          bottom: inset + TAB_LIFT + (TAB_BAR - FAB) / 2,
+          bottom: inset + TAB_LIFT + TAB_BAR + FAB_GAP,
           backgroundColor: palette.accent,
           transform: [{ scale: pressed ? 0.94 : 1 }],
         },
@@ -197,7 +196,7 @@ interface Viewing {
 export function Home({ session }: { session: Session }) {
   const inset = bottomInset();
   return (
-    <NoticeProvider bottom={inset + FLOATING + 4}>
+    <NoticeProvider bottom={inset + FLOATING + FAB + FAB_GAP + 4}>
       <HomeScreens session={session} inset={inset} />
     </NoticeProvider>
   );
@@ -667,16 +666,12 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
         <OpenSearch value={openSearch}>
           <View style={[styles.fill, { backgroundColor: palette.background }]}>
             <View style={[styles.fill, { paddingBottom: showTabs ? 0 : inset }]}>
-              <FloatSpace value={floatSpace}>{screen}</FloatSpace>
+              <FloatSpace value={showTabs && add ? floatSpace + FAB + FAB_GAP : floatSpace}>
+                {screen}
+              </FloatSpace>
             </View>
             {floating ? (
-              <TabBar
-                tab={tab}
-                inset={inset}
-                withAdd={add !== null}
-                palette={palette}
-                onChange={changeTab}
-              />
+              <TabBar tab={tab} inset={inset} palette={palette} onChange={changeTab} />
             ) : null}
             {floating && add && library.status === 'ready' ? (
               <AddButton
@@ -689,7 +684,12 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
             ) : null}
             <View
               pointerEvents="box-none"
-              style={[styles.cards, { bottom: (floating ? floatSpace : inset) + 4 }]}
+              style={[
+                styles.cards,
+                {
+                  bottom: (floating ? floatSpace + (add ? FAB + FAB_GAP : 0) : inset) + 4,
+                },
+              ]}
             >
               <SaveCard saving={saving} palette={palette} />
               <UploadCard library={library} palette={palette} onDeleteOriginals={removeOriginals} />
