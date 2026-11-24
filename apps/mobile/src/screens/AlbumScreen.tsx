@@ -72,7 +72,15 @@ export function AlbumScreen({
   const photos = useMemo(() => albumPhotos(library.photos, album.id), [library.photos, album.id]);
   const rows = useMemo(() => gridRows(photos), [photos]);
   const all = useMemo(() => photosInRows(rows), [rows]);
-  const picking = usePickToDelete(library, onOpen, { onSave, onTeach, filing: library, all });
+  const yours = album.library === undefined && album.sharedAlbum !== true;
+  // In your own album, the picked photos are already in it: Share goes to its invite.
+  const picking = usePickToDelete(library, onOpen, {
+    ...(yours ? { onShare } : {}),
+    onSave,
+    onTeach,
+    filing: library,
+    all,
+  });
   const changeable = canChangeAlbum(album);
   // An album shared with you that you may add to takes new photos from this phone.
   const uploadOnly = addsByUpload(album);
@@ -91,7 +99,6 @@ export function AlbumScreen({
   }, [cover, coverImage, requestThumbs]);
   const span = useMemo(() => dateSpan(photos.map((photo) => photo.takenAt)), [photos]);
   const canAdd = changeable || uploadOnly;
-  const yours = album.library === undefined && album.sharedAlbum !== true;
 
   const summary = (
     <View style={styles.summary}>
@@ -137,7 +144,7 @@ export function AlbumScreen({
               }}
             />
           ) : null}
-          {yours ? <PillButton label="Share" icon="people" onPress={onShare} /> : null}
+          {yours ? <PillButton label="Share" icon="share" onPress={onShare} /> : null}
           {onSave ? (
             <PillButton
               label="Save"

@@ -14,6 +14,16 @@ export type AccountState =
   | { status: 'locked'; account: AccountResponse }
   | { status: 'unlocked'; session: Session };
 
+/** The same state with the account's name changed (the keys in memory stay as they are). */
+export function withName(state: AccountState, name: string): AccountState {
+  if (state.status === 'locked') return { ...state, account: { ...state.account, name } };
+  if (state.status === 'unlocked') {
+    const { session } = state;
+    return { ...state, session: { ...session, account: { ...session.account, name } } };
+  }
+  return state;
+}
+
 /** Minutes without a touch, on screen or in the background, before it locks (as on the web). */
 export const AUTO_LOCK_MINUTES = 1;
 

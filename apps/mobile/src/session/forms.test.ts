@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  MAX_NAME_LENGTH,
   firstProblem,
   moveLabel,
+  nameError,
   signInError,
   signUpErrors,
   strengthTone,
@@ -68,5 +70,17 @@ describe('moving between spaces', () => {
   it('answers a wrong password from the library as if there were no private space', () => {
     expect(wrongOtherPassword('main')).toContain('doesn’t open a private space');
     expect(wrongOtherPassword('private')).toBe('That isn’t your main password.');
+  });
+});
+
+describe('nameError', () => {
+  it('takes a name, trimmed, up to the server limit', () => {
+    expect(nameError('  Sam Rivera ')).toBeNull();
+    expect(nameError('x'.repeat(MAX_NAME_LENGTH))).toBeNull();
+  });
+
+  it('asks for a name and refuses one that is too long', () => {
+    expect(nameError('   ')).toBe('Enter your name.');
+    expect(nameError('x'.repeat(MAX_NAME_LENGTH + 1))).toBe('Use at most 60 characters.');
   });
 });

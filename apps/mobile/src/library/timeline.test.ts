@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Photo } from '@arcafold/core/library/model';
 
 import {
+  favoritePhotos,
   formatTaken,
   gridRows,
   photosInRows,
@@ -36,6 +37,18 @@ describe('timelinePhotos', () => {
       photo('library', '2026-01-01T00:00:00Z', { library: 'Sam' }),
     ]);
     expect(kept.map((p) => p.id)).toEqual(['a', 'library']);
+  });
+});
+
+describe('favoritePhotos', () => {
+  it('keeps the timeline photos with a heart', () => {
+    const kept = favoritePhotos([
+      photo('liked', '2026-01-01T00:00:00Z', { favorite: true }),
+      photo('plain', '2026-01-01T00:00:00Z'),
+      photo('deleted', '2026-01-01T00:00:00Z', { favorite: true, deletedAt: '2026-02-01' }),
+      photo('shared', '2026-01-01T00:00:00Z', { favorite: true, sharedAlbum: true }),
+    ]);
+    expect(kept.map((p) => p.id)).toEqual(['liked']);
   });
 });
 

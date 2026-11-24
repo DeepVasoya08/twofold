@@ -57,19 +57,21 @@ export function photoAlbums(photo: Photo, albums: readonly Album[]): string[] {
   return albums.filter((album) => inIt.has(album.id)).map((album) => album.title);
 }
 
-export type BarAction = 'save' | 'album' | 'similar' | 'move' | 'delete';
+export type BarAction = 'share' | 'save' | 'album' | 'similar' | 'move' | 'delete';
 
 /**
  * The viewer's bottom bar, in order: what can be done with the photo in view. Rarer actions
  * (taking it out of an album, saying it isn't someone) are in the Details sheet.
  */
 export function barActions(can: {
+  share?: boolean;
   save: boolean;
   file: boolean;
   similar: boolean;
   move: boolean;
 }): BarAction[] {
   const actions: BarAction[] = [];
+  if (can.share === true) actions.push('share');
   if (can.save) actions.push('save');
   if (can.file) actions.push('album');
   if (can.similar) actions.push('similar');

@@ -3,9 +3,10 @@ import type { ReactElement } from 'react';
 import { BackHandler } from 'react-native';
 
 import type { Album, Photo } from '@arcafold/core/library/model';
+import { canShare, isViewOnly } from '@arcafold/core/library/albums';
 import { trashNote } from '@arcafold/core/library/trash';
 
-import { albumChangeText } from '../library/album-text';
+import { albumChangeText, favoriteText } from '../library/album-text';
 import { batchText, deleteTitle } from '../library/trash-text';
 import type { Noun } from '../library/trash-text';
 import { teachCountProblem } from '../search/smart-text';
@@ -20,26 +21,32 @@ import { HeaderButton, SelectionHeader } from './AppHeader';
 import { ConfirmSheet } from './ConfirmSheet';
 
 /** What the selection can put in albums with, where it can. */
-export type Filing = Pick<Library, 'photos' | 'albums' | 'setInAlbum' | 'createAlbum'>;
+export type Filing = Pick<
+  Library,
+  'photos' | 'albums' | 'setInAlbum' | 'createAlbum' | 'setFavorites'
+>;
 
 type Open = 'delete' | 'album' | 'naming' | null;
 
 /**
  * Selecting photos on a grid and acting on them together: a long press starts selecting,
  * taps pick, the header turns into "N selected" with Select all, and a floating bar takes the
- * tab bar's place with Album, Save, Teach and Delete. Deleted photos go to Recently deleted.
+ * tab bar's place with Share, Album, Favorite, Save, Teach and Delete. Deleted photos go to Recently deleted.
  * Back stops selecting before it does anything else.
  */
 export function usePickToDelete(
   library: Pick<Library, 'deletePhotos'>,
   open: (photoId: string) => void,
   {
+    onShare,
     onSave,
     onTeach,
     filing,
     all,
     noun = 'photo',
   }: {
+    /** Shares the picked photos with someone, through an album; only your own photos. */
+    onShare?: ((photoIds: readonly string[]) => void) | undefined;
     /** Saves copies to the phone's gallery, where it can. */
     onSave?: ((photoIds: readonly string[]) => void) | undefined;
     /** Teaches search a word from the picked photos, while Smart search is on. */
@@ -71,6 +78,7 @@ export function usePickToDelete(
   const outerSpace = useFloatSpace();
   const [opened, setOpened] = useState<Open>(null);
   const [filingBusy, setFilingBusy] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
   const { selected, clear } = selection;
 
   useEffect(() => {
@@ -109,11 +117,45 @@ export function usePickToDelete(
     }
   };
 
+  // Only photos (not files) you may change can be given a heart, all of them or none.
+  const allPhotos =
+    filing !== undefined && picked.length > 0 && pickedPhotos.length === picked.length;
+  const canFavorite = allPhotos && pickedPhotos.every((photo) => !isViewOnly(photo));
+  const allFavorite = canFavorite && pickedPhotos.every((photo) => photo.favorite);
+  const favorite = async (): Promise<void> => {
+    if (!filing) return;
+    setFavoriteBusy(true);
+    try {
+      const result = await filing.setFavorites(picked, !allFavorite);
+      notice(favoriteText(result, !allFavorite));
+      if (result.failed.length > 0) selection.replace(result.failed);
+      else clear();
+    } catch {
+      notice(favoriteText({ done: [], failed: picked }, !allFavorite));
+    } finally {
+      setFavoriteBusy(false);
+    }
+  };
+
   const everything = all !== undefined && all.length > 0 && picked.length === all.length;
   const actions: BarAction[] =
     picked.length === 0
       ? []
       : [
+          ...(onShare && allPhotos && canShare(pickedPhotos)
+            ? [
+                {
+                  key: 'share',
+                  label: 'Share',
+                  icon: 'share' as const,
+                  accessibilityLabel: 'Share with someone',
+                  onPress: () => {
+                    onShare(picked);
+                    clear();
+                  },
+                },
+              ]
+            : []),
           ...(filing && pickedPhotos.length === picked.length
             ? [
                 {
@@ -124,6 +166,20 @@ export function usePickToDelete(
                   disabled: filingBusy,
                   onPress: () => {
                     setOpened('album');
+                  },
+                },
+              ]
+            : []),
+          ...(canFavorite
+            ? [
+                {
+                  key: 'favorite',
+                  label: 'Favorite',
+                  icon: 'heart' as const,
+                  accessibilityLabel: allFavorite ? 'Remove from favorites' : 'Add to favorites',
+                  disabled: favoriteBusy,
+                  onPress: () => {
+                    void favorite();
                   },
                 },
               ]

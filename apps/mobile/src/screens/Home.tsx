@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 
 import type { Session } from '@arcafold/core/account';
+import { errorMessage } from '@arcafold/core/errors';
 import { albumPhotos } from '@arcafold/core/library/albums';
 import { aspectOf } from '@arcafold/core/library/aspect';
+import type { Album } from '@arcafold/core/library/model';
 import { shownPhotos } from '@arcafold/core/search/answer';
 import { MAX_SMART_TITLE, suggestTitle } from '@arcafold/core/search/smart-album';
 import { MAX_WORD_NAME } from '@arcafold/core/search/taught';
@@ -22,8 +24,15 @@ import { leaveJoined } from '@arcafold/core/sharing';
 import { PhotoPicker } from '../../modules/memory-image';
 import { bottomInset } from '../../modules/system-bars';
 import { lastRun } from '../backup/last-run';
+import { albumChangeText } from '../library/album-text';
 import { deletedText } from '../library/originals';
-import { timelineOrder, timelinePhotos, timelineRows } from '../library/timeline';
+import {
+  favoritePhotos,
+  gridRows,
+  timelineOrder,
+  timelinePhotos,
+  timelineRows,
+} from '../library/timeline';
 import { useLibrary } from '../library/use-library';
 import { useSaveToPhone } from '../library/use-save-to-phone';
 import { personPhotos, usePeople } from '../people/use-people';
@@ -33,6 +42,7 @@ import { useSearchIndex } from '../search/use-search-index';
 import { useSmartAlbum } from '../search/use-smart-album';
 import { searchToSave, smartTitleCheck, teachCountProblem, wordCheck } from '../search/smart-text';
 import { useAccount } from '../session/account';
+import { ProfileProvider } from '../session/profile';
 import { InvitesProvider } from '../sharing/invites';
 import { PhotoAspects } from '../ui/appearance';
 import { FloatSpace } from '../ui/float-space';
@@ -45,7 +55,7 @@ import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 import { AlbumScreen } from './AlbumScreen';
 import { OpenSearch } from './AppHeader';
-import { NameSheet } from './AlbumSheets';
+import { NameSheet, ShareThroughSheet } from './AlbumSheets';
 import { SmartAlbumScreen } from './SmartAlbumScreen';
 import { Albums } from './Albums';
 import { People } from './People';
@@ -57,6 +67,7 @@ import { Files } from './Files';
 import { ChoosePhotos } from './ChoosePhotos';
 import { InviteRequests } from './InviteCards';
 import { JoinScreen } from './JoinScreen';
+import { FavoritesScreen } from './FavoritesScreen';
 import { Settings } from './Settings';
 import { ShareScreen } from './ShareScreen';
 import { Timeline } from './Timeline';
@@ -185,7 +196,7 @@ function AddButton({
 
 /** What the viewer is swiping through. */
 interface Viewing {
-  from: 'timeline' | 'album' | 'person' | 'search' | 'smart';
+  from: 'timeline' | 'album' | 'person' | 'search' | 'smart' | 'favorites';
   start: number;
 }
 
@@ -197,7 +208,9 @@ export function Home({ session }: { session: Session }) {
   const inset = bottomInset();
   return (
     <NoticeProvider bottom={inset + FLOATING + FAB + FAB_GAP + 4}>
-      <HomeScreens session={session} inset={inset} />
+      <ProfileProvider session={session}>
+        <HomeScreens session={session} inset={inset} />
+      </ProfileProvider>
     </NoticeProvider>
   );
 }
@@ -221,6 +234,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const [personId, setPersonId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [choosing, setChoosing] = useState(false);
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [naming, setNaming] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** The sharing screen: for one album (by id), or for the whole library. */
@@ -330,10 +344,10 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   // An album deleted (here or elsewhere) is closed: there's nothing to show.
   const albumOpen = album !== undefined;
   const personOpen = person !== undefined;
-  const place = useRef({ albumOpen, personOpen, tab });
+  const place = useRef({ albumOpen, personOpen, favoritesOpen, tab });
   useEffect(() => {
-    place.current = { albumOpen, personOpen, tab };
-  }, [albumOpen, personOpen, tab]);
+    place.current = { albumOpen, personOpen, favoritesOpen, tab };
+  }, [albumOpen, personOpen, favoritesOpen, tab]);
   useEffect(() => {
     const back = BackHandler.addEventListener('hardwareBackPress', () => {
       if (place.current.albumOpen) {
@@ -342,6 +356,10 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
       }
       if (place.current.personOpen) {
         setPersonId(null);
+        return true;
+      }
+      if (place.current.favoritesOpen) {
+        setFavoritesOpen(false);
         return true;
       }
       if (place.current.tab !== 'photos') {
@@ -428,9 +446,20 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
       return photo ? [photo] : [];
     });
   }, [library.photos, smartIds]);
+  const favorites = useMemo(() => {
+    const rows = gridRows(favoritePhotos(library.photos));
+    return timelineOrder(library.photos, rows);
+  }, [library.photos]);
   const lists = useMemo(
-    () => ({ timeline, album: inAlbum, person: ofPerson, search: found, smart: inSmart }),
-    [timeline, inAlbum, ofPerson, found, inSmart],
+    () => ({
+      timeline,
+      album: inAlbum,
+      person: ofPerson,
+      search: found,
+      smart: inSmart,
+      favorites,
+    }),
+    [timeline, inAlbum, ofPerson, found, inSmart, favorites],
   );
   const viewed = lists[viewing?.from ?? 'timeline'];
   const latest = useRef(lists);
@@ -450,6 +479,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const openOfPerson = useMemo(() => openFrom('person'), [openFrom]);
   const openFound = useMemo(() => openFrom('search'), [openFrom]);
   const openInSmart = useMemo(() => openFrom('smart'), [openFrom]);
+  const openFavorite = useMemo(() => openFrom('favorites'), [openFrom]);
   const closeSmart = useCallback(() => {
     setSmartId(null);
     setSmartMore(false);
@@ -487,6 +517,29 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const closeShare = useCallback(() => {
     setSharing(null);
   }, []);
+
+  // Sharing photos goes through an album, as on the web: pick one of yours (or name a new
+  // one), the photos go in, and that album's invite opens.
+  const [shareFor, setShareFor] = useState<{
+    photoIds: readonly string[];
+    naming: boolean;
+  } | null>(null);
+  const sharePhotos = useCallback((photoIds: readonly string[]) => {
+    setShareFor({ photoIds, naming: false });
+  }, []);
+  const { setInAlbum, createAlbum } = library;
+  const shareThrough = useCallback(
+    async (target: Album, photoIds: readonly string[]) => {
+      const result = await setInAlbum(photoIds, target, true);
+      if (result.failed.length > 0) {
+        notice(albumChangeText(result, target.title, true));
+        return;
+      }
+      setShareFor(null);
+      setSharing({ albumId: target.id });
+    },
+    [setInAlbum, notice],
+  );
   const keys = session.opened.space;
   const { retry: reload } = library;
   const leaveAlbum = useCallback(
@@ -512,7 +565,8 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   ) : null;
 
   // An album or person page covers the tab bar, like a page opened from it; back returns.
-  const showTabs = album === undefined && person === undefined && smartAlbum === undefined;
+  const showTabs =
+    album === undefined && person === undefined && smartAlbum === undefined && !favoritesOpen;
   const floating = showTabs && !tabPicking && !typing;
   const floatSpace = showTabs ? inset + FLOATING : 0;
 
@@ -569,6 +623,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   } else if (person) {
     screen = (
       <PersonScreen
+        onShare={sharePhotos}
         {...(onSave ? { onSave } : {})}
         {...(onTeach ? { onTeach } : {})}
         group={person}
@@ -582,6 +637,20 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
           find.searchFor(name);
           setSearching(true);
         }}
+      />
+    );
+  } else if (favoritesOpen) {
+    screen = (
+      <FavoritesScreen
+        onShare={sharePhotos}
+        {...(onSave ? { onSave } : {})}
+        {...(onTeach ? { onTeach } : {})}
+        library={library}
+        banner={banner}
+        onBack={() => {
+          setFavoritesOpen(false);
+        }}
+        onOpen={openFavorite}
       />
     );
   } else if (tab === 'people') {
@@ -632,6 +701,9 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
         onTrash={() => {
           setTrashOpen(true);
         }}
+        onFavorites={() => {
+          setFavoritesOpen(true);
+        }}
         {...(searchOn ? { smartAlbums: index.smartAlbums, onOpenSmart: setSmartId } : {})}
       />
     );
@@ -645,6 +717,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
     };
     screen = (
       <Timeline
+        onShare={sharePhotos}
         onPicking={setTabPicking}
         {...(onSave ? { onSave } : {})}
         {...(onTeach ? { onTeach } : {})}
@@ -830,6 +903,19 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
                       },
                     }
                   : {})}
+                onShare={(photoId) => {
+                  // In your own album, the photo is already in it: share that album.
+                  if (
+                    viewing.from === 'album' &&
+                    album &&
+                    album.library === undefined &&
+                    album.sharedAlbum !== true
+                  ) {
+                    setSharing({ albumId: album.id });
+                  } else {
+                    sharePhotos([photoId]);
+                  }
+                }}
                 onLike={(photoId) => {
                   setViewing(null);
                   setSearching(true);
@@ -870,6 +956,36 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
                 onSharedWith={library.setSharedWith}
                 onStopSharing={library.stopSharingAlbum}
                 onClose={closeShare}
+              />
+            ) : null}
+            {shareFor && !shareFor.naming ? (
+              <ShareThroughSheet
+                photos={library.photos.filter((each) => shareFor.photoIds.includes(each.id))}
+                albums={library.albums}
+                onPick={(target) => {
+                  shareThrough(target, shareFor.photoIds).catch((error: unknown) => {
+                    notice(errorMessage(error));
+                  });
+                }}
+                onNew={() => {
+                  setShareFor({ ...shareFor, naming: true });
+                }}
+                onCancel={() => {
+                  setShareFor(null);
+                }}
+              />
+            ) : null}
+            {shareFor?.naming ? (
+              <NameSheet
+                title="New shared album"
+                action="Create and share"
+                onSave={async (name) => {
+                  const made = await createAlbum(name);
+                  await shareThrough(made, shareFor.photoIds);
+                }}
+                onCancel={() => {
+                  setShareFor(null);
+                }}
               />
             ) : null}
             {joining ? <JoinScreen onClose={closeJoin} /> : null}

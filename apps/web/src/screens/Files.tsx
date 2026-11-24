@@ -16,7 +16,7 @@ import { EmptyState } from '../components/EmptyState';
 import { FileRow, FileTile, fileDetails } from '../components/FileRow';
 import { Icon } from '../components/Icon';
 import type { MenuItem } from '../components/Menu';
-import { albumChoices } from '../components/AlbumPicker';
+import { albumChoices } from '@arcafold/core/library/albums';
 import { MoveSpaceDialog, moveLabel } from '../components/MoveSpaceDialog';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { FILE_VIEW_CHOICES, ViewPicker } from '../components/ViewPicker';

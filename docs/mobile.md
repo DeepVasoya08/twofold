@@ -125,9 +125,16 @@ or a native module.
   `@arcafold/core/account`), so the private space always needs its password, and nothing kept
   says whether there is one. Signing out, forgetting the account, being signed out from
   another device, a changed password or changed fingerprints all turn it off.
-- Settings (`screens/Settings.tsx`, the round initial at the top right): a cobalt card
-  with the account's name, email and storage used ("X of 1 GB", the same account total in
-  both spaces); rows with small icon tiles for fingerprint unlock on or off (shown only in the main library; turning it on
+- Settings (`screens/Settings.tsx`, the round avatar at the top right): a cobalt card
+  with your profile photo (or initial), the account's name, email and storage used ("X of 1
+  GB", the same account total in both spaces) and an Edit button. Edit profile
+  (`screens/ProfileSheet.tsx`, `session/profile.tsx`) changes your name (`PUT
+/api/account/name`) and the open space's profile photo: Android's photo picker picks one,
+  `PhotoPicker.squareAsync` crops the middle to a 256 px square JPEG in memory, and the shared
+  store (`@arcafold/core/profile-photo`, the same as the web's) encrypts it under a key of its
+  own sealed in an owner-only record. Each space keeps its own photo, held in native memory
+  only and dropped on lock; it shows on the Settings card and in the header avatar. Renaming
+  doesn't reopen the library (sharing uses the new name the next time it opens); rows with small icon tiles for fingerprint unlock on or off (shown only in the main library; turning it on
   asks for the main password, so the private space's password is never kept); the auto-lock
   time; this account's devices, with "Sign out" for any other one (`/api/account/devices`,
   like the web app's Settings); and Lock now and Sign out as two buttons at the bottom, with
@@ -179,6 +186,15 @@ or a native module.
   with me and Shared by me. An album's page opens with its arch cover beside the title, the
   photo count and the days it spans, and who it's shared with, then Add photos, Share (your
   own albums) and Save as buttons; back and ⋯ are round buttons at the top.
+- Favorites (`screens/FavoritesScreen.tsx`): the first card on Albums (All) opens every photo
+  with a heart, by month, as the web's Favorites page. The heart is in the viewer's top bar,
+  and Favorite in the selecting bar gives a heart to every picked photo (or takes it off when
+  they all have one), not for photos you can only view.
+- Sharing photos: Share in the selecting bar (Photos, an album, a person, Favorites) and in
+  the viewer shares your own photos through an album, as on the web: pick one of your albums
+  (those already shared first, `shareChoices` in `@arcafold/core/library/albums`) or name a
+  new one; the photos go in and the album's Share screen opens, where you invite someone View
+  only or Add and edit. Inside your own album, Share goes straight to its Share screen.
 - Sharing and invites (`src/sharing/invites.tsx`, `screens/ShareScreen.tsx`,
   `screens/JoinScreen.tsx`, `screens/InviteCards.tsx`, `screens/SharingSettings.tsx`): the same
   invites as the web app, moved along by the same shared pass (`@arcafold/core/sharing-pass`)

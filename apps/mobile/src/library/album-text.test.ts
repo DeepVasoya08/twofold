@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { albumChangeText, chosenText, dateSpan, photoCount } from './album-text';
+import { albumChangeText, chosenText, dateSpan, favoriteText, photoCount } from './album-text';
 
 describe('photoCount', () => {
   it('counts photos, or says the album is empty', () => {
@@ -51,5 +51,23 @@ describe('dateSpan', () => {
 
   it('skips dates it cannot read', () => {
     expect(dateSpan(['not a date', '2026-11-22T10:00:00Z'])).toBe('Nov 22, 2026');
+  });
+});
+
+describe('favoriteText', () => {
+  it('says how many were added or removed', () => {
+    expect(favoriteText({ done: ['a'], failed: [] }, true)).toBe('Added 1 photo to favorites.');
+    expect(favoriteText({ done: ['a', 'b'], failed: [] }, false)).toBe(
+      'Removed 2 photos from favorites.',
+    );
+  });
+
+  it('says when some or all didn’t go through', () => {
+    expect(favoriteText({ done: ['a'], failed: ['b'] }, true)).toBe(
+      'Added 1 photo to favorites. 1 didn’t go through; try those again.',
+    );
+    expect(favoriteText({ done: [], failed: ['a'] }, false)).toBe(
+      'The photos couldn’t be removed from favorites. Try again.',
+    );
   });
 });

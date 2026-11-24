@@ -39,7 +39,14 @@ import { keepBackup, keptBackup } from '../backup/backup-state';
 import { saveAutoLock, savedAutoLock } from './auto-lock';
 import { keepSession, keptSession } from './kept-session';
 import { forgetEmail, rememberEmail, rememberedEmail } from './remembered';
-import { AUTO_LOCK_MINUTES, idleTooLong, leftScreen, locked, lockOnReturn } from './state';
+import {
+  AUTO_LOCK_MINUTES,
+  idleTooLong,
+  leftScreen,
+  locked,
+  lockOnReturn,
+  withName,
+} from './state';
 import type { AccountState } from './state';
 
 interface AccountValue {
@@ -93,6 +100,8 @@ interface AccountValue {
   /** Minutes without a touch before the app locks, chosen on this phone. */
   autoLockMinutes: number;
   setAutoLockMinutes: (minutes: number) => void;
+  /** Renames the account, as the web's Edit profile does. People you share with see it. */
+  changeName: (name: string) => Promise<void>;
 }
 
 const BIOMETRICS_RESET =
@@ -424,6 +433,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         lastTouch.current = Date.now();
         setAutoLock(minutes);
         void saveAutoLock(minutes);
+      },
+      changeName: async (name) => {
+        const changed = await api.updateName({ name });
+        // Only the name is taken from the answer: the keyring in memory stays as it is.
+        setState((current) => withName(current, changed.name));
       },
     }),
     [

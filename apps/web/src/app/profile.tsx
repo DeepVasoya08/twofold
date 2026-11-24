@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { ReactNode } from 'react';
 
 import { makeProfileImage } from '../lib/profile-image';
-import type { ProfilePhotoStore } from './profile-photo';
+import type { ProfilePhotoStore } from '@arcafold/core/profile-photo';
 import { FormError } from '@arcafold/core/errors';
 
 interface ProfileValue {

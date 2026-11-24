@@ -10,7 +10,7 @@ import { ToastProvider } from './toast';
 import type { Session, Space } from '@arcafold/core/account';
 import { PendingInvitesProvider } from './invites';
 import { ProfileProvider } from './profile';
-import { memoryProfilePhoto, remoteProfilePhoto } from './profile-photo';
+import { memoryProfilePhoto, remoteProfilePhoto } from '@arcafold/core/profile-photo';
 import { sessionStore } from '@arcafold/core/sharing';
 import { StorageProvider } from './storage';
 import { UploadsProvider } from './uploads';

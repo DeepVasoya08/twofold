@@ -32,7 +32,8 @@ export type IconName =
   | 'clock'
   | 'signal'
   | 'phone'
-  | 'theme';
+  | 'theme'
+  | 'share';
 
 export function Icon({ name, size = 22, color }: { name: IconName; size?: number; color: string }) {
   const stroke = Math.max(1.5, Math.round((size / 12) * 2) / 2);
@@ -391,6 +392,25 @@ export function Icon({ name, size = 22, color }: { name: IconName; size?: number
         },
       ];
       break;
+    case 'share': {
+      // Three dots joined: one on the left sending to two on the right.
+      const dot = (x: number, y: number): ViewStyle => ({
+        ...line,
+        left: at(x - 3),
+        top: at(y - 3),
+        width: at(6),
+        height: at(6),
+        borderRadius: at(3),
+      });
+      parts = [
+        dot(6, 12),
+        dot(18, 5.5),
+        dot(18, 18.5),
+        segment(at(8.6), at(10.6), at(15.4), at(6.9), stroke, color),
+        segment(at(8.6), at(13.4), at(15.4), at(17.1), stroke, color),
+      ];
+      break;
+    }
   }
   return (
     <View style={{ width: size, height: size }} accessible={false} pointerEvents="none">

@@ -5,9 +5,9 @@ import { fromBase64Url, toBase64Url } from '@arcafold/crypto/webcrypto';
 import { STORAGE_SIZES } from '@arcafold/types';
 import type { StoredProfilePhoto } from '@arcafold/types';
 
-import { FakeServer } from '@arcafold/core/testing/fake-server';
+import { FakeServer } from './testing/fake-server';
 import { memoryProfilePhoto, remoteProfilePhoto } from './profile-photo';
-import { FormError } from '@arcafold/core/errors';
+import { FormError } from './errors';
 
 const JPEG = new TextEncoder().encode('A SMALL SQUARE PROFILE JPEG');
 

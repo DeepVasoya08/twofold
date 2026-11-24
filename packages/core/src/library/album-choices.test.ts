@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { albumChoices, shareChoices } from './AlbumPicker';
-import type { Photo } from '@arcafold/core/library/model';
+import { albumChoices, canShare, shareChoices } from './albums';
+import type { Photo } from './model';
 
 const photo = (library?: string): Photo => ({
   id: library ?? 'mine',
@@ -42,5 +42,13 @@ describe('shareChoices', () => {
     const withShared = [...albums, { id: 'gift', title: 'Gift', sharedWith: ['Sam'] }];
     expect(shareChoices(withShared, [photo()]).map((a) => a.id)).toEqual(['gift', 'trip', 'home']);
     expect(shareChoices(withShared, [photo('Mira')])).toEqual([]);
+  });
+});
+
+describe('canShare', () => {
+  it('shares only your own photos, and needs at least one', () => {
+    expect(canShare([photo()])).toBe(true);
+    expect(canShare([photo(), photo('Mira')])).toBe(false);
+    expect(canShare([])).toBe(false);
   });
 });

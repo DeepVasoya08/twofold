@@ -22,14 +22,17 @@ import { useBackup } from '../backup/use-backup';
 import { lastActiveText, shortDay } from '../library/devices';
 import { storageShown } from '../library/storage-text';
 import { useAccount } from '../session/account';
+import { useProfile } from '../session/profile';
 import { AUTO_LOCK_CHOICES, autoLockLabel } from '../session/auto-lock';
 import { biometricsAvailable } from '../session/biometric';
+import { Avatar } from '../ui/avatar';
 import { Banner, Button, Field } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { Sheet } from '../ui/sheet';
 import { IconTile, Row, Section } from '../ui/rows';
 import { useAppearance } from '../ui/appearance';
 import type { ThemeChoice } from '../ui/appearance-settings';
+import { ProfileSheet } from './ProfileSheet';
 import { SharingSettings } from './SharingSettings';
 import { SmartSettings } from './SmartSettings';
 import type { Smart } from './SmartSettings';
@@ -384,6 +387,8 @@ export function Settings({
   } = useAccount();
   const palette = usePalette();
   const [askingPassword, setAskingPassword] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const profile = useProfile();
   const { name, email } = session.account;
   const fingerprintOn = biometricFor === email;
   // Fingerprint unlock opens only the main library, so it's set from there.
@@ -412,6 +417,7 @@ export function Settings({
           avatar: palette.accent,
           avatarInk: palette.onAccent,
           bar: palette.accent,
+          editBg: 'rgba(140,156,255,0.22)',
         }
       : {
           background: palette.dark ? '#26338f' : '#2f4bf0',
@@ -420,6 +426,7 @@ export function Settings({
           avatar: '#ffffff',
           avatarInk: '#2f4bf0',
           bar: '#ffffff',
+          editBg: 'rgba(255,255,255,0.22)',
         };
 
   const close = useCallback(() => {
@@ -457,11 +464,22 @@ export function Settings({
         <View style={[styles.profile, { backgroundColor: hero.background }]}>
           <View style={[styles.profileArch, { backgroundColor: hero.arch }]} />
           <View style={styles.profileTop}>
-            <View style={[styles.avatar, { backgroundColor: hero.avatar }]}>
-              <Text style={[styles.avatarText, { color: hero.avatarInk }]}>
-                {(name.trim().at(0) ?? '?').toUpperCase()}
-              </Text>
-            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit profile"
+              onPress={() => {
+                setEditing(true);
+              }}
+            >
+              <Avatar
+                imageId={profile.imageId}
+                name={name}
+                size={52}
+                background={hero.avatar}
+                ink={hero.avatarInk}
+                {...(profile.imageId ? { borderColor: hero.avatar } : {})}
+              />
+            </Pressable>
             <View style={styles.rowText}>
               <Text style={[styles.profileName, { color: hero.ink }]} numberOfLines={1}>
                 {name}
@@ -470,6 +488,17 @@ export function Settings({
                 {email}
               </Text>
             </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit profile"
+              onPress={() => {
+                setEditing(true);
+              }}
+              hitSlop={6}
+              style={[styles.edit, { backgroundColor: hero.editBg }]}
+            >
+              <Text style={[styles.editText, { color: hero.ink }]}>Edit</Text>
+            </Pressable>
           </View>
           {stored ? (
             <View style={styles.storage}>
@@ -621,6 +650,13 @@ export function Settings({
           }}
         />
       ) : null}
+      {editing ? (
+        <ProfileSheet
+          onClose={() => {
+            setEditing(false);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -655,14 +691,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 75,
   },
   profileTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { fontFamily: fonts.display, fontSize: 22 },
+  edit: { height: 34, paddingHorizontal: 14, borderRadius: 17, justifyContent: 'center' },
+  editText: { fontSize: 13, fontWeight: '700' },
   profileName: { fontFamily: fonts.display, fontSize: 20, letterSpacing: -0.3 },
   profileEmail: { fontSize: 13, opacity: 0.8 },
   storage: { gap: 6 },

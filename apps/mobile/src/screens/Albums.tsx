@@ -18,10 +18,12 @@ import type { SmartAlbum } from '@arcafold/core/search/smart-album';
 import { MemoryImage } from '../../modules/memory-image';
 import { photoCount } from '../library/album-text';
 import { filterByName } from '../library/match';
+import { favoritePhotos } from '../library/timeline';
 import type { Library } from '../library/use-library';
-import { fonts } from '../theme';
+import { FAVORITE, fonts } from '../theme';
 import { useAppearance } from '../ui/appearance';
 import { useFloatSpace, useReportPicking } from '../ui/float-space';
+import { Icon } from '../ui/icons';
 import { Button, Note } from '../ui/kit';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
@@ -107,6 +109,69 @@ const AlbumCard = memo(function AlbumCard({
   );
 });
 
+/** The Favorites card, first on All: your hearted photos, newest as its cover. */
+const FavoritesCard = memo(function FavoritesCard({
+  coverId,
+  imageId,
+  count,
+  width,
+  palette,
+  requestThumbs,
+  onOpen,
+}: {
+  coverId: string | null;
+  imageId: string | null;
+  count: number;
+  width: number;
+  palette: Palette;
+  requestThumbs: Library['requestThumbs'];
+  onOpen: () => void;
+}) {
+  useEffect(() => {
+    if (coverId && !imageId) requestThumbs([coverId], true);
+  }, [coverId, imageId, requestThumbs]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Favorites, ${photoCount(count)}`}
+      onPress={onOpen}
+      style={{ width }}
+    >
+      <View
+        style={[
+          styles.cover,
+          {
+            width,
+            height: width * 1.25,
+            borderTopLeftRadius: width / 2,
+            borderTopRightRadius: width / 2,
+            backgroundColor: palette.dark ? '#3a2230' : '#ffe3ea',
+          },
+        ]}
+      >
+        {coverId ? <MemoryImage imageId={imageId} style={{ width, height: width * 1.25 }} /> : null}
+        <View
+          style={[
+            coverId ? styles.heartBadge : null,
+            coverId ? { backgroundColor: palette.surface } : null,
+          ]}
+        >
+          <Icon name="heart" size={coverId ? 20 : 36} color={FAVORITE} />
+        </View>
+      </View>
+      <Text style={[styles.title, { color: palette.text }]} numberOfLines={1}>
+        Favorites
+      </Text>
+      <Text style={[styles.meta, { color: palette.muted }]} numberOfLines={1}>
+        {count > 0 ? photoCount(count) : 'Tap the heart on a photo'}
+      </Text>
+    </Pressable>
+  );
+});
+
+/** What the grid lists: the Favorites card, then albums. */
+type GridItem = { kind: 'favorites' } | ({ kind: 'album' } & Card);
+
 /** Cards for every album, in the order they were made. */
 export function albumCards(albums: readonly Album[], photos: readonly Photo[]): Card[] {
   return albums.map((album) => ({
@@ -143,6 +208,7 @@ export function Albums({
   onOpen,
   onJoin,
   onTrash,
+  onFavorites,
   smartAlbums = [],
   onOpenSmart,
   onPicking,
@@ -157,6 +223,8 @@ export function Albums({
   onJoin: () => void;
   /** Opens Recently deleted. */
   onTrash: () => void;
+  /** Opens Favorites. */
+  onFavorites: () => void;
   /** Searches saved as albums, while Smart search is on here: yours alone, never shared. */
   smartAlbums?: readonly SmartAlbum[];
   onOpenSmart?: (albumId: string) => void;
@@ -182,6 +250,22 @@ export function Albums({
     [allCards, query],
   );
   const { thumbs, requestThumbs } = library;
+  const favorites = useMemo(() => favoritePhotos(library.photos), [library.photos]);
+  // Favorites leads All, and stays findable by its name.
+  const showFavorites =
+    tab === 'all' && filterByName(['Favorites'], query, (title) => title).length > 0;
+  const items = useMemo<GridItem[]>(
+    () => [
+      ...(showFavorites ? [{ kind: 'favorites' as const }] : []),
+      ...cards.map((card) => ({ kind: 'album' as const, ...card })),
+    ],
+    [showFavorites, cards],
+  );
+  const favoriteCover = useMemo(() => {
+    let newest: Photo | null = null;
+    for (const photo of favorites) if (!newest || photo.takenAt > newest.takenAt) newest = photo;
+    return newest?.id ?? null;
+  }, [favorites]);
 
   const header = (
     <AppHeader
@@ -296,7 +380,7 @@ export function Albums({
     </Pressable>
   );
 
-  if (library.status === 'ready' && query.trim() !== '' && cards.length + smart.length === 0) {
+  if (library.status === 'ready' && query.trim() !== '' && items.length + smart.length === 0) {
     return (
       <View style={styles.fill}>
         {header}
@@ -325,7 +409,10 @@ export function Albums({
     );
   }
 
-  if (library.status !== 'ready' || allCards.length + allSmart.length === 0) {
+  if (
+    library.status !== 'ready' ||
+    allCards.length + allSmart.length + (tab === 'all' ? favorites.length : 0) === 0
+  ) {
     return (
       <View style={styles.fill}>
         {header}
@@ -360,9 +447,9 @@ export function Albums({
       {codeLink}
       <FlatList
         key={columns}
-        data={cards}
+        data={items}
         numColumns={columns}
-        keyExtractor={(card) => card.album.id}
+        keyExtractor={(item) => (item.kind === 'favorites' ? 'favorites' : item.album.id)}
         columnWrapperStyle={styles.row}
         contentContainerStyle={[styles.list, { paddingBottom: 32 + floatSpace }]}
         keyboardShouldPersistTaps="handled"
@@ -375,16 +462,28 @@ export function Albums({
             </>
           ) : undefined
         }
-        renderItem={({ item }) => (
-          <AlbumCard
-            card={item}
-            imageId={item.coverId ? (thumbs.get(item.coverId) ?? null) : null}
-            width={cardWidth}
-            palette={palette}
-            requestThumbs={requestThumbs}
-            onOpen={onOpen}
-          />
-        )}
+        renderItem={({ item }) =>
+          item.kind === 'favorites' ? (
+            <FavoritesCard
+              coverId={favoriteCover}
+              imageId={favoriteCover ? (thumbs.get(favoriteCover) ?? null) : null}
+              count={favorites.length}
+              width={cardWidth}
+              palette={palette}
+              requestThumbs={requestThumbs}
+              onOpen={onFavorites}
+            />
+          ) : (
+            <AlbumCard
+              card={item}
+              imageId={item.coverId ? (thumbs.get(item.coverId) ?? null) : null}
+              width={cardWidth}
+              palette={palette}
+              requestThumbs={requestThumbs}
+              onOpen={onOpen}
+            />
+          )
+        }
       />
       {viewSheet}
     </View>
@@ -444,6 +543,16 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+  heartBadge: {
+    position: 'absolute',
+    left: 10,
+    bottom: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: { fontFamily: fonts.display, fontSize: 16, letterSpacing: -0.2, marginTop: 10 },
   meta: { fontSize: 13, marginTop: 1 },
 });

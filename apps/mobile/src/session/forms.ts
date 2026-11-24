@@ -22,6 +22,19 @@ export function signUpErrors(values: SignUpValues): SignUpErrors {
   return errors;
 }
 
+/** The longest name the server takes, as on the web's Edit profile. */
+export const MAX_NAME_LENGTH = 60;
+
+/** What's wrong with a name typed in Edit profile, or null when it can be saved. */
+export function nameError(name: string): string | null {
+  const trimmed = name.trim();
+  if (!trimmed) return 'Enter your name.';
+  if (trimmed.length > MAX_NAME_LENGTH) {
+    return `Use at most ${String(MAX_NAME_LENGTH)} characters.`;
+  }
+  return null;
+}
+
 /** What's wrong with a sign-in form, or null when it can go ahead. */
 export function signInError(email: string, password: string): string | null {
   if (!isValidEmail(email)) return 'Enter a valid email.';

@@ -32,6 +32,7 @@ export function PersonScreen({
   banner,
   onBack,
   onOpen,
+  onShare,
   onSave,
   onTeach,
   onMoved,
@@ -43,6 +44,8 @@ export function PersonScreen({
   banner: ReactNode;
   onBack: () => void;
   onOpen: (photoId: string) => void;
+  /** Shares picked photos with someone, through an album. */
+  onShare?: (photoIds: readonly string[]) => void;
   /** Saves copies of photos to the phone's gallery, where it can. */
   onSave?: (photoIds: readonly string[]) => void;
   /** Teaches search a word from picked photos, while Smart search is on. */
@@ -62,7 +65,13 @@ export function PersonScreen({
   const photos = useMemo(() => personPhotos(group, byId), [group, byId]);
   const rows = useMemo(() => gridRows(photos), [photos]);
   const all = useMemo(() => photosInRows(rows), [rows]);
-  const picking = usePickToDelete(library, onOpen, { onSave, onTeach, filing: library, all });
+  const picking = usePickToDelete(library, onOpen, {
+    onShare,
+    onSave,
+    onTeach,
+    filing: library,
+    all,
+  });
   const cover = group.faces[0];
   const person = group.person;
   const close = () => {

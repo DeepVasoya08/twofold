@@ -1,42 +1,17 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 
-import { albumCover, albumFiles, albumPhotos, copiesInto, fitsAlbum, useVault } from '../app/vault';
+import { albumCover, albumFiles, albumPhotos, useVault } from '../app/vault';
 import { photosAndFiles } from '../lib/format';
 import { Dialog } from './Dialog';
 import { TextField } from './Field';
 import { Icon } from './Icon';
 import { PhotoImage } from './PhotoImage';
 import { errorMessage } from '@arcafold/core/errors';
+import { albumChoices, shareChoices } from '@arcafold/core/library/albums';
 import type { Album, Photo } from '@arcafold/core/library/model';
 
 import './album-picker.css';
-
-/**
- * Albums at least one of `photos` can go in, leaving out `except` (the album being viewed):
- * filed, or copied into an album shared with you that you may add to.
- */
-export function albumChoices(
-  albums: readonly Album[],
-  photos: readonly Photo[],
-  except?: string,
-): Album[] {
-  return albums.filter(
-    (album) =>
-      album.id !== except &&
-      photos.some((photo) => fitsAlbum(photo, album) || copiesInto(photo, album)),
-  );
-}
-
-/**
- * The albums photos can be shared through: your own, the ones already shared with someone
- * first, so sharing more photos with the same people doesn't make another album.
- */
-export function shareChoices(albums: readonly Album[], photos: readonly Photo[]): Album[] {
-  const own = albumChoices(albums, photos).filter((album) => album.library === undefined);
-  const shared = (album: Album) => ((album.sharedWith?.length ?? 0) > 0 ? 0 : 1);
-  return [...own].sort((a, b) => shared(a) - shared(b));
-}
 
 /**
  * Picks an album to add photos to, or makes a new one. Albums belong to one library, so a

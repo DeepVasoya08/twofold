@@ -2,7 +2,9 @@ import { createContext } from 'react';
 import type { ReactNode } from 'react';
 import { Pressable, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { MemoryImage } from '../../modules/memory-image';
 import { useAccount } from '../session/account';
+import { useProfile } from '../session/profile';
 import { fonts } from '../theme';
 import { LogoMark } from '../ui/brand';
 import { Icon } from '../ui/icons';
@@ -48,6 +50,7 @@ export function AppHeader({
   children?: ReactNode;
 }) {
   const { lock } = useAccount();
+  const profile = useProfile();
   const palette = usePalette();
   return (
     <View>
@@ -90,7 +93,16 @@ export function AppHeader({
           onPress={onSettings}
           style={[styles.avatar, { backgroundColor: palette.surface, borderColor: palette.border }]}
         >
-          <Text style={[styles.avatarText, { color: palette.text }]}>{initial}</Text>
+          {profile.imageId ? (
+            <MemoryImage
+              imageId={profile.imageId}
+              fit="cover"
+              maxSide={128}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : (
+            <Text style={[styles.avatarText, { color: palette.text }]}>{initial}</Text>
+          )}
         </Pressable>
       </View>
       {search ? <SearchField row={search} /> : null}
@@ -312,6 +324,7 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     borderWidth: 1,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
