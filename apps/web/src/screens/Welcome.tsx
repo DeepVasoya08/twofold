@@ -268,10 +268,10 @@ function DeviceCards() {
         <div className="device-card__art" aria-hidden="true">
           <span className="mock-search">
             <Icon name="search" size={14} />
-            Riya at the beach 2025
+            me and Estrella last year
           </span>
           <span className="mock-search__chips">
-            {['Riya', 'beach', '2025'].map((part) => (
+            {['You', 'Estrella', 'Last year'].map((part) => (
               <span key={part}>{part}</span>
             ))}
           </span>
