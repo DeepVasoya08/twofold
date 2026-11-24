@@ -128,14 +128,8 @@ export function useBackup(session: Session, onAdded: () => void) {
     );
   }, [kept, status.kind, onAdded]);
 
-  /** Asks Android to run the backup in the background once, soon (to check it works). */
-  const runInBackground = useCallback(() => {
-    BackupJob.runSoon();
-  }, []);
-
   return {
     on: Boolean(kept),
-    runInBackground,
     mobileData: kept?.mobileData ?? false,
     loaded: kept !== undefined,
     last,

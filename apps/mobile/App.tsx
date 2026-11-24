@@ -9,6 +9,7 @@ import { SignUp } from './src/screens/SignUp';
 import { Unlock } from './src/screens/Unlock';
 import { forgetSignUpChoice, routeFor } from './src/routes';
 import { AccountProvider, useAccount } from './src/session/account';
+import { AppearanceProvider } from './src/ui/appearance';
 import { usePalette } from './src/ui/theme';
 
 function Routes() {
@@ -58,8 +59,10 @@ function Shell() {
 
 export default function App() {
   return (
-    <AccountProvider>
-      <Shell />
-    </AccountProvider>
+    <AppearanceProvider>
+      <AccountProvider>
+        <Shell />
+      </AccountProvider>
+    </AppearanceProvider>
   );
 }

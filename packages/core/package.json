@@ -16,6 +16,7 @@
     "./file-types": "./src/file-types.ts",
     "./format-bytes": "./src/format-bytes.ts",
     "./invite-input": "./src/invite-input.ts",
+    "./library/aspect": "./src/library/aspect.ts",
     "./keywords": "./src/keywords.ts",
     "./library/albums": "./src/library/albums.ts",
     "./library/model": "./src/library/model.ts",

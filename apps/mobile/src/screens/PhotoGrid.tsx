@@ -1,13 +1,16 @@
 import { FlashList } from '@shopify/flash-list';
 import type { ViewToken } from '@shopify/flash-list';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { MemoryImage } from '../../modules/memory-image';
-import { COLUMNS, photosInRows } from '../library/timeline';
+import { layOut } from '../library/layout';
+import type { LaidOutRow } from '../library/layout';
+import { photosInRows } from '../library/timeline';
 import type { TimelineRow } from '../library/timeline';
 import { fonts } from '../theme';
+import { PhotoAspects, useAppearance } from '../ui/appearance';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 
@@ -17,7 +20,8 @@ const GAP = 2;
 const Tile = memo(function Tile({
   photoId,
   imageId,
-  size,
+  width,
+  height,
   palette,
   chosen,
   requestThumbs,
@@ -26,7 +30,8 @@ const Tile = memo(function Tile({
 }: {
   photoId: string;
   imageId: string | null;
-  size: number;
+  width: number;
+  height: number;
   palette: Palette;
   /** Set while choosing photos: whether this one is chosen. */
   chosen: boolean | undefined;
@@ -37,7 +42,7 @@ const Tile = memo(function Tile({
   useEffect(() => {
     if (!imageId) requestThumbs([photoId]);
   }, [photoId, imageId, requestThumbs]);
-  const fade = useFadeIn(photoId, imageId);
+  const reveal = useReveal(photoId, imageId);
   const choosing = chosen !== undefined;
   return (
     <Pressable
@@ -55,10 +60,9 @@ const Tile = memo(function Tile({
           : undefined
       }
     >
-      <View style={{ width: size, height: size, backgroundColor: palette.surface }}>
-        <Animated.View style={{ opacity: fade }}>
-          <MemoryImage imageId={imageId} style={{ width: size, height: size }} />
-        </Animated.View>
+      <View style={{ width, height, backgroundColor: palette.track }}>
+        {imageId ? null : <Placeholder palette={palette} />}
+        <MemoryImage imageId={imageId} reveal={reveal} style={{ width, height }} />
       </View>
       {choosing ? (
         <>
@@ -84,24 +88,64 @@ const Tile = memo(function Tile({
 });
 
 /**
- * A preview fades in as it's decrypted, the phone's version of the web's soft focus. Only
- * when it arrives while on screen: a tile reused for another photo, or one whose preview was
- * already there, shows at once.
+ * Whether this tile's preview should come into focus when it arrives (MemoryImage `reveal`):
+ * only when it arrives while on screen. A tile reused for another photo, or one whose preview
+ * was already there, shows at once.
  */
-function useFadeIn(photoId: string, imageId: string | null): Animated.Value {
-  const [fade] = useState(() => new Animated.Value(imageId ? 1 : 0));
-  const seen = useRef({ photoId, hadImage: imageId !== null });
+function useReveal(photoId: string, imageId: string | null): boolean {
+  const [seen, setSeen] = useState({ photoId, waited: imageId === null });
+  if (seen.photoId !== photoId) {
+    const next = { photoId, waited: imageId === null };
+    setSeen(next);
+    return next.waited;
+  }
+  return seen.waited;
+}
+
+/**
+ * While previews load, every waiting tile breathes together, so the grid reads as loading
+ * rather than empty. One shared animation, running only while some tile is waiting.
+ */
+const pulse = new Animated.Value(0);
+let waiting = 0;
+let pulsing: Animated.CompositeAnimation | null = null;
+
+function startWaiting(): void {
+  waiting += 1;
+  if (pulsing) return;
+  pulsing = Animated.loop(
+    Animated.sequence([
+      Animated.timing(pulse, { toValue: 1, duration: 750, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0, duration: 750, useNativeDriver: true }),
+    ]),
+  );
+  pulsing.start();
+}
+
+function stopWaiting(): void {
+  waiting = Math.max(0, waiting - 1);
+  if (waiting > 0 || !pulsing) return;
+  pulsing.stop();
+  pulsing = null;
+  pulse.setValue(0);
+}
+
+function Placeholder({ palette }: { palette: Palette }) {
   useEffect(() => {
-    if (seen.current.photoId !== photoId) {
-      seen.current = { photoId, hadImage: imageId !== null };
-      fade.setValue(imageId ? 1 : 0);
-      return;
-    }
-    if (!imageId || seen.current.hadImage) return;
-    seen.current.hadImage = true;
-    Animated.timing(fade, { toValue: 1, duration: 320, useNativeDriver: true }).start();
-  }, [photoId, imageId, fade]);
-  return fade;
+    startWaiting();
+    return stopWaiting;
+  }, []);
+  return (
+    <Animated.View
+      style={[
+        StyleSheet.absoluteFill,
+        {
+          backgroundColor: palette.muted,
+          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0, 0.16] }),
+        },
+      ]}
+    />
+  );
 }
 
 const TileRow = memo(
@@ -109,21 +153,23 @@ const TileRow = memo(
     photoIds: string[];
     imageIds: (string | null)[];
     chosen: (boolean | undefined)[];
-    size: number;
+    widths: number[];
+    height: number;
     palette: Palette;
     requestThumbs: (photoIds: readonly string[]) => void;
     onPress: (photoId: string) => void;
     onLongPress: ((photoId: string) => void) | undefined;
   }) {
     return (
-      <View style={[styles.tileRow, { height: props.size }]}>
+      <View style={[styles.tileRow, { height: props.height }]}>
         {props.photoIds.map((photoId, index) => (
           <Tile
             key={photoId}
             photoId={photoId}
             imageId={props.imageIds[index] ?? null}
             chosen={props.chosen[index]}
-            size={props.size}
+            width={props.widths[index] ?? props.height}
+            height={props.height}
             palette={props.palette}
             requestThumbs={props.requestThumbs}
             onPress={props.onPress}
@@ -135,7 +181,8 @@ const TileRow = memo(
   },
   // A row only redraws when one of its own previews arrives or is chosen, not on every change.
   (before, after) =>
-    before.size === after.size &&
+    before.height === after.height &&
+    before.widths.every((each, index) => each === after.widths[index]) &&
     before.palette === after.palette &&
     before.onPress === after.onPress &&
     before.onLongPress === after.onLongPress &&
@@ -165,7 +212,7 @@ function MonthHeading({
 }
 
 /**
- * Photos by month, four across, with previews downloaded and decrypted as they come near the
+ * Photos by month, laid out as chosen in Settings (Grid, Compact or Uncropped), with previews downloaded and decrypted as they come near the
  * screen. Tapping a photo opens it, or, while choosing (`chosen` is set), ticks it; a long
  * press (`onLongPress`) starts selecting.
  */
@@ -192,11 +239,16 @@ export function PhotoGrid({
 }) {
   const palette = usePalette();
   const { width } = useWindowDimensions();
-  const size = Math.floor((width - GAP * (COLUMNS - 1)) / COLUMNS);
+  const { photoView } = useAppearance();
+  const aspect = useContext(PhotoAspects);
+  const laid = useMemo(
+    () => layOut(rows, photoView, width, GAP, aspect),
+    [rows, photoView, width, aspect],
+  );
 
   // Previews actually on screen jump the queue ahead of those just drawn off screen.
   const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken<TimelineRow>[] }) => {
+    ({ viewableItems }: { viewableItems: ViewToken<LaidOutRow>[] }) => {
       const onScreen = photosInRows(viewableItems.map((token) => token.item));
       if (onScreen.length > 0) requestThumbs(onScreen, true);
     },
@@ -204,7 +256,7 @@ export function PhotoGrid({
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: TimelineRow }) =>
+    ({ item }: { item: LaidOutRow }) =>
       item.kind === 'month' ? (
         <MonthHeading row={item} palette={palette} />
       ) : (
@@ -212,19 +264,20 @@ export function PhotoGrid({
           photoIds={item.photoIds}
           imageIds={item.photoIds.map((photoId) => thumbs.get(photoId) ?? null)}
           chosen={item.photoIds.map((photoId) => (chosen ? chosen.has(photoId) : undefined))}
-          size={size}
+          widths={item.widths}
+          height={item.height}
           palette={palette}
           requestThumbs={requestThumbs}
           onPress={onPress}
           onLongPress={onLongPress}
         />
       ),
-    [palette, thumbs, chosen, size, requestThumbs, onPress, onLongPress],
+    [palette, thumbs, chosen, requestThumbs, onPress, onLongPress],
   );
 
   return (
     <FlashList
-      data={rows}
+      data={laid}
       renderItem={renderItem}
       keyExtractor={(row) => row.key}
       getItemType={(row) => row.kind}

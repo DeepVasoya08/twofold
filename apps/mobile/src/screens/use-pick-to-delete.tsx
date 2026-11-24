@@ -89,7 +89,7 @@ export function usePickToDelete(
         {picked.length > 0 ? (
           <HeaderButton
             label="Delete"
-            filled
+            danger
             onPress={() => {
               setConfirming(true);
             }}

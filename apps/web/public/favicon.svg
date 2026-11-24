@@ -1,12 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="4 2 24 28">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 4 28 28">
   <style>
     .a { fill: #2f4bf0; }
-    .b { fill: #7d8fff; }
+    .b { fill: #15171c; }
     @media (prefers-color-scheme: dark) {
       .a { fill: #7d8fff; }
-      .b { fill: #c9d0ff; }
+      .b { fill: #ececea; }
     }
   </style>
-  <path class="a" fill-rule="evenodd" d="M6 29V14.5a10 10 0 0 1 20 0V29zM11.5 29v-9a4.5 4.5 0 0 1 9 0v9z" />
-  <path class="b" d="M13.5 29v-8.6a2.5 2.5 0 0 1 5 0V29z" />
+  <mask id="gap">
+    <rect width="32" height="32" fill="#fff" />
+    <path d="M13 29V19a8 8 0 0 1 16 0v10z" fill="#000" stroke="#000" stroke-width="3" stroke-linejoin="round" />
+  </mask>
+  <path class="a" mask="url(#gap)" d="M3 29V15a8 8 0 0 1 16 0v14z" />
+  <path class="b" d="M13 29V19a8 8 0 0 1 16 0v10z" />
 </svg>

@@ -545,11 +545,16 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
 
 - The look is called "Arch". A calm, near-colourless interface (paper white in light mode,
   graphite in dark) so the photos carry the colour, with one cobalt accent kept for the main
-  action on screen, links and the logo. Strong but secondary buttons are ink (`btn--ink`).
+  action on screen, links and the logo. Strong but secondary buttons and the chosen filter
+  chip are ink (`btn--ink`; on the phone, text colour on background). Delete buttons are
+  red outlines, never the accent. Icons are thin line drawings in the text colour, never
+  emoji (Android draws emoji in colour); the phone draws them with views
+  (`apps/mobile/src/ui/icons.tsx`), so it needs no icon font or SVG library.
   The private space is always night: deep navy with lavender light. The theme follows the
   device; Settings can force light or dark.
-- The arch is the signature shape: the logo (an arch with a smaller arch inside it, a
-  private space within your library), album covers, and the artwork on sign-in, sign-up and
+- The arch is the signature shape: the logo ("Fold": two arches folded over each
+  other, your library with a private space tucked in front, the front one cut out of the
+  back by a thin gap), album covers, and the artwork on sign-in, sign-up and
   unlock (a day arch with a small night one in its corner). That artwork is Arcafold's own,
   never a user's photo: nothing is decrypted before unlocking, and the screen must look the
   same whichever password is typed next.

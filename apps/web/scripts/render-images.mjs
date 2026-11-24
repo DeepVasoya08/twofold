@@ -19,19 +19,24 @@ const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 /** The phone app's images (apps/mobile/assets): its icons, splash and sign-in artwork. */
 const phoneDir = join(publicDir, '..', '..', 'mobile', 'assets');
 
-/** The arch mark's shapes, as in components/Brand.tsx (a 32-unit view box). */
-const ARCH_OUTER = 'M6 29V14.5a10 10 0 0 1 20 0V29zM11.5 29v-9a4.5 4.5 0 0 1 9 0v9z';
-const ARCH_INNER = 'M13.5 29v-8.6a2.5 2.5 0 0 1 5 0V29z';
+/** The mark's shapes, as in components/Brand.tsx (a 32-unit view box). */
+const ARCH_BACK = 'M3 29V15a8 8 0 0 1 16 0v14z';
+const ARCH_FRONT = 'M13 29V19a8 8 0 0 1 16 0v10z';
 
-/** The logo mark: an arch with a smaller arch inside it. */
-const mark = (size, { outer = '#2f4bf0', inner = '#7d8fff' } = {}) => `
-  <svg width="${String(size)}" height="${String(size)}" viewBox="4 2 24 28">
-    <path d="${ARCH_OUTER}" fill="${outer}" fill-rule="evenodd" />
-    <path d="${ARCH_INNER}" fill="${inner}" />
+/**
+ * The logo mark: two arches folded over each other, the front one cut out of the back one by
+ * a thin gap. `moon` adds a small moon to the front arch, for the larger icons.
+ */
+const mark = (size, { back = '#2f4bf0', front = '#15171c', moon = null } = {}) => `
+  <svg width="${String(size)}" height="${String(size)}" viewBox="2 4 28 28">
+    <mask id="gap"><rect width="32" height="32" fill="#fff" /><path d="${ARCH_FRONT}" fill="#000" stroke="#000" stroke-width="3" stroke-linejoin="round" /></mask>
+    <path d="${ARCH_BACK}" fill="${back}" mask="url(#gap)" />
+    <path d="${ARCH_FRONT}" fill="${front}" />
+    ${moon ? `<circle cx="21" cy="20" r="1.8" fill="${moon}" />` : ''}
   </svg>`;
 
-/** On cobalt, the mark is white with a lavender inner arch. */
-const onCobalt = { outer: '#ffffff', inner: '#a9b5ff' };
+/** On cobalt, a white library arch with a night-navy private arch and its moon. */
+const onCobalt = { back: '#ffffff', front: '#0c1130', moon: '#c9d0ff' };
 const background = 'radial-gradient(120% 90% at 30% 0%, #4a63ff, #2f4bf0 55%, #2238c9)';
 
 /** A square icon: the mark on cobalt, `inset` of the size left around it. */
@@ -92,7 +97,7 @@ const outputs = [
     dir: phoneDir,
     file: 'splash-icon.png',
     size: 1024,
-    html: `<div style="width:1024px;height:1024px;display:grid;place-items:center">${mark(400)}</div>`,
+    html: `<div style="width:1024px;height:1024px;display:grid;place-items:center">${mark(400, { back: '#7d8fff', front: '#ececea' })}</div>`,
   },
   {
     dir: phoneDir,
@@ -110,7 +115,7 @@ const outputs = [
     dir: phoneDir,
     file: 'android-icon-monochrome.png',
     size: 432,
-    html: `<div style="width:432px;height:432px;display:grid;place-items:center">${mark(220, { outer: '#fff', inner: '#fff' })}</div>`,
+    html: `<div style="width:432px;height:432px;display:grid;place-items:center">${mark(220, { back: '#fff', front: '#fff' })}</div>`,
   },
   {
     dir: phoneDir,

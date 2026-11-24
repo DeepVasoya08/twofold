@@ -18,10 +18,7 @@ import type { Session } from '@arcafold/core/account';
 import type { Device } from '@arcafold/types';
 
 import { backupStatusText } from '../backup/backup-text';
-import { jobStatusText } from '../backup/job-status';
 import { lastRunText } from '../backup/last-run';
-import { BackupJob } from '../../modules/backup-job';
-import type { BackupJobStatus } from '../../modules/backup-job';
 import { useBackup } from '../backup/use-backup';
 import { lastActiveText, shortDay } from '../library/devices';
 import { useAccount } from '../session/account';
@@ -29,6 +26,8 @@ import { AUTO_LOCK_CHOICES, autoLockLabel } from '../session/auto-lock';
 import { biometricsAvailable } from '../session/biometric';
 import { Banner, Button, Field } from '../ui/kit';
 import { Row, Section } from '../ui/rows';
+import { useAppearance } from '../ui/appearance';
+import type { ThemeChoice } from '../ui/appearance-settings';
 import { SharingSettings } from './SharingSettings';
 import { SmartSettings } from './SmartSettings';
 import type { Smart } from './SmartSettings';
@@ -188,14 +187,6 @@ function PasswordSheet({ onDone }: { onDone: () => void }) {
   );
 }
 
-function readJobStatus(): BackupJobStatus | null {
-  try {
-    return BackupJob.status();
-  } catch {
-    return null;
-  }
-}
-
 /** Automatic backup of the main library: on or off, and backing up now. */
 function Backup({
   session,
@@ -207,16 +198,6 @@ function Backup({
   onBackedUp: () => void;
 }) {
   const backup = useBackup(session, onBackedUp);
-  const [jobStatus, setJobStatus] = useState<BackupJobStatus | null>(readJobStatus);
-  // What the background jobs did changes while Settings is open, so it's read again.
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setJobStatus(readJobStatus());
-    }, 5000);
-    return () => {
-      clearInterval(timer);
-    };
-  }, [backup.on, backup.last]);
   const text = backupStatusText(backup.status);
   const running = backup.status.kind === 'running';
   return (
@@ -278,7 +259,7 @@ function Backup({
           ) : null}
           {backup.on ? (
             <Text style={[styles.rowDetail, { color: palette.muted }]}>
-              {lastRunText(backup.last)} {jobStatusText(jobStatus)}
+              {lastRunText(backup.last)}
             </Text>
           ) : null}
           {backup.on ? (
@@ -291,18 +272,78 @@ function Backup({
               }}
             />
           ) : null}
-          {backup.on ? (
-            <Button
-              kind="link"
-              label="Run in the background now"
-              onPress={() => {
-                backup.runInBackground();
-                setJobStatus(readJobStatus());
-              }}
-            />
-          ) : null}
         </View>
       ) : null}
+    </>
+  );
+}
+
+const THEMES: readonly { id: ThemeChoice; label: string }[] = [
+  { id: 'system', label: 'Phone setting' },
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+];
+
+/** A row of rounded choices, one of them picked. */
+function Choices<T extends string>({
+  choices,
+  value,
+  palette,
+  onChange,
+}: {
+  choices: readonly { id: T; label: string }[];
+  value: T;
+  palette: Palette;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <View style={styles.choices} accessibilityRole="radiogroup">
+      {choices.map((choice) => {
+        const chosen = choice.id === value;
+        return (
+          <Pressable
+            key={choice.id}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: chosen }}
+            onPress={() => {
+              onChange(choice.id);
+            }}
+            style={[
+              styles.choice,
+              chosen
+                ? { backgroundColor: palette.text, borderColor: palette.text }
+                : { borderColor: palette.border },
+            ]}
+          >
+            <Text
+              style={[styles.choiceText, { color: chosen ? palette.background : palette.text }]}
+            >
+              {choice.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * The theme, for this phone. The private space stays night whatever the theme,
+ * so you always know where you are.
+ */
+function Appearance({ palette }: { palette: Palette }) {
+  const { theme, setTheme } = useAppearance();
+  return (
+    <>
+      <View style={styles.row}>
+        <View style={styles.rowText}>
+          <Text style={[styles.rowTitle, { color: palette.text }]}>Theme</Text>
+          <Text style={[styles.rowDetail, { color: palette.muted }]}>
+            The private space always uses its night colours.
+          </Text>
+          <Choices choices={THEMES} value={theme} palette={palette} onChange={setTheme} />
+        </View>
+      </View>
     </>
   );
 }
@@ -396,6 +437,10 @@ export function Settings({
           </View>
         </View>
 
+        <Section title="Appearance" palette={palette}>
+          <Appearance palette={palette} />
+        </Section>
+
         <Section title="Security" palette={palette}>
           {showFingerprint ? (
             <Row
@@ -437,14 +482,14 @@ export function Settings({
                       style={[
                         styles.choice,
                         chosen
-                          ? { backgroundColor: palette.accent, borderColor: palette.accent }
+                          ? { backgroundColor: palette.text, borderColor: palette.text }
                           : { borderColor: palette.border },
                       ]}
                     >
                       <Text
                         style={[
                           styles.choiceText,
-                          { color: chosen ? palette.onAccent : palette.text },
+                          { color: chosen ? palette.background : palette.text },
                         ]}
                       >
                         {minutes} min

@@ -1,9 +1,14 @@
 package com.arcafold.memoryimage
 
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.RectF
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.os.Build
+import android.view.animation.DecelerateInterpolator
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
@@ -16,13 +21,18 @@ import expo.modules.kotlin.views.ExpoView
 private const val MAX_ZOOM = 5f
 private const val DOUBLE_TAP_ZOOM = 2.5f
 
+/** How a preview comes into focus as it's decrypted: from this blur, over this long. */
+private const val REVEAL_BLUR = 20f
+private const val REVEAL_MS = 520L
+
 /**
  * Shows an image from MemoryImages by its id: cropped to fill the view ("cover", for tiles)
  * or whole within it ("contain", for the viewer), decoded no larger than `maxSide` pixels.
  * With `zoomable`, it can be pinched, double-tapped and panned (the viewer), reports taps
  * (`onTap`) and whether it's zoomed (`onZoom`), and keeps showing the picture it has while
  * the next one (the original after its preview, or a sharper decode) is decoded, so the
- * zoom carries over.
+ * zoom carries over. With `reveal`, a picture that arrives comes into focus from a soft
+ * blur (Android 12 and later; a fade before that), the phone's version of the web's unseal.
  */
 class MemoryImageView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
   override val shouldUseAndroidLayout = true
@@ -41,6 +51,8 @@ class MemoryImageView(context: Context, appContext: AppContext) : ExpoView(conte
   private var shown: String? = null
   private var fit = "cover"
   private var zoomable = false
+  private var reveal = false
+  private var revealing: ValueAnimator? = null
 
   /** The zoom and pan on top of fitting the picture to the view, in view pixels. */
   private val zoom = Matrix()
@@ -65,6 +77,10 @@ class MemoryImageView(context: Context, appContext: AppContext) : ExpoView(conte
     applyScaleType()
   }
 
+  fun setReveal(value: Boolean) {
+    reveal = value
+  }
+
   fun setZoomable(value: Boolean) {
     zoomable = value
     if (!value) resetZoom()
@@ -86,6 +102,7 @@ class MemoryImageView(context: Context, appContext: AppContext) : ExpoView(conte
     val wanted = id?.let { "$it@$maxSide" }
     if (wanted == shown) return
     shown = wanted
+    stopReveal()
     // A tile clears at once (it may be showing another photo); the viewer keeps what it has.
     if (!zoomable || id == null) image.setImageBitmap(null)
     if (id == null) return
@@ -94,7 +111,36 @@ class MemoryImageView(context: Context, appContext: AppContext) : ExpoView(conte
       if (shown != wanted || (bitmap == null && zoomable)) return@load
       image.setImageBitmap(bitmap)
       updateMatrix()
+      if (reveal && !zoomable && bitmap != null) startReveal()
     }
+  }
+
+  private fun startReveal() {
+    image.alpha = 0f
+    revealing =
+      ValueAnimator.ofFloat(0f, 1f).apply {
+        duration = REVEAL_MS
+        interpolator = DecelerateInterpolator()
+        addUpdateListener { animator ->
+          val t = animator.animatedValue as Float
+          image.alpha = (t * 2.5f).coerceAtMost(1f)
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val blur = REVEAL_BLUR * (1f - t)
+            image.setRenderEffect(
+              if (blur < 0.5f) null else RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP),
+            )
+          }
+        }
+        start()
+      }
+  }
+
+  /** Shows the picture as it is, ending any reveal (a recycled tile moving on). */
+  private fun stopReveal() {
+    revealing?.cancel()
+    revealing = null
+    image.alpha = 1f
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) image.setRenderEffect(null)
   }
 
   override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

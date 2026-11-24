@@ -84,7 +84,7 @@ export function RecentlyDeleted({
           <HeaderButton label={restoring ? 'Restoring…' : 'Restore'} onPress={restore} />
           <HeaderButton
             label="Delete"
-            filled
+            danger
             onPress={() => {
               setConfirm('selected');
             }}
