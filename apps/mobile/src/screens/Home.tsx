@@ -892,6 +892,7 @@ const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
     left: EDGE,
+    right: EDGE,
     height: TAB_BAR,
     borderRadius: TAB_BAR / 2,
     borderWidth: StyleSheet.hairlineWidth,
