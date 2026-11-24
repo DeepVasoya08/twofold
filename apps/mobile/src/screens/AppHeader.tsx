@@ -225,10 +225,10 @@ export function SelectionHeader({
         accessibilityRole="button"
         accessibilityLabel="Stop selecting"
         onPress={onCancel}
-        hitSlop={10}
-        style={styles.back}
+        hitSlop={6}
+        style={[styles.round, { backgroundColor: palette.track }]}
       >
-        <Text style={[styles.closeText, { color: palette.text }]}>✕</Text>
+        <Icon name="close" size={16} color={palette.text} />
       </Pressable>
       <Text
         style={[styles.title, { color: palette.text }]}
@@ -243,8 +243,57 @@ export function SelectionHeader({
   );
 }
 
+/** A round icon button, for the top of a page (back, ⋯). */
+export function RoundButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+}) {
+  const palette = usePalette();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      hitSlop={6}
+      style={({ pressed }) => [
+        styles.round,
+        { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1 },
+        pressed ? { opacity: 0.7 } : null,
+      ]}
+    >
+      <Icon name={icon} size={18} color={palette.text} />
+    </Pressable>
+  );
+}
+
+/**
+ * The top of a page opened from a tab (an album, a person): a round back button, then the
+ * page's own round buttons on the right. The page's title sits in its header below.
+ */
+export function PageTop({ onBack, children }: { onBack: () => void; children?: ReactNode }) {
+  return (
+    <View style={[styles.header, { paddingTop: (StatusBar.currentHeight ?? 24) + 10 }]}>
+      <RoundButton icon="back" label="Back" onPress={onBack} />
+      <View style={styles.spacer} />
+      {children}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  closeText: { fontSize: 22, fontWeight: '400' },
+  round: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spacer: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

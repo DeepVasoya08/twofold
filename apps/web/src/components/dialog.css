@@ -63,21 +63,59 @@
   margin-top: 4px;
 }
 
+/*
+ * At phone widths, dialogs float up from the bottom as sheets, clear of the screen's edges,
+ * with a handle and a round close button, the same as the phone app's.
+ */
 @media (max-width: 560px) {
   .dialog,
   .dialog--md {
-    width: 100%;
+    width: calc(100% - 16px);
     max-width: none;
-    max-height: calc(100dvh - 24px);
-    margin: auto 0 0;
-    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    max-height: calc(100dvh - 32px);
+    margin: auto 8px calc(8px + env(safe-area-inset-bottom));
+    border: 1px solid var(--border);
+    border-radius: 30px;
+  }
+
+  .dialog[open] {
+    animation: sheet-in 0.26s var(--ease);
   }
 
   .dialog__body {
-    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    padding: 10px 20px 22px;
+  }
+
+  .dialog__body::before {
+    content: '';
+    justify-self: center;
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--border-strong);
+  }
+
+  .dialog__header .icon-btn {
+    width: 36px;
+    height: 36px;
+    background: var(--surface-2);
+    color: var(--text);
   }
 
   .dialog__actions .btn {
     flex: 1;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open] {
+    animation: none;
   }
 }

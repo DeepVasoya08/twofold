@@ -20,6 +20,7 @@ export type IconName =
   | 'compact'
   | 'uncropped'
   | 'check'
+  | 'close'
   | 'back'
   | 'more'
   | 'heart'
@@ -353,6 +354,12 @@ export function Icon({ name, size = 22, color }: { name: IconName; size?: number
           borderBottomLeftRadius: at(9),
           backgroundColor: color,
         },
+      ];
+      break;
+    case 'close':
+      parts = [
+        segment(at(6), at(6), at(18), at(18), stroke, color),
+        segment(at(18), at(6), at(6), at(18), stroke, color),
       ];
       break;
     case 'check':

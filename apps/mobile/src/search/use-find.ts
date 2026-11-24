@@ -32,6 +32,8 @@ export interface Find {
   submit: () => void;
   /** Starts a search for photos that look like this one. */
   searchLike: (photoId: string) => void;
+  /** Puts this in the box and searches for it (a person's name, a suggested word). */
+  searchFor: (text: string) => void;
   /** What the last search was read as; null before the first. */
   query: ParsedQuery | null;
   toggleChip: (key: string) => void;
@@ -187,6 +189,12 @@ export function useFind({
     text,
     setText,
     submit,
+    searchFor: (next) => {
+      restart();
+      setText(next);
+      setSubmitted(next.trim());
+      setLike(null);
+    },
     searchLike: (photoId) => {
       restart();
       setText('');

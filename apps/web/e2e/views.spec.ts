@@ -68,3 +68,27 @@ test('groups files by month, as a list or a grid', async ({ page }) => {
   await page.getByRole('button', { name: 'More for plan.txt' }).click();
   await expect(page.getByRole('menuitem', { name: 'Download' })).toBeVisible();
 });
+
+test('on a phone-sized screen, View opens a sheet of pictured layouts', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signUp(page);
+  await uploadPhotos(page, 2, distinctPhotos(2));
+  await expect(page.getByText('2 photos added to your vault')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  const grid = page.locator('.photo-grid').first();
+  // The row of icon buttons gives way to one View button.
+  await expect(page.getByRole('group', { name: 'View' })).toBeHidden();
+  await page.getByRole('button', { name: 'View: Grid' }).click();
+
+  const sheet = page.getByRole('dialog', { name: 'View' });
+  const choices = sheet.getByRole('radiogroup', { name: 'View' });
+  await expect(choices.getByRole('radio', { name: /Grid/ }).first()).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await choices.getByRole('radio', { name: /Uncropped/ }).click();
+  await expect(sheet).toBeHidden();
+  await expect(grid).toHaveAttribute('data-view', 'uncropped');
+  await expect(page.getByRole('button', { name: 'View: Uncropped' })).toBeVisible();
+});

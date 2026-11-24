@@ -7,6 +7,7 @@ import './site-chrome.css';
 /** Sections of the landing page. Plain links, so they work from the legal pages too. */
 const sections = [
   { href: '/#private', label: 'Private space' },
+  { href: '/#device', label: 'Smart search' },
   { href: '/#sharing', label: 'Sharing' },
   { href: '/#how', label: 'How it works' },
   { href: '/#faq', label: 'FAQ' },

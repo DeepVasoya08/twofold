@@ -1,19 +1,22 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { aboutPerson, groupName, personTitle } from '@arcafold/core/people/edits';
-import type { Group } from '@arcafold/core/people/grouping';
+import { groupName, labelNames, personTitle } from '@arcafold/core/people/edits';
+import { PERSON_LABELS } from '@arcafold/core/people/grouping';
+import type { Group, PersonLabel } from '@arcafold/core/people/grouping';
 
 import { photoCount } from '../library/album-text';
-import { gridRows } from '../library/timeline';
+import { gridRows, photosInRows } from '../library/timeline';
 import type { Library } from '../library/use-library';
 import { personPhotos } from '../people/use-people';
 import type { People } from '../people/use-people';
-import { Button, Note } from '../ui/kit';
+import { fonts } from '../theme';
+import { Note } from '../ui/kit';
 import { useNotice } from '../ui/notice';
+import { PillButton } from '../ui/pill-button';
 import { usePalette } from '../ui/theme';
-import { AppHeader, HeaderButton } from './AppHeader';
+import { PageTop, RoundButton } from './AppHeader';
 import { FaceThumb } from './FaceThumb';
 import { LabelsSheet, MergeSheet, PersonMenuSheet, PersonNameSheet } from './PeopleSheets';
 import { PhotoGrid } from './PhotoGrid';
@@ -26,21 +29,18 @@ export function PersonScreen({
   group,
   people,
   library,
-  initial,
   banner,
-  onSettings,
   onBack,
   onOpen,
   onSave,
   onTeach,
   onMoved,
+  onSearch,
 }: {
   group: Group;
   people: People;
   library: Library;
-  initial: string;
   banner: ReactNode;
-  onSettings: () => void;
   onBack: () => void;
   onOpen: (photoId: string) => void;
   /** Saves copies of photos to the phone's gallery, where it can. */
@@ -49,9 +49,10 @@ export function PersonScreen({
   onTeach?: (photoIds: readonly string[]) => void;
   /** A change made a new person (a group got a name, say): show them from now on. */
   onMoved: (personId: string) => void;
+  /** Searches for this person by name (and whatever else is typed after). */
+  onSearch?: (name: string) => void;
 }) {
   const palette = usePalette();
-  const picking = usePickToDelete(library, onOpen, { onSave, onTeach });
   const notice = useNotice();
   const [open, setOpen] = useState<Open>(null);
   const byId = useMemo(
@@ -60,6 +61,8 @@ export function PersonScreen({
   );
   const photos = useMemo(() => personPhotos(group, byId), [group, byId]);
   const rows = useMemo(() => gridRows(photos), [photos]);
+  const all = useMemo(() => photosInRows(rows), [rows]);
+  const picking = usePickToDelete(library, onOpen, { onSave, onTeach, filing: library, all });
   const cover = group.faces[0];
   const person = group.person;
   const close = () => {
@@ -85,47 +88,90 @@ export function PersonScreen({
     );
   };
 
+  const name = person?.name ?? '';
+  const labels = person?.labels ?? [];
+  const toggleLabel = (label: PersonLabel) => {
+    const next = labels.includes(label)
+      ? labels.filter((each) => each !== label)
+      : [...labels, label];
+    quick(() => people.setLabels(group, next), 'Labels saved');
+  };
+
   const summary = (
     <View style={styles.summary}>
-      <FaceThumb
-        face={cover}
-        photo={byId.get(cover.photoId)}
-        imageId={library.thumbs.get(cover.photoId) ?? null}
-        size={112}
-        requestThumbs={library.requestThumbs}
-      />
-      <Text style={[styles.meta, { color: palette.muted }]}>
-        {aboutPerson(group, photoCount(photos.length))}
+      <View style={[styles.ring, { borderColor: palette.accent }]}>
+        <FaceThumb
+          face={cover}
+          photo={byId.get(cover.photoId)}
+          imageId={library.thumbs.get(cover.photoId) ?? null}
+          size={FACE}
+          requestThumbs={library.requestThumbs}
+        />
+      </View>
+      <Text style={[styles.name, { color: palette.text }]} accessibilityRole="header">
+        {personTitle(group)}
       </Text>
-      {person?.name ? null : (
-        <Button
-          kind="secondary"
+      <Text style={[styles.meta, { color: palette.muted }]}>
+        {[...(person?.me ? ['You'] : []), photoCount(photos.length)].join(' · ')}
+      </Text>
+      <View style={styles.labels} accessibilityRole="radiogroup">
+        {PERSON_LABELS.map((label) => {
+          const on = labels.includes(label);
+          return (
+            <Pressable
+              key={label}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: on }}
+              onPress={() => {
+                toggleLabel(label);
+              }}
+              style={[
+                styles.label,
+                on
+                  ? { borderColor: palette.accent, backgroundColor: palette.accentWash }
+                  : { borderColor: palette.border },
+              ]}
+            >
+              <Text style={[styles.labelText, { color: on ? palette.accent : palette.text }]}>
+                {labelNames[label]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {name === '' ? (
+        <PillButton
           label="Add a name"
+          icon="plus"
+          filled
           onPress={() => {
             setOpen('name');
           }}
         />
-      )}
+      ) : onSearch ? (
+        <PillButton
+          label={`Search ${name}’s photos`}
+          icon="search"
+          onPress={() => {
+            onSearch(name);
+          }}
+        />
+      ) : null}
     </View>
   );
 
   return (
     <View style={styles.fill}>
       {picking.header ?? (
-        <AppHeader
-          title={personTitle(group)}
-          initial={initial}
-          onSettings={onSettings}
-          onBack={onBack}
-        >
-          <HeaderButton
-            label="⋯"
-            accessibilityLabel="Person options"
+        <PageTop onBack={onBack}>
+          <RoundButton
+            icon="more"
+            label="Person options"
             onPress={() => {
               setOpen('menu');
             }}
           />
-        </AppHeader>
+        </PageTop>
       )}
       {banner}
       {photos.length === 0 ? (
@@ -197,9 +243,17 @@ export function PersonScreen({
   );
 }
 
+/** The face's size at the top of the page. */
+const FACE = 108;
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centre: { flex: 1, justifyContent: 'center', padding: 24, gap: 16 },
-  summary: { alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, gap: 10 },
+  summary: { alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8, gap: 6 },
+  ring: { padding: 4, borderWidth: 4, borderRadius: FACE, marginBottom: 6 },
+  name: { fontFamily: fonts.display, fontSize: 30, letterSpacing: -0.8 },
   meta: { fontSize: 14 },
+  labels: { flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 6 },
+  label: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
+  labelText: { fontSize: 14, fontWeight: '600' },
 });

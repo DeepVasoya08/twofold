@@ -545,7 +545,7 @@ export function Viewer({
       ) : null}
       {filing === 'picking' && photo ? (
         <PickAlbumSheet
-          photo={photo}
+          photos={[photo]}
           albums={library.albums}
           onPick={(target) => {
             void file(target, true);

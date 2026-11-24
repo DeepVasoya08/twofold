@@ -31,7 +31,7 @@ import type { Library } from '../library/use-library';
 import { useOpenFile } from '../library/use-open-file';
 import { fonts } from '../theme';
 import { useAppearance } from '../ui/appearance';
-import { useFloatSpace, useReportPicking } from '../ui/float-space';
+import { useReportPicking } from '../ui/float-space';
 import { Button, Note } from '../ui/kit';
 import { useNotice } from '../ui/notice';
 import { usePalette } from '../ui/theme';
@@ -266,7 +266,6 @@ export function Files({
   const palette = usePalette();
   const { width } = useWindowDimensions();
   const { fileView, setFileView } = useAppearance();
-  const floatSpace = useFloatSpace();
   const [query, setQuery] = useState('');
   const [choosingView, setChoosingView] = useState(false);
   const tileSize = Math.floor((width - GUTTER * 2 - GAP * (FILE_COLUMNS - 1)) / FILE_COLUMNS);
@@ -505,7 +504,7 @@ export function Files({
           extraData={[thumbs, chosen, opening]}
           onViewableItemsChanged={onGridViewable}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: 24 + floatSpace }}
+          contentContainerStyle={{ paddingBottom: 24 + picking.floatSpace }}
         />
       ) : (
         <FlashList
@@ -517,7 +516,7 @@ export function Files({
           extraData={[thumbs, chosen, opening]}
           onViewableItemsChanged={onViewableItemsChanged}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: 24 + floatSpace }}
+          contentContainerStyle={{ paddingBottom: 24 + picking.floatSpace }}
         />
       )}
       {picking.sheet}

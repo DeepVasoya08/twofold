@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { albumChangeText, chosenText, photoCount } from './album-text';
+import { albumChangeText, chosenText, dateSpan, photoCount } from './album-text';
 
 describe('photoCount', () => {
   it('counts photos, or says the album is empty', () => {
@@ -35,5 +35,21 @@ describe('chosenText', () => {
     expect(chosenText(0)).toBe('Choose photos');
     expect(chosenText(1)).toBe('1 chosen');
     expect(chosenText(3)).toBe('3 chosen');
+  });
+});
+
+describe('dateSpan', () => {
+  it('says one day, a span in a month, across months and across years', () => {
+    expect(dateSpan([])).toBeNull();
+    expect(dateSpan(['2026-11-22T10:00:00Z', '2026-11-22T18:00:00Z'])).toBe('Nov 22, 2026');
+    expect(dateSpan(['2026-11-23T10:00:00Z', '2026-11-20T08:00:00Z'])).toBe('Nov 20 – 23, 2026');
+    expect(dateSpan(['2026-10-30T10:00:00Z', '2026-11-02T08:00:00Z'])).toBe('Oct 30 – Nov 2, 2026');
+    expect(dateSpan(['2025-12-30T10:00:00Z', '2026-01-02T08:00:00Z'])).toBe(
+      'Dec 30, 2025 – Jan 2, 2026',
+    );
+  });
+
+  it('skips dates it cannot read', () => {
+    expect(dateSpan(['not a date', '2026-11-22T10:00:00Z'])).toBe('Nov 22, 2026');
   });
 });

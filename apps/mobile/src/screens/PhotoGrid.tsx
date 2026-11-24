@@ -12,10 +12,13 @@ import type { TimelineRow } from '../library/timeline';
 import { fonts } from '../theme';
 import { PhotoAspects, useAppearance } from '../ui/appearance';
 import { useFloatSpace } from '../ui/float-space';
+import { Icon } from '../ui/icons';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 
 const GAP = 2;
+/** How far a chosen photo shrinks in from its tile's edges. */
+const INSET = 7;
 
 /** One preview. Asks for its own preview when it's drawn, which is when it's near the screen. */
 const Tile = memo(function Tile({
@@ -61,28 +64,41 @@ const Tile = memo(function Tile({
           : undefined
       }
     >
-      <View style={{ width, height, backgroundColor: palette.track }}>
-        {imageId ? null : <Placeholder palette={palette} />}
-        <MemoryImage imageId={imageId} reveal={reveal} style={{ width, height }} />
+      <View
+        style={{
+          width,
+          height,
+          backgroundColor: chosen ? palette.accentWash : palette.track,
+        }}
+      >
+        <View
+          style={
+            chosen
+              ? [styles.shrunk, { width: width - 2 * INSET, height: height - 2 * INSET }]
+              : null
+          }
+        >
+          {imageId ? null : <Placeholder palette={palette} />}
+          <MemoryImage
+            imageId={imageId}
+            reveal={reveal}
+            style={
+              chosen ? { width: width - 2 * INSET, height: height - 2 * INSET } : { width, height }
+            }
+          />
+        </View>
       </View>
       {choosing ? (
-        <>
-          {chosen ? (
-            <View
-              style={[StyleSheet.absoluteFill, styles.chosenFrame, { borderColor: palette.accent }]}
-            />
-          ) : null}
-          <View
-            style={[
-              styles.tick,
-              chosen
-                ? { backgroundColor: palette.accent, borderColor: palette.accent }
-                : { borderColor: '#fff', backgroundColor: 'rgba(0,0,0,0.25)' },
-            ]}
-          >
-            {chosen ? <Text style={[styles.tickText, { color: palette.onAccent }]}>✓</Text> : null}
-          </View>
-        </>
+        <View
+          style={[
+            styles.tick,
+            chosen
+              ? { backgroundColor: palette.accent, borderColor: '#ffffff' }
+              : { borderColor: '#ffffff', backgroundColor: 'rgba(0,0,0,0.25)' },
+          ]}
+        >
+          {chosen ? <Icon name="check" size={13} color="#ffffff" /> : null}
+        </View>
       ) : null}
     </Pressable>
   );
@@ -156,13 +172,16 @@ const TileRow = memo(
     chosen: (boolean | undefined)[];
     widths: number[];
     height: number;
+    gap: number;
     palette: Palette;
     requestThumbs: (photoIds: readonly string[]) => void;
     onPress: (photoId: string) => void;
     onLongPress: ((photoId: string) => void) | undefined;
   }) {
     return (
-      <View style={[styles.tileRow, { height: props.height }]}>
+      <View
+        style={[styles.tileRow, { height: props.height, gap: props.gap, marginBottom: props.gap }]}
+      >
         {props.photoIds.map((photoId, index) => (
           <Tile
             key={photoId}
@@ -183,6 +202,7 @@ const TileRow = memo(
   // A row only redraws when one of its own previews arrives or is chosen, not on every change.
   (before, after) =>
     before.height === after.height &&
+    before.gap === after.gap &&
     before.widths.every((each, index) => each === after.widths[index]) &&
     before.palette === after.palette &&
     before.onPress === after.onPress &&
@@ -228,6 +248,8 @@ export function PhotoGrid({
   header,
   footer,
   bottomPadding = 48,
+  floatSpace: floatOverride,
+  gap = GAP,
 }: {
   rows: readonly TimelineRow[];
   thumbs: ReadonlyMap<string, string>;
@@ -238,15 +260,20 @@ export function PhotoGrid({
   header?: ReactElement;
   footer?: ReactElement;
   bottomPadding?: number;
+  /** Room for what floats over the grid, when it isn't the tab bar's (a selection's bar). */
+  floatSpace?: number;
+  /** Space between photos; search results breathe a little more than the timeline. */
+  gap?: number;
 }) {
   const palette = usePalette();
   const { width } = useWindowDimensions();
   const { photoView } = useAppearance();
-  const floatSpace = useFloatSpace();
+  const tabSpace = useFloatSpace();
+  const floatSpace = floatOverride ?? tabSpace;
   const aspect = useContext(PhotoAspects);
   const laid = useMemo(
-    () => layOut(rows, photoView, width, GAP, aspect),
-    [rows, photoView, width, aspect],
+    () => layOut(rows, photoView, width, gap, aspect),
+    [rows, photoView, width, gap, aspect],
   );
 
   // Previews actually on screen jump the queue ahead of those just drawn off screen.
@@ -269,13 +296,14 @@ export function PhotoGrid({
           chosen={item.photoIds.map((photoId) => (chosen ? chosen.has(photoId) : undefined))}
           widths={item.widths}
           height={item.height}
+          gap={gap}
           palette={palette}
           requestThumbs={requestThumbs}
           onPress={onPress}
           onLongPress={onLongPress}
         />
       ),
-    [palette, thumbs, chosen, requestThumbs, onPress, onLongPress],
+    [palette, thumbs, chosen, gap, requestThumbs, onPress, onLongPress],
   );
 
   return (
@@ -304,12 +332,12 @@ const styles = StyleSheet.create({
   },
   monthLabel: { fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.3 },
   monthCount: { fontSize: 13 },
-  tileRow: { flexDirection: 'row', gap: GAP, marginBottom: GAP },
-  chosenFrame: { borderWidth: 3 },
+  tileRow: { flexDirection: 'row' },
+  shrunk: { margin: INSET, borderRadius: 10, overflow: 'hidden' },
   tick: {
     position: 'absolute',
     top: 6,
-    right: 6,
+    left: 6,
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -317,5 +345,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tickText: { fontSize: 13, fontWeight: '800' },
 });

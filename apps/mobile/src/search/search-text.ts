@@ -19,3 +19,22 @@ export function searchStatus(find: Pick<Find, 'index' | 'lookedAt'>): string | n
       return null;
   }
 }
+
+/** Words to try before typing, while Smart search can look inside photos. */
+export const TRY_WORDS = ['Beach', 'Sunset', 'Food', 'Mountains', 'Dog', 'Birthday'] as const;
+
+/**
+ * The people to offer before typing: those with a name (search finds people by name), not
+ * hidden, most photos first, at most `limit`.
+ */
+export function namedPeople<
+  T extends { person: { name?: string; hidden?: boolean } | null; photoIds: readonly string[] },
+>(groups: readonly T[], limit = 10): (T & { name: string })[] {
+  return groups
+    .flatMap((group) => {
+      const name = group.person?.name?.trim();
+      return name && group.person?.hidden !== true ? [{ ...group, name }] : [];
+    })
+    .sort((a, b) => b.photoIds.length - a.photoIds.length)
+    .slice(0, limit);
+}

@@ -118,6 +118,9 @@ exists but is low-key (Settings → Sharing).
   **Grid** (tiles with a PDF's first page or the file's icon, the name and details below,
   and the menu in the corner).
 - Each choice is kept per device, so a phone and a computer can each use their own.
+- At phone widths (560px and narrower) the row of View buttons becomes one **View** button
+  that opens a sheet of cards, each with a little picture of its layout, as in the phone app
+  (`components/ViewPicker.tsx`).
 
 ## Selecting photos and album actions
 
@@ -501,9 +504,13 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
 ## Landing page, legal pages and SEO
 
 - The landing page (`screens/Welcome.tsx`) leads with privacy without overselling, and
-  never presents Arcafold as a couples app. Its illustrations are small static copies of
-  real screens drawn with the mock landscape art: the unlock box opening either the library
-  or the private space, and an album shared with "Estrella" with the four-word check. Its
+  never presents Arcafold as a couples app. It uses the Arch look: an arch-framed photo
+  beside a phone showing the library in the hero, the private space section in "night"
+  navy, an "On your device" section (`#device`, "Smart search" in the nav) with cards for
+  Smart search, People and Files, a compact features grid, a two-column FAQ and a cobalt
+  arch to close. Its illustrations are small static copies of real screens drawn with the
+  mock landscape art: the unlock box opening either the library or the private space, and
+  an album shared with "Estrella" with the four-word check. Its
   FAQ (`site/faq.ts`) is honest about the trade-offs: no password reset, no recovery for the
   private space, 1 GB per account.
 - The Privacy Policy and Terms of Use (`screens/Privacy.tsx`, `screens/Terms.tsx`) describe
@@ -567,6 +574,9 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
   `style-src 'self'` holds. The only inline style is the upload progress width, set
   through the CSSOM, which the CSP allows.
 - Layout switches at 860px: sidebar on wide screens, top bar plus bottom tabs on phones.
+- At 560px and narrower, dialogs float up from the bottom as sheets clear of the screen's
+  edges, with a handle and a round close button, like the phone app's (`components/dialog.css`).
+  Wider screens keep centred dialogs.
   The sidebar's Collapse button (above storage) folds it to icons only, with each name kept
   as the link's accessible name and tooltip; the choice is a per-browser preference
   (`arcafold.sidebarCollapsed` in localStorage, `lib/sidebar.ts`).

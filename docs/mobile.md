@@ -176,7 +176,9 @@ or a native module.
   album, "Remove from album" takes the photo out. The rules (which photos fit which album,
   what you can only view) are shared with the web app in `@arcafold/core/library/albums`.
   Albums shared with you show here and can be viewed, and the Albums tab filters All, Shared
-  with me and Shared by me.
+  with me and Shared by me. An album's page opens with its arch cover beside the title, the
+  photo count and the days it spans, and who it's shared with, then Add photos, Share (your
+  own albums) and Save as buttons; back and ⋯ are round buttons at the top.
 - Sharing and invites (`src/sharing/invites.tsx`, `screens/ShareScreen.tsx`,
   `screens/JoinScreen.tsx`, `screens/InviteCards.tsx`, `screens/SharingSettings.tsx`): the same
   invites as the web app, moved along by the same shared pass (`@arcafold/core/sharing-pass`)
@@ -197,7 +199,9 @@ or a native module.
   `screens/PeopleSheets.tsx`, `screens/FaceThumb.tsx`): the People tab shows the face groups
   found so far, worked out on the phone from the sealed face results and person records (the
   same ones the web app saves), with each face cut out of its photo's preview in memory. A
-  person's page lists their photos; its ⋯ menu names them, marks "This is me", sets Friends,
+  person's page shows their face in an accent ring, their name and count, Friends, Family and
+  Work as chips that turn on and off, and "Search <name>'s photos" (or "Add a name"), then
+  their photos; its ⋯ menu names them, marks "This is me", sets Friends,
   Family or Work, merges them with someone, or hides them. In the viewer, "Not <name>" takes
   a photo out of them. The changes are shared with the web app in `@arcafold/core/people/edits`.
   With face grouping on, the phone finds faces itself (see "Looking at photos" below).
@@ -206,7 +210,9 @@ or a native module.
   search. A query is read the same way as on the web (`@arcafold/core/search/query`, people,
   dates, labels, taught words, and words for what's in the photo) and answered by the same
   code (`@arcafold/core/search/answer`) over the sealed search vectors your devices saved.
-  Tap a part of the search to leave it out; "More like this" in the viewer starts a search
+  Before anything is typed it offers named people, words to try (with Smart search on) and
+  smart albums, each a tap away. Each part of the search shows as a chip with its icon; tap
+  one to leave it out; "More like this" in the viewer starts a search
   from a photo. Words are turned into a vector on the phone with CLIP's text half in ONNX
   Runtime (`onnxruntime-react-native`, patched to pass `extra` session settings so the 8-bit
   weights are folded as they load, like the web). The first search with words asks before
@@ -225,7 +231,10 @@ or a native module.
   saved search.
 - Deleting and Recently deleted (`screens/use-pick-to-delete.tsx`, `screens/RecentlyDeleted.tsx`,
   `@arcafold/core/library/trash`): a long press on a photo in Photos, an album or a person
-  starts selecting; Delete (there, or in the viewer) moves photos to Recently deleted,
+  starts selecting: the header turns into "N selected" with Select all, picked photos shrink
+  inside an accent tint with a tick, and a floating bar takes the tab bar's place with Album
+  (adds them all, `PickAlbumSheet` for many photos), Save, Teach and Delete
+  (`ui/action-bar.tsx`). Delete (there, or in the viewer) moves photos to Recently deleted,
   recording when in their sealed metadata as on the web. Recently deleted (at the end of
   Albums) restores photos or deletes them for good, and opening the library deletes for good
   whatever has been there 30 days. Photos shared with you to view can't be deleted.
