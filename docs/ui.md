@@ -118,6 +118,9 @@ exists but is low-key (Settings → Sharing).
   **Grid** (tiles with a PDF's first page or the file's icon, the name and details below,
   and the menu in the corner).
 - Each choice is kept per device, so a phone and a computer can each use their own.
+- At phone widths (560px and narrower) the row of View buttons becomes one **View** button
+  that opens a sheet of cards, each with a little picture of its layout, as in the phone app
+  (`components/ViewPicker.tsx`).
 
 ## Selecting photos and album actions
 
@@ -567,6 +570,9 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
   `style-src 'self'` holds. The only inline style is the upload progress width, set
   through the CSSOM, which the CSP allows.
 - Layout switches at 860px: sidebar on wide screens, top bar plus bottom tabs on phones.
+- At 560px and narrower, dialogs float up from the bottom as sheets clear of the screen's
+  edges, with a handle and a round close button, like the phone app's (`components/dialog.css`).
+  Wider screens keep centred dialogs.
   The sidebar's Collapse button (above storage) folds it to icons only, with each name kept
   as the link's accessible name and tooltip; the choice is a per-browser preference
   (`arcafold.sidebarCollapsed` in localStorage, `lib/sidebar.ts`).
