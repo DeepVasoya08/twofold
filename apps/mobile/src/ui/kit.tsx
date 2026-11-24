@@ -173,7 +173,8 @@ export function Button({
   busy?: boolean;
   /** Greyed out until something is chosen. */
   disabled?: boolean;
-  kind?: 'primary' | 'secondary' | 'link';
+  /** `danger` is for a button that deletes: red, never the accent. */
+  kind?: 'primary' | 'secondary' | 'danger' | 'link';
   onPress: () => void;
 }) {
   const palette = usePalette();
@@ -184,6 +185,15 @@ export function Button({
       </Pressable>
     );
   }
+  // On red, dark themes' light red takes dark text; light theme's deep red takes white.
+  const ink =
+    kind === 'secondary'
+      ? palette.accent
+      : kind === 'danger'
+        ? palette.dark
+          ? palette.background
+          : '#ffffff'
+        : palette.onAccent;
   return (
     <Pressable
       accessibilityRole="button"
@@ -194,19 +204,12 @@ export function Button({
         styles.button,
         kind === 'secondary'
           ? { borderWidth: 1.5, borderColor: palette.accent }
-          : { backgroundColor: palette.accent },
+          : { backgroundColor: kind === 'danger' ? palette.error : palette.accent },
         { opacity: disabled ? 0.45 : busy ? 0.7 : 1 },
       ]}
     >
-      {busy ? (
-        <ActivityIndicator color={kind === 'secondary' ? palette.accent : palette.onAccent} />
-      ) : null}
-      <Text
-        style={[
-          styles.buttonText,
-          { color: kind === 'secondary' ? palette.accent : palette.onAccent },
-        ]}
-      >
+      {busy ? <ActivityIndicator color={ink} /> : null}
+      <Text style={[styles.buttonText, { color: ink }]}>
         {busy && busyLabel ? busyLabel : label}
       </Text>
     </Pressable>

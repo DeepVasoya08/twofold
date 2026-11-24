@@ -570,6 +570,17 @@ photo for a moment, then fades. The maths is in `lib/zoom.ts`, the gestures in `
   The sidebar's Collapse button (above storage) folds it to icons only, with each name kept
   as the link's accessible name and tooltip; the choice is a per-browser preference
   (`arcafold.sidebarCollapsed` in localStorage, `lib/sidebar.ts`).
+- The phone app's tabs share one frame (`apps/mobile/src/screens/AppHeader.tsx`,
+  `screens/Home.tsx`): the logo, title, Lock and your initial on top, then a search field
+  pinned under them with a round View button beside it. On Photos the field opens search,
+  which looks inside photos; on Albums, Files and People it finds by name as you type
+  (`library/match.ts`: every word, any order, ignoring case and accents). The tab bar is a
+  floating island over the content: the open tab is an accent pill with its name, the
+  others icons only. The Add button floats above its right end (upload on Photos and Files, a new
+  album on Albums; People has none, as people are found in photos). Both step aside while
+  selecting, while a sheet is open and while the keyboard is up. Sheets are cards floating
+  clear of the screen's edges with large rounded corners and a close button; the View
+  sheet shows a small picture of each layout (`ui/view-sheet.tsx`, `ui/view-choices.ts`).
 - On/off settings (face grouping, Smart search, hiding document photos) are switches
   (`components/Switch.tsx`, `role="switch"`) with a quiet On/Off label beside them, since a
   "Turn off" button left testers unsure which state it was in.

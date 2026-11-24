@@ -54,6 +54,29 @@ export function fileRows(files: readonly Photo[], shown: Shown): FileRow[] {
   ]);
 }
 
+export type FileGridRow =
+  | { kind: 'month'; key: string; label: string; count: number }
+  | { kind: 'files'; key: string; items: Photo[] };
+
+/** The same rows for the grid view: each month's heading, then its files `across` a row. */
+export function fileGridRows(rows: readonly FileRow[], across: number): FileGridRow[] {
+  const out: FileGridRow[] = [];
+  let open: Photo[] | null = null;
+  for (const row of rows) {
+    if (row.kind === 'month') {
+      out.push(row);
+      open = null;
+      continue;
+    }
+    if (!open || open.length >= across) {
+      open = [];
+      out.push({ kind: 'files', key: `row-${row.key}`, items: open });
+    }
+    open.push(row.item);
+  }
+  return out;
+}
+
 const shortDay = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',

@@ -8,6 +8,8 @@ export interface Palette {
   onAccent: string;
   /** The logo's inner arch, and other soft touches of the accent. */
   accentSoft: string;
+  /** A faint tint of the accent behind what's chosen (a view, a tab). */
+  accentWash: string;
   error: string;
   errorSoft: string;
   warning: string;
@@ -32,6 +34,7 @@ export const colors: { dark: Palette; light: Palette } = {
     accent: '#7d8fff',
     onAccent: '#0b0e24',
     accentSoft: '#2f4bf0',
+    accentWash: '#20264d',
     error: '#ff8a8a',
     errorSoft: '#3e1f1d',
     warning: '#d9902e',
@@ -48,6 +51,7 @@ export const colors: { dark: Palette; light: Palette } = {
     accent: '#2f4bf0',
     onAccent: '#ffffff',
     accentSoft: '#7d8fff',
+    accentWash: '#e8ebff',
     error: '#b3261e',
     errorSoft: '#fbe4e1',
     warning: '#b86f12',
@@ -71,6 +75,7 @@ export const nightColors: Palette = {
   accent: '#8c9cff',
   onAccent: '#0c1130',
   accentSoft: '#c9d0ff',
+  accentWash: '#1f2862',
   error: '#ff8f8f',
   errorSoft: '#3a1a2a',
   warning: '#e0a85a',

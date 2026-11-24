@@ -15,6 +15,7 @@ export type IconName =
   | 'files'
   | 'people'
   | 'upload'
+  | 'plus'
   | 'grid'
   | 'compact'
   | 'uncropped'
@@ -167,6 +168,12 @@ export function Icon({ name, size = 22, color }: { name: IconName; size?: number
         borderRadius: at(1.5),
         backgroundColor: color,
       }));
+      break;
+    case 'plus':
+      parts = [
+        segment(at(12), at(4.5), at(12), at(19.5), stroke, color),
+        segment(at(4.5), at(12), at(19.5), at(12), stroke, color),
+      ];
       break;
     case 'check':
       parts = [

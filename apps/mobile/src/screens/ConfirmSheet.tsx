@@ -6,8 +6,8 @@ import { Banner, Button } from '../ui/kit';
 import { Sheet } from '../ui/sheet';
 
 /**
- * Asks before doing something: a title, what it means, and one button that does it. Stays
- * open while it runs, and shows why if it fails.
+ * Asks before deleting something: a title, what it means, and one red button that does it.
+ * Stays open while it runs, and shows why if it fails.
  */
 export function ConfirmSheet({
   title,
@@ -43,7 +43,7 @@ export function ConfirmSheet({
   return (
     <Sheet title={title} body={body} busy={busy} onCancel={onCancel}>
       {error ? <Banner>{error}</Banner> : null}
-      <Button label={action} busyLabel={busyLabel} busy={busy} onPress={submit} />
+      <Button kind="danger" label={action} busyLabel={busyLabel} busy={busy} onPress={submit} />
       <Button kind="link" label="Cancel" onPress={busy ? () => undefined : onCancel} />
     </Sheet>
   );

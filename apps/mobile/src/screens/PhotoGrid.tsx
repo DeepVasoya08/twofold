@@ -11,6 +11,7 @@ import { photosInRows } from '../library/timeline';
 import type { TimelineRow } from '../library/timeline';
 import { fonts } from '../theme';
 import { PhotoAspects, useAppearance } from '../ui/appearance';
+import { useFloatSpace } from '../ui/float-space';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 
@@ -212,9 +213,10 @@ function MonthHeading({
 }
 
 /**
- * Photos by month, laid out as chosen in Settings (Grid, Compact or Uncropped), with previews downloaded and decrypted as they come near the
- * screen. Tapping a photo opens it, or, while choosing (`chosen` is set), ticks it; a long
- * press (`onLongPress`) starts selecting.
+ * Photos by month, laid out as chosen with the View button (Grid, Compact or Uncropped), with
+ * previews downloaded and decrypted as they come near the screen. Tapping a photo opens it,
+ * or, while choosing (`chosen` is set), ticks it; a long press (`onLongPress`) starts
+ * selecting.
  */
 export function PhotoGrid({
   rows,
@@ -240,6 +242,7 @@ export function PhotoGrid({
   const palette = usePalette();
   const { width } = useWindowDimensions();
   const { photoView } = useAppearance();
+  const floatSpace = useFloatSpace();
   const aspect = useContext(PhotoAspects);
   const laid = useMemo(
     () => layOut(rows, photoView, width, GAP, aspect),
@@ -285,7 +288,7 @@ export function PhotoGrid({
       onViewableItemsChanged={onViewableItemsChanged}
       ListHeaderComponent={header}
       ListFooterComponent={footer}
-      contentContainerStyle={{ paddingBottom: bottomPadding }}
+      contentContainerStyle={{ paddingBottom: bottomPadding + floatSpace }}
     />
   );
 }
