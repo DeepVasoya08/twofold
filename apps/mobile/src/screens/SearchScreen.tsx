@@ -29,6 +29,9 @@ import { usePalette } from '../ui/theme';
 import { FaceThumb } from './FaceThumb';
 import { PhotoGrid } from './PhotoGrid';
 
+/** Space between found photos, so each reads as its own result. */
+const RESULT_GAP = 5;
+
 /** Each kind of search part's icon. */
 const CHIP_ICONS: Record<Chip['kind'], IconName> = {
   person: 'people',
@@ -364,6 +367,7 @@ export function SearchScreen({
           thumbs={library.thumbs}
           requestThumbs={library.requestThumbs}
           onPress={onOpen}
+          gap={RESULT_GAP}
           header={header}
           {...(footer ? { footer } : {})}
         />
@@ -445,7 +449,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   block: { gap: 10, paddingHorizontal: 16 },
-  footer: { paddingTop: 16 },
+  footer: { paddingTop: 22 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   meta: { fontSize: 14 },
   count: { flex: 1, fontFamily: fonts.display, fontSize: 20, letterSpacing: -0.3 },

@@ -172,13 +172,16 @@ const TileRow = memo(
     chosen: (boolean | undefined)[];
     widths: number[];
     height: number;
+    gap: number;
     palette: Palette;
     requestThumbs: (photoIds: readonly string[]) => void;
     onPress: (photoId: string) => void;
     onLongPress: ((photoId: string) => void) | undefined;
   }) {
     return (
-      <View style={[styles.tileRow, { height: props.height }]}>
+      <View
+        style={[styles.tileRow, { height: props.height, gap: props.gap, marginBottom: props.gap }]}
+      >
         {props.photoIds.map((photoId, index) => (
           <Tile
             key={photoId}
@@ -199,6 +202,7 @@ const TileRow = memo(
   // A row only redraws when one of its own previews arrives or is chosen, not on every change.
   (before, after) =>
     before.height === after.height &&
+    before.gap === after.gap &&
     before.widths.every((each, index) => each === after.widths[index]) &&
     before.palette === after.palette &&
     before.onPress === after.onPress &&
@@ -245,6 +249,7 @@ export function PhotoGrid({
   footer,
   bottomPadding = 48,
   floatSpace: floatOverride,
+  gap = GAP,
 }: {
   rows: readonly TimelineRow[];
   thumbs: ReadonlyMap<string, string>;
@@ -257,6 +262,8 @@ export function PhotoGrid({
   bottomPadding?: number;
   /** Room for what floats over the grid, when it isn't the tab bar's (a selection's bar). */
   floatSpace?: number;
+  /** Space between photos; search results breathe a little more than the timeline. */
+  gap?: number;
 }) {
   const palette = usePalette();
   const { width } = useWindowDimensions();
@@ -265,8 +272,8 @@ export function PhotoGrid({
   const floatSpace = floatOverride ?? tabSpace;
   const aspect = useContext(PhotoAspects);
   const laid = useMemo(
-    () => layOut(rows, photoView, width, GAP, aspect),
-    [rows, photoView, width, aspect],
+    () => layOut(rows, photoView, width, gap, aspect),
+    [rows, photoView, width, gap, aspect],
   );
 
   // Previews actually on screen jump the queue ahead of those just drawn off screen.
@@ -289,13 +296,14 @@ export function PhotoGrid({
           chosen={item.photoIds.map((photoId) => (chosen ? chosen.has(photoId) : undefined))}
           widths={item.widths}
           height={item.height}
+          gap={gap}
           palette={palette}
           requestThumbs={requestThumbs}
           onPress={onPress}
           onLongPress={onLongPress}
         />
       ),
-    [palette, thumbs, chosen, requestThumbs, onPress, onLongPress],
+    [palette, thumbs, chosen, gap, requestThumbs, onPress, onLongPress],
   );
 
   return (
@@ -324,7 +332,7 @@ const styles = StyleSheet.create({
   },
   monthLabel: { fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.3 },
   monthCount: { fontSize: 13 },
-  tileRow: { flexDirection: 'row', gap: GAP, marginBottom: GAP },
+  tileRow: { flexDirection: 'row' },
   shrunk: { margin: INSET, borderRadius: 10, overflow: 'hidden' },
   tick: {
     position: 'absolute',
