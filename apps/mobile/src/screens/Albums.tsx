@@ -17,12 +17,17 @@ import type { SmartAlbum } from '@arcafold/core/search/smart-album';
 
 import { MemoryImage } from '../../modules/memory-image';
 import { photoCount } from '../library/album-text';
+import { filterByName } from '../library/match';
 import type { Library } from '../library/use-library';
 import { fonts } from '../theme';
+import { useAppearance } from '../ui/appearance';
+import { useFloatSpace, useReportPicking } from '../ui/float-space';
 import { Button, Note } from '../ui/kit';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
-import { AppHeader, HeaderButton } from './AppHeader';
+import { ALBUM_CHOICES, ALBUM_COLUMNS } from '../ui/view-choices';
+import { ViewSheet } from '../ui/view-sheet';
+import { AppHeader } from './AppHeader';
 
 const GUTTER = 16;
 const GAP = 12;
@@ -124,7 +129,11 @@ const EMPTY: Record<Exclude<AlbumTab, 'all'>, string> = {
   'by-me': 'You haven’t shared any albums. Open an album, then ⋯ and Share, to invite someone.',
 };
 
-/** Your albums, and those shared with you: the Albums tab. */
+/**
+ * Your albums, and those shared with you: the Albums tab. The search field under the title
+ * finds albums by name as you type; View shows them two or three across. New albums come from
+ * the floating Add button (Home).
+ */
 export function Albums({
   library,
   initial,
@@ -136,6 +145,7 @@ export function Albums({
   onTrash,
   smartAlbums = [],
   onOpenSmart,
+  onPicking,
 }: {
   library: Library;
   initial: string;
@@ -150,24 +160,58 @@ export function Albums({
   /** Searches saved as albums, while Smart search is on here: yours alone, never shared. */
   smartAlbums?: readonly SmartAlbum[];
   onOpenSmart?: (albumId: string) => void;
+  /** Says when the View sheet opens and closes, so the floating buttons step aside. */
+  onPicking?: (picking: boolean) => void;
 }) {
   const palette = usePalette();
   const { width } = useWindowDimensions();
-  const cardWidth = Math.floor((width - GUTTER * 2 - GAP) / 2);
+  const { albumView, setAlbumView } = useAppearance();
+  const floatSpace = useFloatSpace();
+  const columns = ALBUM_COLUMNS[albumView];
+  const cardWidth = Math.floor((width - GUTTER * 2 - GAP * (columns - 1)) / columns);
   const [tab, setTab] = useState<AlbumTab>('all');
-  const cards = useMemo(
+  const [query, setQuery] = useState('');
+  const [choosingView, setChoosingView] = useState(false);
+  useReportPicking(choosingView, onPicking);
+  const allCards = useMemo(
     () => albumCards(albumsInTab(library.albums, tab), library.photos),
     [library.albums, library.photos, tab],
+  );
+  const cards = useMemo(
+    () => filterByName(allCards, query, (card) => card.album.title),
+    [allCards, query],
   );
   const { thumbs, requestThumbs } = library;
 
   const header = (
-    <AppHeader title="Albums" initial={initial} onSettings={onSettings}>
-      {library.status === 'ready' ? (
-        <HeaderButton label="+ New" accessibilityLabel="New album" filled onPress={onNew} />
-      ) : null}
-    </AppHeader>
+    <AppHeader
+      title="Albums"
+      initial={initial}
+      onSettings={onSettings}
+      search={{
+        placeholder: 'Search albums',
+        query,
+        onQuery: setQuery,
+        view: {
+          icon: albumView === 'large' ? 'grid' : 'compact',
+          label: 'View',
+          onPress: () => {
+            setChoosingView(true);
+          },
+        },
+      }}
+    />
   );
+  const viewSheet = choosingView ? (
+    <ViewSheet
+      choices={ALBUM_CHOICES}
+      value={albumView}
+      onPick={setAlbumView}
+      onCancel={() => {
+        setChoosingView(false);
+      }}
+    />
+  ) : null;
 
   const tabs = (
     <View style={styles.tabs} accessibilityRole="tablist">
@@ -207,7 +251,8 @@ export function Albums({
     ) : null;
 
   // Smart albums are your own and can't be shared, so only All lists them.
-  const smart = tab === 'all' && onOpenSmart ? smartAlbums : [];
+  const allSmart = tab === 'all' && onOpenSmart ? smartAlbums : [];
+  const smart = filterByName(allSmart, query, (album) => album.title);
   const smartList =
     smart.length > 0 && onOpenSmart ? (
       <View style={styles.smart}>
@@ -251,6 +296,20 @@ export function Albums({
     </Pressable>
   );
 
+  if (library.status === 'ready' && query.trim() !== '' && cards.length + smart.length === 0) {
+    return (
+      <View style={styles.fill}>
+        {header}
+        {banner}
+        {tabs}
+        <View style={styles.centre}>
+          <Note>No albums called “{query.trim()}”.</Note>
+        </View>
+        {viewSheet}
+      </View>
+    );
+  }
+
   if (library.status === 'ready' && tab !== 'all' && cards.length === 0) {
     return (
       <View style={styles.fill}>
@@ -261,11 +320,12 @@ export function Albums({
         <View style={styles.centre}>
           <Note>{EMPTY[tab]}</Note>
         </View>
+        {viewSheet}
       </View>
     );
   }
 
-  if (library.status !== 'ready' || cards.length + smart.length === 0) {
+  if (library.status !== 'ready' || allCards.length + allSmart.length === 0) {
     return (
       <View style={styles.fill}>
         {header}
@@ -299,11 +359,13 @@ export function Albums({
       {tabs}
       {codeLink}
       <FlatList
+        key={columns}
         data={cards}
-        numColumns={2}
+        numColumns={columns}
         keyExtractor={(card) => card.album.id}
         columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: 32 + floatSpace }]}
+        keyboardShouldPersistTaps="handled"
         extraData={thumbs}
         ListFooterComponent={
           tab === 'all' ? (
@@ -324,6 +386,7 @@ export function Albums({
           />
         )}
       />
+      {viewSheet}
     </View>
   );
 }

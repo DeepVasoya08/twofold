@@ -7,9 +7,10 @@ import { fonts } from '../theme';
 import { usePalette } from './theme';
 
 /**
- * A panel that slides up over the screen, with a title and what to choose or type. Drawn in
- * the app's own window (not a dialog window), so screenshot blocking covers it too. The back
- * button and a tap outside close it, unless it's busy.
+ * A card that floats up over the screen, clear of its edges, with a title, a close button and
+ * what to choose or type. Drawn in the app's own window (not a dialog window), so screenshot
+ * blocking covers it too. The back button, the close button and a tap outside close it,
+ * unless it's busy.
  */
 export function Sheet({
   title,
@@ -44,13 +45,30 @@ export function Sheet({
       <View
         style={[
           styles.sheet,
-          { backgroundColor: palette.surface, paddingBottom: 24 + bottomInset() },
+          {
+            backgroundColor: palette.surface,
+            borderColor: palette.border,
+            marginBottom: 8 + bottomInset(),
+          },
         ]}
       >
         <View style={[styles.handle, { backgroundColor: palette.border }]} />
-        <Text style={[styles.title, { color: palette.text }]} accessibilityRole="header">
-          {title}
-        </Text>
+        <View style={styles.top}>
+          <Text style={[styles.title, { color: palette.text }]} accessibilityRole="header">
+            {title}
+          </Text>
+          {busy ? null : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={8}
+              onPress={onCancel}
+              style={[styles.close, { backgroundColor: palette.track }]}
+            >
+              <Text style={[styles.closeText, { color: palette.text }]}>✕</Text>
+            </Pressable>
+          )}
+        </View>
         {body ? <Text style={[styles.body, { color: palette.muted }]}>{body}</Text> : null}
         {children}
       </View>
@@ -103,21 +121,37 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(8,10,30,0.55)',
   },
   dismiss: { flex: 1 },
   sheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 24,
-    paddingTop: 12,
+    marginHorizontal: 8,
+    borderRadius: 30,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 22,
     gap: 14,
     maxHeight: '85%',
+    elevation: 12,
+    shadowColor: '#0b0e24',
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
   },
-  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2 },
-  title: { fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.3 },
+  handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2 },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  title: { flex: 1, fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.3 },
+  close: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeText: { fontSize: 15, fontWeight: '700' },
   body: { fontSize: 15, lineHeight: 21 },
-  option: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14 },
+  option: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 14 },
   optionLabel: { fontSize: 16, fontWeight: '600' },
   optionDetail: { fontSize: 13, marginTop: 2 },
 });

@@ -85,10 +85,14 @@ or a native module.
   only in a cloud service can't be deleted from here and is counted as kept. Locking forgets
   the list. The main library never offers this, since it backs up rather than moves; a photo
   automatic backup already copied into the main library stays there.
-- Photos tab: the header's View button picks Grid (four across), Compact (six across) or
-  Uncropped (each photo in its own shape) for every photo grid, saved per phone with the
-  theme (Settings > Appearance: phone setting, light or dark) in `appearance.json`.
-- Adding photos (the floating Add button on the timeline, hidden while selecting): Android's own photo picker (`ACTION_PICK_IMAGES`
+- Every tab has a search field pinned under its header with a View button beside it. Photos:
+  the field opens search; View picks Grid (four across), Compact (six across) or Uncropped
+  (each photo in its own shape) for every photo grid. Albums: find by name, two or three
+  across. Files: find by name, a list or a grid of previews. People: find by name, faces
+  three or four across. The choices are saved per phone with the theme (Settings >
+  Appearance: phone setting, light or dark) in `appearance.json`.
+- Adding photos (the floating Add button beside the tab bar on Photos, hidden while
+  selecting; on Files it adds files, on Albums it starts a new album): Android's own photo picker (`ACTION_PICK_IMAGES`
   from Android 13, the document picker before that), so the app needs no storage permission
   and sees only the photos picked, up to 100 at a time. `PhotoPicker` in
   `modules/memory-image` reads each photo's bytes and makes its 640 px JPEG preview, upright,
@@ -151,12 +155,13 @@ or a native module.
   photos), which Settings shows as "Last backup", and the library reloads on coming back
   when a run added photos after it loaded.
 - Photos and Albums tabs (`screens/Home.tsx`): the library opens once and stays open across
-  both tabs, an open album, the viewer and Settings. The tab bar and the bottom of sheets and
-  the viewer sit above Android's navigation bar, using its height from `modules/system-bars`
+  every tab, an open album, the viewer and Settings. The floating tab bar, the Add button and
+  the bottom of sheets and the viewer sit above Android's navigation bar (lists leave room at
+  the end to scroll clear of the bar, `ui/float-space.ts`), using its height from `modules/system-bars`
   (the app draws edge to edge). Back leaves an album or a person, then goes from Albums or People to Photos.
 - Albums (`screens/Albums.tsx`, `screens/AlbumScreen.tsx`, `screens/AlbumSheets.tsx`): album
   cards with their cover (the chosen one, else the newest photo), count and who shared them;
-  "+ New" names a new album and opens it. An album shows its photos by month with "Add
+  the floating + button names a new album and opens it. An album shows its photos by month with "Add
   photos": from your library (`screens/ChoosePhotos.tsx`, tick photos that can go in it) or,
   for your own albums, straight from this phone, uploaded into the album. Its menu renames or
   deletes it; deleting keeps the photos and takes the album out of their records, best effort,
@@ -231,7 +236,8 @@ or a native module.
   the first time.
 - Files (`screens/Files.tsx`, `src/library/files.ts`, `prepare.ts`, `use-open-file.ts`,
   `modules/save-file` `OpenFileProvider`): the Files tab lists everything that isn't a photo
-  by month, with the categories files were sorted into (on the web) as filters. "+ Add" opens
+  by month, with the categories files were sorted into (on the web) as filters. The floating Add
+  button opens
   Android's file picker; a file is read into memory and stored like the web stores one (its
   own name and type, dated when it was last changed, a padded stand-in preview, or for a PDF
   its first page drawn by Android's `PdfRenderer` in memory). Files added from the phone

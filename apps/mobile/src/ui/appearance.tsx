@@ -4,17 +4,29 @@ import { File, Paths } from 'expo-file-system';
 
 import type { PhotoView } from '../library/layout';
 import { DEFAULT_APPEARANCE, cleanAppearance } from './appearance-settings';
-import type { AppearanceSettings, ThemeChoice } from './appearance-settings';
+import type {
+  AlbumView,
+  AppearanceSettings,
+  FileView,
+  PeopleView,
+  ThemeChoice,
+} from './appearance-settings';
 
 interface AppearanceValue extends AppearanceSettings {
   setTheme: (theme: ThemeChoice) => void;
   setPhotoView: (view: PhotoView) => void;
+  setAlbumView: (view: AlbumView) => void;
+  setFileView: (view: FileView) => void;
+  setPeopleView: (view: PeopleView) => void;
 }
 
 const Appearance = createContext<AppearanceValue>({
   ...DEFAULT_APPEARANCE,
   setTheme: () => undefined,
   setPhotoView: () => undefined,
+  setAlbumView: () => undefined,
+  setFileView: () => undefined,
+  setPeopleView: () => undefined,
 });
 
 const file = () => new File(Paths.document, 'appearance.json');
@@ -60,6 +72,15 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
       },
       setPhotoView: (photoView: PhotoView) => {
         change({ photoView });
+      },
+      setAlbumView: (albumView: AlbumView) => {
+        change({ albumView });
+      },
+      setFileView: (fileView: FileView) => {
+        change({ fileView });
+      },
+      setPeopleView: (peopleView: PeopleView) => {
+        change({ peopleView });
       },
     }),
     [settings, change],

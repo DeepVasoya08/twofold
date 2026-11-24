@@ -4,9 +4,16 @@ import { DEFAULT_APPEARANCE, cleanAppearance, schemeFor } from './appearance-set
 
 describe('cleanAppearance', () => {
   it('reads saved choices', () => {
-    expect(cleanAppearance('{"theme":"dark","photoView":"uncropped"}')).toEqual({
+    expect(
+      cleanAppearance(
+        '{"theme":"dark","photoView":"uncropped","albumView":"small","fileView":"grid","peopleView":"small"}',
+      ),
+    ).toEqual({
       theme: 'dark',
       photoView: 'uncropped',
+      albumView: 'small',
+      fileView: 'grid',
+      peopleView: 'small',
     });
   });
 
@@ -14,8 +21,8 @@ describe('cleanAppearance', () => {
     expect(cleanAppearance(null)).toEqual(DEFAULT_APPEARANCE);
     expect(cleanAppearance('not json')).toEqual(DEFAULT_APPEARANCE);
     expect(cleanAppearance('"dark"')).toEqual(DEFAULT_APPEARANCE);
-    expect(cleanAppearance('{"theme":"neon","photoView":"compact"}')).toEqual({
-      theme: 'system',
+    expect(cleanAppearance('{"theme":"neon","photoView":"compact","fileView":"table"}')).toEqual({
+      ...DEFAULT_APPEARANCE,
       photoView: 'compact',
     });
   });

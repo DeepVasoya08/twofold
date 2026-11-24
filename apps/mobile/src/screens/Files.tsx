@@ -2,7 +2,15 @@ import { FlashList } from '@shopify/flash-list';
 import type { ViewToken } from '@shopify/flash-list';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 
 import { categoryLabel } from '@arcafold/core/file-categories';
 import type { Photo } from '@arcafold/core/library/model';
@@ -12,22 +20,30 @@ import {
   categoryCounts,
   fileBadge,
   fileDetails,
+  fileGridRows,
   fileRows,
   hasPreview,
   libraryFiles,
 } from '../library/files';
-import type { FileRow, Shown } from '../library/files';
+import type { FileGridRow, FileRow, Shown } from '../library/files';
+import { filterByName } from '../library/match';
 import type { Library } from '../library/use-library';
 import { useOpenFile } from '../library/use-open-file';
 import { fonts } from '../theme';
+import { useAppearance } from '../ui/appearance';
+import { useFloatSpace, useReportPicking } from '../ui/float-space';
 import { Button, Note } from '../ui/kit';
 import { useNotice } from '../ui/notice';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
-import { AppHeader, HeaderButton } from './AppHeader';
+import { FILE_CHOICES, FILE_COLUMNS } from '../ui/view-choices';
+import { ViewSheet } from '../ui/view-sheet';
+import { AppHeader } from './AppHeader';
 import { usePickToDelete } from './use-pick-to-delete';
 
 const TILE = 48;
+const GUTTER = 16;
+const GAP = 10;
 
 /** One file: its preview (a PDF's first page) or its kind, name and details. */
 const FileLine = memo(function FileLine({
@@ -105,6 +121,92 @@ const FileLine = memo(function FileLine({
   );
 });
 
+/** One file in the grid view: a big preview (or its kind) with its name under it. */
+const FileTile = memo(function FileTile({
+  item,
+  imageId,
+  size,
+  chosen,
+  opening,
+  palette,
+  requestThumbs,
+  onPress,
+  onLongPress,
+}: {
+  item: Photo;
+  imageId: string | null;
+  size: number;
+  chosen: boolean | undefined;
+  opening: boolean;
+  palette: Palette;
+  requestThumbs: (ids: readonly string[]) => void;
+  onPress: (id: string) => void;
+  onLongPress: (id: string) => void;
+}) {
+  const preview = hasPreview(item);
+  useEffect(() => {
+    if (preview && !imageId) requestThumbs([item.id]);
+  }, [preview, imageId, item.id, requestThumbs]);
+  const choosing = chosen !== undefined;
+  const name = item.file?.name ?? 'File';
+  return (
+    <Pressable
+      accessibilityRole={choosing ? 'checkbox' : 'button'}
+      accessibilityLabel={choosing ? name : `Open ${name}`}
+      accessibilityState={choosing ? { checked: chosen } : { busy: opening }}
+      onPress={() => {
+        onPress(item.id);
+      }}
+      onLongPress={() => {
+        onLongPress(item.id);
+      }}
+      style={{ width: size }}
+    >
+      <View
+        style={[
+          styles.bigTile,
+          {
+            width: size,
+            height: size * 1.2,
+            backgroundColor: palette.surface,
+            borderColor: chosen ? palette.accent : palette.border,
+            borderWidth: chosen ? 2 : StyleSheet.hairlineWidth,
+          },
+        ]}
+      >
+        {preview ? (
+          <MemoryImage imageId={imageId} style={{ width: size, height: size * 1.2 }} />
+        ) : (
+          <Text style={[styles.bigBadge, { color: palette.accent }]} numberOfLines={1}>
+            {fileBadge(item)}
+          </Text>
+        )}
+        {opening ? (
+          <View style={styles.tileOver}>
+            <ActivityIndicator color={palette.accent} />
+          </View>
+        ) : null}
+        {choosing ? (
+          <View
+            style={[
+              styles.tick,
+              styles.tileTick,
+              chosen
+                ? { backgroundColor: palette.accent, borderColor: palette.accent }
+                : { borderColor: '#ffffff', backgroundColor: 'rgba(0,0,0,0.25)' },
+            ]}
+          >
+            {chosen ? <Text style={[styles.tickText, { color: palette.onAccent }]}>✓</Text> : null}
+          </View>
+        ) : null}
+      </View>
+      <Text style={[styles.tileName, { color: palette.text }]} numberOfLines={1}>
+        {name}
+      </Text>
+    </Pressable>
+  );
+});
+
 function Chip({
   label,
   selected,
@@ -137,8 +239,10 @@ function Chip({
 
 /**
  * Files that aren't photos (PDFs, documents and so on) by month, newest first, with their
- * categories as filters. Tapping one opens it in another app, straight from memory; a long
- * press selects files to save to the phone or delete.
+ * categories as filters. The search field finds files by name as you type, and View shows
+ * them as a list or a grid of previews. Tapping one opens it in another app, straight from
+ * memory; a long press selects files to save to the phone or delete. Adding files is the
+ * floating button (Home).
  */
 export function Files({
   library,
@@ -147,6 +251,7 @@ export function Files({
   onSettings,
   onAdd,
   onSave,
+  onPicking,
 }: {
   library: Library;
   initial: string;
@@ -155,8 +260,16 @@ export function Files({
   onAdd: () => void;
   /** Saves copies to the phone (Download/Arcafold), where it can. */
   onSave?: (ids: readonly string[]) => void;
+  /** Says when selecting or the View sheet starts and stops, so the floating buttons step aside. */
+  onPicking?: (picking: boolean) => void;
 }) {
   const palette = usePalette();
+  const { width } = useWindowDimensions();
+  const { fileView, setFileView } = useAppearance();
+  const floatSpace = useFloatSpace();
+  const [query, setQuery] = useState('');
+  const [choosingView, setChoosingView] = useState(false);
+  const tileSize = Math.floor((width - GUTTER * 2 - GAP * (FILE_COLUMNS - 1)) / FILE_COLUMNS);
   const notice = useNotice();
   const { opening, open } = useOpenFile(library, notice);
   const files = useMemo(() => libraryFiles(library.photos), [library.photos]);
@@ -165,7 +278,15 @@ export function Files({
   // A category whose files have all gone (deleted, say) falls back to everything.
   const showing: Shown =
     shown === 'all' || counts.some(([category]) => category === shown) ? shown : 'all';
-  const rows = useMemo(() => fileRows(files, showing), [files, showing]);
+  const found = useMemo(
+    () => filterByName(files, query, (item) => item.file?.name ?? ''),
+    [files, query],
+  );
+  const rows = useMemo(() => fileRows(found, showing), [found, showing]);
+  const gridRows = useMemo(
+    () => (fileView === 'grid' ? fileGridRows(rows, FILE_COLUMNS) : null),
+    [fileView, rows],
+  );
   const byId = useMemo(() => new Map(files.map((item) => [item.id, item])), [files]);
   const openById = useCallback(
     (id: string) => {
@@ -177,6 +298,7 @@ export function Files({
   const picking = usePickToDelete(library, openById, { onSave, noun: 'file' });
   const { thumbs, requestThumbs } = library;
   const { chosen } = picking.grid;
+  useReportPicking(picking.header !== null || choosingView, onPicking);
 
   // Previews on screen jump the queue ahead of those just drawn off screen.
   const onViewableItemsChanged = useCallback(
@@ -188,18 +310,36 @@ export function Files({
     },
     [requestThumbs],
   );
+  const onGridViewable = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken<FileGridRow>[] }) => {
+      const onScreen = viewableItems.flatMap((token) =>
+        token.item.kind === 'files'
+          ? token.item.items.filter(hasPreview).map((item) => item.id)
+          : [],
+      );
+      if (onScreen.length > 0) requestThumbs(onScreen, true);
+    },
+    [requestThumbs],
+  );
+
+  const monthHeading = useCallback(
+    (row: { label: string; count: number }) => (
+      <View style={styles.month}>
+        <Text style={[styles.monthLabel, { color: palette.text }]} accessibilityRole="header">
+          {row.label}
+        </Text>
+        <Text style={[styles.monthCount, { color: palette.muted }]}>
+          {row.count === 1 ? '1 file' : `${String(row.count)} files`}
+        </Text>
+      </View>
+    ),
+    [palette],
+  );
 
   const renderItem = useCallback(
     ({ item: row }: { item: FileRow }) =>
       row.kind === 'month' ? (
-        <View style={styles.month}>
-          <Text style={[styles.monthLabel, { color: palette.text }]} accessibilityRole="header">
-            {row.label}
-          </Text>
-          <Text style={[styles.monthCount, { color: palette.muted }]}>
-            {row.count === 1 ? '1 file' : `${String(row.count)} files`}
-          </Text>
-        </View>
+        monthHeading(row)
       ) : (
         <FileLine
           item={row.item}
@@ -218,18 +358,75 @@ export function Files({
       chosen,
       opening,
       requestThumbs,
+      monthHeading,
+      picking.grid.onPress,
+      picking.grid.onLongPress,
+    ],
+  );
+  const renderGridRow = useCallback(
+    ({ item: row }: { item: FileGridRow }) =>
+      row.kind === 'month' ? (
+        monthHeading(row)
+      ) : (
+        <View style={styles.gridRow}>
+          {row.items.map((item) => (
+            <FileTile
+              key={item.id}
+              item={item}
+              imageId={thumbs.get(item.id) ?? null}
+              size={tileSize}
+              chosen={chosen ? chosen.has(item.id) : undefined}
+              opening={opening === item.id}
+              palette={palette}
+              requestThumbs={requestThumbs}
+              onPress={picking.grid.onPress}
+              onLongPress={picking.grid.onLongPress}
+            />
+          ))}
+        </View>
+      ),
+    [
+      palette,
+      thumbs,
+      chosen,
+      opening,
+      tileSize,
+      requestThumbs,
+      monthHeading,
       picking.grid.onPress,
       picking.grid.onLongPress,
     ],
   );
 
   const header = picking.header ?? (
-    <AppHeader title="Files" initial={initial} onSettings={onSettings}>
-      {library.status === 'ready' ? (
-        <HeaderButton label="+ Add" accessibilityLabel="Add files" filled onPress={onAdd} />
-      ) : null}
-    </AppHeader>
+    <AppHeader
+      title="Files"
+      initial={initial}
+      onSettings={onSettings}
+      search={{
+        placeholder: 'Search files',
+        query,
+        onQuery: setQuery,
+        view: {
+          icon: fileView === 'grid' ? 'grid' : 'files',
+          label: 'View',
+          onPress: () => {
+            setChoosingView(true);
+          },
+        },
+      }}
+    />
   );
+  const viewSheet = choosingView ? (
+    <ViewSheet
+      choices={FILE_CHOICES}
+      value={fileView}
+      onPick={setFileView}
+      onCancel={() => {
+        setChoosingView(false);
+      }}
+    />
+  ) : null;
 
   if (library.status !== 'ready' || files.length === 0) {
     return (
@@ -294,15 +491,37 @@ export function Files({
           ))}
         </ScrollView>
       ) : null}
-      <FlashList
-        data={rows}
-        renderItem={renderItem}
-        keyExtractor={(row) => row.key}
-        getItemType={(row) => row.kind}
-        extraData={[thumbs, chosen, opening]}
-        onViewableItemsChanged={onViewableItemsChanged}
-      />
+      {rows.length === 0 ? (
+        <View style={styles.centre}>
+          <Note>No files called “{query.trim()}”.</Note>
+        </View>
+      ) : gridRows ? (
+        <FlashList
+          key="grid"
+          data={gridRows}
+          renderItem={renderGridRow}
+          keyExtractor={(row) => row.key}
+          getItemType={(row) => row.kind}
+          extraData={[thumbs, chosen, opening]}
+          onViewableItemsChanged={onGridViewable}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 24 + floatSpace }}
+        />
+      ) : (
+        <FlashList
+          key="list"
+          data={rows}
+          renderItem={renderItem}
+          keyExtractor={(row) => row.key}
+          getItemType={(row) => row.kind}
+          extraData={[thumbs, chosen, opening]}
+          onViewableItemsChanged={onViewableItemsChanged}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 24 + floatSpace }}
+        />
+      )}
       {picking.sheet}
+      {viewSheet}
     </View>
   );
 }
@@ -355,4 +574,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tickText: { fontSize: 13, fontWeight: '800' },
+  gridRow: { flexDirection: 'row', gap: GAP, paddingHorizontal: GUTTER, paddingBottom: 14 },
+  bigTile: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bigBadge: { fontSize: 15, fontWeight: '800' },
+  tileOver: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileTick: { position: 'absolute', top: 8, right: 8 },
+  tileName: { fontSize: 13, fontWeight: '600', marginTop: 6 },
 });

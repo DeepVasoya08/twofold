@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { Photo } from '@arcafold/core/library/model';
 
-import { categoryCounts, fileBadge, fileDetails, fileRows, libraryFiles } from './files';
+import {
+  categoryCounts,
+  fileBadge,
+  fileDetails,
+  fileGridRows,
+  fileRows,
+  libraryFiles,
+} from './files';
 
 const item = (id: string, overrides: Partial<Photo> = {}): Photo => ({
   id,
@@ -86,5 +93,16 @@ describe('fileBadge', () => {
     expect(fileBadge(item('b', { file: { name: 'report.document', type: 'text/plain' } }))).toBe(
       'TEXT',
     );
+  });
+});
+
+describe('fileGridRows', () => {
+  it('puts each month’s files in rows, never mixing months', () => {
+    const april = ['a', 'b', 'c', 'd'].map((id) => item(id));
+    const march = item('m', { takenAt: '2026-03-02T10:00:00.000Z' });
+    const rows = fileGridRows(fileRows([...april, march], 'all'), 3);
+    expect(
+      rows.map((row) => (row.kind === 'month' ? row.label : row.items.map((each) => each.id))),
+    ).toEqual(['April 2026', ['a', 'b', 'c'], ['d'], 'March 2026', ['m']]);
   });
 });

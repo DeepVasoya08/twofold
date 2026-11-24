@@ -15,17 +15,21 @@ import type { Group } from '@arcafold/core/people/grouping';
 import type { Photo } from '@arcafold/core/library/model';
 
 import { photoCount } from '../library/album-text';
+import { filterByName } from '../library/match';
 import type { Library } from '../library/use-library';
 import { noPeopleText } from '../people/use-people';
 import type { People as PeopleState } from '../people/use-people';
+import { useAppearance } from '../ui/appearance';
+import { useFloatSpace, useReportPicking } from '../ui/float-space';
 import { Button, Note } from '../ui/kit';
 import { usePalette } from '../ui/theme';
+import { PEOPLE_CHOICES, PEOPLE_COLUMNS } from '../ui/view-choices';
+import { ViewSheet } from '../ui/view-sheet';
 import { AppHeader } from './AppHeader';
 import { FaceThumb } from './FaceThumb';
 
 const GUTTER = 16;
 const GAP = 12;
-const COLUMNS = 3;
 
 const PersonCard = memo(function PersonCard({
   group,
@@ -41,6 +45,8 @@ const PersonCard = memo(function PersonCard({
   width: number;
   requestThumbs: Library['requestThumbs'];
   onOpen: (groupId: string) => void;
+  /** Says when the View sheet opens and closes, so the floating tab bar steps aside. */
+  onPicking?: (picking: boolean) => void;
 }) {
   const palette = usePalette();
   const named = Boolean(group.person?.name);
@@ -74,7 +80,11 @@ const PersonCard = memo(function PersonCard({
   );
 });
 
-/** Everyone found in your photos: the People tab. */
+/**
+ * Everyone found in your photos: the People tab. The search field finds people by name as you
+ * type; View shows faces three or four across. There's no Add button: people are found in
+ * your photos, not added by hand.
+ */
 export function People({
   people,
   library,
@@ -82,6 +92,7 @@ export function People({
   banner,
   onSettings,
   onOpen,
+  onPicking,
 }: {
   people: PeopleState;
   library: Library;
@@ -89,19 +100,47 @@ export function People({
   banner: ReactNode;
   onSettings: () => void;
   onOpen: (groupId: string) => void;
+  /** Says when the View sheet opens and closes, so the floating tab bar steps aside. */
+  onPicking?: (picking: boolean) => void;
 }) {
   const palette = usePalette();
   const { width } = useWindowDimensions();
-  const cardWidth = Math.floor((width - GUTTER * 2 - GAP * (COLUMNS - 1)) / COLUMNS);
+  const { peopleView, setPeopleView } = useAppearance();
+  const floatSpace = useFloatSpace();
+  const columns = PEOPLE_COLUMNS[peopleView];
+  const cardWidth = Math.floor((width - GUTTER * 2 - GAP * (columns - 1)) / columns);
   const [showHidden, setShowHidden] = useState(false);
+  const [query, setQuery] = useState('');
+  const [choosingView, setChoosingView] = useState(false);
+  useReportPicking(choosingView, onPicking);
   const byId = useMemo(
     () => new Map(library.photos.map((photo) => [photo.id, photo])),
     [library.photos],
   );
-  const shown = showHidden ? people.hidden : people.groups;
+  const everyone = showHidden ? people.hidden : people.groups;
+  // Only people with names can be found by name.
+  const shown = filterByName(everyone, query, (group) => group.person?.name ?? '');
   const { thumbs, requestThumbs } = library;
 
-  const header = <AppHeader title="People" initial={initial} onSettings={onSettings} />;
+  const header = (
+    <AppHeader
+      title="People"
+      initial={initial}
+      onSettings={onSettings}
+      search={{
+        placeholder: 'Search people',
+        query,
+        onQuery: setQuery,
+        view: {
+          icon: peopleView === 'large' ? 'grid' : 'compact',
+          label: 'View',
+          onPress: () => {
+            setChoosingView(true);
+          },
+        },
+      }}
+    />
+  );
 
   if (people.status === 'failed') {
     return (
@@ -144,11 +183,12 @@ export function People({
       {banner}
       <FlatList
         data={shown}
-        key={COLUMNS}
-        numColumns={COLUMNS}
+        key={columns}
+        numColumns={columns}
         keyExtractor={(group) => group.id}
         columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: 48 + floatSpace }]}
+        keyboardShouldPersistTaps="handled"
         refreshing={false}
         onRefresh={people.reload}
         ListHeaderComponent={
@@ -158,7 +198,11 @@ export function People({
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Note>{noPeopleText(showHidden)}</Note>
+            <Note>
+              {query.trim() !== '' && everyone.length > 0
+                ? `No one called “${query.trim()}”.`
+                : noPeopleText(showHidden)}
+            </Note>
           </View>
         }
         ListFooterComponent={toggle ?? undefined}
@@ -176,6 +220,16 @@ export function People({
           );
         }}
       />
+      {choosingView ? (
+        <ViewSheet
+          choices={PEOPLE_CHOICES}
+          value={peopleView}
+          onPick={setPeopleView}
+          onCancel={() => {
+            setChoosingView(false);
+          }}
+        />
+      ) : null}
     </View>
   );
 }

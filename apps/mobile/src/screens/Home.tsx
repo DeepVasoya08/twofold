@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppState,
   BackHandler,
+  Keyboard,
   PermissionsAndroid,
   Platform,
   Pressable,
@@ -34,7 +35,9 @@ import { searchToSave, smartTitleCheck, teachCountProblem, wordCheck } from '../
 import { useAccount } from '../session/account';
 import { InvitesProvider } from '../sharing/invites';
 import { PhotoAspects } from '../ui/appearance';
+import { FloatSpace } from '../ui/float-space';
 import { Icon } from '../ui/icons';
+import type { IconName } from '../ui/icons';
 import { Banner, Button } from '../ui/kit';
 import { Sheet } from '../ui/sheet';
 import { NoticeProvider, useNotice } from '../ui/notice';
@@ -63,8 +66,13 @@ import { Viewer } from './Viewer';
 
 type Tab = 'photos' | 'albums' | 'files' | 'people';
 
-/** Height of the tab bar above the navigation bar. */
-const TAB_BAR = 58;
+/** The floating tab bar: its height, and how far it floats above the navigation bar. */
+const TAB_BAR = 62;
+const TAB_LIFT = 14;
+const FAB = 58;
+const EDGE = 16;
+/** Room the floating bar takes at the bottom of a tab, above the navigation bar. */
+const FLOATING = TAB_BAR + TAB_LIFT + 12;
 
 /**
  * Asks (from Android 13, where it's needed) to post the notification that says when photos
@@ -77,14 +85,21 @@ async function askToNotify(): Promise<void> {
   await PermissionsAndroid.request(permission).catch(() => undefined);
 }
 
+/**
+ * The tab bar, floating over the screen as a rounded island: the open tab is an accent pill
+ * with its name, the others just their icons. It leaves room on the right for the tab's Add
+ * button, so the two read as one control.
+ */
 function TabBar({
   tab,
   inset,
+  withAdd,
   palette,
   onChange,
 }: {
   tab: Tab;
   inset: number;
+  withAdd: boolean;
   palette: Palette;
   onChange: (tab: Tab) => void;
 }) {
@@ -100,8 +115,8 @@ function TabBar({
       style={[
         styles.tabBar,
         {
-          height: TAB_BAR + inset,
-          paddingBottom: inset,
+          bottom: inset + TAB_LIFT,
+          right: withAdd ? EDGE + FAB + 10 : EDGE,
           backgroundColor: palette.surface,
           borderColor: palette.border,
         },
@@ -109,7 +124,6 @@ function TabBar({
     >
       {tabs.map((each) => {
         const selected = each.id === tab;
-        const colour = selected ? palette.accent : palette.muted;
         return (
           <Pressable
             key={each.id}
@@ -119,10 +133,14 @@ function TabBar({
             onPress={() => {
               onChange(each.id);
             }}
-            style={styles.tab}
+            style={[styles.tab, selected ? { flex: 2.4, backgroundColor: palette.accent } : null]}
           >
-            <Icon name={each.id} size={22} color={colour} />
-            <Text style={[styles.tabLabel, { color: colour }]}>{each.label}</Text>
+            <Icon name={each.id} size={21} color={selected ? palette.onAccent : palette.muted} />
+            {selected ? (
+              <Text style={[styles.tabLabel, { color: palette.onAccent }]} numberOfLines={1}>
+                {each.label}
+              </Text>
+            ) : null}
           </Pressable>
         );
       })}
@@ -131,21 +149,37 @@ function TabBar({
 }
 
 /**
- * The floating Add button over the Photos tab: uploads from the phone, in the corner where a
- * thumb reaches it, so the header keeps room for the title. It sits under any upload card.
+ * The floating Add button beside the tab bar: uploads photos or files, or starts a new album,
+ * in the corner where a thumb reaches it, so the header keeps room for the title.
  */
-function AddButton({ palette, onPress }: { palette: Palette; onPress: () => void }) {
+function AddButton({
+  icon,
+  label,
+  inset,
+  palette,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  inset: number;
+  palette: Palette;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Add photos"
+      accessibilityLabel={label}
       onPress={onPress}
       style={({ pressed }) => [
         styles.fab,
-        { backgroundColor: palette.accent, transform: [{ scale: pressed ? 0.94 : 1 }] },
+        {
+          bottom: inset + TAB_LIFT + (TAB_BAR - FAB) / 2,
+          backgroundColor: palette.accent,
+          transform: [{ scale: pressed ? 0.94 : 1 }],
+        },
       ]}
     >
-      <Icon name="upload" size={24} color={palette.onAccent} />
+      <Icon name={icon} size={24} color={palette.onAccent} />
     </Pressable>
   );
 }
@@ -163,7 +197,7 @@ interface Viewing {
 export function Home({ session }: { session: Session }) {
   const inset = bottomInset();
   return (
-    <NoticeProvider bottom={TAB_BAR + inset + 16}>
+    <NoticeProvider bottom={inset + FLOATING + 4}>
       <HomeScreens session={session} inset={inset} />
     </NoticeProvider>
   );
@@ -203,7 +237,22 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
     setTrashOpen(false);
   }, []);
   const [pickError, setPickError] = useState<string | null>(null);
-  const [timelinePicking, setTimelinePicking] = useState(false);
+  /** Whether the open tab is selecting or has a sheet open: the floating controls step aside. */
+  const [tabPicking, setTabPicking] = useState(false);
+  // They step aside for the keyboard too, while a tab's search field is being typed in.
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    const shown = Keyboard.addListener('keyboardDidShow', () => {
+      setTyping(true);
+    });
+    const hidden = Keyboard.addListener('keyboardDidHide', () => {
+      setTyping(false);
+    });
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, []);
   const album = library.albums.find((each) => each.id === albumId);
   // People are found in the photos the timeline shows: not files, nor Recently deleted.
   const peoplePhotos = useMemo(() => timelinePhotos(library.photos), [library.photos]);
@@ -465,11 +514,12 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
 
   // An album or person page covers the tab bar, like a page opened from it; back returns.
   const showTabs = album === undefined && person === undefined && smartAlbum === undefined;
-  const bottom = showTabs ? TAB_BAR + inset : inset;
+  const floating = showTabs && !tabPicking && !typing;
+  const floatSpace = showTabs ? inset + FLOATING : 0;
 
   let screen;
-  /** Whether the Photos timeline is showing, which has the floating Add button. */
-  let onTimeline = false;
+  /** The open tab's Add button, if it has one: People are found, not added. */
+  let add: { icon: IconName; label: string; onPress: () => void } | null = null;
   if (smartAlbum && smartAnswer) {
     screen = (
       <SmartAlbumScreen
@@ -538,6 +588,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   } else if (tab === 'people') {
     screen = (
       <People
+        onPicking={setTabPicking}
         people={people}
         library={library}
         initial={initial}
@@ -547,8 +598,10 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
       />
     );
   } else if (tab === 'files') {
+    add = { icon: 'upload', label: 'Add files', onPress: pickFiles };
     screen = (
       <Files
+        onPicking={setTabPicking}
         library={library}
         initial={initial}
         banner={banner}
@@ -558,8 +611,16 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
       />
     );
   } else if (tab === 'albums') {
+    add = {
+      icon: 'plus',
+      label: 'New album',
+      onPress: () => {
+        setNaming(true);
+      },
+    };
     screen = (
       <Albums
+        onPicking={setTabPicking}
         library={library}
         initial={initial}
         banner={banner}
@@ -576,10 +637,16 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
       />
     );
   } else {
-    onTimeline = true;
+    add = {
+      icon: 'upload',
+      label: 'Add photos',
+      onPress: () => {
+        pickPhotos();
+      },
+    };
     screen = (
       <Timeline
-        onPicking={setTimelinePicking}
+        onPicking={setTabPicking}
         {...(onSave ? { onSave } : {})}
         {...(onTeach ? { onTeach } : {})}
         library={library}
@@ -599,21 +666,33 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
       <PhotoAspects value={photoAspect}>
         <OpenSearch value={openSearch}>
           <View style={[styles.fill, { backgroundColor: palette.background }]}>
-            <View style={[styles.fill, { paddingBottom: showTabs ? 0 : inset }]}>{screen}</View>
-            {showTabs ? (
-              <TabBar tab={tab} inset={inset} palette={palette} onChange={changeTab} />
+            <View style={[styles.fill, { paddingBottom: showTabs ? 0 : inset }]}>
+              <FloatSpace value={floatSpace}>{screen}</FloatSpace>
+            </View>
+            {floating ? (
+              <TabBar
+                tab={tab}
+                inset={inset}
+                withAdd={add !== null}
+                palette={palette}
+                onChange={changeTab}
+              />
             ) : null}
-            <View pointerEvents="box-none" style={[styles.cards, { bottom: bottom + 12 }]}>
+            {floating && add && library.status === 'ready' ? (
+              <AddButton
+                icon={add.icon}
+                label={add.label}
+                inset={inset}
+                palette={palette}
+                onPress={add.onPress}
+              />
+            ) : null}
+            <View
+              pointerEvents="box-none"
+              style={[styles.cards, { bottom: (floating ? floatSpace : inset) + 4 }]}
+            >
               <SaveCard saving={saving} palette={palette} />
               <UploadCard library={library} palette={palette} onDeleteOriginals={removeOriginals} />
-              {onTimeline && showTabs && !timelinePicking && library.status === 'ready' ? (
-                <AddButton
-                  palette={palette}
-                  onPress={() => {
-                    pickPhotos();
-                  }}
-                />
-              ) : null}
             </View>
             {naming ? (
               <NameSheet
@@ -796,21 +875,42 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   cards: { position: 'absolute', left: 12, right: 12, gap: 8 },
   fab: {
-    alignSelf: 'flex-end',
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    position: 'absolute',
+    right: EDGE,
+    width: FAB,
+    height: FAB,
+    borderRadius: FAB / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 4,
-    elevation: 6,
+    elevation: 8,
     shadowColor: '#0b0e24',
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
   },
   bannerWrap: { paddingHorizontal: 16, paddingBottom: 8 },
-  tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  tabLabel: { fontSize: 12, fontWeight: '600' },
+  tabBar: {
+    position: 'absolute',
+    left: EDGE,
+    height: TAB_BAR,
+    borderRadius: TAB_BAR / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    padding: 6,
+    gap: 2,
+    elevation: 8,
+    shadowColor: '#0b0e24',
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: (TAB_BAR - 12) / 2,
+  },
+  tabLabel: { fontSize: 14, fontWeight: '700' },
 });
