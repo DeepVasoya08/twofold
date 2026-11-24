@@ -256,29 +256,33 @@ export function AddFromSheet({
 }
 
 /**
- * Picks an album to put a photo in, or makes a new one for it. Albums it can't go in (another
- * library's, or ones you can only view) aren't offered, and ones it's already in say so.
+ * Picks an album to put photos in, or makes a new one for them. Albums they can't all go in
+ * (another library's, or ones you can only view) aren't offered, and ones they're all already
+ * in say so.
  */
 export function PickAlbumSheet({
-  photo,
+  photos,
   albums,
   onPick,
   onNew,
   onCancel,
 }: {
-  photo: Photo;
+  photos: readonly Photo[];
   albums: readonly Album[];
   onPick: (album: Album) => void;
   onNew: () => void;
   onCancel: () => void;
 }) {
-  const fitting = albums.filter((album) => fitsAlbum(photo, album) || copiesInto(photo, album));
+  const fitting = albums.filter((album) =>
+    photos.every((photo) => fitsAlbum(photo, album) || copiesInto(photo, album)),
+  );
+  const yours = photos.every((photo) => photo.library === undefined);
   return (
     <Sheet title="Add to album" onCancel={onCancel}>
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-        {photo.library === undefined ? <SheetOption label="+ New album" onPress={onNew} /> : null}
+        {yours ? <SheetOption label="+ New album" onPress={onNew} /> : null}
         {fitting.map((album) => {
-          const inside = photo.albumIds.includes(album.id);
+          const inside = photos.every((photo) => photo.albumIds.includes(album.id));
           return (
             <SheetOption
               key={album.id}

@@ -11,15 +11,35 @@ import {
   View,
 } from 'react-native';
 
+import type { Group } from '@arcafold/core/people/grouping';
 import { notLookedAtLine, notReadyLine } from '@arcafold/core/search/answer';
+import type { Chip } from '@arcafold/core/search/query';
+import type { SmartAlbum } from '@arcafold/core/search/smart-album';
 
 import { resultRows } from '../library/timeline';
 import type { Library } from '../library/use-library';
-import { searchStatus } from '../search/search-text';
+import { TRY_WORDS, namedPeople, searchStatus } from '../search/search-text';
 import type { Find } from '../search/use-find';
 import { Button, Note } from '../ui/kit';
+import { fonts } from '../theme';
+import { Icon } from '../ui/icons';
+import type { IconName } from '../ui/icons';
+import { PillButton } from '../ui/pill-button';
 import { usePalette } from '../ui/theme';
+import { FaceThumb } from './FaceThumb';
 import { PhotoGrid } from './PhotoGrid';
+
+/** Each kind of search part's icon. */
+const CHIP_ICONS: Record<Chip['kind'], IconName> = {
+  person: 'people',
+  me: 'people',
+  us: 'people',
+  label: 'people',
+  word: 'search',
+  what: 'search',
+  like: 'similar',
+  when: 'clock',
+};
 
 /**
  * Searching your photos: a box at the top, what the search was read as (tap a part to leave
@@ -31,6 +51,10 @@ export function SearchScreen({
   onOpen,
   onClose,
   onSaveAlbum,
+  groups = [],
+  smartAlbums = [],
+  onOpenSmart,
+  wordsOn = false,
 }: {
   find: Find;
   library: Library;
@@ -38,8 +62,20 @@ export function SearchScreen({
   onClose: () => void;
   /** Saves the search on screen as a smart album, while Smart search is on here. */
   onSaveAlbum?: () => void;
+  /** People found in the photos, offered before typing. */
+  groups?: readonly Group[];
+  /** Searches saved as albums, offered before typing. */
+  smartAlbums?: readonly SmartAlbum[];
+  onOpenSmart?: (id: string) => void;
+  /** Whether searches can look inside photos here (Smart search on), to offer words to try. */
+  wordsOn?: boolean;
 }) {
   const palette = usePalette();
+  const people = useMemo(() => namedPeople(groups), [groups]);
+  const byId = useMemo(
+    () => new Map(library.photos.map((photo) => [photo.id, photo])),
+    [library.photos],
+  );
   useEffect(() => {
     const back = BackHandler.addEventListener('hardwareBackPress', () => {
       onClose();
@@ -75,12 +111,13 @@ export function SearchScreen({
               onPress={() => {
                 find.toggleChip(chip.key);
               }}
-              style={[
-                styles.chip,
-                { borderColor: palette.border, backgroundColor: palette.surface },
-              ]}
+              style={[styles.chip, { backgroundColor: palette.accentWash }]}
             >
-              <Text style={[styles.chipText, { color: palette.text }]}>{chip.label} ✕</Text>
+              <View style={[styles.chipDot, { backgroundColor: palette.accent }]}>
+                <Icon name={CHIP_ICONS[chip.kind]} size={13} color={palette.onAccent} />
+              </View>
+              <Text style={[styles.chipText, { color: palette.accent }]}>{chip.label}</Text>
+              <Icon name="close" size={12} color={palette.accent} />
             </Pressable>
           ))}
         </ScrollView>
@@ -122,26 +159,39 @@ export function SearchScreen({
       {find.notLookedAt.photo || find.notLookedAt.words.length > 0 ? (
         <Note>{notLookedAtLine(find.notLookedAt)}</Note>
       ) : null}
-      {found && onSaveAlbum && query && query.chips.length > 0 ? (
-        <Button kind="secondary" label="Save as album" onPress={onSaveAlbum} />
-      ) : null}
       {found ? (
-        <Text style={[styles.count, { color: palette.text }]} accessibilityLiveRegion="polite">
-          {best === 0 && more === 0
-            ? 'No matches. Try other words, or tap a part of the search to leave it out.'
-            : best > 0
-              ? best === 1
-                ? '1 best match'
-                : `${best.toLocaleString('en-US')} best matches`
-              : 'No clear matches. These might be close:'}
-        </Text>
+        <View style={styles.countRow}>
+          <Text
+            style={[styles.count, { color: palette.text }]}
+            accessibilityLiveRegion="polite"
+            accessibilityRole="header"
+          >
+            {best === 0 && more === 0
+              ? 'No matches'
+              : best > 0
+                ? best === 1
+                  ? '1 best match'
+                  : `${best.toLocaleString('en-US')} best matches`
+                : 'No clear matches'}
+          </Text>
+          {onSaveAlbum && query && query.chips.length > 0 && (best > 0 || more > 0) ? (
+            <PillButton label="Save as album" icon="albums" onPress={onSaveAlbum} />
+          ) : null}
+        </View>
+      ) : null}
+      {found && best === 0 ? (
+        <Note>
+          {more === 0
+            ? 'Try other words, or tap a part of the search to leave it out.'
+            : 'These might be close:'}
+        </Note>
       ) : null}
     </View>
   );
 
   const footer =
     found && (best > 0 || more > 0) ? (
-      <View style={styles.block}>
+      <View style={[styles.block, styles.footer]}>
         {best > 0 && more > 0 && !find.showMore ? (
           <Button
             kind="secondary"
@@ -167,37 +217,147 @@ export function SearchScreen({
           hitSlop={10}
           style={styles.back}
         >
-          <Text style={[styles.backText, { color: palette.text }]}>‹</Text>
+          <Icon name="back" size={20} color={palette.text} />
         </Pressable>
-        <TextInput
-          accessibilityLabel="Search your photos"
-          placeholder="Search: people, places, dates…"
-          placeholderTextColor={palette.muted}
-          value={find.text}
-          onChangeText={find.setText}
-          onSubmitEditing={find.submit}
-          returnKeyType="search"
-          autoFocus
-          autoCorrect={false}
-          // Searches are never learned by the keyboard.
-          autoComplete="off"
-          importantForAutofill="no"
-          keyboardType="visible-password"
-          maxLength={300}
-          style={[
-            styles.input,
-            { color: palette.text, borderColor: palette.border, backgroundColor: palette.surface },
-          ]}
-        />
+        <View
+          style={[styles.field, { borderColor: palette.accent, backgroundColor: palette.surface }]}
+        >
+          <Icon name="search" size={17} color={palette.muted} />
+          <TextInput
+            accessibilityLabel="Search your photos"
+            placeholder="Search: people, places, dates…"
+            placeholderTextColor={palette.muted}
+            value={find.text}
+            onChangeText={find.setText}
+            onSubmitEditing={find.submit}
+            returnKeyType="search"
+            autoFocus
+            autoCorrect={false}
+            // Searches are never learned by the keyboard.
+            autoComplete="off"
+            importantForAutofill="no"
+            keyboardType="visible-password"
+            maxLength={300}
+            style={[styles.input, { color: palette.text }]}
+          />
+          {find.text !== '' || query !== null ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+              hitSlop={10}
+              onPress={find.clear}
+              style={[styles.clear, { backgroundColor: palette.track }]}
+            >
+              <Icon name="close" size={11} color={palette.muted} />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
       {query === null ? (
-        <View style={styles.empty}>
-          <Note>
-            Try a person, a date, or what’s in the photo, like “Ada at the beach in June”. Searches
-            run on this phone and aren’t saved.
-          </Note>
+        <ScrollView
+          contentContainerStyle={styles.start}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
           {status ? <Note>{status}</Note> : null}
-        </View>
+          {people.length > 0 ? (
+            <View style={styles.section}>
+              <Text style={[styles.heading, { color: palette.text }]} accessibilityRole="header">
+                People
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.people}
+                keyboardShouldPersistTaps="handled"
+              >
+                {people.map((group) => {
+                  const face = group.faces[0];
+                  return (
+                    <Pressable
+                      key={group.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Search for ${group.name}`}
+                      onPress={() => {
+                        find.searchFor(group.name);
+                      }}
+                      style={styles.person}
+                    >
+                      <FaceThumb
+                        face={face}
+                        photo={byId.get(face.photoId)}
+                        imageId={library.thumbs.get(face.photoId) ?? null}
+                        size={60}
+                        requestThumbs={library.requestThumbs}
+                      />
+                      <Text style={[styles.personName, { color: palette.text }]} numberOfLines={1}>
+                        {group.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
+          {wordsOn ? (
+            <View style={styles.section}>
+              <Text style={[styles.heading, { color: palette.text }]} accessibilityRole="header">
+                Try
+              </Text>
+              <View style={styles.tries}>
+                {TRY_WORDS.map((word) => (
+                  <Pressable
+                    key={word}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Search for ${word}`}
+                    onPress={() => {
+                      find.searchFor(word.toLowerCase());
+                    }}
+                    style={[
+                      styles.try,
+                      { backgroundColor: palette.surface, borderColor: palette.border },
+                    ]}
+                  >
+                    <Icon name="search" size={14} color={palette.accent} />
+                    <Text style={[styles.tryText, { color: palette.text }]}>{word}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
+          {smartAlbums.length > 0 && onOpenSmart ? (
+            <View style={styles.section}>
+              <Text style={[styles.heading, { color: palette.text }]} accessibilityRole="header">
+                Smart albums
+              </Text>
+              <View style={styles.tries}>
+                {smartAlbums.map((smart) => (
+                  <Pressable
+                    key={smart.id}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      onOpenSmart(smart.id);
+                    }}
+                    style={[
+                      styles.try,
+                      { backgroundColor: palette.surface, borderColor: palette.border },
+                    ]}
+                  >
+                    <Icon name="albums" size={14} color={palette.accent} />
+                    <Text style={[styles.tryText, { color: palette.text }]}>{smart.title}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
+          <View style={[styles.private, { backgroundColor: palette.accentWash }]}>
+            <Icon name="lock" size={18} color={palette.accent} />
+            <Text style={[styles.privateText, { color: palette.text }]}>
+              Try a person, a date, or what’s in the photo, like “Ada at the beach in June”. Search
+              runs on this phone, and what you type is never sent or saved.
+            </Text>
+          </View>
+        </ScrollView>
       ) : (
         <PhotoGrid
           rows={rows}
@@ -221,23 +381,72 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
-  back: { width: 28, height: 34, alignItems: 'center', justifyContent: 'center' },
-  backText: { fontSize: 34, lineHeight: 36, fontWeight: '300' },
-  input: {
+  back: { width: 32, height: 40, alignItems: 'center', justifyContent: 'center' },
+  field: {
     flex: 1,
+    height: 48,
+    borderWidth: 2,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+  },
+  input: { flex: 1, fontSize: 16, paddingVertical: 0 },
+  clear: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  start: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 40, gap: 24 },
+  section: { gap: 12 },
+  heading: { fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.3 },
+  people: { gap: 14 },
+  person: { width: 64, alignItems: 'center', gap: 6 },
+  personName: { fontSize: 13, fontWeight: '600' },
+  tries: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  try: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
     borderWidth: 1,
     borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  empty: { padding: 24, gap: 12 },
+  tryText: { fontSize: 14, fontWeight: '600' },
+  private: { flexDirection: 'row', gap: 12, alignItems: 'center', padding: 14, borderRadius: 18 },
+  privateText: { flex: 1, fontSize: 13, lineHeight: 18 },
   headerBlock: { paddingHorizontal: 16, paddingBottom: 12, gap: 10 },
   chips: { gap: 8 },
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    borderRadius: 999,
+    paddingLeft: 5,
+    paddingRight: 11,
+    paddingVertical: 5,
+  },
+  chipDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   chipText: { fontSize: 14, fontWeight: '600' },
+  countRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
   block: { gap: 10, paddingHorizontal: 16 },
+  footer: { paddingTop: 16 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   meta: { fontSize: 14 },
-  count: { fontSize: 15, fontWeight: '600' },
+  count: { flex: 1, fontFamily: fonts.display, fontSize: 20, letterSpacing: -0.3 },
 });

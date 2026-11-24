@@ -551,9 +551,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
         {...(onTeach ? { onTeach } : {})}
         album={album}
         library={library}
-        initial={initial}
         banner={banner}
-        onSettings={openSettings}
         onBack={closeAlbum}
         onOpen={openInAlbum}
         onChoose={() => {
@@ -576,12 +574,14 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
         group={person}
         people={people}
         library={library}
-        initial={initial}
         banner={banner}
-        onSettings={openSettings}
         onBack={closePerson}
         onOpen={openOfPerson}
         onMoved={setPersonId}
+        onSearch={(name) => {
+          find.searchFor(name);
+          setSearching(true);
+        }}
       />
     );
   } else if (tab === 'people') {
@@ -754,6 +754,17 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
                 library={library}
                 onOpen={openFound}
                 onClose={closeSearch}
+                groups={people.groups}
+                wordsOn={searchOn}
+                {...(searchOn
+                  ? {
+                      smartAlbums: index.smartAlbums,
+                      onOpenSmart: (id: string) => {
+                        closeSearch();
+                        setSmartId(id);
+                      },
+                    }
+                  : {})}
                 {...(searchOn
                   ? {
                       onSaveAlbum: () => {

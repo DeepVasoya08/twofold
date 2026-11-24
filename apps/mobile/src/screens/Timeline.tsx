@@ -2,7 +2,7 @@ import { useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { timelineRows } from '../library/timeline';
+import { photosInRows, timelineRows } from '../library/timeline';
 import type { Library } from '../library/use-library';
 import { useAccount } from '../session/account';
 import { fonts } from '../theme';
@@ -53,7 +53,8 @@ export function Timeline({
   const { space } = useAccount();
   const palette = usePalette();
   const rows = useMemo(() => timelineRows(library.photos), [library.photos]);
-  const picking = usePickToDelete(library, onOpen, { onSave, onTeach });
+  const all = useMemo(() => photosInRows(rows), [rows]);
+  const picking = usePickToDelete(library, onOpen, { onSave, onTeach, filing: library, all });
   const { photoView, setPhotoView } = useAppearance();
   const [choosingView, setChoosingView] = useState(false);
   const openSearch = useContext(OpenSearch);

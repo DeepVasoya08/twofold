@@ -30,3 +30,29 @@ export function chosenText(count: number): string {
   if (count === 0) return 'Choose photos';
   return count === 1 ? '1 chosen' : `${String(count)} chosen`;
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * The days an album's photos were taken across, shortest first: "Nov 22, 2026",
+ * "Nov 20 – 23, 2026", "Oct 30 – Nov 2, 2026" or "Dec 30, 2025 – Jan 2, 2026" (UTC, like the
+ * timeline). Null when there are no photos.
+ */
+export function dateSpan(takenAts: readonly string[]): string | null {
+  const times = takenAts.map((at) => Date.parse(at)).filter((time) => !Number.isNaN(time));
+  if (times.length === 0) return null;
+  const first = new Date(Math.min(...times));
+  const last = new Date(Math.max(...times));
+  const day = (date: Date) => `${MONTHS[date.getUTCMonth()] ?? ''} ${String(date.getUTCDate())}`;
+  const year = (date: Date) => String(date.getUTCFullYear());
+  if (first.getUTCFullYear() !== last.getUTCFullYear()) {
+    return `${day(first)}, ${year(first)} – ${day(last)}, ${year(last)}`;
+  }
+  if (first.getUTCMonth() !== last.getUTCMonth()) {
+    return `${day(first)} – ${day(last)}, ${year(last)}`;
+  }
+  if (first.getUTCDate() !== last.getUTCDate()) {
+    return `${day(first)} – ${String(last.getUTCDate())}, ${year(last)}`;
+  }
+  return `${day(first)}, ${year(first)}`;
+}

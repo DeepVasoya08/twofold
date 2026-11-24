@@ -1,21 +1,25 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import {
   addsByUpload,
+  albumCover,
   albumPhotos,
   albumSharing,
   canChangeAlbum,
 } from '@arcafold/core/library/albums';
 import type { Album } from '@arcafold/core/library/model';
 
-import { photoCount } from '../library/album-text';
-import { gridRows } from '../library/timeline';
+import { MemoryImage } from '../../modules/memory-image';
+import { dateSpan, photoCount } from '../library/album-text';
+import { gridRows, photosInRows } from '../library/timeline';
 import type { Library } from '../library/use-library';
 import { fonts } from '../theme';
 import { Button, Note } from '../ui/kit';
+import { Icon } from '../ui/icons';
 import { useNotice } from '../ui/notice';
+import { PillButton } from '../ui/pill-button';
 import { usePalette } from '../ui/theme';
 import {
   AddFromSheet,
@@ -24,7 +28,7 @@ import {
   LeaveAlbumSheet,
   NameSheet,
 } from './AlbumSheets';
-import { AppHeader, HeaderButton } from './AppHeader';
+import { PageTop, RoundButton } from './AppHeader';
 import { PhotoGrid } from './PhotoGrid';
 import { usePickToDelete } from './use-pick-to-delete';
 
@@ -34,9 +38,7 @@ type Open = 'menu' | 'rename' | 'delete' | 'add' | 'leave' | null;
 export function AlbumScreen({
   album,
   library,
-  initial,
   banner,
-  onSettings,
   onBack,
   onOpen,
   onSave,
@@ -48,9 +50,7 @@ export function AlbumScreen({
 }: {
   album: Album;
   library: Library;
-  initial: string;
   banner: ReactNode;
-  onSettings: () => void;
   onBack: () => void;
   onOpen: (photoId: string) => void;
   /** Saves copies of photos to the phone's gallery, where it can. */
@@ -67,11 +67,12 @@ export function AlbumScreen({
   onLeave: () => Promise<void>;
 }) {
   const palette = usePalette();
-  const picking = usePickToDelete(library, onOpen, { onSave, onTeach });
   const notice = useNotice();
   const [open, setOpen] = useState<Open>(null);
   const photos = useMemo(() => albumPhotos(library.photos, album.id), [library.photos, album.id]);
   const rows = useMemo(() => gridRows(photos), [photos]);
+  const all = useMemo(() => photosInRows(rows), [rows]);
+  const picking = usePickToDelete(library, onOpen, { onSave, onTeach, filing: library, all });
   const changeable = canChangeAlbum(album);
   // An album shared with you that you may add to takes new photos from this phone.
   const uploadOnly = addsByUpload(album);
@@ -82,20 +83,72 @@ export function AlbumScreen({
     setOpen(null);
   };
 
+  const cover = useMemo(() => albumCover(library.photos, album), [library.photos, album]);
+  const coverImage = cover ? (library.thumbs.get(cover.id) ?? null) : null;
+  const { requestThumbs } = library;
+  useEffect(() => {
+    if (cover && !coverImage) requestThumbs([cover.id], true);
+  }, [cover, coverImage, requestThumbs]);
+  const span = useMemo(() => dateSpan(photos.map((photo) => photo.takenAt)), [photos]);
+  const canAdd = changeable || uploadOnly;
+  const yours = album.library === undefined && album.sharedAlbum !== true;
+
   const summary = (
     <View style={styles.summary}>
-      <Text style={[styles.meta, { color: palette.muted }]}>
-        {photos.length === 0 ? 'No photos yet' : photoCount(photos.length)}
-        {sharing ? ` · ${sharing}` : ''}
-      </Text>
-      {(changeable || uploadOnly) && photos.length > 0 ? (
-        <Button
-          kind="secondary"
-          label="Add photos"
-          onPress={() => {
-            setOpen('add');
-          }}
-        />
+      <View style={styles.hero}>
+        <View
+          style={[styles.cover, { backgroundColor: palette.track }]}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          {cover ? <MemoryImage imageId={coverImage} style={styles.coverImage} /> : null}
+        </View>
+        <View style={styles.heroText}>
+          <Text
+            style={[styles.title, { color: palette.text }]}
+            accessibilityRole="header"
+            numberOfLines={3}
+          >
+            {album.title}
+          </Text>
+          <Text style={[styles.meta, { color: palette.muted }]}>
+            {photos.length === 0 ? 'No photos yet' : photoCount(photos.length)}
+            {span ? ` · ${span}` : ''}
+          </Text>
+          {sharing ? (
+            <View style={styles.sharedRow}>
+              <Icon name="people" size={15} color={palette.accent} />
+              <Text style={[styles.shared, { color: palette.text }]} numberOfLines={2}>
+                {sharing}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+      {photos.length > 0 && (canAdd || yours || onSave) ? (
+        <View style={styles.actions}>
+          {canAdd ? (
+            <PillButton
+              label="Add photos"
+              icon="plus"
+              filled
+              onPress={() => {
+                setOpen('add');
+              }}
+            />
+          ) : null}
+          {yours ? <PillButton label="Share" icon="people" onPress={onShare} /> : null}
+          {onSave ? (
+            <PillButton
+              label="Save"
+              icon="download"
+              accessibilityLabel="Save all to phone"
+              onPress={() => {
+                onSave(all);
+              }}
+            />
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
@@ -103,22 +156,24 @@ export function AlbumScreen({
   return (
     <View style={styles.fill}>
       {picking.header ?? (
-        <AppHeader title={album.title} initial={initial} onSettings={onSettings} onBack={onBack}>
+        <PageTop onBack={onBack}>
           {hasMenu ? (
-            <HeaderButton
-              label="⋯"
-              accessibilityLabel="Album options"
+            <RoundButton
+              icon="more"
+              label="Album options"
               onPress={() => {
                 setOpen('menu');
               }}
             />
           ) : null}
-        </AppHeader>
+        </PageTop>
       )}
       {banner}
       {photos.length === 0 ? (
         <View style={styles.centre}>
-          <Text style={[styles.emptyTitle, { color: palette.text }]}>Nothing in here yet</Text>
+          <Text style={[styles.emptyTitle, { color: palette.text }]}>
+            Nothing in “{album.title}” yet
+          </Text>
           {sharing ? <Note>{sharing}</Note> : null}
           {changeable ? (
             <>
@@ -229,10 +284,29 @@ export function AlbumScreen({
   );
 }
 
+/** The cover's width; it's an arch a quarter taller than wide. */
+const COVER = 118;
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centre: { flex: 1, justifyContent: 'center', padding: 24, gap: 16 },
   emptyTitle: { fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.3 },
-  summary: { paddingHorizontal: 16, paddingTop: 4, gap: 12 },
+  summary: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 4, gap: 16 },
+  hero: { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
+  cover: {
+    width: COVER,
+    height: COVER * 1.25,
+    borderTopLeftRadius: COVER / 2,
+    borderTopRightRadius: COVER / 2,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+    overflow: 'hidden',
+  },
+  coverImage: { width: COVER, height: COVER * 1.25 },
+  heroText: { flex: 1, gap: 6, paddingBottom: 4 },
+  title: { fontFamily: fonts.display, fontSize: 28, lineHeight: 30, letterSpacing: -0.8 },
   meta: { fontSize: 14 },
+  sharedRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  shared: { flex: 1, fontSize: 13, fontWeight: '600' },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 });
