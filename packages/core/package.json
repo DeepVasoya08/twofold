@@ -36,6 +36,7 @@
     "./people/yunet": "./src/people/yunet.ts",
     "./photo-date": "./src/photo-date.ts",
     "./photo-types": "./src/photo-types.ts",
+    "./profile-photo": "./src/profile-photo.ts",
     "./picture": "./src/picture.ts",
     "./records": "./src/records.ts",
     "./recovery-file": "./src/recovery-file.ts",

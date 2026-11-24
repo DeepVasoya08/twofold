@@ -15,7 +15,7 @@ import {
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import { FormError } from '@arcafold/core/errors';
-import { addsByUpload, canChangeAlbum, isViewOnly } from '@arcafold/core/library/albums';
+import { addsByUpload, canChangeAlbum, canShare, isViewOnly } from '@arcafold/core/library/albums';
 import type { Album, Photo } from '@arcafold/core/library/model';
 import { GONE, trashNote } from '@arcafold/core/library/trash';
 import type { Session } from '@arcafold/core/account';
@@ -34,7 +34,7 @@ import {
 import { deleteTitle } from '../library/trash-text';
 import type { Library } from '../library/use-library';
 import { useAccount } from '../session/account';
-import { fonts } from '../theme';
+import { FAVORITE, fonts } from '../theme';
 import { Icon } from '../ui/icons';
 import { Banner } from '../ui/kit';
 import { useNotice } from '../ui/notice';
@@ -55,8 +55,6 @@ const ZOOMED_MAX_SIDE = 4096;
 
 /** The viewer's red, readable on black, for Delete. */
 const DANGER = '#ff8a80';
-/** A favorite's heart. */
-const FAVORITE = '#ff6b8a';
 
 /** A round see-through button over the photo. */
 function RoundButton({
@@ -145,6 +143,7 @@ export function Viewer({
   notThis,
   onLike,
   onSave,
+  onShare,
   onClose,
 }: {
   photos: Photo[];
@@ -172,6 +171,8 @@ export function Viewer({
   onLike?: (photoId: string) => void;
   /** Saves a copy of the photo in view to the phone's gallery. */
   onSave?: (photoId: string) => void;
+  /** Shares the photo in view with someone, through an album. */
+  onShare?: (photoId: string) => void;
   onClose: () => void;
 }) {
   const { space, otherSpace } = useAccount();
@@ -245,6 +246,7 @@ export function Viewer({
   };
 
   const actions = barActions({
+    share: onShare !== undefined && photo !== undefined && canShare([photo]),
     save: onSave !== undefined,
     file: canFile,
     similar: onLike !== undefined,
@@ -382,6 +384,13 @@ export function Viewer({
               {actions.map((action) => {
                 const busy = filing !== null || moving !== null;
                 const item = {
+                  share: {
+                    label: 'Share',
+                    icon: 'share' as const,
+                    run: () => {
+                      onShare?.(photo.id);
+                    },
+                  },
                   save: {
                     label: 'Save',
                     icon: 'download' as const,
@@ -435,9 +444,11 @@ export function Viewer({
                           ? 'More like this'
                           : action === 'save'
                             ? 'Save to phone'
-                            : action === 'album'
-                              ? 'Add to album'
-                              : item.label
+                            : action === 'share'
+                              ? 'Share with someone'
+                              : action === 'album'
+                                ? 'Add to album'
+                                : item.label
                     }
                     disabled={action !== 'save' && action !== 'similar' && busy}
                     onPress={item.run}

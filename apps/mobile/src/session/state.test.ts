@@ -11,6 +11,7 @@ import {
   leftScreen,
   locked,
   lockOnReturn,
+  withName,
 } from './state';
 
 const account = { email: 'sam@example.com', name: 'Sam' } as AccountResponse;
@@ -65,5 +66,26 @@ describe('lockOnReturn', () => {
 
   it('does nothing when the app never left', () => {
     expect(lockOnReturn(null, 10 * SYSTEM_SCREEN_GRACE_MS)).toBe(false);
+  });
+});
+
+describe('withName', () => {
+  it('renames the account and keeps the opened keys', () => {
+    const opened = { space: 'keys' };
+    const session = { account, opened } as unknown as Session;
+    const next = withName({ status: 'unlocked', session }, 'Sam Rivera');
+    expect(next).toEqual({
+      status: 'unlocked',
+      session: { account: { ...account, name: 'Sam Rivera' }, opened },
+    });
+    if (next.status === 'unlocked') expect(next.session.opened).toBe(opened);
+  });
+
+  it('renames a locked account, and leaves a signed-out app alone', () => {
+    expect(withName({ status: 'locked', account }, 'Sam R')).toEqual({
+      status: 'locked',
+      account: { ...account, name: 'Sam R' },
+    });
+    expect(withName({ status: 'signed-out' }, 'Sam R')).toEqual({ status: 'signed-out' });
   });
 });

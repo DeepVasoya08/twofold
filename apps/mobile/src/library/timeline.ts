@@ -14,6 +14,11 @@ export function timelinePhotos(photos: readonly Photo[]): Photo[] {
   );
 }
 
+/** Your favorites: the timeline's photos with a heart, as the web's Favorites lists them. */
+export function favoritePhotos(photos: readonly Photo[]): Photo[] {
+  return timelinePhotos(photos).filter((photo) => photo.favorite);
+}
+
 export type TimelineRow =
   | { kind: 'month'; key: string; label: string; count: number }
   | { kind: 'tiles'; key: string; photoIds: string[] };

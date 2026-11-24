@@ -118,3 +118,37 @@ export function albumSharing(album: Album): string | null {
   }
   return null;
 }
+
+/**
+ * Albums at least one of `photos` can go in, leaving out `except` (the album being viewed):
+ * filed, or copied into an album shared with you that you may add to.
+ */
+export function albumChoices(
+  albums: readonly Album[],
+  photos: readonly Photo[],
+  except?: string,
+): Album[] {
+  return albums.filter(
+    (album) =>
+      album.id !== except &&
+      photos.some((photo) => fitsAlbum(photo, album) || copiesInto(photo, album)),
+  );
+}
+
+/**
+ * Whether photos can be shared with someone: only your own photos, through an album of
+ * yours (a library or album shared with you stays theirs to share).
+ */
+export function canShare(photos: readonly Photo[]): boolean {
+  return photos.length > 0 && photos.every((photo) => photo.library === undefined);
+}
+
+/**
+ * The albums photos can be shared through: your own, the ones already shared with someone
+ * first, so sharing more photos with the same people doesn't make another album.
+ */
+export function shareChoices(albums: readonly Album[], photos: readonly Photo[]): Album[] {
+  const own = albumChoices(albums, photos).filter((album) => album.library === undefined);
+  const shared = (album: Album) => ((album.sharedWith?.length ?? 0) > 0 ? 0 : 1);
+  return [...own].sort((a, b) => shared(a) - shared(b));
+}

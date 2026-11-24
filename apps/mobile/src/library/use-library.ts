@@ -96,6 +96,8 @@ export interface Library {
    * it doesn't save. Photos shared with you to view can't be.
    */
   setFavorite: (photoId: string, favorite: boolean) => Promise<void>;
+  /** Gives several photos a heart, or takes it off, as the web's selection bar does. */
+  setFavorites: (photoIds: readonly string[], favorite: boolean) => Promise<Settled<string>>;
   /**
    * Gets one of your albums ready to share: it gets a key of its own (if it has none), which
    * is what people it's shared with are given.
@@ -182,7 +184,12 @@ const backgroundUploads = new BackgroundUploads(
 export function useLibrary(session: Session): Library {
   // The session changes when the other space's keys are opened; the library doesn't.
   const keys = session.opened.space;
-  const name = session.account.name;
+  // The name sharing introduces you by, read when the library opens. Renaming yourself in
+  // Edit profile doesn't reopen the library (as on the web); the new name is used next time.
+  const name = useRef(session.account.name);
+  useEffect(() => {
+    name.current = session.account.name;
+  }, [session.account.name]);
   const [status, setStatus] = useState<Library['status']>('loading');
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -193,7 +200,7 @@ export function useLibrary(session: Session): Library {
   const opened = useRef<SpaceStore | null>(null);
   // One uploader per opening of the library, so photos added before a lock can finish
   // with the keys they started with while the next unlock starts its own.
-  const uploader = useMemo(() => newUploader(keys, name, attempt), [keys, name, attempt]);
+  const uploader = useMemo(() => newUploader(keys, attempt), [keys, attempt]);
   const uploads = useSyncExternalStore(uploader.subscribe, uploader.getState);
   const moving = spaceOf(session.opened) === 'private';
   // What was moved in during this opening; locking forgets it.
@@ -202,7 +209,7 @@ export function useLibrary(session: Session): Library {
 
   useEffect(() => {
     let stopped = false;
-    const store = sessionStore(keys, name);
+    const store = sessionStore(keys, name.current);
     const thumbLoader = createThumbLoader({
       fetch: (photoIds, onThumb) => store.thumbs(photoIds, onThumb),
       onReady: (urls) => {
@@ -271,7 +278,7 @@ export function useLibrary(session: Session): Library {
         close();
       });
     };
-  }, [keys, name, attempt, uploader, originals, moving]);
+  }, [keys, attempt, uploader, originals, moving]);
 
   const requestThumbs = useCallback((photoIds: readonly string[], onScreen?: boolean) => {
     loader.current?.request(photoIds, onScreen);
@@ -482,6 +489,28 @@ export function useLibrary(session: Session): Library {
     [photos],
   );
 
+  const setFavorites = useCallback(
+    async (photoIds: readonly string[], favorite: boolean) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      const byId = new Map(photos.map((photo) => [photo.id, photo]));
+      const result = await settleEach(photoIds, SAVES_AT_ONCE, async (photoId) => {
+        const photo = byId.get(photoId);
+        if (!photo) throw new FormError(GONE);
+        if (isViewOnly(photo)) {
+          throw new FormError('Photos shared with you to view can’t be changed.');
+        }
+        if (photo.favorite !== favorite) await store.update({ ...photo, favorite });
+      });
+      const done = new Set(result.done);
+      setPhotos((current) =>
+        current.map((photo) => (done.has(photo.id) ? { ...photo, favorite } : photo)),
+      );
+      return result;
+    },
+    [photos],
+  );
+
   const hideUploads = useCallback(() => {
     uploader.closeDialog();
   }, [uploader]);
@@ -543,6 +572,7 @@ export function useLibrary(session: Session): Library {
     deleteAlbum,
     setInAlbum,
     setFavorite,
+    setFavorites,
     shareAlbum,
     stopSharingAlbum,
     setSharedWith,

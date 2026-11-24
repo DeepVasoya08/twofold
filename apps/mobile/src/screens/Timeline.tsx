@@ -29,6 +29,7 @@ export function Timeline({
   onSettings,
   onAdd,
   onOpen,
+  onShare,
   onSave,
   onTeach,
   onPicking,
@@ -40,6 +41,8 @@ export function Timeline({
   onSettings: () => void;
   onAdd: () => void;
   onOpen: (photoId: string) => void;
+  /** Shares picked photos with someone, through an album. */
+  onShare?: (photoIds: readonly string[]) => void;
   /** Saves copies of photos to the phone's gallery, where it can. */
   onSave?: (photoIds: readonly string[]) => void;
   /** Teaches search a word from picked photos, while Smart search is on. */
@@ -54,7 +57,13 @@ export function Timeline({
   const palette = usePalette();
   const rows = useMemo(() => timelineRows(library.photos), [library.photos]);
   const all = useMemo(() => photosInRows(rows), [rows]);
-  const picking = usePickToDelete(library, onOpen, { onSave, onTeach, filing: library, all });
+  const picking = usePickToDelete(library, onOpen, {
+    onShare,
+    onSave,
+    onTeach,
+    filing: library,
+    all,
+  });
   const { photoView, setPhotoView } = useAppearance();
   const [choosingView, setChoosingView] = useState(false);
   const openSearch = useContext(OpenSearch);

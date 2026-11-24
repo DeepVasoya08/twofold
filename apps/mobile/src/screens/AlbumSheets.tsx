@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 
-import { albumTitle, copiesInto, fitsAlbum } from '@arcafold/core/library/albums';
+import {
+  albumSharing,
+  albumTitle,
+  copiesInto,
+  fitsAlbum,
+  shareChoices,
+} from '@arcafold/core/library/albums';
 import { errorMessage } from '@arcafold/core/errors';
 import type { Album, Photo } from '@arcafold/core/library/model';
 
@@ -295,6 +301,52 @@ export function PickAlbumSheet({
             />
           );
         })}
+      </ScrollView>
+    </Sheet>
+  );
+}
+
+/**
+ * Picks the album to share photos through, as on the web: one of your own (those already
+ * shared with someone first, so sharing more with the same people doesn't make another
+ * album), or a new one. The album's invite comes next, where you choose what they can do.
+ */
+export function ShareThroughSheet({
+  photos,
+  albums,
+  onPick,
+  onNew,
+  onCancel,
+}: {
+  photos: readonly Photo[];
+  albums: readonly Album[];
+  onPick: (album: Album) => void;
+  onNew: () => void;
+  onCancel: () => void;
+}) {
+  const choices = shareChoices(albums, photos);
+  return (
+    <Sheet
+      title={`Share ${photoCount(photos.length)}`}
+      body="Photos are shared through an album. Pick one, then invite people and choose what they can do. Everyone invited sees the same album."
+      onCancel={onCancel}
+    >
+      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        <SheetOption
+          label="+ New shared album"
+          detail="Name it, then invite someone"
+          onPress={onNew}
+        />
+        {choices.map((album) => (
+          <SheetOption
+            key={album.id}
+            label={album.title}
+            detail={albumSharing(album) ?? 'Not shared yet'}
+            onPress={() => {
+              onPick(album);
+            }}
+          />
+        ))}
       </ScrollView>
     </Sheet>
   );

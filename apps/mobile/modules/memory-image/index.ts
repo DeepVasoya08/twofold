@@ -66,6 +66,8 @@ export interface DeleteResult {
 interface PhotoPickerModule {
   /** Opens Android's photo picker; resolves with what was picked (none if cancelled). */
   pickAsync(): Promise<PickedPhoto[]>;
+  /** Opens Android's photo picker for one photo; none if cancelled. */
+  pickOneAsync(): Promise<PickedPhoto[]>;
   /** Opens Android's file picker, for any kind of file; none if cancelled. */
   pickFilesAsync(): Promise<PickedPhoto[]>;
   /** A JPEG of a picked PDF's first page, made in memory; null if it can't be drawn. */
@@ -78,6 +80,8 @@ interface PhotoPickerModule {
     maxSide: number,
     quality: number,
   ): Promise<{ thumb: ArrayBuffer; width: number; height: number }>;
+  /** A side × side JPEG of the middle of the photo, upright, made in memory. */
+  squareAsync(uri: string, side: number, quality: number): Promise<ArrayBuffer>;
   /** Asks Android to delete picked photos from the phone; it shows them and asks first. */
   deleteAsync(uris: readonly string[]): Promise<DeleteResult>;
 }

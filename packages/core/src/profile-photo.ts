@@ -1,14 +1,16 @@
 import type { SpaceKeys } from '@arcafold/crypto';
 import { STORAGE_SIZES } from '@arcafold/types';
 
-import { spaceApi } from '@arcafold/core/api';
-import type { SpaceApi } from '@arcafold/core/api';
-import { FormError } from '@arcafold/core/errors';
+import { spaceApi } from './api';
+import type { SpaceApi } from './api';
+import { loadCrypto } from './crypto-loader';
+import { FormError } from './errors';
 
 /**
  * The open space's profile photo, stored like a photo: the image is encrypted under a key
  * of its own, and that key is sealed in an owner-only record. Each space keeps its own, so
- * the main library's photo says nothing about whether a private space exists.
+ * the main library's photo says nothing about whether a private space exists. Shared by the
+ * web and phone apps.
  */
 export interface ProfilePhotoStore {
   /** The decrypted JPEG, or null if there is none (or it doesn't decrypt). */
@@ -16,8 +18,6 @@ export interface ProfilePhotoStore {
   save: (jpeg: Uint8Array<ArrayBuffer>) => Promise<void>;
   remove: () => Promise<void>;
 }
-
-const loadCrypto = () => import('@arcafold/crypto');
 
 interface ProfileMeta {
   v: 1;

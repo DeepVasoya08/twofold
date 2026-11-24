@@ -66,4 +66,10 @@ describe('barActions', () => {
     ]);
     expect(barActions({ save: true, file: false, similar: false, move: false })).toEqual(['save']);
   });
+
+  it('puts Share first, for your own photos', () => {
+    expect(
+      barActions({ share: true, save: true, file: true, similar: false, move: false }),
+    ).toEqual(['share', 'save', 'album', 'delete']);
+  });
 });

@@ -88,6 +88,9 @@ export const nightColors: Palette = {
  * The headings' typeface, bundled with the app (modules/brand-fonts). On Android a bundled
  * font is picked by its file name, so each weight is its own family; leave fontWeight unset.
  */
+/** A favorite's heart, in every theme, as on the web. */
+export const FAVORITE = '#ff6b8a';
+
 export const fonts = {
   display: 'BricolageGrotesque-Bold',
   displaySemi: 'BricolageGrotesque-SemiBold',

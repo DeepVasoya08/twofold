@@ -25,6 +25,24 @@ export function albumChangeText(
   return `${what}. ${String(failed)} couldn’t be ${included ? 'added' : 'removed'}; try those again.`;
 }
 
+/** What to say after giving photos a heart, or taking it off. */
+export function favoriteText(
+  result: Pick<Settled<string>, 'done' | 'failed'>,
+  favorite: boolean,
+): string {
+  const done = result.done.length;
+  const failed = result.failed.length;
+  if (done === 0) {
+    return favorite
+      ? 'The photos couldn’t be added to favorites. Try again.'
+      : 'The photos couldn’t be removed from favorites. Try again.';
+  }
+  const photos = done === 1 ? '1 photo' : `${String(done)} photos`;
+  const what = favorite ? `Added ${photos} to favorites` : `Removed ${photos} from favorites`;
+  if (failed === 0) return `${what}.`;
+  return `${what}. ${String(failed)} didn’t go through; try those again.`;
+}
+
 /** "Choose photos", or how many are chosen so far. */
 export function chosenText(count: number): string {
   if (count === 0) return 'Choose photos';

@@ -51,24 +51,10 @@ class PhotoPickerModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("ArcafoldPhotoPicker")
 
-    AsyncFunction("pickAsync") { promise: Promise ->
-      val activity = appContext.currentActivity
-        ?: throw CodedException("ERR_NO_ACTIVITY", "Arcafold isn't on screen.", null)
-      pending?.resolve(emptyList<Map<String, Any>>())
-      pending = promise
-      val intent =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-          Intent(MediaStore.ACTION_PICK_IMAGES)
-            .setType("image/*")
-            .putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, minOf(PICK_MAX, MediaStore.getPickImagesMaxLimit()))
-        } else {
-          Intent(Intent.ACTION_OPEN_DOCUMENT)
-            .addCategory(Intent.CATEGORY_OPENABLE)
-            .setType("image/*")
-            .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-        }
-      activity.startActivityForResult(intent, PICK_REQUEST)
-    }
+    AsyncFunction("pickAsync") { promise: Promise -> openPicker(promise, true) }
+
+    /** Android's photo picker for one photo only (a profile photo). */
+    AsyncFunction("pickOneAsync") { promise: Promise -> openPicker(promise, false) }
 
     /**
      * Opens Android's file picker for any kind of file (documents, PDFs, anything). The app
@@ -178,6 +164,31 @@ class PhotoPickerModule : Module() {
      * A JPEG preview no larger than `maxSide`, turned upright, made in memory, with the
      * photo's own width and height (upright too).
      */
+    /**
+     * A `side` × `side` JPEG of the middle of the picture, turned upright, made in memory: a
+     * profile photo, cropped as the web crops one.
+     */
+    AsyncFunction("squareAsync") { uri: String, side: Int, quality: Int ->
+      // Decoded a little larger than needed, so its shorter side still covers `side`.
+      val (decoded, _, _) = decodeUpright(Uri.parse(uri), side * 4)
+      val crop = minOf(decoded.width, decoded.height)
+      val left = (decoded.width - crop) / 2
+      val top = (decoded.height - crop) / 2
+      val out = minOf(side, crop)
+      val square = Bitmap.createBitmap(decoded, left, top, crop, crop)
+      val scaled = Bitmap.createScaledBitmap(square, out, out, true)
+      if (square !== decoded) square.recycle()
+      decoded.recycle()
+      val bytes = ByteArrayOutputStream()
+      scaled.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(1, 100), bytes)
+      scaled.recycle()
+      val jpeg = bytes.toByteArray()
+      val buffer = ByteBuffer.allocateDirect(jpeg.size).put(jpeg)
+      jpeg.fill(0)
+      buffer.flip()
+      ArrayBuffer(buffer)
+    }
+
     AsyncFunction("previewAsync") { uri: String, maxSide: Int, quality: Int ->
       val (bitmap, width, height) = decodeUpright(Uri.parse(uri), maxSide)
       val out = ByteArrayOutputStream()
@@ -189,6 +200,26 @@ class PhotoPickerModule : Module() {
       buffer.flip()
       mapOf("thumb" to ArrayBuffer(buffer), "width" to width, "height" to height)
     }
+  }
+
+  /** Opens Android's photo picker, for many photos or for one. */
+  private fun openPicker(promise: Promise, many: Boolean) {
+    val activity = appContext.currentActivity
+      ?: throw CodedException("ERR_NO_ACTIVITY", "Arcafold isn't on screen.", null)
+    pending?.resolve(emptyList<Map<String, Any>>())
+    pending = promise
+    val intent =
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Intent(MediaStore.ACTION_PICK_IMAGES).setType("image/*").apply {
+          if (many) putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, minOf(PICK_MAX, MediaStore.getPickImagesMaxLimit()))
+        }
+      } else {
+        Intent(Intent.ACTION_OPEN_DOCUMENT)
+          .addCategory(Intent.CATEGORY_OPENABLE)
+          .setType("image/*")
+          .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, many)
+      }
+    activity.startActivityForResult(intent, PICK_REQUEST)
   }
 
   /**
