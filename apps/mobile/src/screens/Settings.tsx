@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
-  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StatusBar,
@@ -21,16 +20,20 @@ import { backupStatusText } from '../backup/backup-text';
 import { lastRunText } from '../backup/last-run';
 import { useBackup } from '../backup/use-backup';
 import { lastActiveText, shortDay } from '../library/devices';
+import { storageShown } from '../library/storage-text';
 import { useAccount } from '../session/account';
 import { AUTO_LOCK_CHOICES, autoLockLabel } from '../session/auto-lock';
 import { biometricsAvailable } from '../session/biometric';
 import { Banner, Button, Field } from '../ui/kit';
-import { Row, Section } from '../ui/rows';
+import { Icon } from '../ui/icons';
+import { Sheet } from '../ui/sheet';
+import { IconTile, Row, Section } from '../ui/rows';
 import { useAppearance } from '../ui/appearance';
 import type { ThemeChoice } from '../ui/appearance-settings';
 import { SharingSettings } from './SharingSettings';
 import { SmartSettings } from './SmartSettings';
 import type { Smart } from './SmartSettings';
+import { fonts } from '../theme';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 
@@ -98,6 +101,7 @@ function Devices({ palette }: { palette: Palette }) {
           <Row
             key={device.id}
             title={name}
+            icon="phone"
             detail={`${active} · Signed in ${shortDay(device.signedInAt)}`}
             palette={palette}
             action={
@@ -132,7 +136,6 @@ function Devices({ palette }: { palette: Palette }) {
 /** Asks for the main password before fingerprint unlock is turned on from here. */
 function PasswordSheet({ onDone }: { onDone: () => void }) {
   const { enableBiometricsWithPassword } = useAccount();
-  const palette = usePalette();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -157,33 +160,28 @@ function PasswordSheet({ onDone }: { onDone: () => void }) {
     );
   };
   return (
-    <KeyboardAvoidingView behavior="padding" style={styles.backdrop}>
-      <Pressable style={styles.dismiss} onPress={busy ? undefined : onDone} />
-      <View style={[styles.sheet, { backgroundColor: palette.surface }]}>
-        <Text style={[styles.sheetTitle, { color: palette.text }]} accessibilityRole="header">
-          Turn on fingerprint unlock
-        </Text>
-        <Text style={[styles.rowDetail, { color: palette.muted }]}>
-          Enter your main password once. Android then asks for your fingerprint or face.
-        </Text>
-        <Field
-          label="Main password"
-          value={password}
-          onChangeText={(text) => {
-            setPassword(text);
-            setError(null);
-          }}
-          secure
-          autoComplete="current-password"
-          autoFocus
-          returnKeyType="go"
-          onSubmitEditing={submit}
-        />
-        {error ? <Banner>{error}</Banner> : null}
-        <Button label="Turn on" busyLabel="Checking…" busy={busy} onPress={submit} />
-        <Button kind="link" label="Cancel" onPress={busy ? () => undefined : onDone} />
-      </View>
-    </KeyboardAvoidingView>
+    <Sheet
+      title="Turn on fingerprint unlock"
+      body="Enter your main password once. Android then asks for your fingerprint or face."
+      busy={busy}
+      onCancel={onDone}
+    >
+      <Field
+        label="Main password"
+        value={password}
+        onChangeText={(text) => {
+          setPassword(text);
+          setError(null);
+        }}
+        secure
+        autoComplete="current-password"
+        autoFocus
+        returnKeyType="go"
+        onSubmitEditing={submit}
+      />
+      {error ? <Banner>{error}</Banner> : null}
+      <Button label="Turn on" busyLabel="Checking…" busy={busy} onPress={submit} />
+    </Sheet>
   );
 }
 
@@ -204,6 +202,7 @@ function Backup({
     <>
       <Row
         title="Back up new photos"
+        icon="upload"
         detail={
           backup.on
             ? 'New photos on this phone go to your library by themselves, encrypted, even while Arcafold is locked or closed.'
@@ -229,6 +228,7 @@ function Backup({
       {backup.on ? (
         <Row
           title="Use mobile data"
+          icon="signal"
           detail={
             backup.mobileData
               ? 'Backs up on Wi-Fi or mobile data, when the battery isn’t low.'
@@ -335,7 +335,8 @@ function Appearance({ palette }: { palette: Palette }) {
   const { theme, setTheme } = useAppearance();
   return (
     <>
-      <View style={styles.row}>
+      <View style={styles.rowTop}>
+        <IconTile icon="theme" palette={palette} />
         <View style={styles.rowText}>
           <Text style={[styles.rowTitle, { color: palette.text }]}>Theme</Text>
           <Text style={[styles.rowDetail, { color: palette.muted }]}>
@@ -388,6 +389,39 @@ export function Settings({
   // Fingerprint unlock opens only the main library, so it's set from there.
   const showFingerprint = space === 'main' && (fingerprintOn || biometricsAvailable());
 
+  // The account's total across both spaces: the same figure in either one, as on the web.
+  const [stored, setStored] = useState<{ label: string; fraction: number } | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.storage().then(
+      ({ used, limit }) => {
+        if (live) setStored(storageShown(used, limit));
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  const hero =
+    space === 'private'
+      ? {
+          background: '#1f2a6b',
+          arch: 'rgba(140,156,255,0.18)',
+          ink: palette.text,
+          avatar: palette.accent,
+          avatarInk: palette.onAccent,
+          bar: palette.accent,
+        }
+      : {
+          background: palette.dark ? '#26338f' : '#2f4bf0',
+          arch: 'rgba(255,255,255,0.14)',
+          ink: '#ffffff',
+          avatar: '#ffffff',
+          avatarInk: '#2f4bf0',
+          bar: '#ffffff',
+        };
+
   const close = useCallback(() => {
     if (askingPassword) setAskingPassword(false);
     else onClose();
@@ -410,31 +444,54 @@ export function Settings({
           accessibilityRole="button"
           accessibilityLabel="Back"
           onPress={onClose}
-          hitSlop={12}
-          style={styles.back}
+          hitSlop={8}
+          style={[styles.back, { backgroundColor: palette.surface, borderColor: palette.border }]}
         >
-          <Text style={[styles.backText, { color: palette.text }]}>‹</Text>
+          <Icon name="back" size={18} color={palette.text} />
         </Pressable>
         <Text style={[styles.title, { color: palette.text }]} accessibilityRole="header">
           Settings
         </Text>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
-        <View
-          style={[
-            styles.profile,
-            { backgroundColor: palette.surface, borderColor: palette.border },
-          ]}
-        >
-          <View style={[styles.avatar, { backgroundColor: palette.accent }]}>
-            <Text style={[styles.avatarText, { color: palette.onAccent }]}>
-              {(name.trim().at(0) ?? '?').toUpperCase()}
-            </Text>
+        <View style={[styles.profile, { backgroundColor: hero.background }]}>
+          <View style={[styles.profileArch, { backgroundColor: hero.arch }]} />
+          <View style={styles.profileTop}>
+            <View style={[styles.avatar, { backgroundColor: hero.avatar }]}>
+              <Text style={[styles.avatarText, { color: hero.avatarInk }]}>
+                {(name.trim().at(0) ?? '?').toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.rowText}>
+              <Text style={[styles.profileName, { color: hero.ink }]} numberOfLines={1}>
+                {name}
+              </Text>
+              <Text style={[styles.profileEmail, { color: hero.ink }]} numberOfLines={1}>
+                {email}
+              </Text>
+            </View>
           </View>
-          <View style={styles.rowText}>
-            <Text style={[styles.profileName, { color: palette.text }]}>{name}</Text>
-            <Text style={[styles.rowDetail, { color: palette.muted }]}>{email}</Text>
-          </View>
+          {stored ? (
+            <View style={styles.storage}>
+              <View style={styles.storageLine}>
+                <Text style={[styles.storageText, { color: hero.ink }]}>Storage used</Text>
+                <Text style={[styles.storageText, styles.soft, { color: hero.ink }]}>
+                  {stored.label}
+                </Text>
+              </View>
+              <View style={styles.storageTrack}>
+                <View
+                  style={[
+                    styles.storageFill,
+                    {
+                      width: `${String(Math.round(stored.fraction * 100))}%`,
+                      backgroundColor: hero.bar,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          ) : null}
         </View>
 
         <Section title="Appearance" palette={palette}>
@@ -445,6 +502,7 @@ export function Settings({
           {showFingerprint ? (
             <Row
               title="Fingerprint or face unlock"
+              icon="lock"
               detail="Opens your library without your password."
               palette={palette}
               action={
@@ -461,7 +519,8 @@ export function Settings({
               }
             />
           ) : null}
-          <View style={styles.row}>
+          <View style={styles.rowTop}>
+            <IconTile icon="clock" palette={palette} />
             <View style={styles.rowText}>
               <Text style={[styles.rowTitle, { color: palette.text }]}>Auto-lock</Text>
               <Text style={[styles.rowDetail, { color: palette.muted }]}>
@@ -526,25 +585,34 @@ export function Settings({
           <Devices palette={palette} />
         </Section>
 
-        <Section title="This phone" palette={palette}>
-          <View style={styles.rowPad}>
-            <Button kind="secondary" label="Lock now" onPress={lock} />
-            <Button
-              kind="secondary"
-              label="Sign out"
-              onPress={() => {
-                void logOut();
-              }}
-            />
-            <Button
-              kind="link"
-              label="Sign out and forget this account"
-              onPress={() => {
-                void forgetAccount();
-              }}
-            />
-          </View>
-        </Section>
+        <View style={styles.endButtons}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={lock}
+            style={[
+              styles.endButton,
+              { backgroundColor: palette.surface, borderColor: palette.border },
+            ]}
+          >
+            <Text style={[styles.endText, { color: palette.text }]}>Lock now</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              void logOut();
+            }}
+            style={[styles.endButton, { borderColor: palette.error }]}
+          >
+            <Text style={[styles.endText, { color: palette.error }]}>Sign out</Text>
+          </Pressable>
+        </View>
+        <Button
+          kind="link"
+          label="Sign out and forget this account"
+          onPress={() => {
+            void forgetAccount();
+          }}
+        />
       </ScrollView>
       {askingPassword ? (
         <PasswordSheet
@@ -566,27 +634,65 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingBottom: 8,
   },
-  back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  backText: { fontSize: 34, lineHeight: 38 },
-  title: { fontSize: 22, fontWeight: '700' },
-  content: { padding: 16, paddingBottom: 48, gap: 20 },
-  profile: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
+  back: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 20, fontWeight: '700' },
-  profileName: { fontSize: 18, fontWeight: '700' },
+  title: { fontFamily: fonts.display, fontSize: 28, letterSpacing: -0.7 },
+  content: { padding: 16, paddingBottom: 48, gap: 20 },
+  profile: { borderRadius: 26, padding: 18, gap: 16, overflow: 'hidden' },
+  profileArch: {
+    position: 'absolute',
+    right: -30,
+    top: -10,
+    width: 150,
+    height: 190,
+    borderTopLeftRadius: 75,
+    borderTopRightRadius: 75,
+  },
+  profileTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { fontFamily: fonts.display, fontSize: 22 },
+  profileName: { fontFamily: fonts.display, fontSize: 20, letterSpacing: -0.3 },
+  profileEmail: { fontSize: 13, opacity: 0.8 },
+  storage: { gap: 6 },
+  storageLine: { flexDirection: 'row', justifyContent: 'space-between' },
+  storageText: { fontSize: 13, fontWeight: '600' },
+  soft: { opacity: 0.8 },
+  storageTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    overflow: 'hidden',
+  },
+  storageFill: { height: 8, borderRadius: 4 },
+  rowTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  endButtons: { flexDirection: 'row', gap: 10 },
+  endButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endText: { fontSize: 15, fontWeight: '600' },
   section: { gap: 8 },
   sectionTitle: {
     fontSize: 13,
@@ -605,29 +711,11 @@ const styles = StyleSheet.create({
   },
   rowPad: { paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
   rowText: { flex: 1, gap: 2 },
-  rowTitle: { fontSize: 16, fontWeight: '600' },
-  rowDetail: { fontSize: 14, lineHeight: 20 },
+  rowTitle: { fontSize: 15, fontWeight: '600' },
+  rowDetail: { fontSize: 13, lineHeight: 18 },
   pill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
   pillText: { fontSize: 14, fontWeight: '600' },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   choice: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
   choiceText: { fontSize: 14, fontWeight: '600' },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  dismiss: { flex: 1 },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 36,
-    gap: 14,
-  },
-  sheetTitle: { fontSize: 20, fontWeight: '700' },
 });

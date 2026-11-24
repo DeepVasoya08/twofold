@@ -92,6 +92,11 @@ export interface Library {
     included: boolean,
   ) => Promise<Settled<string>>;
   /**
+   * Marks a photo a favorite or not, as the web's heart does. Shown at once, and put back if
+   * it doesn't save. Photos shared with you to view can't be.
+   */
+  setFavorite: (photoId: string, favorite: boolean) => Promise<void>;
+  /**
    * Gets one of your albums ready to share: it gets a key of its own (if it has none), which
    * is what people it's shared with are given.
    */
@@ -452,6 +457,31 @@ export function useLibrary(session: Session): Library {
     [photos],
   );
 
+  const setFavorite = useCallback(
+    async (photoId: string, favorite: boolean) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      const photo = photos.find((each) => each.id === photoId);
+      if (!photo) throw new FormError(GONE);
+      if (isViewOnly(photo))
+        throw new FormError('Photos shared with you to view can’t be changed.');
+      if (photo.favorite === favorite) return;
+      const mark = (value: boolean) => {
+        setPhotos((current) =>
+          current.map((each) => (each.id === photoId ? { ...each, favorite: value } : each)),
+        );
+      };
+      mark(favorite);
+      try {
+        await store.update({ ...photo, favorite });
+      } catch (error) {
+        mark(photo.favorite);
+        throw error;
+      }
+    },
+    [photos],
+  );
+
   const hideUploads = useCallback(() => {
     uploader.closeDialog();
   }, [uploader]);
@@ -512,6 +542,7 @@ export function useLibrary(session: Session): Library {
     renameAlbum,
     deleteAlbum,
     setInAlbum,
+    setFavorite,
     shareAlbum,
     stopSharingAlbum,
     setSharedWith,
