@@ -16,3 +16,4 @@ blob-report/
 apps/web/public/resources/search/
 .venv/
 __pycache__/
+.revyl/
