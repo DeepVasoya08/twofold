@@ -283,18 +283,22 @@ export function useLibrary(session: Session): Library {
         setAlbums(loaded.albums);
         setFolders(loaded.folders);
         setStatus('ready');
-        void loadTrash(store, () => stopped, (loadedTrash) => {
-          setTrash(loadedTrash);
-          // Folders whose 30 days are up go too, now their files have (best effort).
-          void purgeFolders(store, expiredFolders(loaded.folders), {
-            saved: () => undefined,
-            gone: (gone) => {
-              if (stopped) return;
-              const ids = new Set(gone);
-              setFolders((current) => current.filter((folder) => !ids.has(folder.id)));
-            },
-          });
-        });
+        void loadTrash(
+          store,
+          () => stopped,
+          (loadedTrash) => {
+            setTrash(loadedTrash);
+            // Folders whose 30 days are up go too, now their files have (best effort).
+            void purgeFolders(store, expiredFolders(loaded.folders), {
+              saved: () => undefined,
+              gone: (gone) => {
+                if (stopped) return;
+                const ids = new Set(gone);
+                setFolders((current) => current.filter((folder) => !ids.has(folder.id)));
+              },
+            });
+          },
+        );
       },
       () => {
         if (!stopped) setStatus('failed');
