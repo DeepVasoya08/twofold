@@ -400,6 +400,58 @@ describe('remoteStore', () => {
     expect((await remoteStore(space, server.api).list()).albums).toEqual([]);
   });
 
+  it('keeps folders apart from albums, under seals that hide their names', async () => {
+    const { server, space } = await setUp();
+    const store = remoteStore(space, server.api);
+    const album = await store.createAlbum('Trip');
+    const taxes = await store.createFolder('  Taxes 2025 ');
+    const receipts = await store.createFolder('Receipts', taxes.id);
+    expect(taxes).toEqual({ id: taxes.id, name: 'Taxes 2025' });
+    expect(receipts).toEqual({ id: receipts.id, name: 'Receipts', parentId: taxes.id });
+    // On the server a folder is just another album record.
+    const stored = server.albums.get(taxes.id)?.album.meta ?? '';
+    expect(contains(fromBase64Url(stored) ?? new Uint8Array(), bytes('Taxes'))).toBe(false);
+    expect(contains(fromBase64Url(stored) ?? new Uint8Array(), bytes('folder'))).toBe(false);
+
+    const filed = await store.add(FILE, [receipts.id]);
+    const later = await remoteStore(space, server.api).list();
+    expect(later.albums).toEqual([album]);
+    expect(later.folders).toEqual(expect.arrayContaining([taxes, receipts]));
+    expect(later.photos.find((photo) => photo.id === filed.id)?.albumIds).toEqual([receipts.id]);
+  });
+
+  it('renames, moves and deletes a folder', async () => {
+    const { server, space } = await setUp();
+    const store = remoteStore(space, server.api);
+    const taxes = await store.createFolder('Taxes');
+    const car = await store.createFolder('Car');
+    const deletedAt = '2026-11-20T10:00:00.000Z';
+    await store.saveFolder({ ...car, name: 'Car papers', parentId: taxes.id });
+    await store.saveFolder({ ...taxes, deletedAt });
+    expect((await remoteStore(space, server.api).list()).folders).toEqual(
+      expect.arrayContaining([
+        { id: car.id, name: 'Car papers', parentId: taxes.id },
+        { id: taxes.id, name: 'Taxes', deletedAt },
+      ]),
+    );
+    await expect(store.saveFolder({ ...car, name: '  ' })).rejects.toThrow(/name/);
+    await store.removeAlbum(taxes.id);
+    await expect(store.saveFolder(taxes)).rejects.toThrow(/isn’t here/);
+    expect((await remoteStore(space, server.api).list()).folders).toEqual([
+      { id: car.id, name: 'Car papers', parentId: taxes.id },
+    ]);
+  });
+
+  it('can’t change another space’s folder', async () => {
+    const { server, space } = await setUp();
+    const folder = await remoteStore(space, server.api).createFolder('Taxes');
+    const other = remoteStore(await newSpace(), server.api);
+    await other.list();
+    await expect(other.saveFolder({ ...folder, name: 'Mine now' })).rejects.toThrow();
+    await expect(other.removeAlbum(folder.id)).rejects.toThrow();
+    expect((await remoteStore(space, server.api).list()).folders).toEqual([folder]);
+  });
+
   it('can’t rename another space’s album', async () => {
     const { server, space } = await setUp();
     const album = await remoteStore(space, server.api).createAlbum('Trip');
@@ -416,10 +468,15 @@ describe('remoteStore', () => {
     expect(await remoteStore(await newSpace(), server.api).list()).toEqual({
       photos: [],
       albums: [],
+      folders: [],
     });
     // Same token but the wrong key: the records don't open, so nothing shows.
     const impostor = { spaceKey: (await newSpace()).spaceKey, spaceId: space.spaceId };
-    expect(await remoteStore(impostor, server.api).list()).toEqual({ photos: [], albums: [] });
+    expect(await remoteStore(impostor, server.api).list()).toEqual({
+      photos: [],
+      albums: [],
+      folders: [],
+    });
   });
 
   it('leaves out a photo whose record was tampered with or swapped', async () => {
@@ -690,9 +747,9 @@ describe('combinedStore', () => {
     const own = {
       ...memoryStore({ photos: [photo('mine')], albums: [] }),
       list: () =>
-        new Promise<{ photos: Photo[]; albums: Album[] }>((resolve) => {
+        new Promise<{ photos: Photo[]; albums: Album[]; folders: [] }>((resolve) => {
           releaseOwn = () => {
-            resolve({ photos: [photo('mine')], albums: [] });
+            resolve({ photos: [photo('mine')], albums: [], folders: [] });
           };
         }),
     };

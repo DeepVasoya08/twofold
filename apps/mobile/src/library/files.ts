@@ -2,7 +2,8 @@ import { CATEGORIES, categoryLabel } from '@arcafold/core/file-categories';
 import type { Category } from '@arcafold/core/file-categories';
 import { fileKindLabel, fileKindOf } from '@arcafold/core/file-types';
 import { formatBytes } from '@arcafold/core/format-bytes';
-import type { Photo } from '@arcafold/core/library/model';
+import { itemsIn } from '@arcafold/core/library/folders';
+import type { Folder, Photo } from '@arcafold/core/library/model';
 import { groupByMonth } from '@arcafold/core/library/months';
 
 /**
@@ -110,4 +111,28 @@ export function fileBadge(item: Photo): string {
 /** Whether a file has a preview of its own to show (a PDF's first page). */
 export function hasPreview(item: Photo): boolean {
   return item.file?.preview === true;
+}
+
+/**
+ * Which files Files lists: those in the open folder (or in no folder, at the top), or, while
+ * searching or showing one category, matching files from every folder.
+ */
+export function filesHere(
+  files: readonly Photo[],
+  folders: readonly Folder[],
+  folderId: string | null,
+  everywhere: boolean,
+): Photo[] {
+  return everywhere ? [...files] : itemsIn(files, folders, folderId);
+}
+
+/** "3 files · 1 folder", or "Empty", for a folder's card. */
+export function folderSummary(counts: { folders: number; items: number }): string {
+  const parts = [
+    ...(counts.items > 0 ? [counts.items === 1 ? '1 file' : `${String(counts.items)} files`] : []),
+    ...(counts.folders > 0
+      ? [counts.folders === 1 ? '1 folder' : `${String(counts.folders)} folders`]
+      : []),
+  ];
+  return parts.length > 0 ? parts.join(' · ') : 'Empty';
 }

@@ -15,11 +15,13 @@ import {
   encodePhotoMeta,
   hasPreview,
   parseAlbumMeta,
+  parseFolderMeta,
   parsePhotoMeta,
 } from '../records';
-import type { AlbumMeta, PhotoMeta } from '../records';
+import type { AlbumMeta, FolderMeta, PhotoMeta } from '../records';
 import { uploadKeyPair } from '../upload/upload-only';
-import type { Album, FileDetails, Photo } from './model';
+import { folderName } from './folders';
+import type { Album, FileDetails, Folder, Photo } from './model';
 
 /**
  * One space's photos and albums, stored encrypted on the server. Every photo has its own
@@ -115,9 +117,20 @@ export interface NewPhoto {
 /** Where an upload is: encrypting on this device, then sending ciphertext. */
 export type UploadStage = 'encrypting' | 'uploading';
 
+/** What a space holds, as `SpaceStore.list` hands it back. */
+export interface SpaceContents {
+  photos: Photo[];
+  albums: Album[];
+  /** Folders in Files, including those in Recently deleted (with `deletedAt`). */
+  folders: Folder[];
+}
+
 export interface SpaceStore {
-  /** Every photo and album. Photos come without images (`src` is empty) until `image`. */
-  list: () => Promise<{ photos: Photo[]; albums: Album[] }>;
+  /**
+   * Every photo, album and folder. Photos come without images (`src` is empty) until
+   * `image`.
+   */
+  list: () => Promise<SpaceContents>;
   /**
    * Downloads and decrypts a photo's preview or original into an object URL. Only the
    * latest original is kept: asking for another revokes the previous one.
@@ -174,8 +187,18 @@ export interface SpaceStore {
   restore: (photoIds: readonly string[]) => Promise<string[]>;
   createAlbum: (title: string) => Promise<Album>;
   renameAlbum: (albumId: string, title: string) => Promise<void>;
-  /** Deletes an album. Its photos stay; take the album out of them with `update`. */
+  /**
+   * Deletes an album, or a folder, for good. Its photos stay; take it out of them with
+   * `update`.
+   */
   removeAlbum: (albumId: string) => Promise<void>;
+  /** Makes a folder in Files, inside `parentId` or at the top. */
+  createFolder: (name: string, parentId?: string) => Promise<Folder>;
+  /**
+   * Saves a folder's name, where it is, and whether it is in Recently deleted. Files go in
+   * and out of folders with `update`, like albums.
+   */
+  saveFolder: (folder: Folder) => Promise<void>;
   /**
    * Gets an album of your own ready to share with people: gives it a key of its own if it
    * has none, and lists its photos (sealed under that key) for them. Returns the album key,
@@ -244,6 +267,17 @@ function fileOf(meta: PhotoMeta): FileDetails | undefined {
 const NOT_A_PHOTO = 'That’s a file, not a photo. Download it to open it.';
 
 const ALBUM_GONE = 'That album isn’t here anymore.';
+const FOLDER_GONE = 'That folder isn’t here anymore.';
+
+/** A folder as the apps show it. */
+function toFolder(id: string, meta: FolderMeta): Folder {
+  return {
+    id,
+    name: meta.name,
+    ...(meta.parent !== undefined && { parentId: meta.parent }),
+    ...(meta.deletedAt !== undefined && { deletedAt: meta.deletedAt }),
+  };
+}
 const ALBUM_ONLY = 'In an album shared with you, you can add photos or take them out.';
 
 /** Who added a photo, as this device sees it. The owner's photos carry no `by`. */
@@ -304,6 +338,7 @@ export function remoteStore(
   const remote = () => (apiPromise ??= access().then((opened) => makeApi(opened.token)));
   const known = new Map<string, Known>();
   const albumMetas = new Map<string, AlbumMeta>();
+  const folderMetas = new Map<string, FolderMeta>();
   const urls = new Map<string, string>();
 
   const track = (
@@ -340,7 +375,7 @@ export function remoteStore(
     return crypto.sealRecord(await access(), 'photo', id, encodePhotoMeta(meta));
   };
 
-  const sealAlbum = async (id: string, meta: AlbumMeta) => {
+  const sealAlbum = async (id: string, meta: AlbumMeta | FolderMeta) => {
     const crypto = await loadCrypto();
     return crypto.sealRecord(await access(), 'album', id, encodeJson(meta));
   };
@@ -587,13 +622,21 @@ export function remoteStore(
       const storedAlbums = api.listAlbums();
       storedAlbums.catch(() => undefined);
       const albums: Album[] = [];
+      const folders: Folder[] = [];
       const removals: { album: string; photoIds: string[] }[] = [];
       const opening = storedAlbums.then(async ({ albums: stored }) => {
         for (const each of stored) {
           const opened = await crypto
             .openRecord(keys, 'album', each.id, each.meta)
             .catch(() => null);
-          const meta = opened && parseAlbumMeta(decodeJson(opened));
+          const plain = opened && decodeJson(opened);
+          const folder = parseFolderMeta(plain);
+          if (folder) {
+            folderMetas.set(each.id, folder);
+            folders.push(toFolder(each.id, folder));
+            continue;
+          }
+          const meta = parseAlbumMeta(plain);
           if (!meta) continue;
           albumMetas.set(each.id, meta);
           albums.push({ id: each.id, title: meta.title });
@@ -606,7 +649,7 @@ export function remoteStore(
       albumsOpened = opening.catch(() => undefined);
       const photos = await openPhotos((after) => api.listPhotos(after));
       await opening;
-      if (removals.length === 0) return { photos, albums };
+      if (removals.length === 0) return { photos, albums, folders };
       const changed = await catchUpRemovals(removals);
       return {
         photos: photos.map((photo) => {
@@ -614,6 +657,7 @@ export function remoteStore(
           return entry ? { ...photo, albumIds: entry.meta.albumIds } : photo;
         }),
         albums,
+        folders,
       };
     },
 
@@ -842,6 +886,39 @@ export function remoteStore(
       const api = await remote();
       await api.deleteAlbum(albumId);
       albumMetas.delete(albumId);
+      folderMetas.delete(albumId);
+    },
+
+    createFolder: async (name, parentId) => {
+      const crypto = await loadCrypto();
+      const id = await crypto.newRecordId();
+      const meta: FolderMeta = {
+        v: 1,
+        kind: 'folder',
+        name: folderName(name),
+        ...(parentId !== undefined && { parent: parentId }),
+      };
+      const api = await remote();
+      await api.createAlbum({ id, meta: await sealAlbum(id, meta) });
+      folderMetas.set(id, meta);
+      return toFolder(id, meta);
+    },
+
+    saveFolder: async (folder) => {
+      const current = folderMetas.get(folder.id);
+      if (!current) throw new FormError(FOLDER_GONE);
+      // Keep its share key, if it has one.
+      const meta: FolderMeta = {
+        v: 1,
+        kind: 'folder',
+        name: folderName(folder.name),
+        ...(folder.parentId !== undefined && { parent: folder.parentId }),
+        ...(folder.deletedAt !== undefined && { deletedAt: folder.deletedAt }),
+        ...(current.shareKey !== undefined && { shareKey: current.shareKey }),
+      };
+      const api = await remote();
+      await api.updateAlbum(folder.id, await sealAlbum(folder.id, meta));
+      folderMetas.set(folder.id, meta);
     },
 
     shareAlbum: async (albumId) => {
@@ -1031,6 +1108,7 @@ export function combinedStore(
       }
       const photos = [...mine.photos];
       const albums = [...mine.albums];
+      const folders = [...mine.folders];
       const seen = new Map(photos.map((photo, index) => [photo.id, index]));
       for (const { source, loaded, viewOnly } of loadedShared) {
         if (!loaded) continue;
@@ -1058,8 +1136,15 @@ export function combinedStore(
           albumStores.set(album.id, source.store);
           albums.push({ ...album, ...albumMarks });
         }
+        // Folders of a library shared with you whole. (Folders shared on their own come later.)
+        if (source.album) continue;
+        for (const folder of loaded.folders) {
+          if (albumStores.has(folder.id)) continue;
+          albumStores.set(folder.id, source.store);
+          folders.push({ ...folder, library: source.name, ...(viewOnly && { viewOnly: true }) });
+        }
       }
-      return { photos, albums };
+      return { photos, albums, folders };
     },
     image: (photoId, part) => storeOf(photoId).image(photoId, part),
     viewImage: (photoId) => storeOf(photoId).viewImage(photoId),
@@ -1144,6 +1229,16 @@ export function combinedStore(
       await ownedChange(albumStoreOf(albumId)).removeAlbum(albumId);
       albumStores.delete(albumId);
     },
+    createFolder: async (name, parentId) => {
+      // A folder inside a library you joined is made there, if you may change it.
+      const target = parentId === undefined ? own : ownedChange(albumStoreOf(parentId));
+      const folder = await target.createFolder(name, parentId);
+      if (target === own) return folder;
+      albumStores.set(folder.id, target);
+      const source = shared.find((candidate) => candidate.store === target);
+      return source ? { ...folder, library: source.name } : folder;
+    },
+    saveFolder: async (folder) => ownedChange(albumStoreOf(folder.id)).saveFolder(folder),
     // Only a space's owner can say who it's shared with, so only your own albums are shared.
     shareAlbum: (albumId) =>
       albumStores.has(albumId) ? Promise.reject(new FormError(NOT_YOURS)) : own.shareAlbum(albumId),

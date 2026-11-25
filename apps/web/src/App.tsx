@@ -51,6 +51,7 @@ const titles: Record<Route['name'], string> = {
   favorites: 'Favorites · Arcafold',
   files: 'Files · Arcafold',
   file: 'File · Arcafold',
+  folder: 'Files · Arcafold',
   trash: 'Recently deleted · Arcafold',
   search: 'Search · Arcafold',
   people: 'People · Arcafold',
@@ -129,6 +130,12 @@ function Screen({ route }: { route: Route }) {
       return (
         <AppShell>
           <Files />
+        </AppShell>
+      );
+    case 'folder':
+      return (
+        <AppShell uploadAlbumId={route.folderId}>
+          <Files key={route.folderId} folderId={route.folderId} />
         </AppShell>
       );
     case 'trash':

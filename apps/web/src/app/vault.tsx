@@ -44,7 +44,25 @@ import type {
   SpaceStore,
   UploadStage,
 } from '@arcafold/core/library/space-store';
-import type { Album, Photo } from '@arcafold/core/library/model';
+import type { Album, Folder, Photo } from '@arcafold/core/library/model';
+import {
+  canMoveFolder,
+  expiredFolders,
+  folderName,
+  liveFolders,
+  withFolder,
+} from '@arcafold/core/library/folders';
+import {
+  changeableFolder,
+  deleteFolder,
+  deleteFolderForGood,
+  moveToFolder,
+  purgeFolders,
+  renameFolder,
+  restoreFolder,
+  saveFolders,
+} from '@arcafold/core/library/folder-changes';
+import type { FolderSink } from '@arcafold/core/library/folder-changes';
 import {
   addsByUpload,
   canFillAlbum,
@@ -69,6 +87,13 @@ export interface VaultState {
   files?: Photo[];
   /** Photos and files in Recently deleted, newest deletion first, once they have loaded. */
   trash?: Photo[];
+  /** Folders in Files, including those in Recently deleted. Left out where there are none. */
+  folders?: Folder[];
+}
+
+/** The open space's folders, including those in Recently deleted. */
+export function foldersOf(state: VaultState): Folder[] {
+  return state.folders ?? [];
 }
 
 /** Whether an item is a file rather than a photo. */
@@ -124,7 +149,10 @@ export type VaultAction =
   | { type: 'create-album'; album: Album }
   | { type: 'rename-album'; albumId: string; title: string }
   | { type: 'delete-album'; albumId: string }
-  | { type: 'set-shared-with'; albumId: string; names: string[] };
+  | { type: 'set-shared-with'; albumId: string; names: string[] }
+  | { type: 'set-folders'; folders: readonly Folder[] }
+  | { type: 'remove-folders'; folderIds: readonly string[] }
+  | { type: 'move-to-folder'; itemIds: readonly string[]; folderId: string | null };
 
 /** What a change to many photos sets on each: a favorite, or being in an album or not. */
 export type PhotoDetails = { favorite: boolean } | { albumId: string; included: boolean };
@@ -263,6 +291,28 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
           return rest;
         }),
       };
+    case 'set-folders': {
+      const changed = new Map(action.folders.map((folder) => [folder.id, folder]));
+      const kept = foldersOf(state).map((folder) => changed.get(folder.id) ?? folder);
+      const known = new Set(kept.map((folder) => folder.id));
+      const added = action.folders.filter((folder) => !known.has(folder.id));
+      return { ...state, folders: [...kept, ...added] };
+    }
+    case 'remove-folders': {
+      const gone = new Set(action.folderIds);
+      return { ...state, folders: foldersOf(state).filter((folder) => !gone.has(folder.id)) };
+    }
+    case 'move-to-folder': {
+      const ids = new Set(action.itemIds);
+      const folders = foldersOf(state);
+      const update = (item: Photo) =>
+        ids.has(item.id) ? withFolder(item, action.folderId, folders) : item;
+      return {
+        ...state,
+        photos: state.photos.map(update),
+        ...(state.files && { files: state.files.map(update) }),
+      };
+    }
     case 'delete-album': {
       const update = (photo: Photo) =>
         withDetails(photo, { albumId: action.albumId, included: false });
@@ -389,6 +439,22 @@ interface VaultValue {
   stopSharingAlbum: (albumId: string) => Promise<void>;
   /** Records who an album is shared with now, by name, after someone is added or removed. */
   setSharedWith: (albumId: string, names: string[]) => void;
+  /** Makes a folder in Files, inside `parentId` or at the top. */
+  createFolder: (name: string, parentId?: string) => Promise<Folder>;
+  renameFolder: (folderId: string, name: string) => Promise<void>;
+  /** Moves a folder into another (or to the top of Files, for null). */
+  moveFolder: (folderId: string, parentId: string | null) => Promise<void>;
+  /**
+   * Moves files (or photos) into a folder, or out to the top of Files for null, saving only
+   * those it changes. Each goes through or fails on its own.
+   */
+  moveToFolder: (itemIds: readonly string[], folderId: string | null) => Promise<Settled<string>>;
+  /** Moves a folder to Recently deleted, with the folders and files inside it. */
+  deleteFolder: (folderId: string) => Promise<void>;
+  /** Brings a folder back from Recently deleted, with what was deleted along with it. */
+  restoreFolder: (folderId: string) => Promise<void>;
+  /** Deletes a folder in Recently deleted for good, with what was deleted along with it. */
+  deleteFolderForever: (folderId: string) => Promise<void>;
   /**
    * Downloads and decrypts photos' originals, a few at a time, for saving copies to the
    * device. Each is named by when it was taken. Reports progress after each photo; stops
@@ -493,6 +559,13 @@ export function VaultProvider({
         setStatus('ready');
         void loadTrash(store, stopped, (trash) => {
           dispatch({ type: 'set-trash', trash });
+          // Folders whose 30 days are up go too, now their files have (best effort).
+          void purgeFolders(store, expiredFolders(loaded.folders), {
+            saved: () => undefined,
+            gone: (folderIds) => {
+              if (!stopped()) dispatch({ type: 'remove-folders', folderIds });
+            },
+          });
         });
       },
       () => {
@@ -522,6 +595,28 @@ export function VaultProvider({
       if (photo.viewOnly) throw new FormError(VIEW_ONLY_PHOTO);
       return photo;
     };
+    const folders = foldersOf(state);
+    /** Shows each step of a change to folders as it goes through. */
+    const sink: FolderSink = {
+      saved: (changed) => {
+        dispatch({ type: 'set-folders', folders: changed });
+      },
+      moved: (itemIds, folderId) => {
+        dispatch({ type: 'move-to-folder', itemIds, folderId });
+      },
+      trashed: (photoIds, deletedAt) => {
+        dispatch({ type: 'trash-photos', photoIds, deletedAt });
+      },
+      restored: (photoIds) => {
+        dispatch({ type: 'restore-photos', photoIds });
+      },
+      removed: (photoIds) => {
+        dispatch({ type: 'delete-photos', photoIds });
+      },
+      gone: (folderIds) => {
+        dispatch({ type: 'remove-folders', folderIds });
+      },
+    };
     const otherStoreFor = (keys: SpaceKeys | undefined) => {
       if (!keys) throw new FormError('Unlock the other space first.');
       return storeFor(keys);
@@ -539,9 +634,12 @@ export function VaultProvider({
       state,
       status,
       space,
-      // Files stay out of albums for now: they live in Files.
-      upload: (photo, albumId, onStage) =>
-        store.add(photo, albumId && !photo.file ? [albumId] : [], onStage),
+      // Files go into a folder they're uploaded to, but stay out of albums: they live in Files.
+      upload: (photo, albumId, onStage) => {
+        const intoFolder = albumId !== undefined && liveFolders(folders).has(albumId);
+        const albumIds = albumId && (intoFolder || !photo.file) ? [albumId] : [];
+        return store.add(photo, albumIds, onStage);
+      },
       showUploaded,
       importPhoto: (photo, albumIds) => store.add(photo, albumIds),
       fingerprint: (original) => store.fingerprint(original),
@@ -668,6 +766,31 @@ export function VaultProvider({
       setSharedWith: (albumId, names) => {
         dispatch({ type: 'set-shared-with', albumId, names });
       },
+      createFolder: async (name, parentId) => {
+        if (parentId !== undefined) changeableFolder(folders, parentId);
+        const folder = await store.createFolder(folderName(name), parentId);
+        dispatch({ type: 'set-folders', folders: [folder] });
+        return folder;
+      },
+      renameFolder: (folderId, name) => renameFolder(store, folders, folderId, name, sink),
+      moveFolder: async (folderId, parentId) => {
+        const folder = changeableFolder(folders, folderId);
+        if (!canMoveFolder(folders, folderId, parentId)) {
+          throw new FormError('A folder can’t go inside itself.');
+        }
+        const moved = { ...folder };
+        if (parentId === null) delete moved.parentId;
+        else moved.parentId = parentId;
+        await saveFolders(store, [moved], sink);
+      },
+      moveToFolder: (itemIds, folderId) =>
+        moveToFolder(store, folders, allItems(state), itemIds, folderId, sink, (item) => {
+          findChangeable(item.id);
+        }),
+      deleteFolder: (folderId) => deleteFolder(store, folders, allItems(state), folderId, sink),
+      restoreFolder: (folderId) => restoreFolder(store, folders, state.trash ?? [], folderId, sink),
+      deleteFolderForever: (folderId) =>
+        deleteFolderForGood(store, folders, state.trash ?? [], folderId, sink),
       originals: async (photoIds, options) => {
         const items = photoIds.map((id) => ({ id, size: find(id).size ?? 0 }));
         const originals = await downloadAll(items, (id) => store.original(id), options);

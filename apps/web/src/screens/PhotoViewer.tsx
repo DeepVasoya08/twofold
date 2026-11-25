@@ -48,6 +48,8 @@ export function photosInContext(
       return documentPhotos(state, looks);
     case 'album':
       return albumPhotos(state, context.albumId);
+    case 'folder':
+      return albumPhotos(state, context.folderId);
     case 'person':
     case 'search':
     case 'smart': {
@@ -68,6 +70,8 @@ function closeTarget(context: PhotoContext): string {
   switch (context.kind) {
     case 'album':
       return paths.album(context.albumId);
+    case 'folder':
+      return paths.folder(context.folderId);
     case 'favorites':
       return paths.favorites;
     case 'person':

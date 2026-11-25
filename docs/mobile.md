@@ -280,6 +280,17 @@ or a native module.
   permission to read that one address; the copy is wiped when another file opens or the app
   locks. What the other app does with it is up to that app. A long press selects files to
   save to the phone (Download/Arcafold) or delete.
+- Folders in Files (`screens/Files.tsx`, `screens/FolderSheets.tsx`,
+  `screens/DeletedFolders.tsx`, shared logic in `packages/core/src/library/folders.ts` and
+  `folder-changes.ts`): the same folders as the web, sealed the same way. The top of Files
+  shows its folders as arch cards, then the files in no folder; tapping one opens it, and
+  back (the gesture or the button in the header) goes up a level. A long press on a folder
+  card opens its sheet: Rename, Move to folder (a picker opened one level at a time, which
+  can also make a folder) or Delete folder. "+ New folder" makes one where you are, and
+  inside a folder the floating button says Upload here and puts what you add into it. A long
+  press on files adds Move beside Download and Delete. Searching or filtering by category
+  looks through every folder. Recently deleted lists deleted folders above the photos, each
+  with what went with it, to Restore or delete for good.
 - Looking at photos (`src/ai/use-scan.ts`, `src/people/face-finder.ts`,
   `src/search/photo-encoder.ts`, `src/search/use-search-index.ts`, `screens/SmartSettings.tsx`):
   with Face grouping and Smart search on (Settings > Smart features, per phone, like the web;

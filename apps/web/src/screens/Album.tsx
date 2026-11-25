@@ -176,7 +176,7 @@ export function Album({ albumId }: { albumId: string }) {
                   <FileRow
                     key={item.id}
                     item={item}
-                    albumId={album.id}
+                    from={{ kind: 'album', albumId: album.id }}
                     details={fileDetails(item, null)}
                     menu={fileMenu(item, album, {
                       download: () => {

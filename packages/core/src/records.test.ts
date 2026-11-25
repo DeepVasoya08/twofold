@@ -7,6 +7,7 @@ import {
   encodePhotoMeta,
   hasPreview,
   parseAlbumMeta,
+  parseFolderMeta,
   parsePhotoMeta,
 } from './records';
 import type { PhotoMeta } from './records';
@@ -140,5 +141,39 @@ describe('parseAlbumMeta', () => {
 describe('decodeJson', () => {
   it('returns null for bytes that are not JSON', () => {
     expect(decodeJson(new Uint8Array([0xff, 0x00]))).toBeNull();
+  });
+});
+
+describe('parseFolderMeta', () => {
+  it('reads a folder, with where it is and when it was deleted', () => {
+    const value = {
+      v: 1,
+      kind: 'folder',
+      name: 'Taxes',
+      parent: 'p1',
+      deletedAt: '2026-11-01T00:00:00.000Z',
+      shareKey: 'k',
+    };
+    expect(parseFolderMeta(decodeJson(encodeJson(value)))).toEqual(value);
+    expect(parseFolderMeta({ v: 1, kind: 'folder', name: 'Top' })).toEqual({
+      v: 1,
+      kind: 'folder',
+      name: 'Top',
+    });
+  });
+
+  it.each([
+    ['an album', { v: 1, title: 'Trip' }],
+    ['no name', { v: 1, kind: 'folder', name: '' }],
+    ['a long name', { v: 1, kind: 'folder', name: 'a'.repeat(101) }],
+    ['a bad parent', { v: 1, kind: 'folder', name: 'A', parent: 3 }],
+    ['a bad deletion date', { v: 1, kind: 'folder', name: 'A', deletedAt: 'soon' }],
+    ['another version', { v: 2, kind: 'folder', name: 'A' }],
+  ])('refuses %s', (_, value) => {
+    expect(parseFolderMeta(value)).toBeNull();
+  });
+
+  it('is refused as an album, so older apps never list folders in Albums', () => {
+    expect(parseAlbumMeta({ v: 1, kind: 'folder', name: 'Taxes' })).toBeNull();
   });
 });

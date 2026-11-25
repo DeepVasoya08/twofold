@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useDownloads } from '../app/downloads';
 import { useRouter } from '../app/router';
 import { parsePhotoContext, paths } from '../app/routes';
-import { useVault } from '../app/vault';
+import { foldersOf, useVault } from '../app/vault';
+import { liveFolders } from '@arcafold/core/library/folders';
 import { PageHeader } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
@@ -40,13 +41,17 @@ export function FileViewer({ fileId }: { fileId: string }) {
   const { state, status, openFile } = useVault();
   const downloads = useDownloads();
   const { search } = useRouter();
-  // Opened from an album: back goes there.
+  // Opened from an album or a folder: back goes there.
   const from = parsePhotoContext(search);
   const album =
     from.kind === 'album' ? state.albums.find((each) => each.id === from.albumId) : undefined;
+  const folder =
+    from.kind === 'folder' ? liveFolders(foldersOf(state)).get(from.folderId) : undefined;
   const back = album
     ? { to: paths.album(album.id), label: album.title }
-    : { to: paths.files, label: 'Files' };
+    : folder
+      ? { to: paths.folder(folder.id), label: folder.name }
+      : { to: paths.files, label: 'Files' };
   const item = state.files?.find((candidate) => candidate.id === fileId);
   const file = item?.file;
   const view: FileView = file ? fileViewOf(file.type, file.name) : 'none';

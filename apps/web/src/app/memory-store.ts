@@ -1,19 +1,24 @@
 import { FormError } from '@arcafold/core/errors';
-import type { Album, Photo } from '@arcafold/core/library/model';
+import { folderName } from '@arcafold/core/library/folders';
+import type { Album, Folder, Photo } from '@arcafold/core/library/model';
 import type { SpaceStore } from '@arcafold/core/library/space-store';
 
 /**
  * A store that keeps nothing: for rendering tests and previews that start from fixed state.
  * Images are whatever `src` the photos already have.
  */
-export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): SpaceStore {
+export function memoryStore(initial: {
+  photos: Photo[];
+  albums: Album[];
+  folders?: Folder[];
+}): SpaceStore {
   let next = 0;
   const newId = () => {
     next += 1;
     return `local-${String(next)}`;
   };
   return {
-    list: () => Promise.resolve(initial),
+    list: () => Promise.resolve({ ...initial, folders: initial.folders ?? [] }),
     image: (photoId) =>
       Promise.resolve(initial.photos.find((photo) => photo.id === photoId)?.src ?? ''),
     viewImage: () => undefined,
@@ -51,6 +56,13 @@ export function memoryStore(initial: { photos: Photo[]; albums: Album[] }): Spac
     createAlbum: (title) => Promise.resolve({ id: newId(), title }),
     renameAlbum: () => Promise.resolve(),
     removeAlbum: () => Promise.resolve(),
+    createFolder: (name, parentId) =>
+      Promise.resolve({
+        id: newId(),
+        name: folderName(name),
+        ...(parentId !== undefined && { parentId }),
+      }),
+    saveFolder: () => Promise.resolve(),
     shareAlbum: () => Promise.reject(new FormError('This preview can’t share albums.')),
     stopSharingAlbum: () => Promise.resolve(),
     read: () => Promise.reject(new FormError('This preview can’t move photos.')),

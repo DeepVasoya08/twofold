@@ -60,6 +60,26 @@ export interface AlbumMeta {
   shareKey?: string;
 }
 
+/**
+ * A folder in Files. It is stored as an album record (the server can't tell the two apart),
+ * and a file is in it when its `albumIds` name it. Its name is `name`, not `title`, so apps
+ * from before folders existed refuse the record instead of showing it as an album.
+ */
+export interface FolderMeta {
+  v: 1;
+  kind: 'folder';
+  name: string;
+  /** The folder it is in; left out at the top of Files. */
+  parent?: string;
+  /** Set while it is in Recently deleted: when it was deleted (ISO 8601). */
+  deletedAt?: string;
+  /** Its own key, base64url, once it has been shared. */
+  shareKey?: string;
+}
+
+/** The longest a folder's name may be, in characters. */
+export const MAX_FOLDER_NAME = 100;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -136,6 +156,26 @@ export function parseAlbumMeta(value: unknown): AlbumMeta | null {
   const meta: AlbumMeta = { v: 1, title: value.title };
   if (typeof value.shareKey === 'string') meta.shareKey = value.shareKey;
   else if (value.shareKey !== undefined) return null;
+  return meta;
+}
+
+export function parseFolderMeta(value: unknown): FolderMeta | null {
+  if (!isRecord(value) || value.v !== 1 || value.kind !== 'folder') return null;
+  const { name, parent, deletedAt, shareKey } = value;
+  if (typeof name !== 'string' || name.length === 0) return null;
+  if (Array.from(name).length > MAX_FOLDER_NAME) return null;
+  if (parent !== undefined && (typeof parent !== 'string' || parent.length === 0)) return null;
+  if (
+    deletedAt !== undefined &&
+    (typeof deletedAt !== 'string' || Number.isNaN(Date.parse(deletedAt)))
+  ) {
+    return null;
+  }
+  if (shareKey !== undefined && typeof shareKey !== 'string') return null;
+  const meta: FolderMeta = { v: 1, kind: 'folder', name };
+  if (parent !== undefined) meta.parent = parent;
+  if (deletedAt !== undefined) meta.deletedAt = deletedAt;
+  if (shareKey !== undefined) meta.shareKey = shareKey;
   return meta;
 }
 

@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +14,15 @@ import {
 } from 'react-native';
 
 import { categoryLabel } from '@arcafold/core/file-categories';
-import type { Photo } from '@arcafold/core/library/model';
+import {
+  childFolders,
+  folderCounts,
+  folderTrash,
+  folderTree,
+  liveFolders,
+} from '@arcafold/core/library/folders';
+import type { Folder, Photo } from '@arcafold/core/library/model';
+import { TRASH_DAYS } from '@arcafold/core/library/trash';
 
 import { MemoryImage } from '../../modules/memory-image';
 import {
@@ -22,6 +31,8 @@ import {
   fileDetails,
   fileGridRows,
   fileRows,
+  filesHere,
+  folderSummary,
   hasPreview,
   libraryFiles,
 } from '../library/files';
@@ -39,6 +50,8 @@ import type { Palette } from '../ui/theme';
 import { FILE_CHOICES, FILE_COLUMNS } from '../ui/view-choices';
 import { ViewSheet } from '../ui/view-sheet';
 import { AppHeader } from './AppHeader';
+import { ConfirmSheet } from './ConfirmSheet';
+import { FolderActionsSheet, FolderCard, FolderNameSheet, MoveToFolderSheet } from './FolderSheets';
 import { usePickToDelete } from './use-pick-to-delete';
 
 const TILE = 48;
@@ -246,6 +259,8 @@ function Chip({
  */
 export function Files({
   library,
+  folderId,
+  onFolder,
   initial,
   banner,
   onSettings,
@@ -254,6 +269,10 @@ export function Files({
   onPicking,
 }: {
   library: Library;
+  /** The open folder, or null for the top of Files. */
+  folderId: string | null;
+  /** Opens a folder, or the top of Files for null. */
+  onFolder: (folderId: string | null) => void;
   initial: string;
   banner: ReactNode;
   onSettings: () => void;
@@ -274,12 +293,31 @@ export function Files({
   const files = useMemo(() => libraryFiles(library.photos), [library.photos]);
   const counts = useMemo(() => categoryCounts(files), [files]);
   const [shown, setShown] = useState<Shown>('all');
-  // A category whose files have all gone (deleted, say) falls back to everything.
+  const { folders } = library;
+  const live = useMemo(() => liveFolders(folders), [folders]);
+  const here = folderId === null ? undefined : live.get(folderId);
+  const at = here?.id ?? null;
+  const [sheet, setSheet] = useState<FolderSheet>(null);
+  // Categories cover every folder, so they're offered at the top of Files only. A category
+  // whose files have all gone (deleted, say) falls back to everything.
   const showing: Shown =
-    shown === 'all' || counts.some(([category]) => category === shown) ? shown : 'all';
+    at === null && (shown === 'all' || counts.some(([category]) => category === shown))
+      ? shown
+      : 'all';
+  // Searching or showing one category finds files in every folder.
+  const everywhere = query.trim() !== '' || showing !== 'all';
+  const subfolders = useMemo(
+    () => (everywhere ? [] : childFolders(folders, at)),
+    [everywhere, folders, at],
+  );
   const found = useMemo(
-    () => filterByName(files, query, (item) => item.file?.name ?? ''),
-    [files, query],
+    () =>
+      filterByName(
+        filesHere(files, folders, at, everywhere),
+        query,
+        (item) => item.file?.name ?? '',
+      ),
+    [files, folders, at, everywhere, query],
   );
   const rows = useMemo(() => fileRows(found, showing), [found, showing]);
   const gridRows = useMemo(
@@ -294,10 +332,37 @@ export function Files({
     },
     [byId, open],
   );
-  const picking = usePickToDelete(library, openById, { onSave, noun: 'file' });
+  const picking = usePickToDelete(library, openById, {
+    onSave,
+    noun: 'file',
+    onMove: (ids) => {
+      setSheet({ kind: 'move-items', ids });
+    },
+  });
+
+  // A folder that went (deleted on another device, say) leaves you at the top.
+  useEffect(() => {
+    if (folderId !== null && library.status === 'ready' && !here) onFolder(null);
+  }, [folderId, here, library.status, onFolder]);
+
+  // Back goes up a folder, once nothing else (selecting, a sheet) wants it.
+  const up = useCallback(() => {
+    onFolder(here?.parentId !== undefined && live.has(here.parentId) ? here.parentId : null);
+  }, [here, live, onFolder]);
+  useEffect(() => {
+    if (!here) return;
+    const back = BackHandler.addEventListener('hardwareBackPress', () => {
+      up();
+      return true;
+    });
+    return () => {
+      back.remove();
+    };
+  }, [here, up]);
   const { thumbs, requestThumbs } = library;
   const { chosen } = picking.grid;
-  useReportPicking(picking.header !== null || choosingView, onPicking);
+  // The tab bar and floating button give way to anything that slides up over Files.
+  useReportPicking(picking.header !== null || choosingView || sheet !== null, onPicking);
 
   // Previews on screen jump the queue ahead of those just drawn off screen.
   const onViewableItemsChanged = useCallback(
@@ -399,11 +464,12 @@ export function Files({
 
   const header = picking.header ?? (
     <AppHeader
-      title="Files"
+      title={here?.name ?? 'Files'}
       initial={initial}
       onSettings={onSettings}
+      {...(here && { onBack: up })}
       search={{
-        placeholder: 'Search files',
+        placeholder: here ? 'Search all files' : 'Search files',
         query,
         onQuery: setQuery,
         view: {
@@ -427,7 +493,99 @@ export function Files({
     />
   ) : null;
 
-  if (library.status !== 'ready' || files.length === 0) {
+  const cardWidth = Math.floor((width - GUTTER * 2 - GAP) / 2);
+  const sheets = (
+    <FolderSheets
+      library={library}
+      sheet={sheet}
+      at={at}
+      notice={notice}
+      onSheet={setSheet}
+      onMoved={picking.clear}
+      onLeft={(folder) => {
+        if (folder.id === at) up();
+      }}
+    />
+  );
+  const top = (
+    <View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chips}
+        style={styles.chipBar}
+      >
+        {here?.viewOnly ? null : (
+          <Chip
+            label="+ New folder"
+            selected={false}
+            palette={palette}
+            onPress={() => {
+              setSheet({ kind: 'new' });
+            }}
+          />
+        )}
+        {at === null && counts.length > 1 ? (
+          <>
+            <Chip
+              label={`All ${String(files.length)}`}
+              selected={showing === 'all'}
+              palette={palette}
+              onPress={() => {
+                setShown('all');
+              }}
+            />
+            {counts.map(([category, count]) => (
+              <Chip
+                key={category}
+                label={`${categoryLabel(category)} ${String(count)}`}
+                selected={showing === category}
+                palette={palette}
+                onPress={() => {
+                  setShown(category);
+                }}
+              />
+            ))}
+          </>
+        ) : null}
+      </ScrollView>
+      {subfolders.length > 0 ? (
+        <View style={styles.folders}>
+          {subfolders.map((folder) => (
+            <FolderCard
+              key={folder.id}
+              folder={folder}
+              width={cardWidth}
+              summary={folderSummary(folderCounts(folders, files, folder.id))}
+              onOpen={onFolder}
+              onMenu={
+                folder.viewOnly
+                  ? undefined
+                  : (chosen) => {
+                      setSheet({ kind: 'menu', folder: chosen });
+                    }
+              }
+            />
+          ))}
+        </View>
+      ) : null}
+      {here && !everywhere && found.length === 0 && subfolders.length === 0 ? (
+        <View style={styles.emptyFolder}>
+          <Text style={[styles.emptyTitle, { color: palette.text }]}>This folder is empty</Text>
+          <Note>
+            {here.viewOnly
+              ? 'Nothing has been put in this folder yet.'
+              : 'Add files with the upload button, or select files and choose Move.'}
+          </Note>
+        </View>
+      ) : null}
+      {here && !everywhere && found.length > 0 && subfolders.length > 0 ? (
+        <Text style={[styles.section, { color: palette.muted }]}>FILES</Text>
+      ) : null}
+    </View>
+  );
+
+  if (library.status !== 'ready' || (files.length === 0 && live.size === 0)) {
     return (
       <View style={styles.fill}>
         {header}
@@ -451,9 +609,17 @@ export function Files({
                 it.
               </Note>
               <Button label="Add files" onPress={onAdd} />
+              <Button
+                kind="secondary"
+                label="New folder"
+                onPress={() => {
+                  setSheet({ kind: 'new' });
+                }}
+              />
             </>
           )}
         </View>
+        {sheets}
       </View>
     );
   }
@@ -462,35 +628,7 @@ export function Files({
     <View style={styles.fill}>
       {header}
       {banner}
-      {counts.length > 1 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-          style={styles.chipBar}
-        >
-          <Chip
-            label={`All ${String(files.length)}`}
-            selected={showing === 'all'}
-            palette={palette}
-            onPress={() => {
-              setShown('all');
-            }}
-          />
-          {counts.map(([category, count]) => (
-            <Chip
-              key={category}
-              label={`${categoryLabel(category)} ${String(count)}`}
-              selected={showing === category}
-              palette={palette}
-              onPress={() => {
-                setShown(category);
-              }}
-            />
-          ))}
-        </ScrollView>
-      ) : null}
-      {rows.length === 0 ? (
+      {rows.length === 0 && query.trim() !== '' ? (
         <View style={styles.centre}>
           <Note>No files called “{query.trim()}”.</Note>
         </View>
@@ -503,6 +641,7 @@ export function Files({
           getItemType={(row) => row.kind}
           extraData={[thumbs, chosen, opening]}
           onViewableItemsChanged={onGridViewable}
+          ListHeaderComponent={top}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 24 + picking.floatSpace }}
         />
@@ -515,20 +654,185 @@ export function Files({
           getItemType={(row) => row.kind}
           extraData={[thumbs, chosen, opening]}
           onViewableItemsChanged={onViewableItemsChanged}
+          ListHeaderComponent={top}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 24 + picking.floatSpace }}
         />
       )}
       {picking.sheet}
       {viewSheet}
+      {sheets}
     </View>
   );
+}
+
+/** Which folder sheet is open in Files. */
+type FolderSheet =
+  | { kind: 'new' }
+  | { kind: 'menu'; folder: Folder }
+  | { kind: 'rename'; folder: Folder }
+  | { kind: 'delete'; folder: Folder }
+  | { kind: 'move-folder'; folder: Folder }
+  | { kind: 'move-items'; ids: readonly string[] }
+  | null;
+
+/** Making, renaming, moving and deleting folders, and moving files into them. */
+function FolderSheets({
+  library,
+  sheet,
+  at,
+  notice,
+  onSheet,
+  onMoved,
+  onLeft,
+}: {
+  library: Library;
+  sheet: FolderSheet;
+  /** The open folder, where new folders go. */
+  at: string | null;
+  notice: (message: string) => void;
+  onSheet: (sheet: FolderSheet) => void;
+  /** After files have moved, to stop selecting. */
+  onMoved: () => void;
+  /** After a folder has gone to Recently deleted. */
+  onLeft: (folder: Folder) => void;
+}) {
+  const close = () => {
+    onSheet(null);
+  };
+  if (!sheet) return null;
+  const { folders } = library;
+  const place = (folderId: string | null) =>
+    folderId === null ? 'Files' : `“${liveFolders(folders).get(folderId)?.name ?? 'the folder'}”`;
+  switch (sheet.kind) {
+    case 'new':
+      return (
+        <FolderNameSheet
+          title="New folder"
+          action="Create"
+          onSave={async (name) => {
+            const folder = await library.createFolder(name, at ?? undefined);
+            close();
+            notice(`Made “${folder.name}”`);
+          }}
+          onCancel={close}
+        />
+      );
+    case 'menu':
+      return (
+        <FolderActionsSheet
+          folder={sheet.folder}
+          onRename={() => {
+            onSheet({ kind: 'rename', folder: sheet.folder });
+          }}
+          onMove={() => {
+            onSheet({ kind: 'move-folder', folder: sheet.folder });
+          }}
+          onDelete={() => {
+            onSheet({ kind: 'delete', folder: sheet.folder });
+          }}
+          onCancel={close}
+        />
+      );
+    case 'rename':
+      return (
+        <FolderNameSheet
+          title="Rename folder"
+          action="Save"
+          initial={sheet.folder.name}
+          onSave={async (name) => {
+            await library.renameFolder(sheet.folder.id, name);
+            close();
+          }}
+          onCancel={close}
+        />
+      );
+    case 'delete': {
+      const { folderIds, itemIds } = folderTrash(folders, library.photos, sheet.folder.id);
+      const inside = folderSummary({ folders: folderIds.length - 1, items: itemIds.length });
+      return (
+        <ConfirmSheet
+          title={`Delete “${sheet.folder.name}”?`}
+          body={
+            inside === 'Empty'
+              ? `The folder goes to Recently deleted for ${String(TRASH_DAYS)} days.`
+              : `The folder and what’s in it (${inside}) go to Recently deleted for ${String(TRASH_DAYS)} days.`
+          }
+          action="Delete folder"
+          busyLabel="Deleting…"
+          onConfirm={async () => {
+            await library.deleteFolder(sheet.folder.id);
+            close();
+            onLeft(sheet.folder);
+            notice('Folder moved to Recently deleted');
+          }}
+          onCancel={close}
+        />
+      );
+    }
+    case 'move-folder':
+      return (
+        <MoveToFolderSheet
+          title={`Move “${sheet.folder.name}” to…`}
+          folders={folders.filter((folder) => folder.library === sheet.folder.library)}
+          start={sheet.folder.parentId ?? null}
+          blocked={folderTree(folders, sheet.folder.id)}
+          onCreate={(name, parentId) => library.createFolder(name, parentId ?? undefined)}
+          onMove={async (target) => {
+            await library.moveFolder(sheet.folder.id, target);
+            close();
+            notice(`Moved to ${place(target)}`);
+          }}
+          onCancel={close}
+        />
+      );
+    case 'move-items':
+      return (
+        <MoveToFolderSheet
+          title={
+            sheet.ids.length === 1
+              ? 'Move 1 file to…'
+              : `Move ${String(sheet.ids.length)} files to…`
+          }
+          folders={folders.filter((folder) => !folder.viewOnly)}
+          start={at}
+          onCreate={(name, parentId) => library.createFolder(name, parentId ?? undefined)}
+          onMove={async (target) => {
+            const result = await library.moveToFolder(sheet.ids, target);
+            if (result.done.length === 0) throw result.error;
+            close();
+            onMoved();
+            notice(
+              result.failed.length > 0
+                ? `Moved ${String(result.done.length)} to ${place(target)}. ${String(result.failed.length)} didn’t move.`
+                : `Moved to ${place(target)}`,
+            );
+          }}
+          onCancel={close}
+        />
+      );
+  }
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centre: { flex: 1, justifyContent: 'center', padding: 24, gap: 16 },
   emptyTitle: { fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.3 },
+  folders: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GAP,
+    paddingHorizontal: GUTTER,
+    paddingBottom: 6,
+  },
+  emptyFolder: { padding: 24, gap: 10 },
+  section: {
+    paddingHorizontal: GUTTER,
+    paddingTop: 16,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
   chipBar: { flexGrow: 0 },
   chips: { paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },

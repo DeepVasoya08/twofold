@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { FormError } from '@arcafold/core/errors';
 
-import { batchText, deleteForeverTitle, deleteTitle } from './trash-text';
+import { batchText, deleteForeverTitle, deleteTitle, trashSummary } from './trash-text';
 
 describe('batchText', () => {
   it('says what was done, and how many didn’t go through', () => {
@@ -31,5 +31,13 @@ describe('titles', () => {
     expect(deleteForeverTitle(3, true)).toBe('Empty Recently deleted?');
     expect(deleteTitle(1, 'file')).toBe('Delete this file?');
     expect(deleteTitle(2, 'file')).toBe('Delete 2 files?');
+  });
+});
+
+describe('trashSummary', () => {
+  it('counts loose items and deleted folders', () => {
+    expect(trashSummary(3, 0)).toBe('3 photos');
+    expect(trashSummary(0, 1)).toBe('1 folder');
+    expect(trashSummary(1, 2)).toBe('1 photo · 2 folders');
   });
 });

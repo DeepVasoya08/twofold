@@ -13,6 +13,7 @@ import {
   withDetails,
 } from './vault';
 import type { VaultState } from './vault';
+import { foldersOf } from './vault';
 import type { Photo } from '@arcafold/core/library/model';
 
 function photo(id: string, takenAt: string, albumIds: string[] = []): Photo {
@@ -340,5 +341,55 @@ describe('files', () => {
     });
     expect(loaded.files).toBeUndefined();
     expect(isFile(file('f', '2026-01-01T00:00:00Z'))).toBe(true);
+  });
+});
+
+describe('folders', () => {
+  const taxes = { id: 'taxes', name: 'Taxes' };
+  const car = { id: 'car', name: 'Car' };
+  const bill: Photo = {
+    ...photo('bill', '2026-11-01T00:00:00Z', ['album']),
+    file: { name: 'bill.pdf', type: 'application/pdf' },
+  };
+  const start: VaultState = { photos: [], albums: [], files: [bill], folders: [taxes, car] };
+
+  it('adds and changes folders in place', () => {
+    const renamed = vaultReducer(start, {
+      type: 'set-folders',
+      folders: [
+        { ...taxes, name: 'Tax' },
+        { id: 'new', name: 'New' },
+      ],
+    });
+    expect(foldersOf(renamed).map((folder) => folder.name)).toEqual(['Tax', 'Car', 'New']);
+    const removed = vaultReducer(renamed, { type: 'remove-folders', folderIds: ['car'] });
+    expect(foldersOf(removed).map((folder) => folder.id)).toEqual(['taxes', 'new']);
+  });
+
+  it('moves files between folders, keeping their albums', () => {
+    const inTaxes = vaultReducer(start, {
+      type: 'move-to-folder',
+      itemIds: ['bill'],
+      folderId: 'taxes',
+    });
+    expect(inTaxes.files?.[0]?.albumIds).toEqual(['album', 'taxes']);
+    const inCar = vaultReducer(inTaxes, {
+      type: 'move-to-folder',
+      itemIds: ['bill'],
+      folderId: 'car',
+    });
+    expect(inCar.files?.[0]?.albumIds).toEqual(['album', 'car']);
+    const top = vaultReducer(inCar, { type: 'move-to-folder', itemIds: ['bill'], folderId: null });
+    expect(top.files?.[0]?.albumIds).toEqual(['album']);
+  });
+
+  it('keeps loaded folders apart from albums', () => {
+    const loaded = vaultReducer(
+      { photos: [], albums: [] },
+      { type: 'loaded', state: { photos: [bill], albums: [], folders: [taxes] } },
+    );
+    expect(loaded.folders).toEqual([taxes]);
+    expect(loaded.albums).toEqual([]);
+    expect(loaded.files).toEqual([bill]);
   });
 });

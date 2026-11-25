@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Photo } from '@arcafold/core/library/model';
+import type { Folder, Photo } from '@arcafold/core/library/model';
 
 import {
   categoryCounts,
@@ -8,6 +8,8 @@ import {
   fileDetails,
   fileGridRows,
   fileRows,
+  filesHere,
+  folderSummary,
   libraryFiles,
 } from './files';
 
@@ -104,5 +106,35 @@ describe('fileGridRows', () => {
     expect(
       rows.map((row) => (row.kind === 'month' ? row.label : row.items.map((each) => each.id))),
     ).toEqual(['April 2026', ['a', 'b', 'c'], ['d'], 'March 2026', ['m']]);
+  });
+});
+
+describe('folders in Files', () => {
+  const folders: Folder[] = [
+    { id: 'taxes', name: 'Taxes' },
+    { id: 'old', name: 'Old', deletedAt: '2026-11-20T00:00:00.000Z' },
+  ];
+  const files = [
+    item('loose'),
+    item('filed', { albumIds: ['taxes'] }),
+    item('orphan', { albumIds: ['old'] }),
+  ];
+
+  it('lists the open folder’s files, or those in no live folder at the top', () => {
+    expect(filesHere(files, folders, 'taxes', false).map((file) => file.id)).toEqual(['filed']);
+    expect(filesHere(files, folders, null, false).map((file) => file.id)).toEqual([
+      'loose',
+      'orphan',
+    ]);
+  });
+
+  it('lists files from every folder while searching or filtering', () => {
+    expect(filesHere(files, folders, 'taxes', true)).toHaveLength(3);
+  });
+
+  it('sums up what is in a folder', () => {
+    expect(folderSummary({ folders: 0, items: 0 })).toBe('Empty');
+    expect(folderSummary({ folders: 1, items: 1 })).toBe('1 file · 1 folder');
+    expect(folderSummary({ folders: 2, items: 3 })).toBe('3 files · 2 folders');
   });
 });
