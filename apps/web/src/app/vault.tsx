@@ -49,12 +49,20 @@ import {
   canMoveFolder,
   expiredFolders,
   folderName,
-  folderRestore,
-  folderTrash,
-  folderTree,
   liveFolders,
   withFolder,
 } from '@arcafold/core/library/folders';
+import {
+  changeableFolder,
+  deleteFolder,
+  deleteFolderForGood,
+  moveToFolder,
+  purgeFolders,
+  renameFolder,
+  restoreFolder,
+  saveFolders,
+} from '@arcafold/core/library/folder-changes';
+import type { FolderSink } from '@arcafold/core/library/folder-changes';
 import {
   addsByUpload,
   canFillAlbum,
@@ -371,13 +379,6 @@ export const mockVaults: VaultsState = {
 };
 
 const VIEW_ONLY = 'Photos in an album shared with you can be viewed, not changed.';
-const FOLDER_GONE = 'That folder isn’t here anymore.';
-/** What to show when some of a change to a folder didn't go through. */
-function failure(settled: Settled<unknown>): Error {
-  return settled.error instanceof Error ? settled.error : new FormError(FOLDER_GONE);
-}
-
-const VIEW_ONLY_FOLDER = 'This folder was shared with you to view. You can’t change it.';
 const VIEW_ONLY_PHOTO = 'This photo was shared with you to view. You can’t change it.';
 
 /** How many photos a change to many saves at once. */
@@ -559,19 +560,12 @@ export function VaultProvider({
         void loadTrash(store, stopped, (trash) => {
           dispatch({ type: 'set-trash', trash });
           // Folders whose 30 days are up go too, now their files have (best effort).
-          const expired = expiredFolders(loaded.folders).filter(
-            (folder) => folder.library === undefined,
-          );
-          void settleEach(expired, SAVES_AT_ONCE, (folder) => store.removeAlbum(folder.id)).then(
-            (purged) => {
-              if (!stopped() && purged.done.length > 0) {
-                dispatch({
-                  type: 'remove-folders',
-                  folderIds: purged.done.map((folder) => folder.id),
-                });
-              }
+          void purgeFolders(store, expiredFolders(loaded.folders), {
+            saved: () => undefined,
+            gone: (folderIds) => {
+              if (!stopped()) dispatch({ type: 'remove-folders', folderIds });
             },
-          );
+          });
         });
       },
       () => {
@@ -602,18 +596,26 @@ export function VaultProvider({
       return photo;
     };
     const folders = foldersOf(state);
-    /** A folder that may be changed: not one in a library you can only view. */
-    const findFolder = (folderId: string): Folder => {
-      const folder = folders.find((candidate) => candidate.id === folderId);
-      if (!folder) throw new FormError(FOLDER_GONE);
-      if (folder.viewOnly) throw new FormError(VIEW_ONLY_FOLDER);
-      return folder;
-    };
-    /** Saves folders, then shows them as saved, a few at a time. */
-    const saveFolders = async (changed: Folder[]) => {
-      const result = await settleEach(changed, SAVES_AT_ONCE, (folder) => store.saveFolder(folder));
-      dispatch({ type: 'set-folders', folders: result.done });
-      if (result.failed.length > 0) throw failure(result);
+    /** Shows each step of a change to folders as it goes through. */
+    const sink: FolderSink = {
+      saved: (changed) => {
+        dispatch({ type: 'set-folders', folders: changed });
+      },
+      moved: (itemIds, folderId) => {
+        dispatch({ type: 'move-to-folder', itemIds, folderId });
+      },
+      trashed: (photoIds, deletedAt) => {
+        dispatch({ type: 'trash-photos', photoIds, deletedAt });
+      },
+      restored: (photoIds) => {
+        dispatch({ type: 'restore-photos', photoIds });
+      },
+      removed: (photoIds) => {
+        dispatch({ type: 'delete-photos', photoIds });
+      },
+      gone: (folderIds) => {
+        dispatch({ type: 'remove-folders', folderIds });
+      },
     };
     const otherStoreFor = (keys: SpaceKeys | undefined) => {
       if (!keys) throw new FormError('Unlock the other space first.');
@@ -765,86 +767,30 @@ export function VaultProvider({
         dispatch({ type: 'set-shared-with', albumId, names });
       },
       createFolder: async (name, parentId) => {
-        if (parentId !== undefined) findFolder(parentId);
+        if (parentId !== undefined) changeableFolder(folders, parentId);
         const folder = await store.createFolder(folderName(name), parentId);
         dispatch({ type: 'set-folders', folders: [folder] });
         return folder;
       },
-      renameFolder: async (folderId, name) => {
-        await saveFolders([{ ...findFolder(folderId), name: folderName(name) }]);
-      },
+      renameFolder: (folderId, name) => renameFolder(store, folders, folderId, name, sink),
       moveFolder: async (folderId, parentId) => {
-        const folder = findFolder(folderId);
+        const folder = changeableFolder(folders, folderId);
         if (!canMoveFolder(folders, folderId, parentId)) {
           throw new FormError('A folder can’t go inside itself.');
         }
         const moved = { ...folder };
         if (parentId === null) delete moved.parentId;
         else moved.parentId = parentId;
-        await saveFolders([moved]);
+        await saveFolders(store, [moved], sink);
       },
-      moveToFolder: async (itemIds, folderId) => {
-        const target = folderId === null ? undefined : findFolder(folderId);
-        const result = await settleEach(itemIds, SAVES_AT_ONCE, async (itemId) => {
-          const item = findChangeable(itemId);
-          if (target && item.library !== target.library) {
-            throw new FormError('Files can only go in folders of their own library.');
-          }
-          const moved = withFolder(item, folderId, folders);
-          if (moved !== item) await store.update(moved);
-        });
-        dispatch({ type: 'move-to-folder', itemIds: result.done, folderId });
-        return result;
-      },
-      deleteFolder: async (folderId) => {
-        findFolder(folderId);
-        const deletedAt = new Date().toISOString();
-        const { folderIds, itemIds } = folderTrash(folders, allItems(state), folderId);
-        // Files first: if that fails, the folder stays and still holds what's left.
-        if (itemIds.length > 0) {
-          const moved = await moveAll(itemIds, (ids) => store.trash(ids, deletedAt));
-          dispatch({ type: 'trash-photos', photoIds: moved.done, deletedAt });
-          if (moved.failed.length > 0) throw failure(moved);
-        }
-        await saveFolders(
-          folders
-            .filter((folder) => folderIds.includes(folder.id))
-            .map((folder) => ({ ...folder, deletedAt })),
-        );
-      },
-      restoreFolder: async (folderId) => {
-        findFolder(folderId);
-        const plan = folderRestore(folders, state.trash ?? [], folderId);
-        await saveFolders(
-          folders
-            .filter((folder) => plan.folderIds.includes(folder.id))
-            .map((folder) => {
-              const back = { ...folder };
-              delete back.deletedAt;
-              if (folder.id === folderId && plan.moveToTop) delete back.parentId;
-              return back;
-            }),
-        );
-        if (plan.itemIds.length > 0) {
-          const result = await moveAll(plan.itemIds, (ids) => store.restore(ids));
-          dispatch({ type: 'restore-photos', photoIds: result.done });
-          if (result.failed.length > 0) throw failure(result);
-        }
-      },
-      deleteFolderForever: async (folderId) => {
-        const folder = findFolder(folderId);
-        const together = folders.filter((each) => each.deletedAt === folder.deletedAt);
-        const tree = folderTree(together, folderId);
-        const items = (state.trash ?? []).filter(
-          (item) => item.deletedAt === folder.deletedAt && item.albumIds.some((id) => tree.has(id)),
-        );
-        const removed = await settleEach(items, SAVES_AT_ONCE, (item) => store.remove(item.id));
-        dispatch({ type: 'delete-photos', photoIds: removed.done.map((item) => item.id) });
-        if (removed.failed.length > 0) throw failure(removed);
-        const gone = await settleEach([...tree], SAVES_AT_ONCE, (id) => store.removeAlbum(id));
-        dispatch({ type: 'remove-folders', folderIds: gone.done });
-        if (gone.failed.length > 0) throw failure(gone);
-      },
+      moveToFolder: (itemIds, folderId) =>
+        moveToFolder(store, folders, allItems(state), itemIds, folderId, sink, (item) => {
+          findChangeable(item.id);
+        }),
+      deleteFolder: (folderId) => deleteFolder(store, folders, allItems(state), folderId, sink),
+      restoreFolder: (folderId) => restoreFolder(store, folders, state.trash ?? [], folderId, sink),
+      deleteFolderForever: (folderId) =>
+        deleteFolderForGood(store, folders, state.trash ?? [], folderId, sink),
       originals: async (photoIds, options) => {
         const items = photoIds.map((id) => ({ id, size: find(id).size ?? 0 }));
         const originals = await downloadAll(items, (id) => store.original(id), options);
