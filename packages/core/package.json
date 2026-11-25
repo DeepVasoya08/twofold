@@ -19,6 +19,7 @@
     "./library/aspect": "./src/library/aspect.ts",
     "./keywords": "./src/keywords.ts",
     "./library/albums": "./src/library/albums.ts",
+    "./library/folders": "./src/library/folders.ts",
     "./library/model": "./src/library/model.ts",
     "./library/months": "./src/library/months.ts",
     "./library/space-store": "./src/library/space-store.ts",

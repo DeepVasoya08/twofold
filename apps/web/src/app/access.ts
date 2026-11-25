@@ -47,6 +47,7 @@ export function redirectFor(
     case 'favorites':
     case 'files':
     case 'file':
+    case 'folder':
     case 'trash':
     case 'search':
     case 'people':

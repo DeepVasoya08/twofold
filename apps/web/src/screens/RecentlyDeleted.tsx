@@ -2,7 +2,9 @@ import { useState } from 'react';
 
 import { allSelected, batchMessage, useSelection } from '../app/selection';
 import { useToast } from '../app/toast';
-import { TRASH_DAYS, useVault } from '../app/vault';
+import { TRASH_DAYS, foldersOf, useVault } from '../app/vault';
+import { DeletedFolders } from '../components/DeletedFolders';
+import { inTrashedFolder, trashedFolders } from '@arcafold/core/library/folders';
 import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
 import { EmptyState } from '../components/EmptyState';
@@ -11,6 +13,7 @@ import { PhotoGrid } from '../components/PhotoGrid';
 import { photosAndFiles } from '../lib/format';
 import type { Settled } from '../lib/settle-each';
 import { errorMessage } from '@arcafold/core/errors';
+import type { Folder, Photo } from '@arcafold/core/library/model';
 import { daysLeftLabel } from '@arcafold/core/library/trash';
 
 export { daysLeftLabel } from '@arcafold/core/library/trash';
@@ -22,12 +25,16 @@ import '../components/selection-bar.css';
  * 30 days a device that opens the space deletes them for good.
  */
 export function RecentlyDeleted() {
-  const { state, restorePhotos, deleteForever } = useVault();
+  const { state, restorePhotos, deleteForever, deleteFolderForever } = useVault();
   const toast = useToast();
   const selection = useSelection();
   const [confirm, setConfirm] = useState<'selected' | 'all' | null>(null);
   const [busy, setBusy] = useState(false);
-  const trash = state.trash ?? [];
+  const folders = foldersOf(state);
+  const deletedFolders = trashedFolders(folders).filter((folder) => !folder.viewOnly);
+  // What was deleted along with a folder shows inside it, not on its own.
+  const everyDeleted = state.trash ?? [];
+  const trash = everyDeleted.filter((photo) => !inTrashedFolder(photo, folders));
   const allIds = trash.map((photo) => photo.id);
   const selected = allIds.filter((photoId) => selection.selected.has(photoId));
   const everything = allSelected(selection.selected, allIds);
@@ -55,13 +62,21 @@ export function RecentlyDeleted() {
 
   const forever = confirm === 'all' ? allIds : selected;
 
+  /** Deletes everything here for good: photos and files, then the folders they were in. */
+  const emptyAll = async (items: readonly Photo[], gone: readonly Folder[]) => {
+    const result = await deleteForever(items.map((photo) => photo.id));
+    if (result.failed.length > 0) throw result.error;
+    for (const folder of gone) await deleteFolderForever(folder.id);
+    return result;
+  };
+
   return (
     <div className="page">
       <PageHeader
         title="Recently deleted"
         subtitle={`Photos and files stay here for ${String(TRASH_DAYS)} days, then they’re deleted for good.`}
         actions={
-          trash.length > 0 && (
+          (trash.length > 0 || deletedFolders.length > 0) && (
             <button
               type="button"
               className="btn btn--secondary"
@@ -132,19 +147,23 @@ export function RecentlyDeleted() {
         </div>
       )}
 
-      {trash.length === 0 ? (
+      {deletedFolders.length > 0 && <DeletedFolders folders={deletedFolders} />}
+
+      {trash.length === 0 && deletedFolders.length === 0 ? (
         <EmptyState icon="trash" title="Nothing here">
           {state.trash === undefined
             ? 'Loading…'
             : `Photos and files you delete stay here for ${String(TRASH_DAYS)} days, so you can get them back.`}
         </EmptyState>
       ) : (
-        <PhotoGrid
-          photos={trash}
-          context={{ kind: 'all' }}
-          selection={picking}
-          note={(photo) => daysLeftLabel(photo)}
-        />
+        trash.length > 0 && (
+          <PhotoGrid
+            photos={trash}
+            context={{ kind: 'all' }}
+            selection={picking}
+            note={(photo) => daysLeftLabel(photo)}
+          />
+        )
       )}
 
       <Dialog
@@ -175,10 +194,33 @@ export function RecentlyDeleted() {
             disabled={busy}
             aria-busy={busy}
             onClick={() => {
-              run(
-                () => deleteForever(forever),
-                (photos) => `${photos} deleted for good`,
-              );
+              if (confirm === 'all') {
+                if (busy) return;
+                setBusy(true);
+                emptyAll(everyDeleted, deletedFolders)
+                  .then(
+                    (result) => {
+                      selection.clear();
+                      toast.show(
+                        result.done.length > 0
+                          ? batchMessage(result, (photos) => `${photos} deleted for good`)
+                          : 'Recently deleted is empty',
+                      );
+                    },
+                    (error: unknown) => {
+                      toast.show(errorMessage(error));
+                    },
+                  )
+                  .finally(() => {
+                    setBusy(false);
+                    setConfirm(null);
+                  });
+              } else {
+                run(
+                  () => deleteForever(forever),
+                  (photos) => `${photos} deleted for good`,
+                );
+              }
             }}
           >
             Delete for good

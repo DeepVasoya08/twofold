@@ -226,6 +226,17 @@ other accounts; see [Sharing](#sharing).
   would single files out, and the sealed record says `preview: true` only for a drawn one.
   Apps from before files existed leave these records out, since their type isn't a photo
   format.
+- **Folders** in Files are stored as album records (same table, same `crypto_aead`
+  construction and associated data), so the server can't tell a folder from an album, how
+  many of each there are, or how they nest. The sealed record is `{ v: 1, kind: "folder",
+name, parent?, deletedAt? }`: it has a `name` rather than an album's `title`, so apps from
+  before folders existed refuse it instead of listing it in Albums. A file (or photo) is in
+  a folder when its sealed `albumIds` name it, and in one folder at most; moving it rewrites
+  only its sealed record. Deleting a folder seals the same `deletedAt` into it, the folders
+  inside it and their files, so they come back together, and a device that opens the space
+  deletes them for good after 30 days, as with photos. A folder that is missing or deleted
+  doesn't count, so its files show at the top of Files. Unshared folders reveal nothing
+  new; sharing a folder is described under Sharing.
 - **Moving** a photo to the other space downloads and decrypts it, adds it to the other
   space under a new id and key, then deletes the original. The two copies share nothing
   the server can match.

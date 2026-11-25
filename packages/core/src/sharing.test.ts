@@ -736,7 +736,7 @@ describe('a shared album', () => {
   it('stops for Bob when Alice stops sharing, and a new share gets a new key', async () => {
     const { w, alices, album, grant, bobs } = await sharedAlbum();
     await alices.stopSharingAlbum(album.id);
-    expect(await bobs().list()).toEqual({ photos: [], albums: [] });
+    expect(await bobs().list()).toEqual({ photos: [], albums: [], folders: [] });
     const again = await shareAlbumWithBob(w, alices, album.id);
     expect(again.recordKey).not.toBe(grant.recordKey);
     expect((await bobs().list()).photos).toHaveLength(2);

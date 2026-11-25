@@ -16,6 +16,8 @@ export type Route =
   | { name: 'favorites' }
   /** Files that aren't photos: PDFs, documents and the rest. */
   | { name: 'files' }
+  /** One folder in Files. */
+  | { name: 'folder'; folderId: string }
   /** One file, shown inside the app where it can be (PDFs, text, Word). */
   | { name: 'file'; fileId: string }
   /** Photos deleted in the last 30 days, which can still be restored. */
@@ -53,9 +55,17 @@ export const paths = {
   smartAlbum: (albumId: string) => `/albums/smart/${encodeURIComponent(albumId)}`,
   favorites: '/favorites',
   files: '/files',
-  /** A file, opened from an album when `albumId` is given, so its back link returns there. */
-  file: (fileId: string, albumId?: string) =>
-    `/files/${encodeURIComponent(fileId)}${albumId === undefined ? '' : `?from=${formatContext({ kind: 'album', albumId })}`}`,
+  folder: (folderId: string) => `/files/folder/${encodeURIComponent(folderId)}`,
+  /**
+   * A file, opened from an album (by its id) or a folder when `from` says so, so its back
+   * link returns there.
+   */
+  file: (fileId: string, from?: string | PhotoContext) => {
+    const context: PhotoContext | undefined =
+      typeof from === 'string' ? { kind: 'album', albumId: from } : from;
+    const query = context && context.kind !== 'all' ? `?from=${formatContext(context)}` : '';
+    return `/files/${encodeURIComponent(fileId)}${query}`;
+  },
   trash: '/recently-deleted',
   search: '/search',
   people: '/people',
@@ -156,6 +166,10 @@ export function matchRoute(pathname: string): Route {
   const join = /^\/join\/([^/]+)$/.exec(path);
   if (join?.[1] !== undefined && LINK_TOKEN.test(join[1])) return { name: 'join', token: join[1] };
 
+  const folder = /^\/files\/folder\/([^/]+)$/.exec(path);
+  const folderId = folder?.[1] === undefined ? null : decodeSegment(folder[1]);
+  if (folderId) return { name: 'folder', folderId };
+
   const file = /^\/files\/([^/]+)$/.exec(path);
   const fileId = file?.[1] === undefined ? null : decodeSegment(file[1]);
   if (fileId) return { name: 'file', fileId };
@@ -176,6 +190,8 @@ export type PhotoContext =
   /** The last search's results, held in memory: the URL only says "search". */
   | { kind: 'search' }
   | { kind: 'album'; albumId: string }
+  /** A folder in Files. */
+  | { kind: 'folder'; folderId: string }
   /** A smart album's photos, found again on this device: the URL only names the album. */
   | { kind: 'smart'; albumId: string }
   | { kind: 'person'; groupId: string };
@@ -184,6 +200,8 @@ function formatContext(context: PhotoContext): string {
   switch (context.kind) {
     case 'album':
       return `album:${encodeURIComponent(context.albumId)}`;
+    case 'folder':
+      return `folder:${encodeURIComponent(context.folderId)}`;
     case 'smart':
       return `smart:${encodeURIComponent(context.albumId)}`;
     case 'person':
@@ -201,6 +219,10 @@ export function parsePhotoContext(search: string): PhotoContext {
   if (from?.startsWith('album:')) {
     const albumId = decodeSegment(from.slice('album:'.length));
     if (albumId) return { kind: 'album', albumId };
+  }
+  if (from?.startsWith('folder:')) {
+    const folderId = decodeSegment(from.slice('folder:'.length));
+    if (folderId) return { kind: 'folder', folderId };
   }
   if (from?.startsWith('smart:')) {
     const albumId = decodeSegment(from.slice('smart:'.length));

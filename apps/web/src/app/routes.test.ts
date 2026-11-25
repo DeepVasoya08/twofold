@@ -47,6 +47,14 @@ describe('matchRoute', () => {
       kind: 'album',
       albumId: 'trip',
     });
+    expect(matchRoute(paths.folder('f 1'))).toEqual({ name: 'folder', folderId: 'f 1' });
+    // Opened from a folder, a file's back link returns there.
+    const fromFolder = paths.file('f1', { kind: 'folder', folderId: 'taxes' });
+    expect(parsePhotoContext(fromFolder.slice(fromFolder.indexOf('?')))).toEqual({
+      kind: 'folder',
+      folderId: 'taxes',
+    });
+    expect(paths.file('f1', { kind: 'all' })).toBe('/files/f1');
     expect(matchRoute(paths.person('group:abc#2'))).toEqual({
       name: 'person',
       groupId: 'group:abc#2',

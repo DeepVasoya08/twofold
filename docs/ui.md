@@ -77,6 +77,23 @@ exists but is low-key (Settings → Sharing).
   favorites.
 - The lock button (sidebar, or top bar on phones) forgets which space was open.
 
+## Folders in Files
+
+- Files has folders you make and name yourself, any number deep (`screens/Files.tsx`,
+  `/files/folder/:id`, shared logic in `packages/core/src/library/folders.ts`). The top of
+  Files shows its folders, then the files in no folder; a folder shows its path back up,
+  its folders, any photos uploaded into it (they're in Photos too) and its files.
+- **New folder** makes one where you are. **Upload here** (Add files inside a folder)
+  puts what you add into that folder. A file moves with **Move to folder** in its menu (a
+  picker opened one level at a time, which can also make a folder), or by dragging it onto
+  a folder or a step of the path on a computer; the toast offers Undo. A folder's menu
+  renames it, moves it (never into itself) or deletes it.
+- Categories stay as filters at the top of Files and cover every folder; filtered, each
+  file says which folder it's in.
+- Deleting a folder moves it to Recently deleted with everything inside, under a Folders
+  section there; Restore brings them back together (into the top of Files if the folder it
+  was in is gone), and files deleted with it don't show on their own.
+
 ## Finding files
 
 - The search box finds files as well as photos. A file matches when every word typed

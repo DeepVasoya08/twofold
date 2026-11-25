@@ -96,3 +96,23 @@ export interface Album {
   /** For an album shared with you: the record of it in your space, for leaving it. */
   joinedId?: string;
 }
+
+/**
+ * A folder in Files, which you make, name and fill yourself (categories are worked out for
+ * you). A file is in a folder when its `albumIds` name it; it is in one folder at most.
+ */
+export interface Folder {
+  id: string;
+  name: string;
+  /** The folder it is in; left out at the top of Files. */
+  parentId?: string;
+  /**
+   * Set while the folder is in Recently deleted, with what was in it when it was deleted
+   * (ISO 8601). It is deleted for good 30 days later.
+   */
+  deletedAt?: string;
+  /** Set when the folder is someone else's: whose library it is. */
+  library?: string;
+  /** Set when the folder is someone else's and you can only view it. */
+  viewOnly?: boolean;
+}

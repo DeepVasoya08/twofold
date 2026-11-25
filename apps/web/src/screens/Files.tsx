@@ -8,7 +8,33 @@ import { useToast } from '../app/toast';
 import { useUploads } from '../app/uploads';
 import { documentPhotos, useDocumentLooks } from '../app/document-photos';
 import { useDocumentPhotosView, useFileView } from '../app/views';
-import { isViewOnly, trashNote, useVault } from '../app/vault';
+import {
+  TRASH_DAYS,
+  allItems,
+  foldersOf,
+  isViewOnly,
+  timelinePhotos,
+  trashNote,
+  useVault,
+} from '../app/vault';
+import { Link, useRouter } from '../app/router';
+import { paths } from '../app/routes';
+import type { PhotoContext } from '../app/routes';
+import {
+  childFolders,
+  folderCounts,
+  folderOf,
+  folderPath,
+  folderTrash,
+  folderTree,
+  itemsIn,
+  liveFolders,
+} from '@arcafold/core/library/folders';
+import { FolderNameDialog, FolderPicker } from '../components/FolderDialogs';
+import { FolderTile, folderSummary } from '../components/FolderTile';
+import { dropProps } from '../components/folder-drag';
+import type { Dropped } from '../components/folder-drag';
+import { Menu } from '../components/Menu';
 import { PageHeader } from '../components/AppShell';
 import { Dialog } from '../components/Dialog';
 import { AlbumPicker } from '../components/AlbumPicker';
@@ -27,7 +53,7 @@ import type { DocumentLook } from '../lib/file-sort/looks';
 import { groupByMonth, pluralize } from '../lib/format';
 import { formatBytes } from '../lib/storage-usage';
 import { errorMessage } from '@arcafold/core/errors';
-import type { Photo } from '@arcafold/core/library/model';
+import type { Folder, Photo } from '@arcafold/core/library/model';
 
 import './files.css';
 import './gallery.css';
@@ -71,11 +97,13 @@ function shownLabel(shown: Shown): string {
 
 /**
  * Files that aren't photos: PDFs, documents and anything else but videos, encrypted on this
- * device like photos, and sorted into categories on the device that added them.
+ * device like photos, and sorted into categories on the device that added them. You keep
+ * them in folders of your own (`folderId` is the one open), which can hold folders too.
  */
-export function Files() {
+export function Files({ folderId }: { folderId?: string } = {}) {
   const vault = useVault();
-  const { state, space } = vault;
+  const { state, space, status } = vault;
+  const { navigate } = useRouter();
   const { openDialog } = useUploads();
   const downloads = useDownloads();
   const { otherSpaceOpen } = useAccount();
@@ -84,11 +112,24 @@ export function Files() {
   const [moving, setMoving] = useState<Photo | null>(null);
   const [sorting, setSorting] = useState<Photo | null>(null);
   const [filing, setFiling] = useState<Photo | null>(null);
+  /** Files or a folder being moved into another folder. */
+  const [placing, setPlacing] = useState<Dropped | null>(null);
+  /** A folder being made, renamed or deleted. */
+  const [folderDialog, setFolderDialog] = useState<
+    { kind: 'new' } | { kind: 'rename' | 'delete'; folder: Folder } | null
+  >(null);
   const [shown, setShown] = useState<Shown>('all');
   const [busy, setBusy] = useState(false);
   const [view, setView] = useFileView();
   const [hidden] = useDocumentPhotosView();
 
+  const folders = foldersOf(state);
+  const live = useMemo(() => liveFolders(folders), [folders]);
+  const here = folderId === undefined ? undefined : live.get(folderId);
+  const path = useMemo(
+    () => (folderId === undefined ? [] : folderPath(folders, folderId)),
+    [folders, folderId],
+  );
   const files = useMemo(
     () =>
       [...(state.files ?? [])]
@@ -105,15 +146,27 @@ export function Files() {
     ...(pictures.length > 0 ? [[DOCUMENT_PHOTOS, pictures.length] as [Shown, number]] : []),
     ...counts,
   ];
-  // A choice emptied (its last file moved or deleted) falls back to All.
-  const filter = choices.some(([choice]) => choice === shown) ? shown : 'all';
-  const listed =
-    filter === 'all' || filter === DOCUMENT_PHOTOS
-      ? files
+  // Categories cover every folder, so they're offered at the top of Files only. A choice
+  // emptied (its last file moved or deleted) falls back to All.
+  const filter =
+    folderId === undefined && choices.some(([choice]) => choice === shown) ? shown : 'all';
+  const atLevel = filter === 'all';
+  const level = folderId ?? null;
+  const subfolders = atLevel ? childFolders(folders, level) : [];
+  const listed = atLevel
+    ? itemsIn(files, folders, level)
+    : filter === DOCUMENT_PHOTOS
+      ? []
       : files.filter((item) => categoryOf(item, looks.get(item.id)) === filter);
+  // Photos uploaded into a folder show there as well as in Photos.
+  const folderPhotos =
+    folderId === undefined ? [] : itemsIn(timelinePhotos(state), folders, folderId);
   const label = (item: Photo) => categoryOf(item, looks.get(item.id));
+  const readOnlyHere = here?.viewOnly === true;
+  const from: PhotoContext | undefined =
+    folderId === undefined ? undefined : { kind: 'folder', folderId };
 
-  const run = (work: () => Promise<void>, done: string) => {
+  const run = (work: () => Promise<void>, done: string, undo?: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
     work().then(
@@ -123,7 +176,19 @@ export function Files() {
         setMoving(null);
         setSorting(null);
         setFiling(null);
-        toast.show(done);
+        setPlacing(null);
+        setFolderDialog(null);
+        toast.show(
+          done,
+          undo && {
+            label: 'Undo',
+            run: () => {
+              undo().catch((error: unknown) => {
+                toast.show(errorMessage(error));
+              });
+            },
+          },
+        );
       },
       (error: unknown) => {
         setBusy(false);
@@ -139,6 +204,36 @@ export function Files() {
     );
   };
 
+  /** Puts a file, or a folder, into `target` (or the top of Files, for null). */
+  const place = (what: Dropped, target: string | null) => {
+    const where = target === null ? 'Files' : `“${live.get(target)?.name ?? 'the folder'}”`;
+    if (what.kind === 'folder') {
+      const folder = live.get(what.id);
+      if (!folder || what.id === target || (folder.parentId ?? null) === target) return;
+      const before = folder.parentId ?? null;
+      run(
+        () => vault.moveFolder(what.id, target),
+        `Moved “${folder.name}” to ${where}`,
+        () => vault.moveFolder(what.id, before),
+      );
+      return;
+    }
+    const item = allItems(state).find((candidate) => candidate.id === what.id);
+    if (!item) return;
+    const before = folderOf(item, live) ?? null;
+    if (before === target) return;
+    run(
+      async () => {
+        const result = await vault.moveToFolder([what.id], target);
+        if (result.failed.length > 0) throw result.error;
+      },
+      `Moved to ${where}`,
+      async () => {
+        await vault.moveToFolder([what.id], before);
+      },
+    );
+  };
+
   const menuFor = (item: Photo): MenuItem[] => {
     const items: MenuItem[] = [
       {
@@ -150,6 +245,13 @@ export function Files() {
       },
     ];
     if (isViewOnly(item)) return items;
+    items.push({
+      label: 'Move to folder',
+      icon: 'folder',
+      onSelect: () => {
+        setPlacing({ kind: 'item', id: item.id });
+      },
+    });
     if (albumChoices(state.albums, [item]).length > 0 || item.library === undefined) {
       items.push({
         label: 'Add to album',
@@ -161,7 +263,7 @@ export function Files() {
     }
     items.push({
       label: 'Move to category',
-      icon: 'folder',
+      icon: 'sparkle',
       onSelect: () => {
         setSorting(item);
       },
@@ -187,40 +289,129 @@ export function Files() {
     return items;
   };
 
-  const upload = (
+  const folderMenu = (folder: Folder): MenuItem[] =>
+    folder.viewOnly
+      ? []
+      : [
+          {
+            label: 'Rename',
+            icon: 'pencil',
+            onSelect: () => {
+              setFolderDialog({ kind: 'rename', folder });
+            },
+          },
+          {
+            label: 'Move to folder',
+            icon: 'folder',
+            onSelect: () => {
+              setPlacing({ kind: 'folder', id: folder.id });
+            },
+          },
+          {
+            label: 'Delete folder',
+            icon: 'trash',
+            danger: true,
+            onSelect: () => {
+              setFolderDialog({ kind: 'delete', folder });
+            },
+          },
+        ];
+
+  const upload = !readOnlyHere && (
     <button type="button" className="btn btn--primary" onClick={openDialog}>
       <Icon name="upload" size={18} />
-      Add files
+      {here ? 'Upload here' : 'Add files'}
     </button>
   );
+  const newFolder = !readOnlyHere && (
+    <button
+      type="button"
+      className="btn btn--secondary"
+      onClick={() => {
+        setFolderDialog({ kind: 'new' });
+      }}
+    >
+      <Icon name="plus" size={18} />
+      New folder
+    </button>
+  );
+  const canDrop = !readOnlyHere;
+  const dropInto = (target: string) =>
+    canDrop
+      ? (what: Dropped) => {
+          place(what, target);
+        }
+      : undefined;
+
+  if (folderId !== undefined && !here) {
+    return (
+      <div className="page">
+        <PageHeader title="Files" back={{ to: paths.files, label: 'Files' }} />
+        {status !== 'loading' && (
+          <EmptyState icon="folder" title="This folder isn’t here">
+            It may have been deleted or moved to Recently deleted.
+          </EmptyState>
+        )}
+      </div>
+    );
+  }
+
+  const nothing = files.length === 0 && pictures.length === 0 && live.size === 0;
+  const emptyHere =
+    here !== undefined &&
+    subfolders.length === 0 &&
+    listed.length === 0 &&
+    folderPhotos.length === 0;
+
+  const deletingFolder = folderDialog?.kind === 'delete' ? folderDialog.folder : null;
+  const deletingCounts = deletingFolder
+    ? folderTrash(folders, allItems(state), deletingFolder.id)
+    : null;
 
   return (
     <div className="page">
+      {here && <FolderPath path={path} onDrop={canDrop ? place : undefined} />}
       <PageHeader
-        title="Files"
+        title={here?.name ?? 'Files'}
         subtitle={
-          files.length > 0
-            ? `${pluralize(files.length, 'file')} · ${formatBytes(total)}`
-            : 'PDFs, documents and other files, encrypted like your photos'
+          here
+            ? folderSummary(folderCounts(folders, [...files, ...timelinePhotos(state)], here.id)) +
+              (here.library === undefined ? '' : ` · Shared by ${here.library}`)
+            : files.length > 0
+              ? `${pluralize(files.length, 'file')} · ${formatBytes(total)}`
+              : 'PDFs, documents and other files, encrypted like your photos'
         }
         actions={
-          (files.length > 0 || pictures.length > 0) && (
+          !nothing && (
             <>
               <ViewPicker choices={FILE_VIEW_CHOICES} value={view} onChange={setView} />
+              {newFolder}
               {upload}
+              {here && folderMenu(here).length > 0 && (
+                <Menu label="Folder actions" items={folderMenu(here)} icon="more-vertical" />
+              )}
             </>
           )
         }
       />
 
-      {files.length === 0 && pictures.length === 0 ? (
-        <EmptyState icon="file" title="No files yet" action={upload}>
-          Add PDFs, documents, spreadsheets and other files. They’re encrypted on this device before
-          they’re uploaded. Videos can’t be added yet.
+      {nothing ? (
+        <EmptyState
+          icon="file"
+          title="No files yet"
+          action={
+            <>
+              {upload}
+              {newFolder}
+            </>
+          }
+        >
+          Add PDFs, documents, spreadsheets and other files, and keep them in folders. They’re
+          encrypted on this device before they’re uploaded. Videos can’t be added yet.
         </EmptyState>
       ) : (
         <>
-          {choices.length > 2 && (
+          {folderId === undefined && choices.length > 2 && (
             <div className="file-categories" role="group" aria-label="Show category">
               {choices.map(([category, count]) => (
                 <button
@@ -237,6 +428,46 @@ export function Files() {
                 </button>
               ))}
             </div>
+          )}
+          {subfolders.length > 0 && (
+            <section className="folders" aria-labelledby="folders-title">
+              <h2 className="folders__title" id="folders-title">
+                Folders
+              </h2>
+              <ul className="folder-grid">
+                {subfolders.map((folder) => (
+                  <FolderTile
+                    key={folder.id}
+                    folder={folder}
+                    summary={folderSummary(
+                      folderCounts(folders, [...files, ...timelinePhotos(state)], folder.id),
+                    )}
+                    menu={folderMenu(folder)}
+                    onDrop={folder.viewOnly ? undefined : dropInto(folder.id)}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
+          {emptyHere && (
+            <EmptyState icon="folder" title="This folder is empty" action={upload}>
+              {readOnlyHere
+                ? 'Nothing has been put in this folder yet.'
+                : 'Upload files here, or move files in from their menu or by dragging them onto the folder.'}
+            </EmptyState>
+          )}
+          {folderPhotos.length > 0 && (
+            <section className="month" aria-labelledby="folder-photos-title">
+              <header className="month__header">
+                <h2 className="month__title" id="folder-photos-title">
+                  Photos
+                </h2>
+              </header>
+              <PhotoGrid
+                photos={folderPhotos}
+                context={{ kind: 'folder', folderId: here?.id ?? '' }}
+              />
+            </section>
           )}
           {filter === DOCUMENT_PHOTOS ? (
             <div className="file-months" role="region" aria-label="Document photos">
@@ -260,43 +491,152 @@ export function Files() {
               ))}
             </div>
           ) : (
-            <div className="file-months" role="region" aria-label="Files">
-              {groupByMonth(listed).map((month) => (
-                <section
-                  key={month.key}
-                  className="month"
-                  aria-labelledby={`files-month-${month.key}`}
-                >
-                  <header className="month__header">
-                    <h2 className="month__title" id={`files-month-${month.key}`}>
-                      {month.label}
-                    </h2>
-                  </header>
-                  <ul className={view === 'grid' ? 'file-grid' : 'file-list'}>
-                    {month.photos.map((item) =>
-                      view === 'grid' ? (
-                        <FileTile
-                          key={item.id}
-                          item={item}
-                          details={fileDetails(item, null)}
-                          menu={menuFor(item)}
-                        />
-                      ) : (
-                        <FileRow
-                          key={item.id}
-                          item={item}
-                          details={fileDetails(item, filter === 'all' ? label(item) : null)}
-                          menu={menuFor(item)}
-                        />
-                      ),
-                    )}
-                  </ul>
-                </section>
-              ))}
-            </div>
+            listed.length > 0 && (
+              <div className="file-months" role="region" aria-label="Files">
+                {groupByMonth(listed).map((month) => (
+                  <section
+                    key={month.key}
+                    className="month"
+                    aria-labelledby={`files-month-${month.key}`}
+                  >
+                    <header className="month__header">
+                      <h2 className="month__title" id={`files-month-${month.key}`}>
+                        {month.label}
+                      </h2>
+                    </header>
+                    <ul className={view === 'grid' ? 'file-grid' : 'file-list'}>
+                      {month.photos.map((item) => {
+                        const draggable = canDrop && !isViewOnly(item) && live.size > 0;
+                        const where = atLevel ? null : folderOf(item, live);
+                        // Filtered by category, files come from every folder: say which.
+                        const inFolder = where ? ` · in ${live.get(where)?.name ?? ''}` : '';
+                        const details =
+                          fileDetails(item, filter === 'all' ? label(item) : null) + inFolder;
+                        return view === 'grid' ? (
+                          <FileTile
+                            key={item.id}
+                            item={item}
+                            details={fileDetails(item, null)}
+                            menu={menuFor(item)}
+                            draggable={draggable}
+                            {...(from && { from })}
+                          />
+                        ) : (
+                          <FileRow
+                            key={item.id}
+                            item={item}
+                            details={details}
+                            menu={menuFor(item)}
+                            draggable={draggable}
+                            {...(from && { from })}
+                          />
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            )
           )}
         </>
       )}
+
+      <FolderNameDialog
+        open={folderDialog?.kind === 'new'}
+        title={here ? `New folder in “${here.name}”` : 'New folder'}
+        action="Create"
+        onClose={() => {
+          setFolderDialog(null);
+        }}
+        onSave={async (name) => {
+          const folder = await vault.createFolder(name, here?.id);
+          setFolderDialog(null);
+          toast.show(`Made “${folder.name}”`);
+        }}
+      />
+
+      <FolderNameDialog
+        open={folderDialog?.kind === 'rename'}
+        title="Rename folder"
+        action="Save"
+        initial={folderDialog?.kind === 'rename' ? folderDialog.folder.name : ''}
+        onClose={() => {
+          setFolderDialog(null);
+        }}
+        onSave={async (name) => {
+          if (folderDialog?.kind !== 'rename') return;
+          await vault.renameFolder(folderDialog.folder.id, name);
+          setFolderDialog(null);
+          toast.show(`Renamed to “${name.trim()}”`);
+        }}
+      />
+
+      <Dialog
+        open={deletingFolder !== null}
+        onClose={() => {
+          setFolderDialog(null);
+        }}
+        title={`Delete “${deletingFolder?.name ?? ''}”?`}
+        description={
+          deletingCounts && deletingCounts.itemIds.length + deletingCounts.folderIds.length > 1
+            ? `The folder and ${deletedInside(deletingCounts)} go to Recently deleted. You can restore them for ${String(TRASH_DAYS)} days.`
+            : `The folder goes to Recently deleted. You can restore it for ${String(TRASH_DAYS)} days.`
+        }
+      >
+        <div className="dialog__actions">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => {
+              setFolderDialog(null);
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn--danger"
+            disabled={busy}
+            aria-busy={busy}
+            onClick={() => {
+              if (!deletingFolder) return;
+              const leave = deletingFolder.id === folderId;
+              run(async () => {
+                await vault.deleteFolder(deletingFolder.id);
+                if (leave) {
+                  const parent = path.at(-2);
+                  navigate(parent ? paths.folder(parent.id) : paths.files);
+                }
+              }, 'Folder deleted');
+            }}
+          >
+            Delete folder
+          </button>
+        </div>
+      </Dialog>
+
+      <FolderPicker
+        open={placing !== null}
+        title={placing?.kind === 'folder' ? 'Move folder to…' : 'Move to folder'}
+        folders={folders.filter((folder) => {
+          const subject =
+            placing?.kind === 'item'
+              ? allItems(state).find((item) => item.id === placing.id)
+              : live.get(placing?.id ?? '');
+          return folder.library === subject?.library && !folder.viewOnly;
+        })}
+        start={folderId ?? null}
+        blocked={placing?.kind === 'folder' ? folderTree(folders, placing.id) : new Set()}
+        busy={busy}
+        onClose={() => {
+          setPlacing(null);
+        }}
+        onPick={(target) => {
+          if (placing) place(placing, target);
+          setPlacing(null);
+        }}
+        onCreate={(name, parentId) => vault.createFolder(name, parentId ?? undefined)}
+      />
 
       <AlbumPicker
         open={filing !== null}
@@ -374,6 +714,69 @@ export function Files() {
         }}
       />
     </div>
+  );
+}
+
+/** "3 files and 1 folder", for what goes along with a deleted folder. */
+function deletedInside(counts: { folderIds: string[]; itemIds: string[] }): string {
+  const folders = counts.folderIds.length - 1;
+  const parts = [
+    ...(counts.itemIds.length > 0 ? [pluralize(counts.itemIds.length, 'file')] : []),
+    ...(folders > 0 ? [pluralize(folders, 'folder')] : []),
+  ];
+  return `its ${parts.join(' and ')}`;
+}
+
+/** Where a folder is: Files, then each folder down to it. Each step takes drops. */
+function FolderPath({
+  path,
+  onDrop,
+}: {
+  path: readonly Folder[];
+  onDrop: ((what: Dropped, target: string | null) => void) | undefined;
+}) {
+  return (
+    <nav className="folder-path" aria-label="Folder path">
+      <PathStep to={paths.files} label="Files" target={null} onDrop={onDrop} />
+      {path.slice(0, -1).map((folder) => (
+        <PathStep
+          key={folder.id}
+          to={paths.folder(folder.id)}
+          label={folder.name}
+          target={folder.id}
+          onDrop={onDrop}
+        />
+      ))}
+    </nav>
+  );
+}
+
+function PathStep({
+  to,
+  label,
+  target,
+  onDrop,
+}: {
+  to: string;
+  label: string;
+  target: string | null;
+  onDrop: ((what: Dropped, target: string | null) => void) | undefined;
+}) {
+  const [over, setOver] = useState(false);
+  return (
+    <>
+      <Link
+        to={to}
+        className={`folder-path__step${over ? ' folder-path__step--over' : ''}`}
+        {...(onDrop &&
+          dropProps((what) => {
+            onDrop(what, target);
+          }, setOver))}
+      >
+        {label}
+      </Link>
+      <Icon name="chevron-right" size={14} />
+    </>
   );
 }
 
