@@ -216,6 +216,23 @@ describe('sharing an album', () => {
     expect(listed.members).toEqual([{ id: member.id, meta: member.meta, album, access: 'view' }]);
   });
 
+  it('takes a shared folder’s larger record, up to its limit, for that route only', async () => {
+    const folder = await addAlbum();
+    const big = random(16 * 1024);
+    expect(
+      (await owner.request('PUT', `/space/albums/${folder}/shared`, { meta: big })).status,
+    ).toBe(204);
+    // The folders' own records stay small, and so does the shared one past its limit.
+    expect((await owner.request('PUT', `/space/albums/${folder}`, { meta: big })).status).toBe(400);
+    expect(
+      (
+        await owner.request('PUT', `/space/albums/${folder}/shared`, {
+          meta: random(33 * 1024) + random(33 * 1024),
+        })
+      ).status,
+    ).toBe(400);
+  });
+
   it('limits how many people one album is shared with, apart from the library', async () => {
     const album = await addAlbum();
     await shareAlbum(album);

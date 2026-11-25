@@ -280,17 +280,21 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
           album.id === action.albumId ? { ...album, title: action.title } : album,
         ),
       };
-    case 'set-shared-with':
+    case 'set-shared-with': {
+      // An album or a folder: both are shared the same way.
+      const named = <T extends { id: string; sharedWith?: string[] }>(each: T): T => {
+        if (each.id !== action.albumId) return each;
+        if (action.names.length > 0) return { ...each, sharedWith: action.names };
+        const rest = { ...each };
+        delete rest.sharedWith;
+        return rest;
+      };
       return {
         ...state,
-        albums: state.albums.map((album) => {
-          if (album.id !== action.albumId) return album;
-          if (action.names.length > 0) return { ...album, sharedWith: action.names };
-          const rest = { ...album };
-          delete rest.sharedWith;
-          return rest;
-        }),
+        albums: state.albums.map(named),
+        ...(state.folders && { folders: state.folders.map(named) }),
       };
+    }
     case 'set-folders': {
       const changed = new Map(action.folders.map((folder) => [folder.id, folder]));
       const kept = foldersOf(state).map((folder) => changed.get(folder.id) ?? folder);

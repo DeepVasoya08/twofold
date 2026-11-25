@@ -5,7 +5,7 @@ import type { InviteEntry, JoinEntry } from '../app/invites';
 import { useRouter } from '../app/router';
 import { matchRoute, paths } from '../app/routes';
 import { useToast } from '../app/toast';
-import { useVault } from '../app/vault';
+import { foldersOf, useVault } from '../app/vault';
 import { Icon } from './Icon';
 import { errorMessage } from '@arcafold/core/errors';
 
@@ -42,14 +42,16 @@ export function useCopy(): (text: string, what: string) => void {
   };
 }
 
-/** What an invite shares, as the inviter reads it: "your library" or "“Trip”". */
+/** What an invite shares, as the inviter reads it: "your library", or an album or folder. */
 function useTarget(): (album: string | null) => string {
   const { space, state } = useVault();
   const where = space === 'private' ? 'private space' : 'library';
   return (album) => {
     if (album === null) return `your ${where}`;
     const found = state.albums.find((each) => each.id === album && each.library === undefined);
-    return found ? `“${found.title}”` : 'an album';
+    if (found) return `“${found.title}”`;
+    const folder = foldersOf(state).find((each) => each.id === album && each.library === undefined);
+    return folder ? `“${folder.name}”` : 'an album';
   };
 }
 

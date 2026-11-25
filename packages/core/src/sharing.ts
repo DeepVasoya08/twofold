@@ -891,7 +891,7 @@ async function sharedSources(
   });
 }
 
-/** Adds who each of your own albums is shared with, by name, to what `store` lists. */
+/** Adds who each of your own albums and folders is shared with, by name, to what `store` lists. */
 export function withAlbumMembers(store: SpaceStore, members: () => Promise<Member[]>): SpaceStore {
   return {
     ...store,
@@ -909,6 +909,10 @@ export function withAlbumMembers(store: SpaceStore, members: () => Promise<Membe
         albums: loaded.albums.map((album) => {
           const sharedWith = album.library === undefined ? names.get(album.id) : undefined;
           return sharedWith ? { ...album, sharedWith } : album;
+        }),
+        folders: loaded.folders.map((folder) => {
+          const sharedWith = folder.library === undefined ? names.get(folder.id) : undefined;
+          return sharedWith ? { ...folder, sharedWith } : folder;
         }),
       };
     },

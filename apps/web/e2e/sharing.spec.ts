@@ -204,7 +204,7 @@ test('sharing one album with someone, who can only view it, then removing them',
 
   // Bob gets the album, not Alice's library: it's under Shared with me, and his timeline
   // stays empty.
-  await expect(bob.getByText('Alice shared an album with you')).toBeVisible();
+  await expect(bob.getByText('Alice shared an album or folder with you')).toBeVisible();
   await expect(bob.getByRole('heading', { level: 1, name: 'Albums' })).toBeVisible();
   await bob.getByRole('tab', { name: 'Shared with me' }).click();
   await expect(bob.getByText('From Alice')).toBeVisible();
@@ -288,7 +288,7 @@ test('sharing one album with add and edit: they add a photo and take one out', a
   await expect(alice.getByText('“Porto” is shared with Bob.')).toBeVisible();
 
   // Bob adds a photo of his own to the album. It stays out of his timeline.
-  await expect(bob.getByText('Alice shared an album with you')).toBeVisible();
+  await expect(bob.getByText('Alice shared an album or folder with you')).toBeVisible();
   await bob.getByRole('tab', { name: 'Shared with me' }).click();
   await bob.getByRole('link', { name: /Porto/ }).click();
   await expect(bob.getByText('Shared with you by Alice · you can add photos')).toBeVisible();

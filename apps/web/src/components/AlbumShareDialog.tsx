@@ -11,16 +11,24 @@ import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 import { PendingInviteList } from './Invites';
 import { errorMessage } from '@arcafold/core/errors';
-import type { Album } from '@arcafold/core/library/model';
+import type { Album, Folder } from '@arcafold/core/library/model';
 import type { MemberAccess } from '@arcafold/types';
 
 import './album-share-dialog.css';
 
 type People = { state: 'loading' } | { state: 'ready'; members: Member[] } | { state: 'failed' };
 
+/** An album or a folder of yours that is being shared, by what the dialog needs. */
+interface Shared {
+  id: string;
+  title: string;
+  folder: boolean;
+}
+
 /**
- * Who one of your albums is shared with: invite someone, change what they can do there, remove
- * someone, or stop sharing it with everyone. People get only this album.
+ * Who one of your albums (or folders) is shared with: invite someone, change what they can do
+ * there, remove someone, or stop sharing it with everyone. People get only that album or
+ * folder.
  */
 export function AlbumShareDialog({
   open,
@@ -33,13 +41,30 @@ export function AlbumShareDialog({
 }) {
   return (
     <Dialog open={open} onClose={onClose} title={`Share “${album.title}”`}>
-      <AlbumPeople album={album} />
+      <AlbumPeople album={{ id: album.id, title: album.title, folder: false }} />
+    </Dialog>
+  );
+}
+
+/** The same dialog for a folder in Files: people get the folder and every folder inside it. */
+export function FolderShareDialog({
+  open,
+  folder,
+  onClose,
+}: {
+  open: boolean;
+  folder: Folder;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={open} onClose={onClose} title={`Share “${folder.name}”`}>
+      <AlbumPeople album={{ id: folder.id, title: folder.name, folder: true }} />
     </Dialog>
   );
 }
 
 /** Mounted only while the dialog is open, so it loads who has access each time it opens. */
-function AlbumPeople({ album }: { album: Album }) {
+function AlbumPeople({ album }: { album: Shared }) {
   const { state } = useAccount();
   const { space, setSharedWith, stopSharingAlbum } = useVault();
   const toast = useToast();
@@ -142,9 +167,9 @@ function AlbumPeople({ album }: { album: Album }) {
   return (
     <div className="album-share">
       <p className="album-share__note">
-        Invite someone to this album. They get its photos, including ones you add later, and nothing
-        else in your {where}. With Add and edit, they can also add photos and take any photo out of
-        it.
+        {album.folder
+          ? `Invite someone to this folder. They get its files and the folders inside it, including what you add later, and nothing else in your ${where}. With Add and edit, they can also add files to it.`
+          : `Invite someone to this album. They get its photos, including ones you add later, and nothing else in your ${where}. With Add and edit, they can also add photos and take any photo out of it.`}
       </p>
 
       <section aria-label="People with access">

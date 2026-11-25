@@ -32,7 +32,7 @@ import type { Invite, Join, Member, SharingApis } from '@arcafold/core/sharing';
 import { advancePending, grantedText, passInterval } from '@arcafold/core/sharing-pass';
 import type { InviteEntry, JoinEntry } from '@arcafold/core/sharing-pass';
 import { useToast } from './toast';
-import { useVault } from './vault';
+import { foldersOf, useVault } from './vault';
 import { FormError } from '@arcafold/core/errors';
 
 /**
@@ -245,8 +245,10 @@ function LivePendingInvites({
   }, [every, check]);
 
   const albumsRef = useRef(vault.albums);
+  const foldersRef = useRef(foldersOf(vault));
   useEffect(() => {
     albumsRef.current = vault.albums;
+    foldersRef.current = foldersOf(vault);
   });
 
   const start = useCallback(
@@ -308,9 +310,17 @@ function LivePendingInvites({
         if (invite.album === null) {
           member = await confirmInvite(invite, joiner, keys, myName, sharing);
         } else {
-          const album = albumsRef.current.find(
-            (each) => each.id === invite.album && each.library === undefined,
-          );
+          // An album, or a folder in Files: both are shared the same way.
+          const album =
+            albumsRef.current.find(
+              (each) => each.id === invite.album && each.library === undefined,
+            ) ??
+            foldersRef.current.find(
+              (each) =>
+                each.id === invite.album &&
+                each.library === undefined &&
+                each.deletedAt === undefined,
+            );
           if (!album) throw new FormError('That album isn’t here anymore. Cancel this invite.');
           // The album gets its own key now, and only that key goes to them.
           const albumKey = await shareAlbum(album.id);

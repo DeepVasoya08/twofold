@@ -148,6 +148,11 @@ export const STORAGE_SIZES = {
   recordId: 16,
   /** Largest sealed record (photo or album metadata), in bytes before base64url. */
   maxRecord: 2048,
+  /**
+   * Largest sealed record a shared album or folder shows the people it's shared with: a
+   * shared folder's holds the names of the folders inside it too.
+   */
+  maxSharedRecord: 64 * 1024,
   /** Largest encrypted thumbnail and full-size photo, in bytes. */
   maxThumb: 1024 * 1024,
   maxFull: 64 * 1024 * 1024,

@@ -419,6 +419,34 @@ contents, titles, dates or keys. Albums that aren't shared, and the private spac
 nothing new. An album shared from the private space is kept in the private space's rows, so
 nothing links it to an account.
 
+### Sharing one folder
+
+A folder in Files is shared exactly like an album (it is an album row to the server): its
+own random key in its sealed record, a member row scoped to it, the same token limits, and
+the same View only or Add and edit.
+
+- **What its people see.** The folder's shared record (`albums.shared_meta`), sealed under
+  its key, holds its name and every folder inside it at any depth (id, name and the folder
+  it's in), padded to a whole number of KiB so its size says little about how many there
+  are. It may be up to 64 KiB (`maxSharedRecord`); other records stay at 2 KiB.
+  `album_items` lists every file filed anywhere inside it, each sealed under the folder key
+  and filed under the folder inside it that holds it. Folders inside it that are in Recently
+  deleted, and their files, are left out.
+- **Keeping it current.** When the owner (or a library member) makes, renames, moves or
+  deletes a folder inside it, or moves a file in or out, the browser seals the record again
+  and lists or unlists what changed. Moving a folder out takes everything inside it out of
+  the share. A shared folder that goes to Recently deleted stops being shared at once
+  (everyone's token stops working); restoring it doesn't share it again.
+- **Add and edit.** For now a member who may edit can add files, into the folder or any
+  folder inside it. The upload is sealed under the folder key and marked `sealed_for_album`
+  with the shared folder; the owner's device seals it again under the records key and keeps
+  the folder inside it that the member chose. Making, renaming, moving and deleting folders
+  and files stay with the owner.
+
+What this reveals beyond a shared album: roughly how many folders are inside a shared
+folder (to the nearest KiB of names), and, as for albums, which file rows are in it. Not
+their names, the tree, or anything about folders that aren't shared.
+
 ### Invites
 
 An invite moves the access from one browser to another through a server we don't trust

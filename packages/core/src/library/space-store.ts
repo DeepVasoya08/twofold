@@ -11,14 +11,16 @@ import { cleanFileType, isJpeg } from '../file-types';
 import { isPhotoType } from '../photo-types';
 import {
   decodeJson,
+  encodeFolderShareMeta,
   encodeJson,
   encodePhotoMeta,
   hasPreview,
   parseAlbumMeta,
   parseFolderMeta,
+  parseFolderShareMeta,
   parsePhotoMeta,
 } from '../records';
-import type { AlbumMeta, FolderMeta, PhotoMeta } from '../records';
+import type { AlbumMeta, FolderMeta, FolderShareMeta, PhotoMeta } from '../records';
 import { uploadKeyPair } from '../upload/upload-only';
 import { folderName } from './folders';
 import type { Album, FileDetails, Folder, Photo } from './model';
@@ -243,8 +245,8 @@ export interface Membership {
   /** The name of whoever shared the library. */
   ownerName: string;
   /**
-   * Set when only this album was shared. New photos go into it (and only it), and taking a
-   * photo out of it only unlists it there.
+   * Set when only this album (or folder) was shared. New photos go into it (and only it, or
+   * a folder inside it), and taking a photo out of it only unlists it there.
    */
   album?: string;
 }
@@ -279,6 +281,7 @@ function toFolder(id: string, meta: FolderMeta): Folder {
   };
 }
 const ALBUM_ONLY = 'In an album shared with you, you can add photos or take them out.';
+const TOO_MANY_FOLDERS = 'This folder has too many folders inside it to share.';
 
 /** Who added a photo, as this device sees it. The owner's photos carry no `by`. */
 function addedBy(
@@ -380,9 +383,53 @@ export function remoteStore(
     return crypto.sealRecord(await access(), 'album', id, encodeJson(meta));
   };
 
-  /** What a shared album's records are sealed under, or null if it isn't shared. */
+  /**
+   * The folders inside a folder at any depth that aren't in Recently deleted, each with the
+   * folder it is in.
+   */
+  const foldersInside = (rootId: string) => {
+    const inside: FolderShareMeta['folders'] = [];
+    const seen = new Set([rootId]);
+    let level = [rootId];
+    while (level.length > 0) {
+      const next: string[] = [];
+      for (const [id, meta] of folderMetas) {
+        if (meta.parent === undefined || !level.includes(meta.parent) || seen.has(id)) continue;
+        if (meta.deletedAt !== undefined) continue;
+        seen.add(id);
+        inside.push({ id, name: meta.name, parent: meta.parent });
+        next.push(id);
+      }
+      level = next;
+    }
+    return inside;
+  };
+
+  /**
+   * The shares a photo filed in these albums and folders is listed in, each with what it is
+   * filed under there: an album or folder that is shared itself, and every shared folder a
+   * folder is inside.
+   */
+  const sharesOf = (albumIds: readonly string[]) => {
+    const found = new Map<string, string>();
+    for (const id of albumIds) {
+      if (albumMetas.get(id)?.shareKey) found.set(id, id);
+      const seen = new Set<string>();
+      let at: string | undefined = id;
+      while (at !== undefined && !seen.has(at)) {
+        seen.add(at);
+        const meta = folderMetas.get(at);
+        if (!meta || meta.deletedAt !== undefined) break;
+        if (meta.shareKey) found.set(at, id);
+        at = meta.parent;
+      }
+    }
+    return found;
+  };
+
+  /** What a shared album's or folder's records are sealed under, or null if it isn't shared. */
   const sharedAccess = async (albumId: string): Promise<SpaceAccess | null> => {
-    const key = albumMetas.get(albumId)?.shareKey;
+    const key = albumMetas.get(albumId)?.shareKey ?? folderMetas.get(albumId)?.shareKey;
     if (!key) return null;
     const crypto = await loadCrypto();
     return crypto.albumAccess(
@@ -392,14 +439,20 @@ export function remoteStore(
   };
 
   /**
-   * Lists a photo in a shared album: its details sealed under the album key, without its
-   * favorite or the rest of its albums, which stay yours.
+   * Lists a photo in a shared album or folder: its details sealed under that key, without its
+   * favorite or the rest of its albums, which stay yours. In a shared folder it's filed under
+   * `filedIn`, the folder inside it that holds the photo.
    */
-  const listInAlbum = async (shared: SpaceAccess, albumId: string, photoId: string) => {
+  const listInAlbum = async (
+    shared: SpaceAccess,
+    albumId: string,
+    photoId: string,
+    filedIn = albumId,
+  ) => {
     const entry = lookup(photoId);
     const crypto = await loadCrypto();
     // What you've taught the sorting stays yours: shared copies carry no words.
-    const meta: PhotoMeta = { ...entry.meta, favorite: false, albumIds: [albumId] };
+    const meta: PhotoMeta = { ...entry.meta, favorite: false, albumIds: [filedIn] };
     delete meta.words;
     delete meta.sorted;
     const api = await remote();
@@ -416,19 +469,72 @@ export function remoteStore(
    */
   const syncShared = async (photoId: string, before: readonly string[], after: string[]) => {
     const api = await remote();
+    const was = sharesOf(before);
+    const now = sharesOf(after);
     const changes = [
-      ...after.filter((id) => !before.includes(id)).map((id) => ({ id, listed: true })),
-      ...before.filter((id) => !after.includes(id)).map((id) => ({ id, listed: false })),
+      ...[...now]
+        .filter(([id, filedIn]) => was.get(id) !== filedIn)
+        .map(([id, filedIn]) => ({ id, filedIn })),
+      ...[...was.keys()].filter((id) => !now.has(id)).map((id) => ({ id, filedIn: null })),
     ];
     await Promise.all(
-      changes.map(async ({ id, listed }) => {
+      changes.map(async ({ id, filedIn }) => {
         const shared = await sharedAccess(id);
         if (!shared) return;
-        if (listed) await listInAlbum(shared, id, photoId);
+        if (filedIn !== null) await listInAlbum(shared, id, photoId, filedIn);
         else await api.deleteAlbumItem(id, photoId);
       }),
     ).catch(() => undefined);
   };
+
+  /**
+   * Brings a shared folder up to date for the people it's shared with: its name and the
+   * folders inside it, sealed under its key, and every photo filed anywhere inside it listed
+   * (and nothing else).
+   */
+  const syncFolderShare = async (rootId: string) => {
+    const meta = folderMetas.get(rootId);
+    const shared = await sharedAccess(rootId);
+    if (!meta || !shared) return;
+    const crypto = await loadCrypto();
+    const api = await remote();
+    const inside = foldersInside(rootId);
+    const record = encodeFolderShareMeta({
+      v: 1,
+      kind: 'folder',
+      name: meta.name,
+      folders: inside,
+    });
+    const sealed = await crypto.sealRecord(shared, 'album', rootId, record);
+    if (sealed.length > (STORAGE_SIZES.maxSharedRecord * 4) / 3) {
+      throw new FormError(TOO_MANY_FOLDERS);
+    }
+    await api.shareAlbum(rootId, sealed);
+    const tree = new Set([rootId, ...inside.map((folder) => folder.id)]);
+    const listed = new Set((await api.listAlbumItems(rootId)).photoIds);
+    for (const [photoId, entry] of known) {
+      const filedIn = entry.meta.albumIds.find((id) => tree.has(id));
+      if (filedIn === undefined || entry.meta.deletedAt !== undefined) continue;
+      if (!listed.has(photoId)) await listInAlbum(shared, rootId, photoId, filedIn);
+      listed.delete(photoId);
+    }
+    // What's in Recently deleted stays listed: the server hides it until it's restored.
+    for (const photoId of listed) {
+      if (known.get(photoId)?.meta.deletedAt === undefined) {
+        await api.deleteAlbumItem(rootId, photoId);
+      }
+    }
+  };
+
+  /** Brings every shared folder these folders are in up to date. Best effort. */
+  const refreshShares = async (folderIds: readonly string[]) => {
+    for (const rootId of sharesOf(folderIds).keys()) {
+      if (folderMetas.has(rootId)) await syncFolderShare(rootId).catch(() => undefined);
+    }
+  };
+
+  /** For someone given one folder: that folder and the folders inside it, by id. */
+  let memberTree = new Set<string>();
 
   const decrypt = async (photoId: string, part: PhotoPart) => {
     const entry = lookup(photoId);
@@ -536,9 +642,13 @@ export function remoteStore(
         const key = meta && crypto.fromBase64Url(meta.key);
         if (!meta || key?.length !== 32) continue;
         if (stored.sealedForAlbum !== undefined) {
-          // Added to a shared album by someone given it: it's in that album only, and their
-          // fingerprint was taken with the album's key, so it matches nothing here.
-          meta = { ...meta, favorite: false, albumIds: [stored.sealedForAlbum] };
+          // Added to a shared album by someone given it: it's in that album only (or, in a
+          // shared folder, the folder inside it they put it in), and their fingerprint was
+          // taken with the album's key, so it matches nothing here.
+          const root = stored.sealedForAlbum;
+          const inside = new Set(foldersInside(root).map((folder) => folder.id));
+          const filedIn = meta.albumIds.find((id) => inside.has(id)) ?? root;
+          meta = { ...meta, favorite: false, albumIds: [filedIn] };
           delete meta.fp;
         }
         known.set(stored.id, { key, meta });
@@ -630,6 +740,16 @@ export function remoteStore(
             .openRecord(keys, 'album', each.id, each.meta)
             .catch(() => null);
           const plain = opened && decodeJson(opened);
+          // Someone given one folder sees it, and the folders inside it, from its shared record.
+          const shared = membership?.album === undefined ? null : parseFolderShareMeta(plain);
+          if (shared) {
+            memberTree = new Set([each.id, ...shared.folders.map((inside) => inside.id)]);
+            folders.push({ id: each.id, name: shared.name });
+            for (const inside of shared.folders) {
+              folders.push({ id: inside.id, name: inside.name, parentId: inside.parent });
+            }
+            continue;
+          }
           const folder = parseFolderMeta(plain);
           if (folder) {
             folderMetas.set(each.id, folder);
@@ -763,7 +883,9 @@ export function remoteStore(
       // Someone given one album adds to it only, and keeps nothing else about the photo there.
       if (album !== undefined) {
         meta.favorite = false;
-        meta.albumIds = [album];
+        // In a shared folder, it can go in any folder inside it.
+        const filedIn = albumIds[0];
+        meta.albumIds = [filedIn !== undefined && memberTree.has(filedIn) ? filedIn : album];
         delete meta.words;
         delete meta.sorted;
       }
@@ -901,6 +1023,7 @@ export function remoteStore(
       const api = await remote();
       await api.createAlbum({ id, meta: await sealAlbum(id, meta) });
       folderMetas.set(id, meta);
+      await refreshShares([id]);
       return toFolder(id, meta);
     },
 
@@ -917,13 +1040,38 @@ export function remoteStore(
         ...(current.shareKey !== undefined && { shareKey: current.shareKey }),
       };
       const api = await remote();
+      const before = sharesOf([folder.id]);
+      // A shared folder that goes to Recently deleted stops being shared, there and then.
+      if (meta.deletedAt !== undefined && meta.shareKey !== undefined) {
+        await api.unshareAlbum(folder.id);
+        delete meta.shareKey;
+      }
       await api.updateAlbum(folder.id, await sealAlbum(folder.id, meta));
       folderMetas.set(folder.id, meta);
+      // Its name, where it is, or whether it's deleted can change what shared folders hold.
+      before.delete(folder.id);
+      await refreshShares([...before.keys(), folder.id]);
     },
 
     shareAlbum: async (albumId) => {
       const crypto = await loadCrypto();
       const api = await remote();
+      const folder = folderMetas.get(albumId);
+      if (folder) {
+        if (folder.deletedAt !== undefined) throw new FormError(FOLDER_GONE);
+        if (!folder.shareKey) {
+          const shared: FolderMeta = {
+            ...folder,
+            shareKey: crypto.toBase64Url(await crypto.newAlbumKey()),
+          };
+          await api.updateAlbum(albumId, await sealAlbum(albumId, shared));
+          folderMetas.set(albumId, shared);
+        }
+        await syncFolderShare(albumId);
+        const shared = await sharedAccess(albumId);
+        if (!shared) throw new FormError(FOLDER_GONE);
+        return shared.recordKey;
+      }
       let meta = albumMetas.get(albumId);
       if (!meta) throw new FormError(ALBUM_GONE);
       if (!meta.shareKey) {
@@ -954,6 +1102,17 @@ export function remoteStore(
       // Photos added to it by people it was shared with must be sealed again before its key goes.
       await adopting;
       const api = await remote();
+      const folder = folderMetas.get(albumId);
+      if (folder) {
+        await api.unshareAlbum(albumId);
+        if (!folder.shareKey) return;
+        // Sharing it again makes a new key.
+        const meta: FolderMeta = { ...folder };
+        delete meta.shareKey;
+        await api.updateAlbum(albumId, await sealAlbum(albumId, meta));
+        folderMetas.set(albumId, meta);
+        return;
+      }
       const current = albumMetas.get(albumId);
       if (!current) throw new FormError(ALBUM_GONE);
       await api.unshareAlbum(albumId);
@@ -1136,12 +1295,18 @@ export function combinedStore(
           albumStores.set(album.id, source.store);
           albums.push({ ...album, ...albumMarks });
         }
-        // Folders of a library shared with you whole. (Folders shared on their own come later.)
-        if (source.album) continue;
+        // Folders of a library shared with you whole, or a folder shared on its own (with the
+        // folders inside it; the shared one is the one with no parent).
         for (const folder of loaded.folders) {
           if (albumStores.has(folder.id)) continue;
           albumStores.set(folder.id, source.store);
-          folders.push({ ...folder, library: source.name, ...(viewOnly && { viewOnly: true }) });
+          folders.push({
+            ...folder,
+            library: source.name,
+            ...(viewOnly && { viewOnly: true }),
+            ...(source.album && { sharedFolder: true }),
+            ...(source.album && folder.parentId === undefined && { joinedId: source.id }),
+          });
         }
       }
       return { photos, albums, folders };

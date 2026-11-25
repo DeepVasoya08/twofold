@@ -30,6 +30,7 @@ import {
   itemsIn,
   liveFolders,
 } from '@arcafold/core/library/folders';
+import { FolderShareDialog } from '../components/AlbumShareDialog';
 import { FolderNameDialog, FolderPicker } from '../components/FolderDialogs';
 import { FolderTile, folderSummary } from '../components/FolderTile';
 import { dropProps } from '../components/folder-drag';
@@ -118,6 +119,8 @@ export function Files({ folderId }: { folderId?: string } = {}) {
   const [folderDialog, setFolderDialog] = useState<
     { kind: 'new' } | { kind: 'rename' | 'delete'; folder: Folder } | null
   >(null);
+  /** A folder whose sharing is open. */
+  const [sharing, setSharing] = useState<Folder | null>(null);
   const [shown, setShown] = useState<Shown>('all');
   const [busy, setBusy] = useState(false);
   const [view, setView] = useFileView();
@@ -130,13 +133,13 @@ export function Files({ folderId }: { folderId?: string } = {}) {
     () => (folderId === undefined ? [] : folderPath(folders, folderId)),
     [folders, folderId],
   );
-  const files = useMemo(
-    () =>
-      [...(state.files ?? [])]
-        .filter((item) => !item.sharedAlbum)
-        .sort((a, b) => b.takenAt.localeCompare(a.takenAt)),
-    [state.files],
-  );
+  // Of what single shares hold, only files in a folder shared with you belong in Files.
+  const files = useMemo(() => {
+    const sharedFolders = new Set(folders.filter((each) => each.sharedFolder).map((f) => f.id));
+    return [...(state.files ?? [])]
+      .filter((item) => !item.sharedAlbum || item.albumIds.some((id) => sharedFolders.has(id)))
+      .sort((a, b) => b.takenAt.localeCompare(a.takenAt));
+  }, [state.files, folders]);
   const total = files.reduce((sum, item) => sum + (item.size ?? 0), 0);
   const looks = useDocumentLooks();
   const counts = useMemo(() => categoryCounts(files, looks), [files, looks]);
@@ -244,7 +247,8 @@ export function Files({ folderId }: { folderId?: string } = {}) {
         },
       },
     ];
-    if (isViewOnly(item)) return items;
+    // In a folder shared with you, you can add files; changing them is up to its owner.
+    if (isViewOnly(item) || item.sharedAlbum) return items;
     items.push({
       label: 'Move to folder',
       icon: 'folder',
@@ -290,7 +294,7 @@ export function Files({ folderId }: { folderId?: string } = {}) {
   };
 
   const folderMenu = (folder: Folder): MenuItem[] =>
-    folder.viewOnly
+    folder.viewOnly || folder.sharedFolder
       ? []
       : [
           {
@@ -300,6 +304,18 @@ export function Files({ folderId }: { folderId?: string } = {}) {
               setFolderDialog({ kind: 'rename', folder });
             },
           },
+          // Only your own folders can be shared; a library you joined is its owner's to share.
+          ...(folder.library === undefined
+            ? [
+                {
+                  label: 'Share',
+                  icon: 'share',
+                  onSelect: () => {
+                    setSharing(folder);
+                  },
+                } satisfies MenuItem,
+              ]
+            : []),
           {
             label: 'Move to folder',
             icon: 'folder',
@@ -323,7 +339,8 @@ export function Files({ folderId }: { folderId?: string } = {}) {
       {here ? 'Upload here' : 'Add files'}
     </button>
   );
-  const newFolder = !readOnlyHere && (
+  // A folder shared with you on its own takes new files, not new folders.
+  const newFolder = !readOnlyHere && !here?.sharedFolder && (
     <button
       type="button"
       className="btn btn--secondary"
@@ -335,7 +352,7 @@ export function Files({ folderId }: { folderId?: string } = {}) {
       New folder
     </button>
   );
-  const canDrop = !readOnlyHere;
+  const canDrop = !readOnlyHere && !here?.sharedFolder;
   const dropInto = (target: string) =>
     canDrop
       ? (what: Dropped) => {
@@ -376,7 +393,8 @@ export function Files({ folderId }: { folderId?: string } = {}) {
         subtitle={
           here
             ? folderSummary(folderCounts(folders, [...files, ...timelinePhotos(state)], here.id)) +
-              (here.library === undefined ? '' : ` · Shared by ${here.library}`)
+              (here.library === undefined ? '' : ` · Shared by ${here.library}`) +
+              (here.sharedWith?.length ? ` · Shared with ${here.sharedWith.join(', ')}` : '')
             : files.length > 0
               ? `${pluralize(files.length, 'file')} · ${formatBytes(total)}`
               : 'PDFs, documents and other files, encrypted like your photos'
@@ -443,7 +461,9 @@ export function Files({ folderId }: { folderId?: string } = {}) {
                       folderCounts(folders, [...files, ...timelinePhotos(state)], folder.id),
                     )}
                     menu={folderMenu(folder)}
-                    onDrop={folder.viewOnly ? undefined : dropInto(folder.id)}
+                    onDrop={
+                      folder.viewOnly || folder.sharedFolder ? undefined : dropInto(folder.id)
+                    }
                   />
                 ))}
               </ul>
@@ -541,6 +561,15 @@ export function Files({ folderId }: { folderId?: string } = {}) {
         </>
       )}
 
+      {sharing && (
+        <FolderShareDialog
+          open
+          folder={sharing}
+          onClose={() => {
+            setSharing(null);
+          }}
+        />
+      )}
       <FolderNameDialog
         open={folderDialog?.kind === 'new'}
         title={here ? `New folder in “${here.name}”` : 'New folder'}

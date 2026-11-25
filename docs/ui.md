@@ -93,6 +93,12 @@ exists but is low-key (Settings → Sharing).
 - Deleting a folder moves it to Recently deleted with everything inside, under a Folders
   section there; Restore brings them back together (into the top of Files if the folder it
   was in is gone), and files deleted with it don't show on their own.
+- **Share** in a folder's menu opens who it's shared with: invite someone (View only or Add
+  and edit), change what they can do, remove them, or stop sharing. A shared folder's card
+  says Shared. Someone it's shared with finds it at the top of their Files, marked with
+  whose it is; they can open everything inside it and download it, and with Add and edit
+  upload into it or any folder inside it. Folders shared with you can't be renamed, moved or
+  deleted, or have folders made in them.
 
 ## Finding files
 

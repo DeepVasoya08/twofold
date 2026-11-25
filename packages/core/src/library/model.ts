@@ -115,4 +115,13 @@ export interface Folder {
   library?: string;
   /** Set when the folder is someone else's and you can only view it. */
   viewOnly?: boolean;
+  /**
+   * Set when someone shared just this folder, or one it is inside, with you. Unless it's
+   * `viewOnly`, you can add files to it.
+   */
+  sharedFolder?: boolean;
+  /** The people you've shared this folder with, by name. */
+  sharedWith?: string[];
+  /** For a folder shared with you on its own: the record of it in your space, for leaving it. */
+  joinedId?: string;
 }

@@ -98,7 +98,7 @@ test('an invite link works without both people online at once', async ({ browser
 
   // Bob's next visit picks up what she shared.
   await unlockWith(bob, MAIN_PASSWORD);
-  await expect(bob.getByText('Alice shared an album with you')).toBeVisible(LATER);
+  await expect(bob.getByText('Alice shared an album or folder with you')).toBeVisible(LATER);
   await goTo(bob, 'Albums');
   await bob.getByRole('tab', { name: 'Shared with me' }).click();
   await bob.getByRole('link', { name: /Porto/ }).click();

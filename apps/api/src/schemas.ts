@@ -100,6 +100,18 @@ export const createAlbumSchema = z.strictObject({ id: recordId, meta: sealedReco
 
 export const updateRecordSchema = z.strictObject({ meta: sealedRecord });
 
+/**
+ * What a shared album or folder shows the people it's shared with, sealed under its own key.
+ * A folder's holds the folders inside it too, so it may be larger than other records.
+ */
+export const sharedRecordSchema = z.strictObject({
+  meta: z
+    .string()
+    .min(base64UrlLength(40))
+    .max(base64UrlLength(STORAGE_SIZES.maxSharedRecord))
+    .regex(/^[A-Za-z0-9_-]+$/),
+});
+
 /** A phone's upload-only token, sent once so the server can keep its SHA-256. */
 export const createUploadTokenSchema = z.strictObject({ id: recordId, token: spaceTokenSchema });
 
