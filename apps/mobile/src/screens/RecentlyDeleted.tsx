@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, BackHandler, StyleSheet, Text, View } from 'react-native';
 
+import { inTrashedFolder, trashedFolders } from '@arcafold/core/library/folders';
+import type { Folder } from '@arcafold/core/library/model';
 import { TRASH_DAYS, daysLeftLabel } from '@arcafold/core/library/trash';
 
 import { resultRows } from '../library/timeline';
@@ -12,6 +14,7 @@ import { useSelection } from '../ui/selection';
 import { usePalette } from '../ui/theme';
 import { AppHeader, HeaderButton, SelectionHeader } from './AppHeader';
 import { ConfirmSheet } from './ConfirmSheet';
+import { DeletedFolders } from './DeletedFolders';
 import { PhotoGrid } from './PhotoGrid';
 
 /**
@@ -35,8 +38,19 @@ export function RecentlyDeleted({
   const selection = useSelection();
   const [confirm, setConfirm] = useState<'selected' | 'all' | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [goingFolder, setGoingFolder] = useState<Folder | null>(null);
   const trash = library.trash;
-  const ids = useMemo(() => (trash ?? []).map((photo) => photo.id), [trash]);
+  const allFolders = library.folders;
+  // Items deleted along with a folder show under it, not on their own.
+  const ids = useMemo(
+    () => (trash ?? []).filter((item) => !inTrashedFolder(item, allFolders)).map((item) => item.id),
+    [trash, allFolders],
+  );
+  const deletedFolders = useMemo(
+    () => trashedFolders(allFolders).filter((folder) => !folder.viewOnly),
+    [allFolders],
+  );
+  const nothing = ids.length === 0 && deletedFolders.length === 0;
   const rows = useMemo(() => resultRows(ids), [ids]);
   const picked = ids.filter((id) => selection.selected?.has(id));
   const soonest = trash?.at(-1);
@@ -116,13 +130,16 @@ export function RecentlyDeleted({
           The oldest: {daysLeftLabel(soonest).toLowerCase()}.
         </Text>
       ) : null}
-      {ids.length > 0 && !selection.selected ? (
+      {!nothing && !selection.selected ? (
         <HeaderButton
           label="Empty Recently deleted"
           onPress={() => {
             setConfirm('all');
           }}
         />
+      ) : null}
+      {deletedFolders.length > 0 ? (
+        <DeletedFolders library={library} folders={deletedFolders} onDelete={setGoingFolder} />
       ) : null}
     </View>
   );
@@ -135,7 +152,7 @@ export function RecentlyDeleted({
         <View style={styles.centre}>
           <ActivityIndicator color={palette.accent} size="large" />
         </View>
-      ) : ids.length === 0 ? (
+      ) : nothing ? (
         <View style={styles.centre}>
           <Text style={[styles.emptyTitle, { color: palette.text }]}>Nothing here</Text>
           <Note>
@@ -163,11 +180,35 @@ export function RecentlyDeleted({
             setConfirm(null);
           }}
           onConfirm={async () => {
-            const result = await library.deleteForever(goingIds);
+            const all = confirm === 'all';
+            const result = goingIds.length > 0 ? await library.deleteForever(goingIds) : null;
+            // Folders go after their loose files, each with what was deleted along with it.
+            if (all)
+              for (const folder of deletedFolders) await library.deleteFolderForever(folder.id);
             setConfirm(null);
-            notice(batchText(result, (photos) => `${photos} deleted for good`));
-            if (result.failed.length > 0) selection.replace(result.failed);
+            notice(
+              result
+                ? batchText(result, (photos) => `${photos} deleted for good`)
+                : 'Recently deleted is empty',
+            );
+            if (result && result.failed.length > 0) selection.replace(result.failed);
             else clear();
+          }}
+        />
+      ) : null}
+      {goingFolder ? (
+        <ConfirmSheet
+          title={`Delete “${goingFolder.name}” for good?`}
+          body="The folder and everything deleted along with it are deleted for good, from every device. This can’t be undone."
+          action="Delete for good"
+          busyLabel="Deleting…"
+          onCancel={() => {
+            setGoingFolder(null);
+          }}
+          onConfirm={async () => {
+            await library.deleteFolderForever(goingFolder.id);
+            notice(`“${goingFolder.name}” deleted for good`);
+            setGoingFolder(null);
           }}
         />
       ) : null}

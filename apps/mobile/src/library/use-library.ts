@@ -12,7 +12,24 @@ import {
   isViewOnly,
   withAlbum,
 } from '@arcafold/core/library/albums';
-import type { Album, Photo } from '@arcafold/core/library/model';
+import type { Album, Folder, Photo } from '@arcafold/core/library/model';
+import {
+  canMoveFolder,
+  expiredFolders,
+  folderName,
+  withFolder,
+} from '@arcafold/core/library/folders';
+import {
+  changeableFolder,
+  deleteFolder as deleteFolderIn,
+  deleteFolderForGood,
+  moveToFolder as moveToFolderIn,
+  purgeFolders,
+  renameFolder as renameFolderIn,
+  restoreFolder as restoreFolderIn,
+  saveFolders,
+} from '@arcafold/core/library/folder-changes';
+import type { FolderSink } from '@arcafold/core/library/folder-changes';
 import { settleEach } from '@arcafold/core/settle-each';
 import type { Settled } from '@arcafold/core/settle-each';
 import { remoteStore } from '@arcafold/core/library/space-store';
@@ -118,6 +135,24 @@ export interface Library {
   restorePhotos: (photoIds: readonly string[]) => Promise<Settled<string>>;
   /** Deletes photos in Recently deleted for good. */
   deleteForever: (photoIds: readonly string[]) => Promise<Settled<string>>;
+  /**
+   * Folders in Files, including those in Recently deleted (with `deletedAt`). A file is in
+   * one when its `albumIds` name it.
+   */
+  folders: Folder[];
+  /** Makes a folder in Files, inside `parentId` or at the top. */
+  createFolder: (name: string, parentId?: string) => Promise<Folder>;
+  renameFolder: (folderId: string, name: string) => Promise<void>;
+  /** Moves a folder into another, or to the top of Files for null. */
+  moveFolder: (folderId: string, parentId: string | null) => Promise<void>;
+  /** Moves files into a folder, or to the top of Files for null. */
+  moveToFolder: (itemIds: readonly string[], folderId: string | null) => Promise<Settled<string>>;
+  /** Moves a folder to Recently deleted, with the folders and files inside it. */
+  deleteFolder: (folderId: string) => Promise<void>;
+  /** Brings a folder back from Recently deleted, with what was deleted along with it. */
+  restoreFolder: (folderId: string) => Promise<void>;
+  /** Deletes a folder in Recently deleted for good, with what was deleted along with it. */
+  deleteFolderForever: (folderId: string) => Promise<void>;
   /** Hides the upload progress; photos still on their way keep going. */
   hideUploads: () => void;
   /**
@@ -193,6 +228,7 @@ export function useLibrary(session: Session): Library {
   const [status, setStatus] = useState<Library['status']>('loading');
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [albums, setAlbums] = useState<Album[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [thumbs, setThumbs] = useState<ReadonlyMap<string, string>>(new Map());
   const [trash, setTrash] = useState<Photo[] | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -245,8 +281,20 @@ export function useLibrary(session: Session): Library {
         if (stopped) return;
         setPhotos(loaded.photos);
         setAlbums(loaded.albums);
+        setFolders(loaded.folders);
         setStatus('ready');
-        void loadTrash(store, () => stopped, setTrash);
+        void loadTrash(store, () => stopped, (loadedTrash) => {
+          setTrash(loadedTrash);
+          // Folders whose 30 days are up go too, now their files have (best effort).
+          void purgeFolders(store, expiredFolders(loaded.folders), {
+            saved: () => undefined,
+            gone: (gone) => {
+              if (stopped) return;
+              const ids = new Set(gone);
+              setFolders((current) => current.filter((folder) => !ids.has(folder.id)));
+            },
+          });
+        });
       },
       () => {
         if (!stopped) setStatus('failed');
@@ -511,6 +559,141 @@ export function useLibrary(session: Session): Library {
     [photos],
   );
 
+  // What the folder steps below read as they report, without waiting for a render.
+  const foldersNow = useRef(folders);
+  const photosNow = useRef(photos);
+  const trashNow = useRef(trash);
+  useEffect(() => {
+    foldersNow.current = folders;
+    photosNow.current = photos;
+    trashNow.current = trash;
+  }, [folders, photos, trash]);
+
+  /** Shows each step of a change to folders as it goes through. */
+  const folderSink = useMemo<FolderSink>(
+    () => ({
+      saved: (changed) => {
+        const byId = new Map(changed.map((folder) => [folder.id, folder]));
+        setFolders((current) => {
+          const kept = current.map((folder) => byId.get(folder.id) ?? folder);
+          const known = new Set(kept.map((folder) => folder.id));
+          return [...kept, ...changed.filter((folder) => !known.has(folder.id))];
+        });
+      },
+      moved: (itemIds, folderId) => {
+        const ids = new Set(itemIds);
+        const all = foldersNow.current;
+        setPhotos((current) =>
+          current.map((item) => (ids.has(item.id) ? withFolder(item, folderId, all) : item)),
+        );
+      },
+      trashed: (itemIds, deletedAt) => {
+        const ids = new Set(itemIds);
+        const moved = photosNow.current
+          .filter((item) => ids.has(item.id))
+          .map((item) => ({ ...item, deletedAt }));
+        setPhotos((current) => current.filter((item) => !ids.has(item.id)));
+        setTrash((current) => [...moved, ...(current ?? [])]);
+      },
+      restored: (itemIds) => {
+        const ids = new Set(itemIds);
+        const back = (trashNow.current ?? [])
+          .filter((item) => ids.has(item.id))
+          .map((item) => {
+            const rest = { ...item };
+            delete rest.deletedAt;
+            return rest;
+          });
+        setTrash((current) => (current ?? []).filter((item) => !ids.has(item.id)));
+        setPhotos((current) => [...back, ...current]);
+      },
+      removed: (itemIds) => {
+        const ids = new Set(itemIds);
+        setTrash((current) => (current ?? []).filter((item) => !ids.has(item.id)));
+      },
+      gone: (folderIds) => {
+        const ids = new Set(folderIds);
+        setFolders((current) => current.filter((folder) => !ids.has(folder.id)));
+      },
+    }),
+    [],
+  );
+
+  const createFolder = useCallback(
+    async (name: string, parentId?: string) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      if (parentId !== undefined) changeableFolder(folders, parentId);
+      const folder = await store.createFolder(folderName(name), parentId);
+      folderSink.saved([folder]);
+      return folder;
+    },
+    [folders, folderSink],
+  );
+
+  const renameFolder = useCallback(
+    async (folderId: string, name: string) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      await renameFolderIn(store, folders, folderId, name, folderSink);
+    },
+    [folders, folderSink],
+  );
+
+  const moveFolder = useCallback(
+    async (folderId: string, parentId: string | null) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      const folder = changeableFolder(folders, folderId);
+      if (!canMoveFolder(folders, folderId, parentId)) {
+        throw new FormError('A folder can’t go inside itself.');
+      }
+      const moved = { ...folder };
+      if (parentId === null) delete moved.parentId;
+      else moved.parentId = parentId;
+      await saveFolders(store, [moved], folderSink);
+    },
+    [folders, folderSink],
+  );
+
+  const moveToFolder = useCallback(
+    async (itemIds: readonly string[], folderId: string | null) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      return moveToFolderIn(store, folders, photos, itemIds, folderId, folderSink, (item) => {
+        if (isViewOnly(item)) throw new FormError('Files shared with you to view can’t be moved.');
+      });
+    },
+    [folders, photos, folderSink],
+  );
+
+  const deleteFolder = useCallback(
+    async (folderId: string) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      await deleteFolderIn(store, folders, photos, folderId, folderSink);
+    },
+    [folders, photos, folderSink],
+  );
+
+  const restoreFolder = useCallback(
+    async (folderId: string) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      await restoreFolderIn(store, folders, trash ?? [], folderId, folderSink);
+    },
+    [folders, trash, folderSink],
+  );
+
+  const deleteFolderForever = useCallback(
+    async (folderId: string) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      await deleteFolderForGood(store, folders, trash ?? [], folderId, folderSink);
+    },
+    [folders, trash, folderSink],
+  );
+
   const hideUploads = useCallback(() => {
     uploader.closeDialog();
   }, [uploader]);
@@ -580,6 +763,14 @@ export function useLibrary(session: Session): Library {
     deletePhotos,
     restorePhotos,
     deleteForever,
+    folders,
+    createFolder,
+    renameFolder,
+    moveFolder,
+    moveToFolder,
+    deleteFolder,
+    restoreFolder,
+    deleteFolderForever,
     hideUploads,
     originals: originalCount,
     deleteOriginals,

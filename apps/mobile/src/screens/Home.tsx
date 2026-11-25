@@ -231,6 +231,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const onSave = saving.available ? saving.save : undefined;
   const [tab, setTab] = useState<Tab>('photos');
   const [albumId, setAlbumId] = useState<string | null>(null);
+  const [filesFolder, setFilesFolder] = useState<string | null>(null);
   const [personId, setPersonId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [choosing, setChoosing] = useState(false);
@@ -393,14 +394,14 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
     setPickError(null);
     onSystemScreen(() => PhotoPicker.pickFilesAsync()).then(
       (picked) => {
-        addPhotos(picked);
+        addPhotos(picked, filesFolder ?? undefined);
         if (picked.length > 0) void askToNotify();
       },
       () => {
         setPickError('The file picker couldn’t open. Try again.');
       },
     );
-  }, [onSystemScreen, addPhotos]);
+  }, [onSystemScreen, addPhotos, filesFolder]);
   const { deleteOriginals, hideUploads } = library;
   const removeOriginals = useCallback(() => {
     setPickError(null);
@@ -666,10 +667,16 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
       />
     );
   } else if (tab === 'files') {
-    add = { icon: 'upload', label: 'Add files', onPress: pickFiles };
+    add = {
+      icon: 'upload',
+      label: filesFolder ? 'Upload here' : 'Add files',
+      onPress: pickFiles,
+    };
     screen = (
       <Files
         onPicking={setTabPicking}
+        folderId={filesFolder}
+        onFolder={setFilesFolder}
         library={library}
         initial={initial}
         banner={banner}

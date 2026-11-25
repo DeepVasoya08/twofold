@@ -41,6 +41,7 @@ export function usePickToDelete(
     onShare,
     onSave,
     onTeach,
+    onMove,
     filing,
     all,
     noun = 'photo',
@@ -51,6 +52,8 @@ export function usePickToDelete(
     onSave?: ((photoIds: readonly string[]) => void) | undefined;
     /** Teaches search a word from the picked photos, while Smart search is on. */
     onTeach?: ((photoIds: readonly string[]) => void) | undefined;
+    /** Moves the picked files into a folder (Files). */
+    onMove?: ((photoIds: readonly string[]) => void) | undefined;
     /** Puts the picked photos in an album; left out where that doesn't apply (files). */
     filing?: Filing | undefined;
     /** Every photo on the screen, in order, for Select all. */
@@ -65,6 +68,8 @@ export function usePickToDelete(
   sheet: ReactElement | null;
   /** How much room the screen's list leaves at its end, so the bar doesn't cover it. */
   floatSpace: number;
+  /** Stops selecting, as after an action the screen runs itself. */
+  clear: () => void;
   /** What the grid takes. */
   grid: {
     onPress: (photoId: string) => void;
@@ -184,6 +189,19 @@ export function usePickToDelete(
                 },
               ]
             : []),
+          ...(onMove
+            ? [
+                {
+                  key: 'move',
+                  label: 'Move',
+                  icon: 'files' as const,
+                  accessibilityLabel: 'Move to folder',
+                  onPress: () => {
+                    onMove(picked);
+                  },
+                },
+              ]
+            : []),
           ...(onSave
             ? [
                 {
@@ -283,6 +301,7 @@ export function usePickToDelete(
       </>
     ) : null,
     floatSpace,
+    clear,
     grid: {
       floatSpace,
       onPress: selected ? selection.toggle : open,
