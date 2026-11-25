@@ -30,8 +30,11 @@ const PAD_BLOCK = 256;
 const SEGMENT_PAD_BLOCK = 16 * 1024;
 const RECORD_KEY_BYTES = 32;
 
-/** Records everyone with access to a space can open: photos and albums. */
-export type RecordKind = 'photo' | 'album';
+/**
+ * Records everyone with access to a space (or to one shared album or folder) can open:
+ * photos, albums, and changes someone given a shared folder made inside it.
+ */
+export type RecordKind = 'photo' | 'album' | 'folder-edit';
 
 /**
  * Records only the space's owner can open: who it is shared with, the libraries it has
@@ -216,6 +219,24 @@ export function sealRecord(
   data: Uint8Array,
 ): Promise<string> {
   return sealWith(access.recordKey, kind, id, data);
+}
+
+const SHARED_FOLDER_SEALING: Sealing = {
+  padBlock: PAD_BLOCK,
+  maxBytes: STORAGE_SIZES.maxSharedRecord,
+};
+
+/**
+ * Seals a shared folder's record, which holds the folders inside it too, so it may be larger
+ * than other records (up to `STORAGE_SIZES.maxSharedRecord`). It opens like any album record,
+ * with `openRecord(access, 'album', id, …)`.
+ */
+export function sealSharedFolder(
+  access: SpaceAccess,
+  id: string,
+  data: Uint8Array,
+): Promise<string> {
+  return sealWith(access.recordKey, 'album', id, data, SHARED_FOLDER_SEALING);
 }
 
 /** Opens a sealed record. Throws DecryptionError if it was tampered with or belongs elsewhere. */

@@ -8,11 +8,12 @@ import {
   hasPreview,
   parseAlbumMeta,
   encodeFolderShareMeta,
+  parseFolderEdit,
   parseFolderMeta,
   parseFolderShareMeta,
   parsePhotoMeta,
 } from './records';
-import type { FolderShareMeta, PhotoMeta } from './records';
+import type { FolderEdit, FolderShareMeta, PhotoMeta } from './records';
 
 const photo: PhotoMeta = {
   v: 1,
@@ -204,5 +205,44 @@ describe('parseFolderShareMeta', () => {
     const bytes = encodeFolderShareMeta(shared);
     expect(bytes.length % 1024).toBe(0);
     expect(parseFolderShareMeta(JSON.parse(new TextDecoder().decode(bytes)))).toEqual(shared);
+  });
+});
+
+describe('parseFolderEdit', () => {
+  const at = '2026-11-25T10:00:00.000Z';
+
+  it('reads each change it knows', () => {
+    const edits: FolderEdit[] = [
+      { v: 1, op: 'make-folder', id: 'f', name: 'Food', parent: 'r' },
+      { v: 1, op: 'rename-folder', id: 'f', name: 'Meals' },
+      { v: 1, op: 'move-folder', id: 'f', parent: 'r' },
+      { v: 1, op: 'delete-folder', id: 'f', at },
+      { v: 1, op: 'rename-file', file: 'p', name: 'plan.pdf' },
+      { v: 1, op: 'move-file', file: 'p', folder: 'f' },
+      { v: 1, op: 'delete-file', file: 'p', at },
+    ];
+    for (const edit of edits) {
+      expect(parseFolderEdit(decodeJson(encodeJson({ ...edit, extra: 1 })))).toEqual(edit);
+    }
+  });
+
+  it('refuses changes it doesn’t know, or that are missing something', () => {
+    for (const value of [
+      null,
+      'rename',
+      { v: 2, op: 'rename-folder', id: 'f', name: 'A' },
+      { v: 1, op: 'share', id: 'f' },
+      { v: 1, op: 'make-folder', id: 'f', name: 'A' },
+      { v: 1, op: 'make-folder', id: '', name: 'A', parent: 'r' },
+      { v: 1, op: 'rename-folder', id: 'f', name: '' },
+      { v: 1, op: 'rename-folder', id: 'f', name: 'x'.repeat(101) },
+      { v: 1, op: 'delete-folder', id: 'f', at: 'yesterday' },
+      { v: 1, op: 'rename-file', file: 'p', name: '   ' },
+      { v: 1, op: 'rename-file', file: 'p', name: 'x'.repeat(121) },
+      { v: 1, op: 'move-file', file: 'p', folder: 3 },
+      { v: 1, op: 'delete-file', file: 'p' },
+    ]) {
+      expect(parseFolderEdit(value)).toBeNull();
+    }
   });
 });

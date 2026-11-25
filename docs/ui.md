@@ -97,8 +97,12 @@ exists but is low-key (Settings → Sharing).
   and edit), change what they can do, remove them, or stop sharing. A shared folder's card
   says Shared. Someone it's shared with finds it at the top of their Files, marked with
   whose it is; they can open everything inside it and download it, and with Add and edit
-  upload into it or any folder inside it. Folders shared with you can't be renamed, moved or
-  deleted, or have folders made in them.
+  upload into it or any folder inside it. With Add and edit they can also make, rename, move
+  and delete folders inside it, and rename, move (inside it) and delete its files; what they
+  delete goes to the owner's Recently deleted, and the delete dialog says so. The shared
+  folder itself is its owner's to rename, move, delete or share.
+- **Rename** in a file's menu renames it (your own files, and files in a folder shared with
+  you to edit).
 
 ## Finding files
 

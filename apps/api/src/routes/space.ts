@@ -23,6 +23,8 @@ import type {
   PhotoPage,
   ProfilePhotoResponse,
   PutFileResponse,
+  StoredAlbum,
+  StoredFolderEdit,
   StoredPhoto,
   TrashResponse,
   UploadKeyResponse,
@@ -30,9 +32,12 @@ import type {
 } from '@arcafold/types';
 
 import {
+  addFolderEdit,
   albumItemIds,
   albumRemovals,
+  folderEdits,
   forgetAlbumRemoved,
+  forgetFolderEdit,
   putAddedAlbumItem,
   removeAlbumItem,
   deleteAlbumItem,
@@ -55,6 +60,7 @@ import { deleteFaceData } from '../face-db';
 import { messages, readBody } from '../respond';
 import {
   createAlbumSchema,
+  createFolderEditSchema,
   createJoinedSchema,
   createMemberSchema,
   createPendingInviteSchema,
@@ -210,6 +216,7 @@ const ALBUM_EDIT_ROUTES: readonly { method: string; path: RegExp }[] = [
   { method: 'DELETE', path: /\/space\/photos\/[^/]+$/ },
   { method: 'PUT', path: /\/space\/albums\/[^/]+\/items\/[^/]+$/ },
   { method: 'DELETE', path: /\/space\/albums\/[^/]+\/items\/[^/]+$/ },
+  { method: 'POST', path: /\/space\/albums\/[^/]+\/edits$/ },
 ];
 
 /** What a phone's upload-only token may do: add photos, and nothing else. */
@@ -557,19 +564,29 @@ space.delete('/photos/:id', async (c) => {
   return c.body(null, 204);
 });
 
+function withEdits(album: StoredAlbum, edits: Map<string, StoredFolderEdit[]>): StoredAlbum {
+  const waiting = edits.get(album.id);
+  return waiting ? { ...album, edits: waiting } : album;
+}
+
 space.get('/albums', async (c) => {
   const album = c.get('album');
   if (album) {
-    return c.json<AlbumList>({ albums: await sharedAlbumList(c.env.DB, c.get('space'), album) });
+    const [albums, edits] = await Promise.all([
+      sharedAlbumList(c.env.DB, c.get('space'), album),
+      folderEdits(c.env.DB, c.get('space'), album),
+    ]);
+    return c.json<AlbumList>({ albums: albums.map((each) => withEdits(each, edits)) });
   }
-  const [albums, removals] = await Promise.all([
+  const [albums, removals, edits] = await Promise.all([
     listAlbums(c.env.DB, c.get('space')),
     albumRemovals(c.env.DB, c.get('space')),
+    folderEdits(c.env.DB, c.get('space')),
   ]);
   return c.json<AlbumList>({
     albums: albums.map((each) => {
       const removed = removals.get(each.id);
-      return removed ? { ...each, removed } : each;
+      return withEdits(removed ? { ...each, removed } : each, edits);
     }),
   });
 });
@@ -693,6 +710,35 @@ space.delete('/albums/:id/items/:photo', async (c) => {
     if (album !== params.album) return c.json({ error: albumOnly }, 403);
     await removeAlbumItem(c.env.DB, c.get('space'), params.album, params.photo);
   }
+  return c.body(null, 204);
+});
+
+const notEditable = 'That folder isn’t shared anymore, or has too many changes waiting.';
+
+/**
+ * Keeps a change someone given a shared folder as "Add and edit" made inside it (making,
+ * renaming, moving or deleting a folder or file), sealed under the folder's key, until the
+ * owner's device makes it in the space's own records. Only for their own folder.
+ */
+space.post('/albums/:id/edits', async (c) => {
+  const id = recordIdSchema.safeParse(c.req.param('id'));
+  const body = await readBody(c, createFolderEditSchema);
+  if (!id.success || !body) return c.json({ error: messages.badRequest }, 400);
+  if (c.get('album') !== id.data) return c.json({ error: albumOnly }, 403);
+  if (!(await addFolderEdit(c.env.DB, c.get('space'), id.data, body))) {
+    return c.json({ error: notEditable }, 409);
+  }
+  return c.body(null, 201);
+});
+
+/** The owner's device made a change someone given the folder asked for, or let it go. */
+space.delete('/albums/:id/edits/:edit', async (c) => {
+  const album = recordIdSchema.safeParse(c.req.param('id'));
+  const edit = recordIdSchema.safeParse(c.req.param('edit'));
+  if (!album.success || !edit.success || !(await readBody(c, emptySchema))) {
+    return c.json({ error: messages.badRequest }, 400);
+  }
+  await forgetFolderEdit(c.env.DB, c.get('space'), album.data, edit.data);
   return c.body(null, 204);
 });
 

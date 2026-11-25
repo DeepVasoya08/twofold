@@ -21,6 +21,7 @@ import {
   sealSearchSegment,
   sealOwnerRecord,
   sealRecord,
+  sealSharedFolder,
   spaceToken,
 } from './storage';
 import { fromBase64Url, toBase64Url } from './webcrypto';
@@ -99,6 +100,46 @@ describe('sealRecord / openRecord', () => {
 
   it('refuses records that would not fit in storage', async () => {
     await expect(sealRecord(await newAccess(), 'album', 'a', bytes(4096))).rejects.toThrow(
+      /too large/,
+    );
+  });
+
+  it('keeps a shared folder’s change apart from its other records', async () => {
+    const folder = await newAccess();
+    const sealed = await sealRecord(folder, 'folder-edit', 'e1', text('{"op":"rename"}'));
+    await expect(openRecord(folder, 'album', 'e1', sealed)).rejects.toThrow(DecryptionError);
+    await expect(openRecord(folder, 'folder-edit', 'e2', sealed)).rejects.toThrow(DecryptionError);
+    await expect(openRecord(await newAccess(), 'folder-edit', 'e1', sealed)).rejects.toThrow(
+      DecryptionError,
+    );
+  });
+});
+
+describe('sealSharedFolder', () => {
+  it('seals a larger record that opens as the folder’s album record', async () => {
+    const folder = await newAccess();
+    const data = bytes(20 * 1024);
+    const sealed = await sealSharedFolder(folder, 'f1', data);
+    expect(await openRecord(folder, 'album', 'f1', sealed)).toEqual(data);
+  });
+
+  it('refuses the wrong key, id or kind, and tampering', async () => {
+    const folder = await newAccess();
+    const sealed = await sealSharedFolder(folder, 'f1', bytes(5000));
+    await expect(openRecord(await newAccess(), 'album', 'f1', sealed)).rejects.toThrow(
+      DecryptionError,
+    );
+    await expect(openRecord(folder, 'album', 'f2', sealed)).rejects.toThrow(DecryptionError);
+    await expect(openRecord(folder, 'photo', 'f1', sealed)).rejects.toThrow(DecryptionError);
+    const raw = fromBase64Url(sealed);
+    if (!raw) throw new Error('bad base64url');
+    await expect(openRecord(folder, 'album', 'f1', toBase64Url(flip(raw, 40)))).rejects.toThrow(
+      DecryptionError,
+    );
+  });
+
+  it('still has a limit', async () => {
+    await expect(sealSharedFolder(await newAccess(), 'f1', bytes(70 * 1024))).rejects.toThrow(
       /too large/,
     );
   });

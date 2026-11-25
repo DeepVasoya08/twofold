@@ -32,6 +32,7 @@ import {
 } from '@arcafold/core/library/folders';
 import { FolderShareDialog } from '../components/AlbumShareDialog';
 import { FolderNameDialog, FolderPicker } from '../components/FolderDialogs';
+import { MAX_FILE_NAME, cleanFileName } from '@arcafold/core/file-types';
 import { FolderTile, folderSummary } from '../components/FolderTile';
 import { dropProps } from '../components/folder-drag';
 import type { Dropped } from '../components/folder-drag';
@@ -110,6 +111,7 @@ export function Files({ folderId }: { folderId?: string } = {}) {
   const { otherSpaceOpen } = useAccount();
   const toast = useToast();
   const [deleting, setDeleting] = useState<Photo | null>(null);
+  const [renaming, setRenaming] = useState<Photo | null>(null);
   const [moving, setMoving] = useState<Photo | null>(null);
   const [sorting, setSorting] = useState<Photo | null>(null);
   const [filing, setFiling] = useState<Photo | null>(null);
@@ -237,6 +239,12 @@ export function Files({ folderId }: { folderId?: string } = {}) {
     );
   };
 
+  /** Whether a file is yours to change, or in a folder shared with you to edit. */
+  const editable = (item: Photo) =>
+    item.sharedAlbum
+      ? !item.viewOnly && item.albumIds.some((id) => live.get(id)?.sharedFolder)
+      : !isViewOnly(item);
+
   const menuFor = (item: Photo): MenuItem[] => {
     const items: MenuItem[] = [
       {
@@ -247,8 +255,35 @@ export function Files({ folderId }: { folderId?: string } = {}) {
         },
       },
     ];
-    // In a folder shared with you, you can add files; changing them is up to its owner.
-    if (isViewOnly(item) || item.sharedAlbum) return items;
+    if (!editable(item)) return items;
+    const rename: MenuItem = {
+      label: 'Rename',
+      icon: 'pencil',
+      onSelect: () => {
+        setRenaming(item);
+      },
+    };
+    const moveTo: MenuItem = {
+      label: 'Move to folder',
+      icon: 'folder',
+      onSelect: () => {
+        setPlacing({ kind: 'item', id: item.id });
+      },
+    };
+    const remove: MenuItem = {
+      label: 'Delete',
+      icon: 'trash',
+      danger: true,
+      onSelect: () => {
+        setDeleting(item);
+      },
+    };
+    if (item.sharedAlbum) {
+      // In a folder shared with you to edit, a file can be renamed, moved inside it, or
+      // deleted (into its owner's Recently deleted). The rest is up to its owner.
+      return [...items, ...(item.file ? [rename] : []), moveTo, remove];
+    }
+    if (item.file) items.push(rename);
     items.push({
       label: 'Move to folder',
       icon: 'folder',
@@ -282,19 +317,14 @@ export function Files({ folderId }: { folderId?: string } = {}) {
         },
       });
     }
-    items.push({
-      label: 'Delete',
-      icon: 'trash',
-      danger: true,
-      onSelect: () => {
-        setDeleting(item);
-      },
-    });
+    items.push(remove);
     return items;
   };
 
+  // A folder shared with you to edit can be changed inside, but it is its owner's to rename,
+  // move, delete or share.
   const folderMenu = (folder: Folder): MenuItem[] =>
-    folder.viewOnly || folder.sharedFolder
+    folder.viewOnly || (folder.sharedFolder && folder.parentId === undefined)
       ? []
       : [
           {
@@ -305,7 +335,7 @@ export function Files({ folderId }: { folderId?: string } = {}) {
             },
           },
           // Only your own folders can be shared; a library you joined is its owner's to share.
-          ...(folder.library === undefined
+          ...(folder.library === undefined && !folder.sharedFolder
             ? [
                 {
                   label: 'Share',
@@ -339,8 +369,7 @@ export function Files({ folderId }: { folderId?: string } = {}) {
       {here ? 'Upload here' : 'Add files'}
     </button>
   );
-  // A folder shared with you on its own takes new files, not new folders.
-  const newFolder = !readOnlyHere && !here?.sharedFolder && (
+  const newFolder = !readOnlyHere && (
     <button
       type="button"
       className="btn btn--secondary"
@@ -352,7 +381,7 @@ export function Files({ folderId }: { folderId?: string } = {}) {
       New folder
     </button>
   );
-  const canDrop = !readOnlyHere && !here?.sharedFolder;
+  const canDrop = !readOnlyHere;
   const dropInto = (target: string) =>
     canDrop
       ? (what: Dropped) => {
@@ -462,7 +491,10 @@ export function Files({ folderId }: { folderId?: string } = {}) {
                     )}
                     menu={folderMenu(folder)}
                     onDrop={
-                      folder.viewOnly || folder.sharedFolder ? undefined : dropInto(folder.id)
+                      // Inside a folder shared with you, things move between its folders.
+                      folder.viewOnly || (folder.sharedFolder && !here?.sharedFolder)
+                        ? undefined
+                        : dropInto(folder.id)
                     }
                   />
                 ))}
@@ -526,7 +558,7 @@ export function Files({ folderId }: { folderId?: string } = {}) {
                     </header>
                     <ul className={view === 'grid' ? 'file-grid' : 'file-list'}>
                       {month.photos.map((item) => {
-                        const draggable = canDrop && !isViewOnly(item) && live.size > 0;
+                        const draggable = canDrop && editable(item) && live.size > 0;
                         const where = atLevel ? null : folderOf(item, live);
                         // Filtered by category, files come from every folder: say which.
                         const inFolder = where ? ` · in ${live.get(where)?.name ?? ''}` : '';
@@ -607,9 +639,11 @@ export function Files({ folderId }: { folderId?: string } = {}) {
         }}
         title={`Delete “${deletingFolder?.name ?? ''}”?`}
         description={
-          deletingCounts && deletingCounts.itemIds.length + deletingCounts.folderIds.length > 1
-            ? `The folder and ${deletedInside(deletingCounts)} go to Recently deleted. You can restore them for ${String(TRASH_DAYS)} days.`
-            : `The folder goes to Recently deleted. You can restore it for ${String(TRASH_DAYS)} days.`
+          deletingFolder?.sharedFolder
+            ? `It goes to ${deletingFolder.library ?? 'its owner'}’s Recently deleted, with what’s inside it, where they can restore it.`
+            : deletingCounts && deletingCounts.itemIds.length + deletingCounts.folderIds.length > 1
+              ? `The folder and ${deletedInside(deletingCounts)} go to Recently deleted. You can restore them for ${String(TRASH_DAYS)} days.`
+              : `The folder goes to Recently deleted. You can restore it for ${String(TRASH_DAYS)} days.`
         }
       >
         <div className="dialog__actions">
@@ -698,13 +732,35 @@ export function Files({ folderId }: { folderId?: string } = {}) {
         }}
       />
 
+      <FolderNameDialog
+        open={renaming !== null}
+        title="Rename file"
+        action="Save"
+        label="File name"
+        maxLength={MAX_FILE_NAME}
+        initial={renaming?.file?.name ?? ''}
+        onClose={() => {
+          setRenaming(null);
+        }}
+        onSave={async (name) => {
+          if (!renaming) return;
+          await vault.renameFile(renaming.id, name);
+          setRenaming(null);
+          toast.show(`Renamed to “${cleanFileName(name)}”`);
+        }}
+      />
+
       <Dialog
         open={deleting !== null}
         onClose={() => {
           setDeleting(null);
         }}
         title={`Delete ${deleting?.file?.name ?? 'this file'}?`}
-        description={trashNote(1)}
+        description={
+          deleting?.sharedAlbum
+            ? `It goes to ${deleting.library ?? 'its owner'}’s Recently deleted, where they can restore it.`
+            : trashNote(1)
+        }
       >
         <div className="dialog__actions">
           <button

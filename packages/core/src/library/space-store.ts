@@ -1,13 +1,13 @@
 import type { SpaceAccess, SpaceKeys, UploadKeyPair } from '@arcafold/crypto';
 import { STORAGE_SIZES, THUMB_BATCH_MAX, TRASH_BATCH_MAX } from '@arcafold/types';
-import type { PhotoPage, PhotoPart } from '@arcafold/types';
+import type { PhotoPage, PhotoPart, StoredFolderEdit } from '@arcafold/types';
 
-import { spaceApi } from '../api';
+import { ApiError, spaceApi } from '../api';
 import { loadCrypto } from '../crypto-loader';
 import type { SpaceApi } from '../api';
 import { FormError } from '../errors';
 import type { Category } from '../file-categories';
-import { cleanFileType, isJpeg } from '../file-types';
+import { cleanFileName, cleanFileType, isJpeg } from '../file-types';
 import { isPhotoType } from '../photo-types';
 import {
   decodeJson,
@@ -16,12 +16,15 @@ import {
   encodePhotoMeta,
   hasPreview,
   parseAlbumMeta,
+  parseFolderEdit,
   parseFolderMeta,
   parseFolderShareMeta,
   parsePhotoMeta,
 } from '../records';
-import type { AlbumMeta, FolderMeta, FolderShareMeta, PhotoMeta } from '../records';
+import type { AlbumMeta, FolderEdit, FolderMeta, FolderShareMeta, PhotoMeta } from '../records';
 import { uploadKeyPair } from '../upload/upload-only';
+import { applyFolderEdit, changesFolders, inSharedFolder, sharedSubtree } from './folder-edits';
+import type { SharedFolderState } from './folder-edits';
 import { folderName } from './folders';
 import type { Album, FileDetails, Folder, Photo } from './model';
 
@@ -282,6 +285,15 @@ function toFolder(id: string, meta: FolderMeta): Folder {
 }
 const ALBUM_ONLY = 'In an album shared with you, you can add photos or take them out.';
 const TOO_MANY_FOLDERS = 'This folder has too many folders inside it to share.';
+const OWNER_ONLY_FOLDER = 'Only the person who shared this folder can rename, move or delete it.';
+const STAYS_SHARED = 'Files in a folder shared with you stay in it.';
+const NOT_HERE = 'That can’t be done in this shared folder anymore. Reload to see it as it is now.';
+
+/** Whether trying again can't help: the server (or this device) said no for good. */
+function refused(error: unknown): boolean {
+  if (error instanceof FormError) return true;
+  return error instanceof ApiError && [400, 404, 409].includes(error.status);
+}
 
 /** Who added a photo, as this device sees it. The owner's photos carry no `by`. */
 function addedBy(
@@ -505,10 +517,9 @@ export function remoteStore(
       name: meta.name,
       folders: inside,
     });
-    const sealed = await crypto.sealRecord(shared, 'album', rootId, record);
-    if (sealed.length > (STORAGE_SIZES.maxSharedRecord * 4) / 3) {
+    const sealed = await crypto.sealSharedFolder(shared, rootId, record).catch(() => {
       throw new FormError(TOO_MANY_FOLDERS);
-    }
+    });
     await api.shareAlbum(rootId, sealed);
     const tree = new Set([rootId, ...inside.map((folder) => folder.id)]);
     const listed = new Set((await api.listAlbumItems(rootId)).photoIds);
@@ -535,6 +546,182 @@ export function remoteStore(
 
   /** For someone given one folder: that folder and the folders inside it, by id. */
   let memberTree = new Set<string>();
+  /**
+   * For someone given one folder: it, as they see it now, with the changes still waiting
+   * for its owner applied. Changes they make are checked against it first.
+   */
+  let memberShare: SharedFolderState | null = null;
+
+  /** A shared folder of your own as its changes see it, from your own records. */
+  const ownerShareState = (rootId: string): SharedFolderState => {
+    const folders = new Map(
+      foldersInside(rootId).map((folder) => [
+        folder.id,
+        { name: folder.name, parent: folder.parent },
+      ]),
+    );
+    const state: SharedFolderState = { root: rootId, folders, files: new Map() };
+    for (const [photoId, entry] of known) {
+      if (entry.meta.deletedAt !== undefined) continue;
+      const folder = entry.meta.albumIds.find((id) => inSharedFolder(state, id));
+      if (folder === undefined) continue;
+      const name = entry.meta.kind === 'file' ? entry.meta.name : undefined;
+      state.files.set(photoId, { folder, ...(name !== undefined && { name }) });
+    }
+    return state;
+  };
+
+  /** Saves a folder's record. One going to Recently deleted stops being shared, there and then. */
+  const writeFolder = async (id: string, next: FolderMeta) => {
+    const api = await remote();
+    const meta = { ...next };
+    if (meta.deletedAt !== undefined && meta.shareKey !== undefined) {
+      await api.unshareAlbum(id);
+      delete meta.shareKey;
+    }
+    await api.updateAlbum(id, await sealAlbum(id, meta));
+    folderMetas.set(id, meta);
+  };
+
+  /**
+   * Makes, in your own records, a change someone given a shared folder made inside it. It
+   * has been checked against `state` as it was just before (`inside`: the shared folder's
+   * folders then; `tree`: a deleted folder's folders).
+   */
+  const makeEdit = async (
+    edit: FolderEdit,
+    inside: (id: string) => boolean,
+    tree: ReadonlySet<string>,
+  ) => {
+    const api = await remote();
+    switch (edit.op) {
+      case 'make-folder': {
+        const meta: FolderMeta = { v: 1, kind: 'folder', name: edit.name, parent: edit.parent };
+        await api.createAlbum({ id: edit.id, meta: await sealAlbum(edit.id, meta) });
+        folderMetas.set(edit.id, meta);
+        return;
+      }
+      case 'rename-folder':
+      case 'move-folder': {
+        const current = folderMetas.get(edit.id);
+        if (!current) return;
+        await writeFolder(
+          edit.id,
+          edit.op === 'rename-folder'
+            ? { ...current, name: edit.name }
+            : { ...current, parent: edit.parent },
+        );
+        return;
+      }
+      case 'delete-folder': {
+        // Files first, as when you delete a folder: if they can't go, the folder stays.
+        const files = [...known]
+          .filter(([, entry]) => entry.meta.deletedAt === undefined)
+          .filter(([, entry]) => entry.meta.albumIds.some((id) => tree.has(id)))
+          .map(([id]) => id);
+        const trashed = await moveTrash(
+          files,
+          (meta) => ({ ...meta, deletedAt: edit.at }),
+          api.trashPhotos,
+        );
+        if (trashed.length < files.length) throw new FormError(NOT_HERE);
+        for (const id of tree) {
+          const current = folderMetas.get(id);
+          if (current) await writeFolder(id, { ...current, deletedAt: edit.at });
+        }
+        return;
+      }
+      case 'rename-file':
+      case 'move-file': {
+        const entry = lookup(edit.file);
+        const meta: PhotoMeta =
+          edit.op === 'rename-file'
+            ? { ...entry.meta, name: cleanFileName(edit.name) }
+            : {
+                ...entry.meta,
+                albumIds: [...entry.meta.albumIds.filter((id) => !inside(id)), edit.folder],
+              };
+        await api.updatePhoto(edit.file, await sealPhoto(edit.file, meta));
+        known.set(edit.file, { ...entry, meta });
+        await syncShared(edit.file, entry.meta.albumIds, meta.albumIds);
+        return;
+      }
+      case 'delete-file': {
+        const trashed = await moveTrash(
+          [edit.file],
+          (meta) => ({ ...meta, deletedAt: edit.at }),
+          api.trashPhotos,
+        );
+        if (trashed.length === 0) throw new FormError(NOT_HERE);
+        return;
+      }
+    }
+  };
+
+  /** Changes people given your shared folders made inside them, waiting to be made here. */
+  let waitingEdits: { root: string; edits: StoredFolderEdit[] }[] = [];
+  /** Shared folders changes were made in, to bring up to date for their people. */
+  const editedShares = new Set<string>();
+
+  /**
+   * Makes the changes waiting in your shared folders, in the order they were made, and lets
+   * the server forget each one made (or that no longer makes sense). Changes to folders
+   * alone are made first, before files are opened, so a file put in a new folder finds it;
+   * the rest once files are open. A change that fails stays, with those after it, for next
+   * time. Returns whether anything changed.
+   */
+  const makeEdits = async (phase: 'folders' | 'files') => {
+    if (membership?.album !== undefined || waitingEdits.length === 0) return false;
+    const crypto = await loadCrypto();
+    const api = await remote();
+    let changed = false;
+    for (const waiting of waitingEdits) {
+      const shared = await sharedAccess(waiting.root);
+      if (!shared || folderMetas.get(waiting.root)?.deletedAt !== undefined) continue;
+      const state = ownerShareState(waiting.root);
+      const left: StoredFolderEdit[] = [];
+      let stuck = false;
+      for (const stored of waiting.edits) {
+        if (stuck) {
+          left.push(stored);
+          continue;
+        }
+        const edit = await crypto
+          .openRecord(shared, 'folder-edit', stored.id, stored.meta)
+          .then((opened) => parseFolderEdit(decodeJson(opened)))
+          .catch(() => null);
+        // Changes to files wait for the files to be open.
+        if (edit && phase === 'folders' && !changesFolders(edit)) {
+          left.push(stored);
+          continue;
+        }
+        if (edit) {
+          const before = new Set([waiting.root, ...state.folders.keys()]);
+          const tree =
+            edit.op === 'delete-folder' && state.folders.has(edit.id)
+              ? sharedSubtree(state, edit.id)
+              : new Set<string>();
+          if (applyFolderEdit(state, edit)) {
+            const made = await makeEdit(edit, (id) => before.has(id), tree).then(
+              () => 'made' as const,
+              (error: unknown) => (refused(error) ? ('refused' as const) : ('failed' as const)),
+            );
+            if (made === 'failed') {
+              stuck = true;
+              left.push(stored);
+              continue;
+            }
+            changed = true;
+            editedShares.add(waiting.root);
+          }
+        }
+        // Made, or one that doesn't open or no longer makes sense: either way it's done.
+        await api.forgetFolderEdit(waiting.root, stored.id).catch(() => undefined);
+      }
+      waiting.edits = left;
+    }
+    return changed;
+  };
 
   const decrypt = async (photoId: string, part: PhotoPart) => {
     const entry = lookup(photoId);
@@ -601,7 +788,8 @@ export function remoteStore(
   const adopt = async (photos: { id: string; meta: PhotoMeta }[]) => {
     const api = await remote();
     for (const { id, meta } of photos) {
-      await sealPhoto(id, meta)
+      // A change made here since (a shared folder's, say) is what gets sealed.
+      await sealPhoto(id, known.get(id)?.meta ?? meta)
         .then((sealed) => api.updatePhoto(id, sealed))
         .catch(() => undefined);
     }
@@ -723,6 +911,91 @@ export function remoteStore(
     return changed;
   };
 
+  /**
+   * What someone given one folder sees: it and what's in it, with the changes still waiting
+   * for its owner applied on top.
+   */
+  const showMemberShare = async (
+    root: { id: string; name: string; edits: StoredFolderEdit[] },
+    photos: Photo[],
+  ) => {
+    const share: SharedFolderState = memberShare ?? {
+      root: root.id,
+      folders: new Map(),
+      files: new Map(),
+    };
+    for (const photo of photos) {
+      // Where it was filed, which may be a folder a change still waiting makes.
+      const folder = photo.albumIds[0] ?? root.id;
+      share.files.set(photo.id, { folder, ...(photo.file && { name: photo.file.name }) });
+    }
+    const crypto = await loadCrypto();
+    const keys = await access();
+    for (const stored of root.edits) {
+      const edit = await crypto
+        .openRecord(keys, 'folder-edit', stored.id, stored.meta)
+        .then((opened) => parseFolderEdit(decodeJson(opened)))
+        .catch(() => null);
+      if (edit) applyFolderEdit(share, edit);
+    }
+    // Anything filed outside what it holds now shows at its top.
+    for (const [id, file] of share.files) {
+      if (!inSharedFolder(share, file.folder)) share.files.set(id, { ...file, folder: root.id });
+    }
+    memberShare = share;
+    memberTree = new Set([root.id, ...share.folders.keys()]);
+    const shown = photos.flatMap((photo) => {
+      const file = share.files.get(photo.id);
+      if (!file) return [];
+      const entry = known.get(photo.id);
+      const name = file.name;
+      if (entry) {
+        const meta = { ...entry.meta, albumIds: [file.folder] };
+        if (name !== undefined) meta.name = name;
+        known.set(photo.id, { ...entry, meta });
+      }
+      return [
+        {
+          ...photo,
+          albumIds: [file.folder],
+          ...(photo.file && name !== undefined && { file: { ...photo.file, name } }),
+        },
+      ];
+    });
+    const folders: Folder[] = [
+      { id: root.id, name: root.name },
+      ...[...share.folders].map(([id, folder]) => ({
+        id,
+        name: folder.name,
+        parentId: folder.parent,
+      })),
+    ];
+    return { photos: shown, folders };
+  };
+
+  /**
+   * Makes a change inside the folder shared with you, if it still makes sense there: it
+   * waits, sealed under the folder's key, for the owner's device to make it, and everyone
+   * given the folder sees it until then.
+   */
+  const memberEdit = async (edit: FolderEdit) => {
+    const share = memberShare;
+    if (membership?.album === undefined || !share) throw new FormError(ALBUM_ONLY);
+    const next: SharedFolderState = {
+      root: share.root,
+      folders: new Map(share.folders),
+      files: new Map(share.files),
+    };
+    if (!applyFolderEdit(next, edit)) throw new FormError(NOT_HERE);
+    const crypto = await loadCrypto();
+    const id = await crypto.newRecordId();
+    const sealed = await crypto.sealRecord(await access(), 'folder-edit', id, encodeJson(edit));
+    const api = await remote();
+    await api.addFolderEdit(share.root, { id, meta: sealed });
+    memberShare = next;
+    memberTree = new Set([next.root, ...next.folders.keys()]);
+  };
+
   return {
     list: async () => {
       const api = await remote();
@@ -732,8 +1005,13 @@ export function remoteStore(
       const storedAlbums = api.listAlbums();
       storedAlbums.catch(() => undefined);
       const albums: Album[] = [];
-      const folders: Folder[] = [];
+      let folders: Folder[] = [];
       const removals: { album: string; photoIds: string[] }[] = [];
+      // Set (as the albums open) when only one folder is shared with you.
+      const sharedRoot: { at: { id: string; name: string; edits: StoredFolderEdit[] } | null } = {
+        at: null,
+      };
+      waitingEdits = [];
       const opening = storedAlbums.then(async ({ albums: stored }) => {
         for (const each of stored) {
           const opened = await crypto
@@ -743,17 +1021,27 @@ export function remoteStore(
           // Someone given one folder sees it, and the folders inside it, from its shared record.
           const shared = membership?.album === undefined ? null : parseFolderShareMeta(plain);
           if (shared) {
-            memberTree = new Set([each.id, ...shared.folders.map((inside) => inside.id)]);
-            folders.push({ id: each.id, name: shared.name });
-            for (const inside of shared.folders) {
-              folders.push({ id: inside.id, name: inside.name, parentId: inside.parent });
-            }
+            sharedRoot.at = { id: each.id, name: shared.name, edits: each.edits ?? [] };
+            memberShare = {
+              root: each.id,
+              folders: new Map(
+                shared.folders.map((inside) => [
+                  inside.id,
+                  { name: inside.name, parent: inside.parent },
+                ]),
+              ),
+              files: new Map(),
+            };
+            memberTree = new Set([each.id, ...memberShare.folders.keys()]);
             continue;
           }
           const folder = parseFolderMeta(plain);
           if (folder) {
             folderMetas.set(each.id, folder);
             folders.push(toFolder(each.id, folder));
+            if (folder.shareKey && each.edits && each.edits.length > 0) {
+              waitingEdits.push({ root: each.id, edits: each.edits });
+            }
             continue;
           }
           const meta = parseAlbumMeta(plain);
@@ -764,21 +1052,40 @@ export function remoteStore(
             removals.push({ album: each.id, photoIds: each.removed });
           }
         }
+        // New folders people given yours made are made before files that went in them open.
+        if (await makeEdits('folders')) {
+          folders = [...folderMetas].map(([id, meta]) => toFolder(id, meta));
+        }
       });
       // Photos added to a shared album by someone given it open with the album's key.
       albumsOpened = opening.catch(() => undefined);
-      const photos = await openPhotos((after) => api.listPhotos(after));
+      let photos = await openPhotos((after) => api.listPhotos(after));
       await opening;
-      if (removals.length === 0) return { photos, albums, folders };
-      const changed = await catchUpRemovals(removals);
-      return {
-        photos: photos.map((photo) => {
-          const entry = changed.has(photo.id) ? known.get(photo.id) : undefined;
-          return entry ? { ...photo, albumIds: entry.meta.albumIds } : photo;
-        }),
-        albums,
-        folders,
-      };
+      const root = sharedRoot.at;
+      if (root !== null) {
+        const shown = await showMemberShare(root, photos);
+        return { photos: shown.photos, albums, folders: shown.folders };
+      }
+      const changed = removals.length === 0 ? new Set<string>() : await catchUpRemovals(removals);
+      if (waitingEdits.some((waiting) => waiting.edits.length > 0)) {
+        // What it changes is sealed again here, so photos being sealed again go first.
+        await adopting;
+        if (await makeEdits('files')) {
+          folders = [...folderMetas].map(([id, meta]) => toFolder(id, meta));
+          for (const photo of photos) changed.add(photo.id);
+        }
+      }
+      for (const rootId of editedShares) await syncFolderShare(rootId).catch(() => undefined);
+      editedShares.clear();
+      if (changed.size === 0) return { photos, albums, folders };
+      photos = photos.flatMap((photo) => {
+        const entry = known.get(photo.id);
+        if (!changed.has(photo.id) || !entry) return [photo];
+        // Deleted inside a shared folder by someone given it: it's in Recently deleted now.
+        if (entry.meta.deletedAt !== undefined) return [];
+        return [{ ...toPhoto(photo.id, entry.meta, membership, photo.size ?? 0, photo.src) }];
+      });
+      return { photos, albums, folders };
     },
 
     image: async (photoId, part) => {
@@ -912,8 +1219,11 @@ export function remoteStore(
       }
       known.set(id, { key, meta });
       // Sealed under the album key already, so the same record is what the album lists.
-      if (album !== undefined) await api.putAlbumItem(album, id, sealed);
-      else await syncShared(id, [], albumIds);
+      if (album !== undefined) {
+        await api.putAlbumItem(album, id, sealed);
+        const folder = meta.albumIds[0] ?? album;
+        memberShare?.files.set(id, { folder, ...(meta.name !== undefined && { name: meta.name }) });
+      } else await syncShared(id, [], albumIds);
       return toPhoto(
         id,
         meta,
@@ -927,6 +1237,25 @@ export function remoteStore(
     update: async (photo) => {
       const entry = lookup(photo.id);
       const album = membership?.album;
+      const share = memberShare;
+      if (album !== undefined && share) {
+        // In a folder shared with you, a file can be renamed or moved inside it.
+        const current = share.files.get(photo.id);
+        if (!current) throw new FormError(NOT_HERE);
+        const folder = photo.albumIds.find((id) => inSharedFolder(share, id));
+        if (folder === undefined) throw new FormError(STAYS_SHARED);
+        const name = photo.file && cleanFileName(photo.file.name);
+        if (name !== undefined && current.name !== undefined && name !== current.name) {
+          await memberEdit({ v: 1, op: 'rename-file', file: photo.id, name });
+        }
+        if (folder !== current.folder) {
+          await memberEdit({ v: 1, op: 'move-file', file: photo.id, folder });
+        }
+        const meta: PhotoMeta = { ...entry.meta, albumIds: [folder] };
+        if (name !== undefined && entry.meta.kind === 'file') meta.name = name;
+        known.set(photo.id, { ...entry, meta });
+        return;
+      }
       if (album !== undefined) {
         // In an album shared with you, the only change is taking a photo out of it.
         if (photo.albumIds.includes(album)) throw new FormError(ALBUM_ONLY);
@@ -936,6 +1265,9 @@ export function remoteStore(
         return;
       }
       const meta: PhotoMeta = { ...entry.meta, favorite: photo.favorite, albumIds: photo.albumIds };
+      if (entry.meta.kind === 'file' && photo.file && photo.file.name !== entry.meta.name) {
+        meta.name = cleanFileName(photo.file.name);
+      }
       const category = photo.file?.category;
       if (entry.meta.kind === 'file' && category && photo.file?.sortedByYou) {
         meta.category = category;
@@ -959,6 +1291,15 @@ export function remoteStore(
     },
 
     trash: async (photoIds, deletedAt) => {
+      if (membership?.album !== undefined && memberShare) {
+        // Deleted inside a folder shared with you: it goes to its owner's Recently deleted.
+        const done: string[] = [];
+        for (const photoId of photoIds) {
+          await memberEdit({ v: 1, op: 'delete-file', file: photoId, at: deletedAt });
+          done.push(photoId);
+        }
+        return done;
+      }
       const api = await remote();
       return moveTrash(photoIds, (meta) => ({ ...meta, deletedAt }), api.trashPhotos);
     },
@@ -1014,6 +1355,14 @@ export function remoteStore(
     createFolder: async (name, parentId) => {
       const crypto = await loadCrypto();
       const id = await crypto.newRecordId();
+      if (membership?.album !== undefined) {
+        const share = memberShare;
+        if (!share) throw new FormError(ALBUM_ONLY);
+        const parent = parentId ?? share.root;
+        const made = folderName(name);
+        await memberEdit({ v: 1, op: 'make-folder', id, name: made, parent });
+        return { id, name: made, parentId: parent };
+      }
       const meta: FolderMeta = {
         v: 1,
         kind: 'folder',
@@ -1028,6 +1377,30 @@ export function remoteStore(
     },
 
     saveFolder: async (folder) => {
+      if (membership?.album !== undefined) {
+        const share = memberShare;
+        if (!share) throw new FormError(ALBUM_ONLY);
+        if (folder.id === share.root) throw new FormError(OWNER_ONLY_FOLDER);
+        const current = share.folders.get(folder.id);
+        if (!current) {
+          // Already gone along with the folder it was in.
+          if (folder.deletedAt !== undefined) return;
+          throw new FormError(FOLDER_GONE);
+        }
+        if (folder.deletedAt !== undefined) {
+          await memberEdit({ v: 1, op: 'delete-folder', id: folder.id, at: folder.deletedAt });
+          return;
+        }
+        const name = folderName(folder.name);
+        if (name !== current.name) {
+          await memberEdit({ v: 1, op: 'rename-folder', id: folder.id, name });
+        }
+        if (folder.parentId === undefined) throw new FormError(STAYS_SHARED);
+        if (folder.parentId !== current.parent) {
+          await memberEdit({ v: 1, op: 'move-folder', id: folder.id, parent: folder.parentId });
+        }
+        return;
+      }
       const current = folderMetas.get(folder.id);
       if (!current) throw new FormError(FOLDER_GONE);
       // Keep its share key, if it has one.
@@ -1039,15 +1412,8 @@ export function remoteStore(
         ...(folder.deletedAt !== undefined && { deletedAt: folder.deletedAt }),
         ...(current.shareKey !== undefined && { shareKey: current.shareKey }),
       };
-      const api = await remote();
       const before = sharesOf([folder.id]);
-      // A shared folder that goes to Recently deleted stops being shared, there and then.
-      if (meta.deletedAt !== undefined && meta.shareKey !== undefined) {
-        await api.unshareAlbum(folder.id);
-        delete meta.shareKey;
-      }
-      await api.updateAlbum(folder.id, await sealAlbum(folder.id, meta));
-      folderMetas.set(folder.id, meta);
+      await writeFolder(folder.id, meta);
       // Its name, where it is, or whether it's deleted can change what shared folders hold.
       before.delete(folder.id);
       await refreshShares([...before.keys(), folder.id]);
@@ -1219,11 +1585,16 @@ export function combinedStore(
     if (readOnly.has(store)) throw new FormError(VIEW_ONLY_LIBRARY);
     return store;
   };
+  /** The stores of single folders shared with you that you may add to and change inside. */
+  const folderOnly = new Set<SpaceStore>();
   /** For changes beyond adding to an album and taking photos out of it. */
   const ownedChange = (store: SpaceStore) => {
     if (albumOnly.has(store)) throw new FormError(ALBUM_ONLY);
     return changeable(store);
   };
+  /** For changes to folders and files, which a folder shared with you to edit takes too. */
+  const folderChange = (store: SpaceStore) =>
+    folderOnly.has(store) ? changeable(store) : ownedChange(store);
   const photoStores = new Map<string, SpaceStore>();
   const albumStores = new Map<string, SpaceStore>();
   const storeOf = (photoId: string) => photoStores.get(photoId) ?? own;
@@ -1261,9 +1632,13 @@ export function combinedStore(
       shared = loadedShared.map(({ source }) => source);
       readOnly.clear();
       albumOnly.clear();
-      for (const { source, viewOnly } of loadedShared) {
+      folderOnly.clear();
+      for (const { source, loaded, viewOnly } of loadedShared) {
         if (viewOnly) readOnly.add(source.store);
         else if (source.album) albumOnly.add(source.store);
+        if (!viewOnly && source.album && loaded && loaded.folders.length > 0) {
+          folderOnly.add(source.store);
+        }
       }
       const photos = [...mine.photos];
       const albums = [...mine.albums];
@@ -1385,7 +1760,7 @@ export function combinedStore(
       return photos;
     },
     trash: (photoIds, deletedAt) =>
-      eachStore(photoIds, (store, ids) => ownedChange(store).trash(ids, deletedAt)),
+      eachStore(photoIds, (store, ids) => folderChange(store).trash(ids, deletedAt)),
     restore: (photoIds) => eachStore(photoIds, (store, ids) => ownedChange(store).restore(ids)),
     createAlbum: (title) => own.createAlbum(title),
     renameAlbum: async (albumId, title) =>
@@ -1396,14 +1771,15 @@ export function combinedStore(
     },
     createFolder: async (name, parentId) => {
       // A folder inside a library you joined is made there, if you may change it.
-      const target = parentId === undefined ? own : ownedChange(albumStoreOf(parentId));
+      const target = parentId === undefined ? own : folderChange(albumStoreOf(parentId));
       const folder = await target.createFolder(name, parentId);
       if (target === own) return folder;
       albumStores.set(folder.id, target);
       const source = shared.find((candidate) => candidate.store === target);
-      return source ? { ...folder, library: source.name } : folder;
+      if (!source) return folder;
+      return { ...folder, library: source.name, ...(source.album && { sharedFolder: true }) };
     },
-    saveFolder: async (folder) => ownedChange(albumStoreOf(folder.id)).saveFolder(folder),
+    saveFolder: async (folder) => folderChange(albumStoreOf(folder.id)).saveFolder(folder),
     // Only a space's owner can say who it's shared with, so only your own albums are shared.
     shareAlbum: (albumId) =>
       albumStores.has(albumId) ? Promise.reject(new FormError(NOT_YOURS)) : own.shareAlbum(albumId),

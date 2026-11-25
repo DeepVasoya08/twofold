@@ -4,6 +4,7 @@ import type {
   AccountStorage,
   AlbumItemList,
   AlbumList,
+  CreateFolderEditRequest,
   CreateAlbumRequest,
   CreateInviteRequest,
   CreateJoinedRequest,
@@ -390,6 +391,15 @@ export function spaceApi(token: string) {
     /** The album was taken out of a photo someone given the album took out of it. */
     forgetAlbumRemoved: (id: string, photoId: string) =>
       call<undefined>('DELETE', `${album(id)}/removed/${encodeURIComponent(photoId)}`, {}, headers),
+    /**
+     * Keeps a change made inside a shared folder, sealed under its key, for its owner's device
+     * to make. The owner's device hears of it in `listAlbums` (`edits`).
+     */
+    addFolderEdit: (id: string, edit: CreateFolderEditRequest) =>
+      call<undefined>('POST', `${album(id)}/edits`, edit, headers),
+    /** A change made inside a shared folder has been made (or let go). */
+    forgetFolderEdit: (id: string, editId: string) =>
+      call<undefined>('DELETE', `${album(id)}/edits/${encodeURIComponent(editId)}`, {}, headers),
     /** Deletes every photo and album in the space. */
     wipe: () => call<undefined>('DELETE', '/space', {}, headers),
     listMembers: () => call<MemberList>('GET', '/space/members', undefined, headers),

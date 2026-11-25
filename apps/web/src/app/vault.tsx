@@ -15,6 +15,7 @@ import type { PhotoPart } from '@arcafold/types';
 
 import { copyNames } from '../lib/copy-names';
 import type { Category } from '@arcafold/core/file-categories';
+import { cleanFileName } from '@arcafold/core/file-types';
 import { downloadAll } from '../lib/download-progress';
 import type { DownloadProgress } from '../lib/download-progress';
 import type { PhotoCopy } from '../lib/save-copies';
@@ -237,8 +238,9 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
     }
     case 'trash-photos': {
       const gone = new Set(action.photoIds);
+      // One deleted in a folder shared with you goes to its owner's Recently deleted.
       const moved = allItems(state)
-        .filter((photo) => gone.has(photo.id))
+        .filter((photo) => gone.has(photo.id) && !photo.sharedAlbum)
         .map((photo) => ({ ...photo, deletedAt: action.deletedAt }));
       return {
         ...state,
@@ -300,7 +302,11 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
       const kept = foldersOf(state).map((folder) => changed.get(folder.id) ?? folder);
       const known = new Set(kept.map((folder) => folder.id));
       const added = action.folders.filter((folder) => !known.has(folder.id));
-      return { ...state, folders: [...kept, ...added] };
+      // One deleted in a folder shared with you goes to its owner's Recently deleted.
+      const shown = [...kept, ...added].filter(
+        (folder) => !(folder.sharedFolder && folder.deletedAt !== undefined),
+      );
+      return { ...state, folders: shown };
     }
     case 'remove-folders': {
       const gone = new Set(action.folderIds);
@@ -417,6 +423,8 @@ interface VaultValue {
   toggleFavorite: (photoId: string) => Promise<void>;
   /** Puts a file in a category you chose, which teaches the sorting (lib/file-sort). */
   sortFile: (fileId: string, category: Category) => Promise<void>;
+  /** Renames a file (its name is cleaned up first). */
+  renameFile: (fileId: string, name: string) => Promise<void>;
   /** Moves a photo to Recently deleted. */
   deletePhoto: (photoId: string) => Promise<void>;
   /** Moves photos to Recently deleted: each goes through or fails on its own. */
@@ -600,6 +608,18 @@ export function VaultProvider({
       return photo;
     };
     const folders = foldersOf(state);
+    /**
+     * A file that may be renamed, moved or deleted: one of yours, or one in a folder shared
+     * with you to edit (whose changes go to its owner).
+     */
+    const findEditable = (photoId: string): Photo => {
+      const photo = find(photoId);
+      if (!photo.sharedAlbum) return findChangeable(photoId);
+      if (photo.viewOnly) throw new FormError(VIEW_ONLY_PHOTO);
+      const folder = folders.find((each) => photo.albumIds.includes(each.id));
+      if (!folder?.sharedFolder) throw new FormError(VIEW_ONLY);
+      return photo;
+    };
     /** Shows each step of a change to folders as it goes through. */
     const sink: FolderSink = {
       saved: (changed) => {
@@ -658,6 +678,13 @@ export function VaultProvider({
           throw error;
         }
       },
+      renameFile: async (fileId, name) => {
+        const item = findEditable(fileId);
+        if (!item.file) throw new FormError(GONE);
+        const renamed: Photo = { ...item, file: { ...item.file, name: cleanFileName(name) } };
+        await store.update(renamed);
+        dispatch({ type: 'set-file', file: renamed });
+      },
       sortFile: async (fileId, category) => {
         const item = findChangeable(fileId);
         if (!item.file) throw new FormError(GONE);
@@ -674,7 +701,7 @@ export function VaultProvider({
         }
       },
       deletePhoto: async (photoId) => {
-        findChangeable(photoId);
+        findEditable(photoId);
         const deletedAt = new Date().toISOString();
         const moved = await store.trash([photoId], deletedAt);
         if (!moved.includes(photoId)) throw new FormError(GONE);
@@ -682,11 +709,7 @@ export function VaultProvider({
       },
       deletePhotos: async (photoIds) => {
         const deletedAt = new Date().toISOString();
-        const result = await moveAll(
-          photoIds,
-          (ids) => store.trash(ids, deletedAt),
-          findChangeable,
-        );
+        const result = await moveAll(photoIds, (ids) => store.trash(ids, deletedAt), findEditable);
         dispatch({ type: 'trash-photos', photoIds: result.done, deletedAt });
         return result;
       },
@@ -789,7 +812,7 @@ export function VaultProvider({
       },
       moveToFolder: (itemIds, folderId) =>
         moveToFolder(store, folders, allItems(state), itemIds, folderId, sink, (item) => {
-          findChangeable(item.id);
+          findEditable(item.id);
         }),
       deleteFolder: (folderId) => deleteFolder(store, folders, allItems(state), folderId, sink),
       restoreFolder: (folderId) => restoreFolder(store, folders, state.trash ?? [], folderId, sink),
