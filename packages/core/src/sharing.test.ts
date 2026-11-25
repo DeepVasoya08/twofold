@@ -1137,3 +1137,118 @@ describe('changes inside a folder shared to edit', () => {
     expect(waiting()).toBe(0);
   });
 });
+
+describe('one file shared on its own', () => {
+  const FILE: NewPhoto = { ...PHOTO, type: 'application/pdf', file: { name: 'lease.pdf' } };
+  const NEW_VERSION: NewPhoto = {
+    ...PHOTO,
+    full: new TextEncoder().encode('signed'),
+    type: 'application/pdf',
+    file: { name: 'lease signed.pdf' },
+  };
+
+  /** Alice's lease, in her Home folder, shared with Bob; a photo and another file stay hers. */
+  async function sharedFile(access: MemberAccess = 'view') {
+    const w = await world();
+    const alices = remoteStore(w.alice, w.server.api);
+    const home = await alices.createFolder('Home');
+    const lease = await alices.add(FILE, [home.id]);
+    const other = await alices.add({ ...FILE, file: { name: 'other.pdf' } }, [home.id]);
+    await alices.add(PHOTO, []);
+    await alices.list();
+    const shareId = await alices.shareFile(lease.id);
+    await shareAlbumWithBob(w, alices, shareId, access);
+    const bobs = () => sessionStore(w.bob, 'Bob', w.server.api);
+    const alice = () => sessionStore(w.alice, 'Alice', w.server.api);
+    return { w, alices, home, lease, other, shareId, bobs, alice };
+  }
+
+  const byId = <T extends { id: string }>(items: readonly T[], id: string) => {
+    const found = items.find((item) => item.id === id);
+    if (!found) throw new Error(`missing ${id}`);
+    return found;
+  };
+
+  it('shows Bob that file alone, and Alice who it’s shared with', async () => {
+    const { lease, shareId, bobs, alice } = await sharedFile();
+    const seen = await bobs().list();
+    expect(seen.folders).toEqual([]);
+    expect(seen.albums).toEqual([]);
+    expect(seen.photos.map((photo) => photo.id)).toEqual([lease.id]);
+    expect(seen.photos[0]).toMatchObject({
+      sharedFile: true,
+      sharedAlbum: true,
+      viewOnly: true,
+      library: 'Alice',
+      albumIds: [],
+      joinedId: expect.any(String) as string,
+      file: { name: 'lease.pdf' },
+    });
+    const mine = byId((await alice().list()).photos, lease.id);
+    expect(mine).toMatchObject({ shareId, sharedWith: ['Bob'] });
+    // The row it's shared through is no album or folder of hers.
+    const listed = await alice().list();
+    expect(listed.albums).toEqual([]);
+    expect(listed.folders.map((folder) => folder.name)).toEqual(['Home']);
+  });
+
+  it('follows Alice renaming it, and ends when she stops sharing it or deletes it', async () => {
+    const { w, alices, lease, shareId, bobs } = await sharedFile();
+    const own = byId((await alices.list()).photos, lease.id);
+    if (!own.file) throw new Error('not a file');
+    await alices.update({ ...own, file: { ...own.file, name: 'Lease 2026.pdf' } });
+    expect(byId((await bobs().list()).photos, lease.id).file?.name).toBe('Lease 2026.pdf');
+    await alices.stopSharingAlbum(shareId);
+    expect(await listStillJoined(w.bob, w.server.api)).toEqual([]);
+    expect(byId((await alices.list()).photos, lease.id).shareId).toBeUndefined();
+  });
+
+  it('lets Bob, with Can edit, rename it and upload a new version that takes its place', async () => {
+    const { w, lease, home, shareId, bobs, alice } = await sharedFile('edit');
+    const store = bobs();
+    const seen = byId((await store.list()).photos, lease.id);
+    if (!seen.file) throw new Error('not a file');
+    await store.update({ ...seen, file: { ...seen.file, name: 'Lease (Bob).pdf' } });
+    const added = await store.replaceFile(lease.id, NEW_VERSION);
+    expect(added).toMatchObject({ sharedFile: true, library: 'Alice' });
+    const bobSees = (await bobs().list()).photos;
+    expect(bobSees.map((photo) => photo.id)).toEqual([added.id]);
+    expect(bobSees[0]?.file?.name).toBe('lease signed.pdf');
+
+    // Alice's library takes it in: the new version where the old one was, shared in its place.
+    const mine = await alice().list();
+    const next = byId(mine.photos, added.id);
+    expect(next).toMatchObject({ albumIds: [home.id], shareId });
+    expect(mine.photos.map((photo) => photo.id)).not.toContain(lease.id);
+    const trash = await remoteStore(w.alice, w.server.api).listTrash();
+    expect(byId(trash, lease.id).file?.name).toBe('Lease (Bob).pdf');
+    expect(w.server.folderEdits.get(shareId)).toBeUndefined();
+    expect((await bobs().list()).photos.map((photo) => photo.id)).toEqual([added.id]);
+  });
+
+  it('keeps Bob to renaming and new versions, and to nothing while he may only view it', async () => {
+    const { lease, bobs } = await sharedFile('edit');
+    const store = bobs();
+    await store.list();
+    await expect(store.trash([lease.id], '2026-11-25T10:00:00.000Z')).rejects.toThrow(FormError);
+
+    const viewer = await sharedFile('view');
+    const watching = viewer.bobs();
+    const seen = byId((await watching.list()).photos, viewer.lease.id);
+    if (!seen.file) throw new Error('not a file');
+    await expect(
+      watching.update({ ...seen, file: { ...seen.file, name: 'x.pdf' } }),
+    ).rejects.toThrow();
+    await expect(watching.replaceFile(viewer.lease.id, NEW_VERSION)).rejects.toThrow();
+  });
+
+  it('shares only files of your own', async () => {
+    const { alices, bobs, lease } = await sharedFile('edit');
+    const photo = (await alices.list()).photos.find((each) => !each.file);
+    if (!photo) throw new Error('no photo');
+    await expect(alices.shareFile(photo.id)).rejects.toThrow(FormError);
+    const store = bobs();
+    await store.list();
+    await expect(store.shareFile(lease.id)).rejects.toThrow(FormError);
+  });
+});

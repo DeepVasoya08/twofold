@@ -18,11 +18,11 @@ import './album-share-dialog.css';
 
 type People = { state: 'loading' } | { state: 'ready'; members: Member[] } | { state: 'failed' };
 
-/** An album or a folder of yours that is being shared, by what the dialog needs. */
+/** An album, a folder or a file of yours that is being shared, by what the dialog needs. */
 interface Shared {
   id: string;
   title: string;
-  folder: boolean;
+  kind: 'album' | 'folder' | 'file';
 }
 
 /**
@@ -41,7 +41,7 @@ export function AlbumShareDialog({
 }) {
   return (
     <Dialog open={open} onClose={onClose} title={`Share “${album.title}”`}>
-      <AlbumPeople album={{ id: album.id, title: album.title, folder: false }} />
+      <AlbumPeople album={{ id: album.id, title: album.title, kind: 'album' }} />
     </Dialog>
   );
 }
@@ -58,7 +58,26 @@ export function FolderShareDialog({
 }) {
   return (
     <Dialog open={open} onClose={onClose} title={`Share “${folder.name}”`}>
-      <AlbumPeople album={{ id: folder.id, title: folder.name, folder: true }} />
+      <AlbumPeople album={{ id: folder.id, title: folder.name, kind: 'folder' }} />
+    </Dialog>
+  );
+}
+
+/** The same dialog for one file shared on its own (`shareId`: what it is shared under). */
+export function FileShareDialog({
+  open,
+  shareId,
+  name,
+  onClose,
+}: {
+  open: boolean;
+  shareId: string;
+  name: string;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={open} onClose={onClose} title={`Share “${name}”`}>
+      <AlbumPeople album={{ id: shareId, title: name, kind: 'file' }} />
     </Dialog>
   );
 }
@@ -131,7 +150,7 @@ function AlbumPeople({ album }: { album: Shared }) {
           });
           toast.show(
             access === 'edit'
-              ? `${member.name} can add to “${album.title}” now`
+              ? `${member.name} can ${album.kind === 'file' ? 'edit' : 'add to'} “${album.title}” now`
               : `${member.name} can only view “${album.title}” now`,
           );
         },
@@ -167,9 +186,11 @@ function AlbumPeople({ album }: { album: Shared }) {
   return (
     <div className="album-share">
       <p className="album-share__note">
-        {album.folder
-          ? `Invite someone to this folder. They get its files and the folders inside it, including what you add later, and nothing else in your ${where}. With Add and edit, they can also add files to it.`
-          : `Invite someone to this album. They get its photos, including ones you add later, and nothing else in your ${where}. With Add and edit, they can also add photos and take any photo out of it.`}
+        {album.kind === 'file'
+          ? `Invite someone to this file. They get just this file, and nothing else in your ${where}. With Can edit, they can also rename it and upload a new version.`
+          : album.kind === 'folder'
+            ? `Invite someone to this folder. They get its files and the folders inside it, including what you add later, and nothing else in your ${where}. With Add and edit, they can also add, rename, move and delete what’s inside it.`
+            : `Invite someone to this album. They get its photos, including ones you add later, and nothing else in your ${where}. With Add and edit, they can also add photos and take any photo out of it.`}
       </p>
 
       <section aria-label="People with access">
@@ -199,7 +220,9 @@ function AlbumPeople({ album }: { album: Shared }) {
                   }}
                 >
                   <option value="view">View only</option>
-                  <option value="edit">Add and edit</option>
+                  <option value="edit">
+                    {album.kind === 'file' ? 'Can edit' : 'Add and edit'}
+                  </option>
                 </select>
                 <button
                   type="button"

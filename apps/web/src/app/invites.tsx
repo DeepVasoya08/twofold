@@ -246,9 +246,11 @@ function LivePendingInvites({
 
   const albumsRef = useRef(vault.albums);
   const foldersRef = useRef(foldersOf(vault));
+  const filesRef = useRef(vault.files ?? []);
   useEffect(() => {
     albumsRef.current = vault.albums;
     foldersRef.current = foldersOf(vault);
+    filesRef.current = vault.files ?? [];
   });
 
   const start = useCallback(
@@ -310,7 +312,10 @@ function LivePendingInvites({
         if (invite.album === null) {
           member = await confirmInvite(invite, joiner, keys, myName, sharing);
         } else {
-          // An album, or a folder in Files: both are shared the same way.
+          // An album, a folder in Files or one file: all are shared the same way.
+          const sharedFile = filesRef.current.find(
+            (each) => each.shareId === invite.album && each.library === undefined,
+          );
           const album =
             albumsRef.current.find(
               (each) => each.id === invite.album && each.library === undefined,
@@ -320,7 +325,13 @@ function LivePendingInvites({
                 each.id === invite.album &&
                 each.library === undefined &&
                 each.deletedAt === undefined,
-            );
+            ) ??
+            (sharedFile?.shareId !== undefined
+              ? {
+                  id: sharedFile.shareId,
+                  ...(sharedFile.sharedWith && { sharedWith: sharedFile.sharedWith }),
+                }
+              : undefined);
           if (!album) throw new FormError('That album isn’t here anymore. Cancel this invite.');
           // The album gets its own key now, and only that key goes to them.
           const albumKey = await shareAlbum(album.id);

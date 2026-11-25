@@ -904,8 +904,16 @@ export function withAlbumMembers(store: SpaceStore, members: () => Promise<Membe
         if (member.album)
           names.set(member.album, [...(names.get(member.album) ?? []), member.name]);
       }
+      const withNames = <T extends { shareId?: string; library?: string }>(photo: T) => {
+        const sharedWith =
+          photo.library === undefined && photo.shareId !== undefined
+            ? names.get(photo.shareId)
+            : undefined;
+        return sharedWith ? { ...photo, sharedWith } : photo;
+      };
       return {
         ...loaded,
+        photos: loaded.photos.map(withNames),
         albums: loaded.albums.map((album) => {
           const sharedWith = album.library === undefined ? names.get(album.id) : undefined;
           return sharedWith ? { ...album, sharedWith } : album;

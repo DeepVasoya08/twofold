@@ -103,6 +103,11 @@ exists but is low-key (Settings → Sharing).
   folder itself is its owner's to rename, move, delete or share.
 - **Rename** in a file's menu renames it (your own files, and files in a folder shared with
   you to edit).
+- **Share** in a file's menu shares that one file: invite someone with View only or Can
+  edit (rename it and upload a new version). The file's details say who it's shared with.
+  Someone given a file finds it in their Files, marked with whose it is; with Can edit its
+  menu has Rename and **Upload new version**, which takes the old version's place (the old
+  one goes to the owner's Recently deleted). **Remove from my Files** leaves the share.
 
 ## Finding files
 

@@ -139,7 +139,7 @@ export async function advancePending(
 /** What to say when something was shared with this space. */
 export function grantedText(granted: Pick<Granted, 'name' | 'album'>): string {
   return granted.album
-    ? `${granted.name} shared an album or folder with you`
+    ? `${granted.name} shared an album, folder or file with you`
     : `You joined ${granted.name}’s library`;
 }
 

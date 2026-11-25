@@ -8,10 +8,12 @@ import {
   hasPreview,
   parseAlbumMeta,
   encodeFolderShareMeta,
+  parseFileShareMeta,
   parseFolderEdit,
   parseFolderMeta,
   parseFolderShareMeta,
   parsePhotoMeta,
+  parseSharedFileMeta,
 } from './records';
 import type { FolderEdit, FolderShareMeta, PhotoMeta } from './records';
 
@@ -220,6 +222,7 @@ describe('parseFolderEdit', () => {
       { v: 1, op: 'rename-file', file: 'p', name: 'plan.pdf' },
       { v: 1, op: 'move-file', file: 'p', folder: 'f' },
       { v: 1, op: 'delete-file', file: 'p', at },
+      { v: 1, op: 'replace-file', file: 'p', by: 'q' },
     ];
     for (const edit of edits) {
       expect(parseFolderEdit(decodeJson(encodeJson({ ...edit, extra: 1 })))).toEqual(edit);
@@ -241,8 +244,45 @@ describe('parseFolderEdit', () => {
       { v: 1, op: 'rename-file', file: 'p', name: 'x'.repeat(121) },
       { v: 1, op: 'move-file', file: 'p', folder: 3 },
       { v: 1, op: 'delete-file', file: 'p' },
+      { v: 1, op: 'replace-file', file: 'p', by: 'p' },
     ]) {
       expect(parseFolderEdit(value)).toBeNull();
     }
+  });
+});
+
+describe('file shares', () => {
+  it('reads the owner’s record of a shared file, and what its people see', () => {
+    expect(parseFileShareMeta({ v: 1, kind: 'file-share', file: 'p', shareKey: 'k' })).toEqual({
+      v: 1,
+      kind: 'file-share',
+      file: 'p',
+      shareKey: 'k',
+    });
+    expect(parseFileShareMeta({ v: 1, kind: 'file-share', file: 'p' })).toEqual({
+      v: 1,
+      kind: 'file-share',
+      file: 'p',
+    });
+    expect(parseSharedFileMeta({ v: 1, kind: 'file', name: 'plan.pdf' })).toEqual({
+      v: 1,
+      kind: 'file',
+      name: 'plan.pdf',
+    });
+  });
+
+  it('refuses anything else', () => {
+    for (const value of [
+      { v: 1, kind: 'file-share' },
+      { v: 1, kind: 'file-share', file: 'p', shareKey: 3 },
+      { v: 1, kind: 'folder', file: 'p' },
+      { v: 1, title: 'Trip' },
+    ]) {
+      expect(parseFileShareMeta(value)).toBeNull();
+    }
+    expect(parseSharedFileMeta({ v: 1, kind: 'file', name: '' })).toBeNull();
+    expect(parseSharedFileMeta({ v: 1, kind: 'folder', name: 'a', folders: [] })).toBeNull();
+    // Old apps see neither as an album.
+    expect(parseAlbumMeta({ v: 1, kind: 'file-share', file: 'p' })).toBeNull();
   });
 });

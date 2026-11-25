@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { FolderEdit } from '../records';
-import { applyFolderEdit, changesFolders, sharedSubtree } from './folder-edits';
+import { applyFolderEdit, changesFolders, changesOneFile, sharedSubtree } from './folder-edits';
 import type { SharedFolderState } from './folder-edits';
 
 /** Trip (shared) > Days > Day 1, with a file in Days and a photo in Trip. */
@@ -122,5 +122,36 @@ describe('changesFolders', () => {
     expect(changesFolders({ v: 1, op: 'make-folder', id: 'a', name: 'A', parent: 'r' })).toBe(true);
     expect(changesFolders({ v: 1, op: 'delete-folder', id: 'a', at })).toBe(false);
     expect(changesFolders({ v: 1, op: 'move-file', file: 'f', folder: 'a' })).toBe(false);
+  });
+});
+
+describe('a new version', () => {
+  it('takes the old file’s place, where it was', () => {
+    const state = trip();
+    state.files.set('plan2', { folder: 'trip', name: 'plan v2.pdf' });
+    expect(applyFolderEdit(state, { v: 1, op: 'replace-file', file: 'plan', by: 'plan2' })).toBe(
+      true,
+    );
+    expect(state.files.has('plan')).toBe(false);
+    expect(state.files.get('plan2')).toEqual({ folder: 'days', name: 'plan v2.pdf' });
+  });
+
+  it('needs both to be files in the share', () => {
+    const state = trip();
+    expect(applyFolderEdit(state, { v: 1, op: 'replace-file', file: 'plan', by: 'gone' })).toBe(
+      false,
+    );
+    expect(applyFolderEdit(state, { v: 1, op: 'replace-file', file: 'beach', by: 'plan' })).toBe(
+      false,
+    );
+    expect(state.files.has('plan')).toBe(true);
+  });
+
+  it('is one of the two changes a single shared file takes', () => {
+    expect(changesOneFile({ v: 1, op: 'replace-file', file: 'a', by: 'b' })).toBe(true);
+    expect(changesOneFile({ v: 1, op: 'rename-file', file: 'a', name: 'b.pdf' })).toBe(true);
+    expect(changesOneFile({ v: 1, op: 'delete-file', file: 'a', at: '2026-11-25T10:00:00Z' })).toBe(
+      false,
+    );
   });
 });

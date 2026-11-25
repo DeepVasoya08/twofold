@@ -291,10 +291,21 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
         delete rest.sharedWith;
         return rest;
       };
+      // A file shared on its own is named by the row it is shared through.
+      const file = (item: Photo): Photo => {
+        if (item.shareId !== action.albumId) return item;
+        if (action.names.length > 0) return { ...item, sharedWith: action.names };
+        const rest = { ...item };
+        delete rest.sharedWith;
+        // Stopping sharing lets the row go; sharing again makes a new one.
+        delete rest.shareId;
+        return rest;
+      };
       return {
         ...state,
         albums: state.albums.map(named),
         ...(state.folders && { folders: state.folders.map(named) }),
+        ...(state.files && { files: state.files.map(file) }),
       };
     }
     case 'set-folders': {
@@ -447,6 +458,13 @@ interface VaultValue {
    * to hand over.
    */
   shareAlbum: (albumId: string) => Promise<Uint8Array>;
+  /**
+   * Gets one of your files ready to share on its own: the id it is shared under, which the
+   * album sharing screens then take.
+   */
+  shareFile: (fileId: string) => Promise<string>;
+  /** Uploads a new version of a file shared with you to edit (prepared), in its place. */
+  replaceFile: (fileId: string, file: NewPhoto) => Promise<void>;
   /** Stops sharing an album with everyone. */
   stopSharingAlbum: (albumId: string) => Promise<void>;
   /** Records who an album is shared with now, by name, after someone is added or removed. */
@@ -616,6 +634,8 @@ export function VaultProvider({
       const photo = find(photoId);
       if (!photo.sharedAlbum) return findChangeable(photoId);
       if (photo.viewOnly) throw new FormError(VIEW_ONLY_PHOTO);
+      // A file shared with you on its own to edit can be renamed (and given a new version).
+      if (photo.sharedFile) return photo;
       const folder = folders.find((each) => photo.albumIds.includes(each.id));
       if (!folder?.sharedFolder) throw new FormError(VIEW_ONLY);
       return photo;
@@ -786,6 +806,19 @@ export function VaultProvider({
         dispatch({ type: 'delete-album', albumId });
       },
       shareAlbum: (albumId) => store.shareAlbum(albumId),
+      shareFile: async (fileId) => {
+        const item = findChangeable(fileId);
+        const shareId = await store.shareFile(item.id);
+        if (item.shareId !== shareId) dispatch({ type: 'set-file', file: { ...item, shareId } });
+        return shareId;
+      },
+      replaceFile: async (fileId, file) => {
+        const item = find(fileId);
+        if (!item.sharedFile || item.viewOnly) throw new FormError(VIEW_ONLY);
+        const added = await store.replaceFile(fileId, file);
+        dispatch({ type: 'delete-photos', photoIds: [fileId] });
+        dispatch({ type: 'add-photos', photos: [added] });
+      },
       stopSharingAlbum: async (albumId) => {
         await store.stopSharingAlbum(albumId);
         dispatch({ type: 'set-shared-with', albumId, names: [] });
