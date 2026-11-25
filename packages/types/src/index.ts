@@ -291,7 +291,23 @@ export interface StoredAlbum {
    * album took out of it, which the album should be taken out of in their own metadata too.
    */
   removed?: string[];
+  /**
+   * For a shared folder: changes people given it as "Add and edit" made inside it, sealed
+   * under its key, in the order they were made, that the owner's device hasn't made yet.
+   */
+  edits?: StoredFolderEdit[];
 }
+
+/** One change to what's inside a shared folder, sealed under the folder's key. */
+export interface StoredFolderEdit {
+  id: string;
+  meta: string;
+}
+
+export type CreateFolderEditRequest = StoredFolderEdit;
+
+/** The most changes a shared folder keeps waiting for its owner's device. */
+export const MAX_FOLDER_EDITS = 500;
 
 /** One page of a space's photos. `next` is the cursor for the following page, if any. */
 export interface PhotoPage {

@@ -437,15 +437,31 @@ the same View only or Add and edit.
   and lists or unlists what changed. Moving a folder out takes everything inside it out of
   the share. A shared folder that goes to Recently deleted stops being shared at once
   (everyone's token stops working); restoring it doesn't share it again.
-- **Add and edit.** For now a member who may edit can add files, into the folder or any
-  folder inside it. The upload is sealed under the folder key and marked `sealed_for_album`
-  with the shared folder; the owner's device seals it again under the records key and keeps
-  the folder inside it that the member chose. Making, renaming, moving and deleting folders
-  and files stay with the owner.
+- **Add and edit.** A member who may edit can add files, into the folder or any folder
+  inside it. The upload is sealed under the folder key and marked `sealed_for_album` with
+  the shared folder; the owner's device seals it again under the records key and keeps the
+  folder inside it that the member chose.
+- **Changes inside it.** A member who may edit can also make, rename, move and delete
+  folders inside it, and rename, move and delete its files. They don't have the records
+  key, so they can't change the owner's records: each change is a small sealed record
+  (kind `folder-edit`, under the folder key, bound to a random id) that the server keeps in
+  `folder_edits` (folder, space, id, order) until the owner's device opens it. Everyone
+  given the folder applies the changes still waiting on top of what it lists. The owner's
+  device (or a library member who can edit) checks each change against the folder as it
+  is (it must stay inside the shared folder, a new folder's id must be new, a folder can't
+  go inside itself, and the shared folder itself can't be renamed, moved or deleted), makes
+  it in its own records, and tells the server to forget it. Folder changes are made before
+  files open, so a file put in a new folder finds it. A change that no longer makes sense,
+  or doesn't open, is dropped; one that fails for a passing reason waits, with those after
+  it. Deleting goes to the owner's Recently deleted, with the time the member deleted it,
+  so a folder and what was inside it come back together. Only members given the folder to
+  edit can add changes, only for that folder, at most 500 waiting
+  (`MAX_FOLDER_EDITS`); they go when sharing stops.
 
 What this reveals beyond a shared album: roughly how many folders are inside a shared
-folder (to the nearest KiB of names), and, as for albums, which file rows are in it. Not
-their names, the tree, or anything about folders that aren't shared.
+folder (to the nearest KiB of names), as for albums which file rows are in it, and how many
+changes members made inside it that the owner's device hasn't made yet. Not their names,
+the tree, what the changes are, or anything about folders that aren't shared.
 
 ### Invites
 

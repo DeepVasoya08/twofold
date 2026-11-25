@@ -3,6 +3,7 @@ import type {
   MemberAccess,
   PhotoPart,
   StoredAlbum,
+  StoredFolderEdit,
   StoredJoined,
   StoredPendingInvite,
   StoredPhoto,
@@ -29,6 +30,8 @@ export class FakeServer {
   items = new Map<string, { album: string; photo: string; meta: string }>();
   /** By `album/photo`: photos someone given the album took out, until the owner catches up. */
   removed = new Set<string>();
+  /** Changes waiting in shared folders, by folder, oldest first. */
+  folderEdits = new Map<string, StoredFolderEdit[]>();
   /**
    * By share token: whose space it opens, the member record, its album if limited, and what
    * it may do.
@@ -146,6 +149,7 @@ export class FakeServer {
       if (entry) entry.shared = null;
       for (const [key, item] of this.items) if (item.album === album) this.items.delete(key);
       for (const key of this.removed) if (key.startsWith(`${album}/`)) this.removed.delete(key);
+      this.folderEdits.delete(album);
       for (const [key, each] of this.members) if (each.album === album) this.members.delete(key);
     };
     return {
@@ -175,12 +179,16 @@ export class FakeServer {
               scope === null ? entry.token === space : entry.album.id === scope && entry.shared,
             )
             .map((entry) => {
-              if (scope !== null) return { id: entry.album.id, meta: entry.shared ?? '' };
+              const edits = this.folderEdits.get(entry.album.id) ?? [];
+              const withEdits = (album: StoredAlbum) =>
+                edits.length > 0 ? { ...album, edits: [...edits] } : album;
+              if (scope !== null)
+                return withEdits({ id: entry.album.id, meta: entry.shared ?? '' });
               const removed = [...this.removed]
                 .map((key) => key.split('/'))
                 .filter(([album]) => album === entry.album.id)
                 .map(([, photo]) => photo ?? '');
-              return removed.length > 0 ? { ...entry.album, removed } : entry.album;
+              return withEdits(removed.length > 0 ? { ...entry.album, removed } : entry.album);
             }),
         }),
       createPhoto: (photo) => {
@@ -253,6 +261,7 @@ export class FakeServer {
       createAlbum: async (album) => {
         writable();
         await Promise.resolve();
+        if (this.albums.has(album.id)) throw new ApiError(409, 'Taken');
         this.albums.set(album.id, { token: space, album, shared: null });
       },
       updateAlbum: async (id, meta) => {
@@ -309,6 +318,20 @@ export class FakeServer {
         if (scope !== null && this.items.has(key)) this.removed.add(key);
         if (scope === null) this.removed.delete(key);
         this.items.delete(key);
+      },
+      addFolderEdit: async (id, edit) => {
+        await Promise.resolve();
+        if (scope !== id || !albumEditor) throw new ApiError(403, 'Album only');
+        if (!this.albums.get(id)?.shared) throw new ApiError(409, 'Not shared');
+        this.folderEdits.set(id, [...(this.folderEdits.get(id) ?? []), edit]);
+      },
+      forgetFolderEdit: async (id, editId) => {
+        writable();
+        await Promise.resolve();
+        if (this.albums.get(id)?.token !== space) return;
+        const left = (this.folderEdits.get(id) ?? []).filter((edit) => edit.id !== editId);
+        if (left.length > 0) this.folderEdits.set(id, left);
+        else this.folderEdits.delete(id);
       },
       forgetAlbumRemoved: async (id, photoId) => {
         writable();

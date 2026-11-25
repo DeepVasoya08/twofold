@@ -20,6 +20,8 @@ export function FolderNameDialog({
   title,
   action,
   initial = '',
+  label = 'Folder name',
+  maxLength = MAX_FOLDER_NAME,
   onClose,
   onSave,
 }: {
@@ -28,13 +30,25 @@ export function FolderNameDialog({
   /** The button's label: "Create" or "Save". */
   action: string;
   initial?: string;
+  /** What is being named, when it isn't a folder (a file's name, say). */
+  label?: string;
+  maxLength?: number;
   onClose: () => void;
   onSave: (name: string) => Promise<void>;
 }) {
   return (
     <Dialog open={open} onClose={onClose} title={title}>
       {/* Remounted on every opening, so it starts from `initial`. */}
-      {open && <NameForm action={action} initial={initial} onClose={onClose} onSave={onSave} />}
+      {open && (
+        <NameForm
+          action={action}
+          initial={initial}
+          label={label}
+          maxLength={maxLength}
+          onClose={onClose}
+          onSave={onSave}
+        />
+      )}
     </Dialog>
   );
 }
@@ -42,11 +56,15 @@ export function FolderNameDialog({
 function NameForm({
   action,
   initial,
+  label,
+  maxLength,
   onClose,
   onSave,
 }: {
   action: string;
   initial: string;
+  label: string;
+  maxLength: number;
   onClose: () => void;
   onSave: (name: string) => Promise<void>;
 }) {
@@ -76,10 +94,10 @@ function NameForm({
   return (
     <form className="form" onSubmit={submit} noValidate>
       <TextField
-        label="Folder name"
+        label={label}
         autoFocus
         value={name}
-        maxLength={MAX_FOLDER_NAME}
+        maxLength={maxLength}
         onChange={(event) => {
           setName(event.currentTarget.value);
           setError(null);

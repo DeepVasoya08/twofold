@@ -207,6 +207,51 @@ export function parseFolderShareMeta(value: unknown): FolderShareMeta | null {
   return { v: 1, kind: 'folder', name, folders: inside };
 }
 
+/**
+ * A change someone given a shared folder as "Add and edit" made inside it, sealed under the
+ * folder's key until the owner's device makes it in the space's own records. Folders and
+ * files are named by id; `at` is when something was deleted (ISO 8601), so what went
+ * together comes back together.
+ */
+export type FolderEdit =
+  | { v: 1; op: 'make-folder'; id: string; name: string; parent: string }
+  | { v: 1; op: 'rename-folder'; id: string; name: string }
+  | { v: 1; op: 'move-folder'; id: string; parent: string }
+  | { v: 1; op: 'delete-folder'; id: string; at: string }
+  | { v: 1; op: 'rename-file'; file: string; name: string }
+  | { v: 1; op: 'move-file'; file: string; folder: string }
+  | { v: 1; op: 'delete-file'; file: string; at: string };
+
+const isId = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
+const isTime = (value: unknown): value is string =>
+  typeof value === 'string' && !Number.isNaN(Date.parse(value));
+const isFileName = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0 && Array.from(value).length <= MAX_FILE_NAME;
+
+/** A shared folder's change, or null when `value` isn't one this app knows. */
+export function parseFolderEdit(value: unknown): FolderEdit | null {
+  if (!isRecord(value) || value.v !== 1) return null;
+  const { op, id, name, parent, at, file, folder } = value;
+  switch (op) {
+    case 'make-folder':
+      return isId(id) && validName(name) && isId(parent) ? { v: 1, op, id, name, parent } : null;
+    case 'rename-folder':
+      return isId(id) && validName(name) ? { v: 1, op, id, name } : null;
+    case 'move-folder':
+      return isId(id) && isId(parent) ? { v: 1, op, id, parent } : null;
+    case 'delete-folder':
+      return isId(id) && isTime(at) ? { v: 1, op, id, at } : null;
+    case 'rename-file':
+      return isId(file) && isFileName(name) ? { v: 1, op, file, name } : null;
+    case 'move-file':
+      return isId(file) && isId(folder) ? { v: 1, op, file, folder } : null;
+    case 'delete-file':
+      return isId(file) && isTime(at) ? { v: 1, op, file, at } : null;
+    default:
+      return null;
+  }
+}
+
 function validName(name: unknown): name is string {
   return typeof name === 'string' && name.length > 0 && Array.from(name).length <= MAX_FOLDER_NAME;
 }

@@ -1,7 +1,7 @@
 import { randomBytes, toBase64Url } from '@arcafold/crypto/webcrypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { MAX_ALBUM_MEMBERS, SPACE_HEADER, readThumbBatch } from '@arcafold/types';
+import { MAX_ALBUM_MEMBERS, MAX_FOLDER_EDITS, SPACE_HEADER, readThumbBatch } from '@arcafold/types';
 import type { AlbumItemList, AlbumList, MemberList, PhotoPage } from '@arcafold/types';
 
 import type { Env } from './env';
@@ -419,5 +419,86 @@ describe('letting someone add to and edit an album', () => {
     expect(members.members[0]?.access).toBe('edit');
     expect((await guest.request('POST', '/space/photos', photo)).status).toBe(201);
     expect((await guest.request('DELETE', `/space/photos/${photo.id}`, {})).status).toBe(204);
+  });
+});
+
+describe('changes inside a shared folder', () => {
+  async function member(album: string, access: 'view' | 'edit') {
+    const added = await addAlbumMember(album, access);
+    useSpace(guest, added.token);
+    return added;
+  }
+
+  async function editsOf(album: string, c = owner): Promise<string[] | undefined> {
+    const albums = await (await c.request('GET', '/space/albums')).json<AlbumList>();
+    return albums.albums.find((each) => each.id === album)?.edits?.map((edit) => edit.meta);
+  }
+
+  const postEdit = (album: string, meta = newMeta(), id = newId(), c = guest) =>
+    c.request('POST', `/space/albums/${album}/edits`, { id, meta });
+
+  it('keeps an editor’s changes, in order, for everyone given the folder and its owner', async () => {
+    const folder = await addAlbum();
+    await shareAlbum(folder);
+    await member(folder, 'edit');
+    const first = newMeta();
+    const second = newMeta();
+    expect((await postEdit(folder, first)).status).toBe(201);
+    expect((await postEdit(folder, second)).status).toBe(201);
+    expect(await editsOf(folder)).toEqual([first, second]);
+    expect(await editsOf(folder, guest)).toEqual([first, second]);
+  });
+
+  it('lets the owner’s device forget a change once it’s made', async () => {
+    const folder = await addAlbum();
+    await shareAlbum(folder);
+    await member(folder, 'edit');
+    const id = newId();
+    await postEdit(folder, newMeta(), id);
+    // Only the owner (or a library editor) makes changes; the editor can't drop one.
+    expect((await guest.request('DELETE', `/space/albums/${folder}/edits/${id}`, {})).status).toBe(
+      403,
+    );
+    expect((await owner.request('DELETE', `/space/albums/${folder}/edits/${id}`, {})).status).toBe(
+      204,
+    );
+    expect(await editsOf(folder)).toBeUndefined();
+  });
+
+  it('only takes changes from editors, for their own shared folder', async () => {
+    const folder = await addAlbum();
+    const other = await addAlbum();
+    await shareAlbum(folder);
+    await shareAlbum(other);
+    await member(folder, 'view');
+    expect((await postEdit(folder)).status).toBe(403);
+    await member(folder, 'edit');
+    expect((await postEdit(other)).status).toBe(403);
+    // The owner makes changes in their own records, not here.
+    expect((await postEdit(folder, newMeta(), newId(), owner)).status).toBe(403);
+    expect(await editsOf(folder)).toBeUndefined();
+  });
+
+  it('refuses a reused id, and more changes than a folder keeps waiting', async () => {
+    const folder = await addAlbum();
+    await shareAlbum(folder);
+    await member(folder, 'edit');
+    const id = newId();
+    expect((await postEdit(folder, newMeta(), id)).status).toBe(201);
+    expect((await postEdit(folder, newMeta(), id)).status).toBe(409);
+    for (let count = 1; count < MAX_FOLDER_EDITS; count += 1) {
+      expect((await postEdit(folder)).status).toBe(201);
+    }
+    expect((await postEdit(folder)).status).toBe(409);
+  });
+
+  it('forgets every change when sharing stops', async () => {
+    const folder = await addAlbum();
+    await shareAlbum(folder);
+    await member(folder, 'edit');
+    await postEdit(folder);
+    expect((await owner.request('DELETE', `/space/albums/${folder}/shared`, {})).status).toBe(204);
+    await shareAlbum(folder);
+    expect(await editsOf(folder)).toBeUndefined();
   });
 });

@@ -960,7 +960,180 @@ describe('a shared folder', () => {
     await vi.waitFor(() => {
       expect(w.server.photos.get(added.id)?.photo.sealedForAlbum).toBeUndefined();
     });
-    // Still making folders is Alice's alone.
+  });
+
+  it('shares a folder with many folders inside it', async () => {
+    const w = await world();
+    const alices = remoteStore(w.alice, w.server.api);
+    const archive = await alices.createFolder('Archive');
+    for (let year = 1990; year < 2050; year += 1) {
+      await alices.createFolder(`Year ${String(year)} and everything from it`, archive.id);
+    }
+    await alices.list();
+    await shareAlbumWithBob(w, alices, archive.id, 'view');
+    const { folders } = await sessionStore(w.bob, 'Bob', w.server.api).list();
+    expect(folders).toHaveLength(61);
+  });
+});
+
+describe('changes inside a folder shared to edit', () => {
+  const FILE: NewPhoto = {
+    ...PHOTO,
+    type: 'application/pdf',
+    file: { name: 'return.pdf' },
+  };
+  const at = '2026-11-25T10:00:00.000Z';
+
+  /** Alice's Taxes (holding a photo, a file and Receipts, with one more) shared with Bob to edit. */
+  async function editable() {
+    const w = await world();
+    const alices = remoteStore(w.alice, w.server.api);
+    const taxes = await alices.createFolder('Taxes');
+    const receipts = await alices.createFolder('Receipts', taxes.id);
+    const inTaxes = await alices.add(PHOTO, [taxes.id]);
+    const file = await alices.add(FILE, [taxes.id]);
+    const inReceipts = await alices.add(PHOTO, [receipts.id]);
+    await alices.list();
+    await shareAlbumWithBob(w, alices, taxes.id, 'edit');
+    const bobs = async () => {
+      const store = sessionStore(w.bob, 'Bob', w.server.api);
+      const listed = await store.list();
+      return { store, listed };
+    };
+    const alice = () => remoteStore(w.alice, w.server.api);
+    const waiting = () => w.server.folderEdits.get(taxes.id)?.length ?? 0;
+    return { w, taxes, receipts, inTaxes, file, inReceipts, bobs, alice, waiting };
+  }
+
+  const byId = <T extends { id: string }>(items: readonly T[], id: string) => {
+    const found = items.find((item) => item.id === id);
+    if (!found) throw new Error(`missing ${id}`);
+    return found;
+  };
+
+  it('lets Bob make, rename and move folders; everyone sees it, and Alice’s device makes it', async () => {
+    const { taxes, receipts, bobs, alice, waiting } = await editable();
+    const { store } = await bobs();
+    const year = await store.createFolder('2025', taxes.id);
+    expect(year).toMatchObject({ name: '2025', parentId: taxes.id, sharedFolder: true });
+    await store.saveFolder({ ...receipts, name: 'Bills', parentId: year.id });
+    // Made, renamed, moved.
+    expect(waiting()).toBe(3);
+
+    // Bob sees it straight away, from the changes still waiting.
+    const before = (await bobs()).listed.folders;
+    expect(byId(before, year.id)).toMatchObject({ name: '2025', parentId: taxes.id });
+    expect(byId(before, receipts.id)).toMatchObject({ name: 'Bills', parentId: year.id });
+
+    // Alice's device makes them in her own records, and the server forgets them.
+    const { folders } = await alice().list();
+    expect(byId(folders, year.id)).toMatchObject({ name: '2025', parentId: taxes.id });
+    expect(byId(folders, receipts.id)).toMatchObject({ name: 'Bills', parentId: year.id });
+    expect(waiting()).toBe(0);
+    const after = (await bobs()).listed.folders;
+    expect(byId(after, receipts.id)).toMatchObject({ name: 'Bills', parentId: year.id });
+  });
+
+  it('lets Bob rename a file, move files and delete one into Alice’s Recently deleted', async () => {
+    const { taxes, receipts, inTaxes, file, inReceipts, bobs, alice } = await editable();
+    const { store, listed } = await bobs();
+    const seenFile = byId(listed.photos, file.id);
+    if (!seenFile.file) throw new Error('not a file');
+    await store.update({ ...seenFile, file: { ...seenFile.file, name: 'Return 2025.pdf' } });
+    await store.update({ ...byId(listed.photos, inTaxes.id), albumIds: [receipts.id] });
+    expect(await store.trash([inReceipts.id], at)).toEqual([inReceipts.id]);
+
+    const bobSees = (await bobs()).listed.photos;
+    expect(byId(bobSees, file.id).file?.name).toBe('Return 2025.pdf');
+    expect(byId(bobSees, inTaxes.id).albumIds).toEqual([receipts.id]);
+    expect(bobSees.map((photo) => photo.id)).not.toContain(inReceipts.id);
+
+    const store2 = alice();
+    const { photos } = await store2.list();
+    expect(byId(photos, file.id).file?.name).toBe('Return 2025.pdf');
+    expect(byId(photos, inTaxes.id).albumIds).toEqual([receipts.id]);
+    expect(photos.map((photo) => photo.id)).not.toContain(inReceipts.id);
+    const trash = await store2.listTrash();
+    expect(byId(trash, inReceipts.id).deletedAt).toBe(at);
+    expect(byId(trash, inReceipts.id).albumIds).toEqual([receipts.id]);
+    // And it's still where it was for Bob after Alice's device caught up.
+    const bobAfter = (await bobs()).listed.photos;
+    expect(byId(bobAfter, inTaxes.id).albumIds).toEqual([receipts.id]);
+    expect(taxes.id).toBeDefined();
+  });
+
+  it('deletes a folder with what is inside it, together, so it comes back together', async () => {
+    const { receipts, inReceipts, bobs, alice } = await editable();
+    const { store, listed } = await bobs();
+    // As the apps delete a folder: files first, then the folder.
+    await store.trash([inReceipts.id], at);
+    await store.saveFolder({ ...byId(listed.folders, receipts.id), deletedAt: at });
+    expect((await bobs()).listed.folders.map((folder) => folder.id)).not.toContain(receipts.id);
+
+    const store2 = alice();
+    const { folders } = await store2.list();
+    expect(byId(folders, receipts.id).deletedAt).toBe(at);
+    expect(byId(await store2.listTrash(), inReceipts.id).deletedAt).toBe(at);
+  });
+
+  it('files what Bob adds to a folder he just made in it, for Alice too', async () => {
+    const { taxes, bobs, alice } = await editable();
+    const { store } = await bobs();
+    const scans = await store.createFolder('Scans', taxes.id);
+    const added = await store.add(PHOTO, [scans.id]);
+    expect(byId((await bobs()).listed.photos, added.id).albumIds).toEqual([scans.id]);
+    const { photos, folders } = await alice().list();
+    expect(byId(folders, scans.id).parentId).toBe(taxes.id);
+    expect(byId(photos, added.id).albumIds).toEqual([scans.id]);
+  });
+
+  it('keeps the shared folder itself, and what’s in it, Alice’s', async () => {
+    const { taxes, inTaxes, receipts, bobs, waiting } = await editable();
+    const { store, listed } = await bobs();
+    await expect(
+      store.saveFolder({ ...byId(listed.folders, taxes.id), name: 'Mine' }),
+    ).rejects.toThrow(FormError);
+    await expect(
+      store.saveFolder({ ...byId(listed.folders, taxes.id), deletedAt: at }),
+    ).rejects.toThrow(FormError);
+    // Nothing leaves it: not a file, not a folder.
+    await expect(
+      store.update({ ...byId(listed.photos, inTaxes.id), albumIds: [] }),
+    ).rejects.toThrow(FormError);
+    const top = { ...byId(listed.folders, receipts.id) };
+    delete top.parentId;
+    await expect(store.saveFolder(top)).rejects.toThrow(FormError);
+    // A folder can't go inside itself.
+    const inside = await store.createFolder('Inside', receipts.id);
+    await expect(store.saveFolder({ ...top, parentId: inside.id })).rejects.toThrow(FormError);
+    expect(waiting()).toBe(1);
+  });
+
+  it('can’t be changed by someone who may only view it', async () => {
+    const { w, taxes, receipts, inReceipts } = await editable();
+    const bobId = [...w.server.members.values()].find((m) => m.album === taxes.id)?.id;
+    if (!bobId) throw new Error('no member');
+    await updateMemberAccess(w.alice, bobId, 'view', w.server.api);
+    const store = sessionStore(w.bob, 'Bob', w.server.api);
+    const listed = await store.list();
     await expect(store.createFolder('Mine', taxes.id)).rejects.toThrow();
+    await expect(
+      store.saveFolder({ ...byId(listed.folders, receipts.id), name: 'X' }),
+    ).rejects.toThrow();
+    await expect(store.trash([inReceipts.id], at)).rejects.toThrow();
+    expect(w.server.folderEdits.get(taxes.id)).toBeUndefined();
+  });
+
+  it('lets go of a change that doesn’t open or no longer makes sense', async () => {
+    const { w, taxes, receipts, bobs, alice, waiting } = await editable();
+    const { store, listed } = await bobs();
+    await store.saveFolder({ ...byId(listed.folders, receipts.id), name: 'Bills' });
+    w.server.folderEdits.set(taxes.id, [
+      ...(w.server.folderEdits.get(taxes.id) ?? []),
+      { id: 'forged', meta: tamper(w.server.folderEdits.get(taxes.id)?.[0]?.meta ?? '') },
+    ]);
+    const { folders } = await alice().list();
+    expect(byId(folders, receipts.id).name).toBe('Bills');
+    expect(waiting()).toBe(0);
   });
 });

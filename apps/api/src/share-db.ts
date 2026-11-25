@@ -189,6 +189,7 @@ export async function deleteSharing(db: D1Database, space: string): Promise<void
     db.prepare('DELETE FROM pending_invites WHERE space = ?').bind(space),
     db.prepare('DELETE FROM album_items WHERE space = ?').bind(space),
     db.prepare('DELETE FROM album_removed WHERE space = ?').bind(space),
+    db.prepare('DELETE FROM folder_edits WHERE space = ?').bind(space),
   ]);
 }
 

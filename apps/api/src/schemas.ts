@@ -180,6 +180,8 @@ export const createMemberSchema = z.strictObject({
 
 export const updateMemberSchema = z.strictObject({ access: memberAccess });
 
+export const createFolderEditSchema = z.strictObject({ id: recordId, meta: sealedRecord });
+
 export const createJoinedSchema = z.strictObject({ id: recordId, meta: sealedRecord });
 
 export const createPendingInviteSchema = z.strictObject({ id: recordId, meta: sealedRecord });

@@ -1,4 +1,5 @@
-import type { StoredAlbum, StoredPhoto } from '@arcafold/types';
+import { MAX_FOLDER_EDITS } from '@arcafold/types';
+import type { StoredAlbum, StoredFolderEdit, StoredPhoto } from '@arcafold/types';
 
 /**
  * Shared album queries. A shared album's title (`albums.shared_meta`) and its photos' details
@@ -48,6 +49,7 @@ export async function deleteAlbumSharing(
       .bind(album, space),
     db.prepare('DELETE FROM album_items WHERE album = ? AND space = ?').bind(album, space),
     db.prepare('DELETE FROM album_removed WHERE album = ? AND space = ?').bind(album, space),
+    db.prepare('DELETE FROM folder_edits WHERE album = ? AND space = ?').bind(album, space),
     db.prepare('DELETE FROM members WHERE album = ? AND space = ?').bind(album, space),
   ]);
 }
@@ -174,6 +176,68 @@ export async function forgetAlbumRemoved(
   await db
     .prepare('DELETE FROM album_removed WHERE album = ? AND photo = ? AND space = ?')
     .bind(album, photo, space)
+    .run();
+}
+
+/**
+ * Keeps a change someone given a shared folder made inside it, sealed under its key, until the
+ * owner's device makes it. False if the folder isn't shared, the id is taken, or it already
+ * has the most changes waiting.
+ */
+export async function addFolderEdit(
+  db: D1Database,
+  space: string,
+  album: string,
+  edit: StoredFolderEdit,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `INSERT INTO folder_edits (id, album, space, meta)
+       SELECT ?1, ?2, ?3, ?4
+        WHERE EXISTS (SELECT 1 FROM albums
+                       WHERE id = ?2 AND space = ?3 AND shared_meta IS NOT NULL)
+          AND (SELECT COUNT(*) FROM folder_edits WHERE album = ?2 AND space = ?3) < ?5
+       ON CONFLICT (id) DO NOTHING`,
+    )
+    .bind(edit.id, album, space, edit.meta, MAX_FOLDER_EDITS)
+    .run();
+  return result.meta.changes === 1;
+}
+
+/** The changes waiting in a space's shared folders, by folder, oldest first. */
+export async function folderEdits(
+  db: D1Database,
+  space: string,
+  album?: string,
+): Promise<Map<string, StoredFolderEdit[]>> {
+  const query =
+    album === undefined
+      ? db
+          .prepare('SELECT id, album, meta FROM folder_edits WHERE space = ? ORDER BY seq')
+          .bind(space)
+      : db
+          .prepare(
+            'SELECT id, album, meta FROM folder_edits WHERE space = ? AND album = ? ORDER BY seq',
+          )
+          .bind(space, album);
+  const { results } = await query.all<{ id: string; album: string; meta: string }>();
+  const byAlbum = new Map<string, StoredFolderEdit[]>();
+  for (const row of results) {
+    byAlbum.set(row.album, [...(byAlbum.get(row.album) ?? []), { id: row.id, meta: row.meta }]);
+  }
+  return byAlbum;
+}
+
+/** The owner's device made a change someone given the folder asked for (or let it go). */
+export async function forgetFolderEdit(
+  db: D1Database,
+  space: string,
+  album: string,
+  id: string,
+): Promise<void> {
+  await db
+    .prepare('DELETE FROM folder_edits WHERE id = ? AND album = ? AND space = ?')
+    .bind(id, album, space)
     .run();
 }
 
