@@ -47,7 +47,7 @@ export function FolderTile({
         className="folder-tile__main"
         aria-label={`Open folder ${folder.name}`}
       >
-        <span className="folder-tile__arch" aria-hidden="true" />
+        <span className="folder-tile__icon" aria-hidden="true" />
         <span className="folder-tile__name">{folder.name}</span>
         <span className="folder-tile__meta">
           {summary}

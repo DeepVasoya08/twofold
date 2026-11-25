@@ -237,27 +237,50 @@ function Crumb({
   );
 }
 
-/** The small arch that stands for a folder. */
+/** The small folder outline used in lists: a tab behind, the folder's front over it. */
 export function FolderMark({ palette, size }: { palette: Palette; size: number }) {
+  const line = {
+    borderWidth: 1.5,
+    borderColor: palette.accent,
+    backgroundColor: palette.accentWash,
+  };
   return (
-    <View
-      style={{
-        width: size * 1.15,
-        height: size,
-        borderTopLeftRadius: size,
-        borderTopRightRadius: size,
-        borderBottomLeftRadius: 3,
-        borderBottomRightRadius: 3,
-        borderWidth: 1.5,
-        borderColor: palette.accent,
-        backgroundColor: palette.accentWash,
-      }}
-    />
+    <View style={{ width: size * 1.2, height: size }}>
+      <View
+        style={[
+          line,
+          {
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: size * 0.5,
+            height: size * 0.4,
+            borderBottomWidth: 0,
+            borderTopLeftRadius: 3,
+            borderTopRightRadius: 3,
+          },
+        ]}
+      />
+      <View
+        style={[
+          line,
+          {
+            position: 'absolute',
+            top: size * 0.18,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            borderRadius: 4,
+            borderTopLeftRadius: 1,
+          },
+        ]}
+      />
+    </View>
   );
 }
 
 /**
- * A folder as a card in Files: an arch on top, its name and what's in it. A tap opens it; a
+ * A folder as a card in Files: a folder shape on top, its name and what's in it. A tap opens it; a
  * long press opens its menu.
  */
 export function FolderCard({
@@ -299,8 +322,14 @@ export function FolderCard({
         },
       ]}
     >
-      <View style={[styles.arch, { backgroundColor: palette.accentWash }]}>
-        <View style={[styles.archLine, { backgroundColor: palette.accent }]} />
+      <View style={styles.shape}>
+        <View style={[styles.tab, { backgroundColor: palette.accentSoft }]} />
+        <View
+          style={[
+            styles.front,
+            { backgroundColor: palette.accentWash, borderTopColor: palette.accentSoft },
+          ]}
+        />
       </View>
       <Text style={[styles.cardName, { color: palette.text }]} numberOfLines={1}>
         {folder.name}
@@ -334,18 +363,27 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 2,
   },
-  arch: {
-    height: 38,
-    borderTopLeftRadius: 999,
-    borderTopRightRadius: 999,
-    borderBottomLeftRadius: 10,
-    borderBottomRightRadius: 10,
-    marginBottom: 8,
-    justifyContent: 'flex-end',
-    paddingHorizontal: 12,
-    paddingBottom: 7,
+  shape: { height: 40, marginBottom: 8 },
+  tab: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '42%',
+    height: 14,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    opacity: 0.45,
   },
-  archLine: { height: 3, borderRadius: 3, opacity: 0.35 },
+  front: {
+    position: 'absolute',
+    top: 7,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: 12,
+    borderTopLeftRadius: 3,
+    borderTopWidth: 2,
+  },
   cardName: { fontSize: 15, fontWeight: '700' },
   cardMeta: { fontSize: 12.5 },
 });
