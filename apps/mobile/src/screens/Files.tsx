@@ -361,7 +361,8 @@ export function Files({
   }, [here, up]);
   const { thumbs, requestThumbs } = library;
   const { chosen } = picking.grid;
-  useReportPicking(picking.header !== null || choosingView, onPicking);
+  // The tab bar and floating button give way to anything that slides up over Files.
+  useReportPicking(picking.header !== null || choosingView || sheet !== null, onPicking);
 
   // Previews on screen jump the queue ahead of those just drawn off screen.
   const onViewableItemsChanged = useCallback(
