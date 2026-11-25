@@ -12,6 +12,7 @@ import {
 
 import { albumCover, albumPhotos, albumSharing, albumsInTab } from '@arcafold/core/library/albums';
 import type { AlbumTab } from '@arcafold/core/library/albums';
+import { inTrashedFolder, trashedFolders } from '@arcafold/core/library/folders';
 import type { Album, Photo } from '@arcafold/core/library/model';
 import type { SmartAlbum } from '@arcafold/core/search/smart-album';
 
@@ -19,6 +20,7 @@ import { MemoryImage } from '../../modules/memory-image';
 import { photoCount } from '../library/album-text';
 import { filterByName } from '../library/match';
 import { favoritePhotos } from '../library/timeline';
+import { trashSummary } from '../library/trash-text';
 import type { Library } from '../library/use-library';
 import { FAVORITE, fonts } from '../theme';
 import { useAppearance } from '../ui/appearance';
@@ -368,7 +370,15 @@ export function Albums({
       </View>
     ) : null;
 
-  const trashCount = library.trash?.length ?? 0;
+  const trashItems = useMemo(
+    () => (library.trash ?? []).filter((item) => !inTrashedFolder(item, library.folders)).length,
+    [library.trash, library.folders],
+  );
+  const trashFolders = useMemo(
+    () => trashedFolders(library.folders).filter((folder) => !folder.viewOnly).length,
+    [library.folders],
+  );
+  const trashCount = trashItems + trashFolders;
   const trashLink = (
     <Pressable
       accessibilityRole="button"
@@ -376,7 +386,9 @@ export function Albums({
       style={[styles.trash, { borderColor: palette.border }]}
     >
       <Text style={[styles.trashText, { color: palette.text }]}>Recently deleted</Text>
-      <Text style={[styles.meta, { color: palette.muted }]}>{photoCount(trashCount)} ›</Text>
+      <Text style={[styles.meta, { color: palette.muted }]}>
+        {trashSummary(trashItems, trashFolders)} ›
+      </Text>
     </Pressable>
   );
 

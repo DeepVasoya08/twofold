@@ -33,3 +33,15 @@ export function deleteForeverTitle(count: number, all: boolean): string {
   if (all) return 'Empty Recently deleted?';
   return count === 1 ? 'Delete this photo for good?' : `Delete ${counted(count)} for good?`;
 }
+
+/**
+ * What Recently deleted holds, for its link: "3 photos · 1 folder". Items deleted along
+ * with a folder count under that folder, not on their own.
+ */
+export function trashSummary(items: number, folders: number): string {
+  const parts = [
+    ...(items > 0 ? [counted(items)] : []),
+    ...(folders > 0 ? [folders === 1 ? '1 folder' : `${String(folders)} folders`] : []),
+  ];
+  return parts.join(' · ');
+}
