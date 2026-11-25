@@ -173,7 +173,7 @@ test('sharing a folder: the person gets it and what’s inside, and with Add and
   await expect(alice.getByText('“Taxes” is shared with Bob.')).toBeVisible();
 
   // Bob finds it in Files, with the folder inside it and its file, and nothing else of hers.
-  await expect(bob.getByText('Alice shared an album or folder with you')).toBeVisible();
+  await expect(bob.getByText('Alice shared an album, folder or file with you')).toBeVisible();
   await goTo(bob, 'Files');
   await expect(bob.getByRole('link', { name: 'Open folder Taxes' })).toContainText('Alice’s');
   await expect(bob.getByRole('link', { name: 'Open folder Car' })).toHaveCount(0);
@@ -248,7 +248,7 @@ async function shareTaxesToEdit(browser: Browser): Promise<{ alice: Page; bob: P
   await bob.getByRole('button', { name: 'Join' }).click();
   await alice.getByRole('button', { name: 'They match, share' }).click();
   await expect(alice.getByText('“Taxes” is shared with Bob.')).toBeVisible();
-  await expect(bob.getByText('Alice shared an album or folder with you')).toBeVisible();
+  await expect(bob.getByText('Alice shared an album, folder or file with you')).toBeVisible();
   return { alice, bob };
 }
 
@@ -320,4 +320,83 @@ test('in a folder shared to edit: make, rename, move and delete, which Alice’s
   await expect(bob.getByRole('link', { name: 'Open folder Bills' })).toBeVisible();
   await bob.getByRole('link', { name: 'Open folder 2025' }).click();
   await expect(bob.getByText('Donation 2025.pdf')).toBeVisible();
+});
+
+test('sharing one file: Can edit lets them rename it and upload a new version in its place', async ({
+  browser,
+}) => {
+  const alice = await (await browser.newContext()).newPage();
+  const bob = await (await browser.newContext()).newPage();
+  await signUp(alice, freshEmail(), MAIN_PASSWORD, 'Alice');
+  await signUp(bob, freshEmail(), MAIN_PASSWORD, 'Bob');
+
+  // Alice keeps a lease in Home, next to a file she doesn't share.
+  await goTo(alice, 'Files');
+  await newFolder(alice, 'Home');
+  await alice.getByRole('link', { name: 'Open folder Home' }).click();
+  await addFiles(alice, [
+    { name: 'Lease.pdf', buffer: RECEIPT },
+    { name: 'Insurance.pdf', buffer: FORM },
+  ]);
+  await expect(alice.getByText('Insurance.pdf')).toBeVisible();
+
+  // She shares just the lease, letting Bob edit it.
+  await alice.getByRole('button', { name: 'More for Lease.pdf' }).click();
+  await alice.getByRole('menuitem', { name: 'Share' }).click();
+  const people = alice.getByRole('dialog', { name: 'Share “Lease.pdf”' });
+  await expect(people.getByText('They get just this file')).toBeVisible();
+  await people.getByRole('link', { name: 'Invite someone' }).click();
+  await expect(alice.getByRole('heading', { level: 1, name: 'Share “Lease.pdf”' })).toBeVisible();
+  await alice.getByRole('radio', { name: /Can edit/ }).check();
+  const code = alice.getByTestId('invite-code');
+  await expect(code).toHaveText(/^TWO-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+  await goTo(bob, 'Settings');
+  await bob.getByRole('button', { name: 'Enter code' }).click();
+  await bob.getByLabel('Invite code').fill((await code.textContent()) ?? '');
+  await bob.getByRole('button', { name: 'Join' }).click();
+  await alice.getByRole('button', { name: 'They match, share' }).click();
+  await expect(alice.getByText('“Lease.pdf” is shared with Bob.')).toBeVisible();
+
+  // Bob gets that file alone, at the top of his Files.
+  await expect(bob.getByText('Alice shared an album, folder or file with you')).toBeVisible();
+  await goTo(bob, 'Files');
+  await expect(bob.getByText('Lease.pdf')).toBeVisible();
+  await expect(bob.getByText(/Shared by Alice/)).toBeVisible();
+  await expect(bob.getByText('Insurance.pdf')).toHaveCount(0);
+  await expect(bob.getByRole('link', { name: 'Open folder Home' })).toHaveCount(0);
+
+  // He renames it, then uploads a new version.
+  await bob.getByRole('button', { name: 'More for Lease.pdf' }).click();
+  await bob.getByRole('menuitem', { name: 'Rename' }).click();
+  const rename = bob.getByRole('dialog', { name: 'Rename file' });
+  await rename.getByLabel('File name').fill('Lease draft.pdf');
+  await rename.getByRole('button', { name: 'Save' }).click();
+  await expect(bob.getByText('Renamed to “Lease draft.pdf”')).toBeVisible();
+  await bob.getByRole('button', { name: 'More for Lease draft.pdf' }).click();
+  const chooser = bob.waitForEvent('filechooser');
+  await bob.getByRole('menuitem', { name: 'Upload new version' }).click();
+  await (
+    await chooser
+  ).setFiles({ name: 'Lease signed.pdf', mimeType: 'application/pdf', buffer: FORM });
+  await expect(bob.getByText('Uploaded a new version of “Lease draft.pdf”')).toBeVisible();
+  await expect(bob.getByText('Lease signed.pdf')).toBeVisible();
+  await expect(bob.getByText('Lease draft.pdf')).toHaveCount(0);
+
+  // Alice's library takes it in: the new version in Home, still shared; the old one deleted.
+  await lock(alice);
+  await unlockWith(alice, MAIN_PASSWORD);
+  await goTo(alice, 'Files');
+  await alice.getByRole('link', { name: 'Open folder Home' }).click();
+  await expect(alice.getByText('Lease signed.pdf')).toBeVisible();
+  await expect(alice.getByText(/Shared with Bob/)).toBeVisible();
+  await goTo(alice, 'Recently deleted');
+  await expect(alice.getByRole('link', { name: 'File Lease draft.pdf' })).toBeVisible();
+
+  // Bob can let it go from his Files.
+  await lock(bob);
+  await unlockWith(bob, MAIN_PASSWORD);
+  await goTo(bob, 'Files');
+  await bob.getByRole('button', { name: 'More for Lease signed.pdf' }).click();
+  await bob.getByRole('menuitem', { name: 'Remove from my Files' }).click();
+  await expect(bob.getByText('No files yet')).toBeVisible();
 });

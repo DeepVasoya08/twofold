@@ -60,6 +60,17 @@ export interface Photo {
    * when they were added. Stored like photos, so the server can't tell the two apart.
    */
   file?: FileDetails;
+  /** For a file of yours shared on its own: the album row it is shared through. */
+  shareId?: string;
+  /** For a file of yours shared on its own: who with, by name. */
+  sharedWith?: string[];
+  /**
+   * Set when someone shared just this file with you. You can view and download it, and
+   * unless it's `viewOnly`, rename it and upload a new version.
+   */
+  sharedFile?: boolean;
+  /** For a file shared with you on its own: the record of it in your space, for leaving it. */
+  joinedId?: string;
 }
 
 /** A file's own name and media type, kept only in its sealed metadata. */

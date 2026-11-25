@@ -458,6 +458,23 @@ the same View only or Add and edit.
   edit can add changes, only for that folder, at most 500 waiting
   (`MAX_FOLDER_EDITS`); they go when sharing stops.
 
+#### Sharing one file
+
+One file can be shared on its own the same way, through a hidden album row of its own. The
+owner's record for the row (kind `file-share`, under the records key) names the file and
+holds the row's random key; the row never shows as an album or folder. Its shared record,
+sealed under that key and padded like any other, holds only the file's name, and
+`album_items` lists just that file. Renaming the file seals the record again; deleting the
+file, or stopping sharing, deletes the row and everyone's token stops working.
+
+With **Can edit** (Add and edit on the row) a member can rename the file or upload a new
+version. A new version is uploaded like any member upload, sealed under the row's key; the
+change that puts it in the old file's place is a `replace-file` folder change (old file id,
+new file id). The owner's device makes it: the new version takes the old one's folder,
+albums and favourite, the row is pointed at it, and the old version goes to the owner's
+Recently deleted. A single-file share accepts only renames and new versions; anything else
+is refused on the member's device and dropped on the owner's.
+
 What this reveals beyond a shared album: roughly how many folders are inside a shared
 folder (to the nearest KiB of names), as for albums which file rows are in it, and how many
 changes members made inside it that the owner's device hasn't made yet. Not their names,

@@ -16,11 +16,15 @@ import { errorMessage } from '@arcafold/core/errors';
 
 import './share.css';
 
-/** One album, or one folder in Files, being shared instead of the whole library. */
+/**
+ * One album, one folder in Files or one file, being shared instead of the whole library. A
+ * file's `id` is the one it is shared under; `fileId` is the file itself.
+ */
 interface SharedAlbum {
   id: string;
   title: string;
-  folder: boolean;
+  kind: 'album' | 'folder' | 'file';
+  fileId?: string;
 }
 
 /** Keeps a sharing screen checking often for the other side's steps while it's open. */
@@ -53,7 +57,16 @@ export const FOLDER_ACCESS_LABELS: Record<MemberAccess, { title: string; detail:
     title: 'View only',
     detail: 'They can open and download what’s in this folder and the folders inside it.',
   },
-  edit: { title: 'Add and edit', detail: 'They can also add files to it.' },
+  edit: {
+    title: 'Add and edit',
+    detail: 'They can also add, rename, move and delete what’s inside it.',
+  },
+};
+
+/** What someone given one file can do with it, in a few words. */
+export const FILE_ACCESS_LABELS: Record<MemberAccess, { title: string; detail: string }> = {
+  view: { title: 'View only', detail: 'They can open and download this file.' },
+  edit: { title: 'Can edit', detail: 'They can also rename it and upload a new version.' },
 };
 
 /** Picks what someone invited to the library, or to one album or folder, will be able to do. */
@@ -69,9 +82,11 @@ function AccessPicker({
   onChange: (access: MemberAccess) => void;
 }) {
   const labels = album
-    ? album.folder
-      ? FOLDER_ACCESS_LABELS
-      : ALBUM_ACCESS_LABELS
+    ? album.kind === 'file'
+      ? FILE_ACCESS_LABELS
+      : album.kind === 'folder'
+        ? FOLDER_ACCESS_LABELS
+        : ALBUM_ACCESS_LABELS
     : ACCESS_LABELS;
   return (
     <fieldset className="access-picker" disabled={disabled}>
@@ -95,7 +110,7 @@ function AccessPicker({
       ))}
       <span className="access-picker__note">
         {album
-          ? `You can change this later from the ${album.folder ? 'folder' : 'album'}’s Share menu.`
+          ? `You can change this later from the ${album.kind}’s Share menu.`
           : 'You can change this later in Settings.'}
       </span>
     </fieldset>
@@ -152,7 +167,7 @@ function InvitePanel({ where, album }: { where: string; album: SharedAlbum | nul
           <Icon name="check" size={20} />
           <p>
             {album
-              ? `“${album.title}” is shared with ${finished.name}. You can remove them any time from the ${album.folder ? 'folder' : 'album'}’s Share menu.`
+              ? `“${album.title}” is shared with ${finished.name}. You can remove them any time from the ${album.kind}’s Share menu.`
               : `Your ${where} is shared with ${finished.name}. You can change what they can do, or stop sharing, any time in Settings.`}
           </p>
         </div>
@@ -323,28 +338,38 @@ export function Share() {
     const folder = foldersOf(vault).find(
       (each) => each.id === albumId && each.library === undefined && each.deletedAt === undefined,
     );
+    // And a file shared on its own, by the id it is shared under.
+    const file = (vault.files ?? []).find(
+      (each) => each.shareId === albumId && each.library === undefined,
+    );
     const album: SharedAlbum | null = found
-      ? { id: found.id, title: found.title, folder: false }
+      ? { id: found.id, title: found.title, kind: 'album' }
       : folder
-        ? { id: folder.id, title: folder.name, folder: true }
-        : null;
+        ? { id: folder.id, title: folder.name, kind: 'folder' }
+        : file
+          ? { id: albumId, title: file.file?.name ?? 'File', kind: 'file', fileId: file.id }
+          : null;
     return (
       <div className="page page--narrow">
         <PageHeader
           title={album ? `Share “${album.title}”` : status === 'loading' ? 'Share' : 'Not found'}
           subtitle={
             album
-              ? album.folder
-                ? 'Invite someone you trust. They get this folder’s files and the folders inside it, including what you add later, and nothing else.'
-                : 'Invite someone you trust. They get this album’s photos, including ones you add later, and nothing else.'
+              ? album.kind === 'file'
+                ? 'Invite someone you trust. They get just this file, and nothing else.'
+                : album.kind === 'folder'
+                  ? 'Invite someone you trust. They get this folder’s files and the folders inside it, including what you add later, and nothing else.'
+                  : 'Invite someone you trust. They get this album’s photos, including ones you add later, and nothing else.'
               : status === 'loading'
                 ? 'Decrypting your albums…'
                 : 'It may have been deleted, or it isn’t yours to share.'
           }
           back={
-            album?.folder
-              ? { to: paths.folder(album.id), label: 'Folder' }
-              : { to: paths.album(albumId), label: 'Album' }
+            album?.kind === 'file'
+              ? { to: paths.files, label: 'Files' }
+              : album?.kind === 'folder'
+                ? { to: paths.folder(album.id), label: 'Folder' }
+                : { to: paths.album(albumId), label: 'Album' }
           }
         />
         {album && (

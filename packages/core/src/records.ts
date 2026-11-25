@@ -208,6 +208,37 @@ export function parseFolderShareMeta(value: unknown): FolderShareMeta | null {
 }
 
 /**
+ * One file shared on its own. It is kept as an album row (so it can be shared like one), and
+ * only its owner's apps read this record: which file it is, and its key once shared.
+ */
+export interface FileShareMeta {
+  v: 1;
+  kind: 'file-share';
+  file: string;
+  shareKey?: string;
+}
+
+/** What the people one file is shared with see of it, sealed under its share key. */
+export interface SharedFileMeta {
+  v: 1;
+  kind: 'file';
+  name: string;
+}
+
+export function parseFileShareMeta(value: unknown): FileShareMeta | null {
+  if (!isRecord(value) || value.v !== 1 || value.kind !== 'file-share') return null;
+  const { file, shareKey } = value;
+  if (!isId(file)) return null;
+  if (shareKey !== undefined && typeof shareKey !== 'string') return null;
+  return { v: 1, kind: 'file-share', file, ...(shareKey !== undefined && { shareKey }) };
+}
+
+export function parseSharedFileMeta(value: unknown): SharedFileMeta | null {
+  if (!isRecord(value) || value.v !== 1 || value.kind !== 'file') return null;
+  return isFileName(value.name) ? { v: 1, kind: 'file', name: value.name } : null;
+}
+
+/**
  * A change someone given a shared folder as "Add and edit" made inside it, sealed under the
  * folder's key until the owner's device makes it in the space's own records. Folders and
  * files are named by id; `at` is when something was deleted (ISO 8601), so what went
@@ -220,7 +251,8 @@ export type FolderEdit =
   | { v: 1; op: 'delete-folder'; id: string; at: string }
   | { v: 1; op: 'rename-file'; file: string; name: string }
   | { v: 1; op: 'move-file'; file: string; folder: string }
-  | { v: 1; op: 'delete-file'; file: string; at: string };
+  | { v: 1; op: 'delete-file'; file: string; at: string }
+  | { v: 1; op: 'replace-file'; file: string; by: string };
 
 const isId = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 const isTime = (value: unknown): value is string =>
@@ -247,6 +279,10 @@ export function parseFolderEdit(value: unknown): FolderEdit | null {
       return isId(file) && isId(folder) ? { v: 1, op, file, folder } : null;
     case 'delete-file':
       return isId(file) && isTime(at) ? { v: 1, op, file, at } : null;
+    case 'replace-file':
+      return isId(file) && isId(value.by) && file !== value.by
+        ? { v: 1, op, file, by: value.by }
+        : null;
     default:
       return null;
   }

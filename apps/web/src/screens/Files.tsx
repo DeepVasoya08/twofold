@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import type { SpaceKeys } from '@arcafold/crypto';
 
 import { useAccount } from '../app/account';
 import { useDownloads } from '../app/downloads';
 import { useToast } from '../app/toast';
-import { useUploads } from '../app/uploads';
+import { prepareFile, useUploads } from '../app/uploads';
 import { documentPhotos, useDocumentLooks } from '../app/document-photos';
 import { useDocumentPhotosView, useFileView } from '../app/views';
 import {
@@ -30,7 +30,8 @@ import {
   itemsIn,
   liveFolders,
 } from '@arcafold/core/library/folders';
-import { FolderShareDialog } from '../components/AlbumShareDialog';
+import { FileShareDialog, FolderShareDialog } from '../components/AlbumShareDialog';
+import { leaveJoined } from '@arcafold/core/sharing';
 import { FolderNameDialog, FolderPicker } from '../components/FolderDialogs';
 import { MAX_FILE_NAME, cleanFileName } from '@arcafold/core/file-types';
 import { FolderTile, folderSummary } from '../components/FolderTile';
@@ -108,7 +109,9 @@ export function Files({ folderId }: { folderId?: string } = {}) {
   const { navigate } = useRouter();
   const { openDialog } = useUploads();
   const downloads = useDownloads();
-  const { otherSpaceOpen } = useAccount();
+  const account = useAccount();
+  const { otherSpaceOpen } = account;
+  const keys = account.state.status === 'unlocked' ? account.state.session.opened.space : null;
   const toast = useToast();
   const [deleting, setDeleting] = useState<Photo | null>(null);
   const [renaming, setRenaming] = useState<Photo | null>(null);
@@ -123,6 +126,11 @@ export function Files({ folderId }: { folderId?: string } = {}) {
   >(null);
   /** A folder whose sharing is open. */
   const [sharing, setSharing] = useState<Folder | null>(null);
+  /** A file whose sharing is open, by the id it is shared under. */
+  const [sharingFile, setSharingFile] = useState<{ shareId: string; name: string } | null>(null);
+  /** A file shared with you to edit, getting a new version from the file picker. */
+  const [replacing, setReplacing] = useState<Photo | null>(null);
+  const versionInput = useRef<HTMLInputElement>(null);
   const [shown, setShown] = useState<Shown>('all');
   const [busy, setBusy] = useState(false);
   const [view, setView] = useFileView();
@@ -135,11 +143,16 @@ export function Files({ folderId }: { folderId?: string } = {}) {
     () => (folderId === undefined ? [] : folderPath(folders, folderId)),
     [folders, folderId],
   );
-  // Of what single shares hold, only files in a folder shared with you belong in Files.
+  // Of what single shares hold, only files shared on their own or in a folder shared with you
+  // belong in Files.
   const files = useMemo(() => {
     const sharedFolders = new Set(folders.filter((each) => each.sharedFolder).map((f) => f.id));
+    const belongs = (item: Photo) =>
+      !item.sharedAlbum ||
+      item.sharedFile === true ||
+      item.albumIds.some((id) => sharedFolders.has(id));
     return [...(state.files ?? [])]
-      .filter((item) => !item.sharedAlbum || item.albumIds.some((id) => sharedFolders.has(id)))
+      .filter(belongs)
       .sort((a, b) => b.takenAt.localeCompare(a.takenAt));
   }, [state.files, folders]);
   const total = files.reduce((sum, item) => sum + (item.size ?? 0), 0);
@@ -183,6 +196,8 @@ export function Files({ folderId }: { folderId?: string } = {}) {
         setFiling(null);
         setPlacing(null);
         setFolderDialog(null);
+        // Some steps only open something, with nothing to say.
+        if (done === '') return;
         toast.show(
           done,
           undo && {
@@ -242,8 +257,29 @@ export function Files({ folderId }: { folderId?: string } = {}) {
   /** Whether a file is yours to change, or in a folder shared with you to edit. */
   const editable = (item: Photo) =>
     item.sharedAlbum
-      ? !item.viewOnly && item.albumIds.some((id) => live.get(id)?.sharedFolder)
+      ? !item.viewOnly &&
+        (item.sharedFile === true || item.albumIds.some((id) => live.get(id)?.sharedFolder))
       : !isViewOnly(item);
+
+  /** Leaves a file shared with you on its own: it goes from your Files. */
+  const leaveFile = (item: Photo) => {
+    const joinedId = item.joinedId;
+    if (!keys || !joinedId) return;
+    run(
+      async () => {
+        await leaveJoined(keys, joinedId);
+        account.reloadVault();
+      },
+      `Removed “${item.file?.name ?? 'the file'}” from your Files`,
+    );
+  };
+
+  const shareFile = (item: Photo) => {
+    run(async () => {
+      const shareId = await vault.shareFile(item.id);
+      setSharingFile({ shareId, name: item.file?.name ?? 'File' });
+    }, '');
+  };
 
   const menuFor = (item: Photo): MenuItem[] => {
     const items: MenuItem[] = [
@@ -255,7 +291,14 @@ export function Files({ folderId }: { folderId?: string } = {}) {
         },
       },
     ];
-    if (!editable(item)) return items;
+    const leave: MenuItem = {
+      label: 'Remove from my Files',
+      icon: 'logout',
+      onSelect: () => {
+        leaveFile(item);
+      },
+    };
+    if (!editable(item)) return item.sharedFile ? [...items, leave] : items;
     const rename: MenuItem = {
       label: 'Rename',
       icon: 'pencil',
@@ -278,12 +321,37 @@ export function Files({ folderId }: { folderId?: string } = {}) {
         setDeleting(item);
       },
     };
+    if (item.sharedFile) {
+      // A file shared with you on its own to edit: rename it, or upload a new version.
+      return [
+        ...items,
+        rename,
+        {
+          label: 'Upload new version',
+          icon: 'upload',
+          onSelect: () => {
+            setReplacing(item);
+            versionInput.current?.click();
+          },
+        },
+        leave,
+      ];
+    }
     if (item.sharedAlbum) {
       // In a folder shared with you to edit, a file can be renamed, moved inside it, or
       // deleted (into its owner's Recently deleted). The rest is up to its owner.
       return [...items, ...(item.file ? [rename] : []), moveTo, remove];
     }
     if (item.file) items.push(rename);
+    if (item.file && item.library === undefined) {
+      items.push({
+        label: 'Share',
+        icon: 'share',
+        onSelect: () => {
+          shareFile(item);
+        },
+      });
+    }
     items.push({
       label: 'Move to folder',
       icon: 'folder',
@@ -593,6 +661,35 @@ export function Files({ folderId }: { folderId?: string } = {}) {
         </>
       )}
 
+      <input
+        ref={versionInput}
+        type="file"
+        hidden
+        aria-label="Choose a new version"
+        onChange={(event) => {
+          const chosen = event.currentTarget.files?.[0];
+          const target = replacing;
+          event.currentTarget.value = '';
+          if (!chosen || !target) return;
+          run(
+            async () => {
+              await vault.replaceFile(target.id, await prepareFile(chosen));
+              setReplacing(null);
+            },
+            `Uploaded a new version of “${target.file?.name ?? 'the file'}”`,
+          );
+        }}
+      />
+      {sharingFile && (
+        <FileShareDialog
+          open
+          shareId={sharingFile.shareId}
+          name={sharingFile.name}
+          onClose={() => {
+            setSharingFile(null);
+          }}
+        />
+      )}
       {sharing && (
         <FolderShareDialog
           open

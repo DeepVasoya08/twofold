@@ -65,6 +65,8 @@ export function memoryStore(initial: {
     saveFolder: () => Promise.resolve(),
     shareAlbum: () => Promise.reject(new FormError('This preview can’t share albums.')),
     stopSharingAlbum: () => Promise.resolve(),
+    shareFile: () => Promise.reject(new Error('Sharing needs an account.')),
+    replaceFile: () => Promise.reject(new Error('Sharing needs an account.')),
     read: () => Promise.reject(new FormError('This preview can’t move photos.')),
     original: () => Promise.reject(new FormError('This preview can’t download photos.')),
     fingerprint: () => Promise.reject(new FormError('This preview can’t import photos.')),

@@ -51,7 +51,11 @@ function useTarget(): (album: string | null) => string {
     const found = state.albums.find((each) => each.id === album && each.library === undefined);
     if (found) return `“${found.title}”`;
     const folder = foldersOf(state).find((each) => each.id === album && each.library === undefined);
-    return folder ? `“${folder.name}”` : 'an album';
+    if (folder) return `“${folder.name}”`;
+    const file = (state.files ?? []).find(
+      (each) => each.shareId === album && each.library === undefined,
+    );
+    return file?.file ? `“${file.file.name}”` : 'an album';
   };
 }
 

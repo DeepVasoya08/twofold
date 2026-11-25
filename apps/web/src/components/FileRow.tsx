@@ -23,6 +23,7 @@ export function fileDetails(item: Photo, category: Category | null): string {
     formatShortDay(item.takenAt),
     ...(category && (file?.category || category !== 'other') ? [categoryLabel(category)] : []),
     ...(item.library === undefined ? [] : [`Shared by ${item.library}`]),
+    ...(item.sharedWith?.length ? [`Shared with ${item.sharedWith.join(', ')}`] : []),
   ];
   return parts.join(' · ');
 }

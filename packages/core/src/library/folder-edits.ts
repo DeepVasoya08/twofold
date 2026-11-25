@@ -86,7 +86,21 @@ export function applyFolderEdit(state: SharedFolderState, edit: FolderEdit): boo
     }
     case 'delete-file':
       return files.delete(edit.file);
+    case 'replace-file': {
+      // A new version, uploaded into the share, takes the old one's place.
+      const file = files.get(edit.file);
+      const next = files.get(edit.by);
+      if (file?.name === undefined || next?.name === undefined) return false;
+      files.delete(edit.file);
+      files.set(edit.by, { ...next, folder: file.folder });
+      return true;
+    }
   }
+}
+
+/** The changes someone given one file (not a folder) may make: renaming it, or a new version. */
+export function changesOneFile(edit: FolderEdit): boolean {
+  return edit.op === 'rename-file' || edit.op === 'replace-file';
 }
 
 /** Whether a change is to folders only, which the owner's device makes before opening files. */
