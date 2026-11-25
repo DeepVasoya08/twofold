@@ -402,8 +402,12 @@ space.post('/photos', async (c) => {
   return c.body(null, 201);
 });
 
-/** Someone given one album can only upload the files of photos they started for it. */
+/**
+ * Someone given one album, or a phone's upload-only token, may only upload the files of (and
+ * commit) photos it started itself.
+ */
 function mayUpload(c: Context<AppEnv>, photo: StoredPhoto): boolean {
+  if (c.get('access') === 'upload') return photo.sealedForOwner === true;
   const album = c.get('album');
   return album === null || photo.sealedForAlbum === album;
 }
@@ -456,7 +460,7 @@ space.post('/photos/:id/commit', async (c) => {
     return c.json({ error: messages.badRequest }, 400);
   }
   const tag = c.get('space');
-  if (c.get('album') !== null) {
+  if (c.get('album') !== null || c.get('access') === 'upload') {
     const photo = await findPhoto(c.env.DB, tag, id.data);
     if (!photo || !mayUpload(c, photo)) return c.json({ error: notFound }, 404);
   }
@@ -722,9 +726,11 @@ const notEditable = 'That folder isn’t shared anymore, or has too many changes
  */
 space.post('/albums/:id/edits', async (c) => {
   const id = recordIdSchema.safeParse(c.req.param('id'));
-  const body = await readBody(c, createFolderEditSchema);
-  if (!id.success || !body) return c.json({ error: messages.badRequest }, 400);
+  if (!id.success) return c.json({ error: messages.badRequest }, 400);
+  // Only someone given this folder adds changes; the owner's device makes its own directly.
   if (c.get('album') !== id.data) return c.json({ error: albumOnly }, 403);
+  const body = await readBody(c, createFolderEditSchema);
+  if (!body) return c.json({ error: messages.badRequest }, 400);
   if (!(await addFolderEdit(c.env.DB, c.get('space'), id.data, body))) {
     return c.json({ error: notEditable }, 409);
   }

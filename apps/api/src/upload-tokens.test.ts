@@ -139,6 +139,15 @@ describe('upload-only tokens', () => {
     expect((await putFile(phone, mine.id, 'full', randomBytes(1000))).status).toBe(404);
   });
 
+  it("can't upload into or commit an upload the owner started", async () => {
+    const thumb = randomBytes(100);
+    const photo = { id: newId(), meta: newMeta(), thumbSize: thumb.length, fullSize: 1000 };
+    expect((await owner.request('POST', '/space/photos', photo)).status).toBe(201);
+    expect((await putFile(phone, photo.id, 'thumb', thumb)).status).toBe(404);
+    expect((await putFile(owner, photo.id, 'thumb', thumb)).status).toBe(200);
+    expect((await phone.request('POST', `/space/photos/${photo.id}/commit`, {})).status).toBe(404);
+  });
+
   it('stop working once revoked', async () => {
     expect(
       await (await owner.request('GET', '/space/upload-tokens')).json<UploadTokenList>(),
