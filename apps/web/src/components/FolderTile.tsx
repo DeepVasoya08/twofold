@@ -21,7 +21,7 @@ export function folderSummary(counts: { folders: number; items: number }): strin
 }
 
 /**
- * A folder in Files: an arch-topped card that opens it. Files and folders can be dropped on
+ * A folder in Files: a card with a folder on it that opens it. Files and folders can be dropped on
  * it when `onDrop` is given.
  */
 export function FolderTile({
@@ -47,12 +47,15 @@ export function FolderTile({
         className="folder-tile__main"
         aria-label={`Open folder ${folder.name}`}
       >
-        <span className="folder-tile__arch" aria-hidden="true" />
+        <span className="folder-tile__icon" aria-hidden="true" />
         <span className="folder-tile__name">{folder.name}</span>
         <span className="folder-tile__meta">
           {summary}
           {folder.library !== undefined && ` · ${folder.library}’s`}
         </span>
+        {(folder.sharedWith?.length ?? 0) > 0 && (
+          <span className="folder-tile__shared">Shared</span>
+        )}
       </Link>
       {menu.length > 0 && (
         <Menu label={`More for ${folder.name}`} items={menu} className="folder-tile__menu" />

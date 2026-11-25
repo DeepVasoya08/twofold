@@ -849,3 +849,118 @@ describe('an album Bob may add to', () => {
     await expect(bobs.add(PHOTO, [album.id])).rejects.toThrow();
   });
 });
+
+describe('a shared folder', () => {
+  /**
+   * Alice's Files: Taxes holding a photo and Receipts (holding one more), and Car beside it
+   * with one of its own, Taxes shared with Bob.
+   */
+  async function sharedFolder(access: MemberAccess = 'view') {
+    const w = await world();
+    const alices = remoteStore(w.alice, w.server.api);
+    const taxes = await alices.createFolder('Taxes');
+    const receipts = await alices.createFolder('Receipts', taxes.id);
+    const car = await alices.createFolder('Car');
+    const inTaxes = await alices.add(PHOTO, [taxes.id]);
+    const inReceipts = await alices.add(PHOTO, [receipts.id]);
+    const inCar = await alices.add(PHOTO, [car.id]);
+    await alices.add(PHOTO, []);
+    await alices.list();
+    await shareAlbumWithBob(w, alices, taxes.id, access);
+    const bobs = () => sessionStore(w.bob, 'Bob', w.server.api);
+    return { w, alices, taxes, receipts, car, inTaxes, inReceipts, inCar, bobs };
+  }
+
+  const ids = (items: readonly { id: string }[]) => items.map((item) => item.id).sort();
+
+  it('shows Bob that folder, the folders inside it and what they hold, filed where they are', async () => {
+    const { taxes, receipts, inTaxes, inReceipts, bobs } = await sharedFolder();
+    const { photos, folders, albums } = await bobs().list();
+    expect(albums).toEqual([]);
+    expect(folders).toEqual([
+      {
+        id: taxes.id,
+        name: 'Taxes',
+        library: 'Alice',
+        viewOnly: true,
+        sharedFolder: true,
+        joinedId: expect.any(String) as string,
+      },
+      {
+        id: receipts.id,
+        name: 'Receipts',
+        parentId: taxes.id,
+        library: 'Alice',
+        viewOnly: true,
+        sharedFolder: true,
+      },
+    ]);
+    expect(ids(photos)).toEqual(ids([inTaxes, inReceipts]));
+    expect(photos.find((photo) => photo.id === inReceipts.id)?.albumIds).toEqual([receipts.id]);
+    expect(photos.find((photo) => photo.id === inTaxes.id)?.albumIds).toEqual([taxes.id]);
+  });
+
+  it('lists who it’s shared with for Alice', async () => {
+    const { w, taxes } = await sharedFolder();
+    const { folders } = await sessionStore(w.alice, 'Alice', w.server.api).list();
+    expect(folders.find((folder) => folder.id === taxes.id)?.sharedWith).toEqual(['Bob']);
+  });
+
+  it('follows new folders, files moved in and out, renames and folders moved away', async () => {
+    const { alices, taxes, receipts, car, inTaxes, inCar, bobs } = await sharedFolder();
+    const old = await alices.createFolder('Old', receipts.id);
+    const all = (await alices.list()).photos;
+    const photo = (id: string) => {
+      const found = all.find((each) => each.id === id);
+      if (!found) throw new Error('missing photo');
+      return found;
+    };
+    await alices.update({ ...photo(inCar.id), albumIds: [old.id] });
+    await alices.update({ ...photo(inTaxes.id), albumIds: [] });
+    await alices.saveFolder({ ...taxes, name: 'Taxes 2025' });
+    let seen = await bobs().list();
+    expect(seen.folders.map((folder) => folder.name)).toEqual(['Taxes 2025', 'Receipts', 'Old']);
+    expect(seen.photos.find((each) => each.id === inCar.id)?.albumIds).toEqual([old.id]);
+    expect(ids(seen.photos)).not.toContain(inTaxes.id);
+
+    // Receipts leaves Taxes, with what's inside it: none of it is shared now.
+    await alices.saveFolder({ id: receipts.id, name: 'Receipts', parentId: car.id });
+    seen = await bobs().list();
+    expect(seen.folders.map((folder) => folder.name)).toEqual(['Taxes 2025']);
+    expect(seen.photos).toEqual([]);
+  });
+
+  it('stops being shared when it goes to Recently deleted', async () => {
+    const { w, alices, taxes } = await sharedFolder();
+    await alices.saveFolder({ ...taxes, deletedAt: '2026-11-25T00:00:00.000Z' });
+    expect(await listStillJoined(w.bob, w.server.api)).toEqual([]);
+  });
+
+  it('can’t be changed by Bob, nor added to while he may only view it', async () => {
+    const { taxes, bobs } = await sharedFolder();
+    const store = bobs();
+    await store.list();
+    await expect(store.add(PHOTO, [taxes.id])).rejects.toThrow();
+    await expect(store.createFolder('Mine', taxes.id)).rejects.toThrow();
+    await expect(store.saveFolder({ ...taxes, name: 'Mine' })).rejects.toThrow();
+  });
+
+  it('takes what Bob adds, into the folder inside it he chose, which Alice then keeps', async () => {
+    const { w, alices, taxes, receipts, bobs } = await sharedFolder('edit');
+    const store = bobs();
+    const { folders } = await store.list();
+    expect(folders[0]?.viewOnly).toBeUndefined();
+    const added = await store.add(PHOTO, [receipts.id]);
+    expect(w.server.photos.get(added.id)?.photo.sealedForAlbum).toBe(taxes.id);
+    const again = await bobs().list();
+    expect(again.photos.find((photo) => photo.id === added.id)?.albumIds).toEqual([receipts.id]);
+
+    const seen = (await alices.list()).photos.find((photo) => photo.id === added.id);
+    expect(seen).toMatchObject({ albumIds: [receipts.id], addedBy: 'contact' });
+    await vi.waitFor(() => {
+      expect(w.server.photos.get(added.id)?.photo.sealedForAlbum).toBeUndefined();
+    });
+    // Still making folders is Alice's alone.
+    await expect(store.createFolder('Mine', taxes.id)).rejects.toThrow();
+  });
+});

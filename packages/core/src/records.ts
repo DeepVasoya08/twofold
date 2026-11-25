@@ -80,6 +80,18 @@ export interface FolderMeta {
 /** The longest a folder's name may be, in characters. */
 export const MAX_FOLDER_NAME = 100;
 
+/**
+ * What the people a folder is shared with see of it, sealed under the folder's own key: its
+ * name, and the folders inside it at any depth (each naming the one it is in, which is the
+ * shared folder itself for those directly inside).
+ */
+export interface FolderShareMeta {
+  v: 1;
+  kind: 'folder';
+  name: string;
+  folders: { id: string; name: string; parent: string }[];
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -177,6 +189,36 @@ export function parseFolderMeta(value: unknown): FolderMeta | null {
   if (deletedAt !== undefined) meta.deletedAt = deletedAt;
   if (shareKey !== undefined) meta.shareKey = shareKey;
   return meta;
+}
+
+/** A shared folder's record, or null when `value` isn't one. */
+export function parseFolderShareMeta(value: unknown): FolderShareMeta | null {
+  if (!isRecord(value) || value.v !== 1 || value.kind !== 'folder') return null;
+  const { name, folders } = value;
+  if (!validName(name) || !Array.isArray(folders)) return null;
+  const inside: FolderShareMeta['folders'] = [];
+  for (const each of folders as unknown[]) {
+    if (!isRecord(each)) return null;
+    const { id, name: folderName, parent } = each;
+    if (typeof id !== 'string' || id.length === 0 || !validName(folderName)) return null;
+    if (typeof parent !== 'string' || parent.length === 0) return null;
+    inside.push({ id, name: folderName, parent });
+  }
+  return { v: 1, kind: 'folder', name, folders: inside };
+}
+
+function validName(name: unknown): name is string {
+  return typeof name === 'string' && name.length > 0 && Array.from(name).length <= MAX_FOLDER_NAME;
+}
+
+/**
+ * A shared folder's record as the bytes that get sealed, padded to a whole number of KiB so
+ * its size says little about how many folders are inside.
+ */
+export function encodeFolderShareMeta(meta: FolderShareMeta): Uint8Array<ArrayBuffer> {
+  const bytes = encodeJson({ ...meta, pad: '' });
+  const missing = Math.ceil(bytes.length / 1024) * 1024 - bytes.length;
+  return missing > 0 ? encodeJson({ ...meta, pad: ' '.repeat(missing) }) : bytes;
 }
 
 /** A record as the bytes that get sealed. */

@@ -6,7 +6,7 @@ import { useMe } from '../app/account';
 import { usePendingInvites } from '../app/invites';
 import { Link, useRouter } from '../app/router';
 import { parseShareAlbum, paths } from '../app/routes';
-import { useVault } from '../app/vault';
+import { foldersOf, useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { Avatar } from '../components/Brand';
 import { FormAlert } from '../components/FormAlert';
@@ -16,10 +16,11 @@ import { errorMessage } from '@arcafold/core/errors';
 
 import './share.css';
 
-/** One album being shared instead of the whole library. */
+/** One album, or one folder in Files, being shared instead of the whole library. */
 interface SharedAlbum {
   id: string;
   title: string;
+  folder: boolean;
 }
 
 /** Keeps a sharing screen checking often for the other side's steps while it's open. */
@@ -46,7 +47,16 @@ export const ALBUM_ACCESS_LABELS: Record<MemberAccess, { title: string; detail: 
   },
 };
 
-/** Picks what someone invited to the library, or to one album, will be able to do. */
+/** What someone given one folder can do there, in a few words. */
+export const FOLDER_ACCESS_LABELS: Record<MemberAccess, { title: string; detail: string }> = {
+  view: {
+    title: 'View only',
+    detail: 'They can open and download what’s in this folder and the folders inside it.',
+  },
+  edit: { title: 'Add and edit', detail: 'They can also add files to it.' },
+};
+
+/** Picks what someone invited to the library, or to one album or folder, will be able to do. */
 function AccessPicker({
   value,
   album,
@@ -54,11 +64,15 @@ function AccessPicker({
   onChange,
 }: {
   value: MemberAccess;
-  album: boolean;
+  album: SharedAlbum | null;
   disabled: boolean;
   onChange: (access: MemberAccess) => void;
 }) {
-  const labels = album ? ALBUM_ACCESS_LABELS : ACCESS_LABELS;
+  const labels = album
+    ? album.folder
+      ? FOLDER_ACCESS_LABELS
+      : ALBUM_ACCESS_LABELS
+    : ACCESS_LABELS;
   return (
     <fieldset className="access-picker" disabled={disabled}>
       <legend className="access-picker__legend">What can they do?</legend>
@@ -81,7 +95,7 @@ function AccessPicker({
       ))}
       <span className="access-picker__note">
         {album
-          ? 'You can change this later from the album’s Share menu.'
+          ? `You can change this later from the ${album.folder ? 'folder' : 'album'}’s Share menu.`
           : 'You can change this later in Settings.'}
       </span>
     </fieldset>
@@ -138,7 +152,7 @@ function InvitePanel({ where, album }: { where: string; album: SharedAlbum | nul
           <Icon name="check" size={20} />
           <p>
             {album
-              ? `“${album.title}” is shared with ${finished.name}. You can remove them any time from the album’s Share menu.`
+              ? `“${album.title}” is shared with ${finished.name}. You can remove them any time from the ${album.folder ? 'folder' : 'album'}’s Share menu.`
               : `Your ${where} is shared with ${finished.name}. You can change what they can do, or stop sharing, any time in Settings.`}
           </p>
         </div>
@@ -201,7 +215,7 @@ function InvitePanel({ where, album }: { where: string; album: SharedAlbum | nul
     <div className="share">
       <AccessPicker
         value={picked ?? invite?.access ?? 'view'}
-        album={album !== null}
+        album={album}
         disabled={!invite || picked !== null}
         onChange={onAccess}
       />
@@ -305,25 +319,33 @@ export function Share() {
   const albumId = parseShareAlbum(search);
   if (albumId !== null) {
     const found = vault.albums.find((each) => each.id === albumId && each.library === undefined);
-    const album: SharedAlbum | null = found ? { id: found.id, title: found.title } : null;
+    // A folder in Files is shared the same way.
+    const folder = foldersOf(vault).find(
+      (each) => each.id === albumId && each.library === undefined && each.deletedAt === undefined,
+    );
+    const album: SharedAlbum | null = found
+      ? { id: found.id, title: found.title, folder: false }
+      : folder
+        ? { id: folder.id, title: folder.name, folder: true }
+        : null;
     return (
       <div className="page page--narrow">
         <PageHeader
-          title={
-            album
-              ? `Share “${album.title}”`
-              : status === 'loading'
-                ? 'Share album'
-                : 'Album not found'
-          }
+          title={album ? `Share “${album.title}”` : status === 'loading' ? 'Share' : 'Not found'}
           subtitle={
             album
-              ? 'Invite someone you trust. They get this album’s photos, including ones you add later, and nothing else.'
+              ? album.folder
+                ? 'Invite someone you trust. They get this folder’s files and the folders inside it, including what you add later, and nothing else.'
+                : 'Invite someone you trust. They get this album’s photos, including ones you add later, and nothing else.'
               : status === 'loading'
                 ? 'Decrypting your albums…'
                 : 'It may have been deleted, or it isn’t yours to share.'
           }
-          back={{ to: paths.album(albumId), label: 'Album' }}
+          back={
+            album?.folder
+              ? { to: paths.folder(album.id), label: 'Folder' }
+              : { to: paths.album(albumId), label: 'Album' }
+          }
         />
         {album && (
           <div className="share-card">

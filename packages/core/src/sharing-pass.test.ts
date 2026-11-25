@@ -71,7 +71,9 @@ describe('advancePending', () => {
 
 describe('grantedText', () => {
   it('says what was shared', () => {
-    expect(grantedText({ name: 'Sam', album: true })).toBe('Sam shared an album with you');
+    expect(grantedText({ name: 'Sam', album: true })).toBe(
+      'Sam shared an album or folder with you',
+    );
     expect(grantedText({ name: 'Sam', album: false })).toBe('You joined Sam’s library');
   });
 });

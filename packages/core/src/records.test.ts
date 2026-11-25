@@ -7,10 +7,12 @@ import {
   encodePhotoMeta,
   hasPreview,
   parseAlbumMeta,
+  encodeFolderShareMeta,
   parseFolderMeta,
+  parseFolderShareMeta,
   parsePhotoMeta,
 } from './records';
-import type { PhotoMeta } from './records';
+import type { FolderShareMeta, PhotoMeta } from './records';
 
 const photo: PhotoMeta = {
   v: 1,
@@ -175,5 +177,32 @@ describe('parseFolderMeta', () => {
 
   it('is refused as an album, so older apps never list folders in Albums', () => {
     expect(parseAlbumMeta({ v: 1, kind: 'folder', name: 'Taxes' })).toBeNull();
+  });
+});
+
+describe('parseFolderShareMeta', () => {
+  const shared: FolderShareMeta = {
+    v: 1,
+    kind: 'folder',
+    name: 'Taxes',
+    folders: [{ id: 'r', name: 'Receipts', parent: 't' }],
+  };
+
+  it('reads a shared folder with the folders inside it', () => {
+    expect(parseFolderShareMeta(shared)).toEqual(shared);
+    expect(parseFolderShareMeta({ ...shared, folders: [] })?.folders).toEqual([]);
+  });
+
+  it('refuses a folder record of your own, or one with a bad folder inside', () => {
+    expect(parseFolderShareMeta({ v: 1, kind: 'folder', name: 'Taxes' })).toBeNull();
+    expect(parseFolderShareMeta({ ...shared, folders: [{ id: 'r', name: '' }] })).toBeNull();
+    expect(parseFolderShareMeta({ ...shared, folders: [{ id: 'r', name: 'R' }] })).toBeNull();
+    expect(parseFolderShareMeta({ ...shared, name: 'x'.repeat(101) })).toBeNull();
+  });
+
+  it('pads the record to whole KiB, and still reads it', () => {
+    const bytes = encodeFolderShareMeta(shared);
+    expect(bytes.length % 1024).toBe(0);
+    expect(parseFolderShareMeta(JSON.parse(new TextDecoder().decode(bytes)))).toEqual(shared);
   });
 });

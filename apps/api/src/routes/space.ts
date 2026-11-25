@@ -67,6 +67,7 @@ import {
   spaceTokenSchema,
   trashSchema,
   updateMemberSchema,
+  sharedRecordSchema,
   updateRecordSchema,
 } from '../schemas';
 import { requestSessionHash, sessionEnded } from '../session';
@@ -618,11 +619,12 @@ space.delete('/albums/:id', async (c) => {
 
 /**
  * Starts sharing an album, or replaces its title as the people it's shared with see it
- * (sealed under the album's own key).
+ * (sealed under the album's own key). A shared folder's record holds the folders inside it
+ * too, so it may be larger.
  */
 space.put('/albums/:id/shared', async (c) => {
   const id = recordIdSchema.safeParse(c.req.param('id'));
-  const body = await readBody(c, updateRecordSchema);
+  const body = await readBody(c, sharedRecordSchema);
   if (!id.success || !body) return c.json({ error: messages.badRequest }, 400);
   if (!(await setAlbumShared(c.env.DB, c.get('space'), id.data, body.meta))) {
     return c.json({ error: albumNotFound }, 404);
