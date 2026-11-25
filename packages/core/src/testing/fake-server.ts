@@ -59,6 +59,21 @@ export class FakeServer {
   /** By upload-only token: the space it adds photos to, and the token's id. */
   uploadTokens = new Map<string, { space: string; id: string }>();
 
+  /** Everything about one space that its people can see, as one string: a stand-in stamp. */
+  private snapshot(space: string): string {
+    const mine = <T extends { token: string }>(entries: Map<string, T>) =>
+      [...entries.values()].filter((entry) => entry.token === space);
+    const albums = mine(this.albums);
+    const albumIds = new Set(albums.map((entry) => entry.album.id));
+    return JSON.stringify([
+      mine(this.photos),
+      albums,
+      [...this.items.values()].filter((item) => albumIds.has(item.album)),
+      [...this.folderEdits].filter(([album]) => albumIds.has(album)),
+      [...this.members.values()].filter((entry) => entry.space === space),
+    ]);
+  }
+
   /**
    * An upload-only token reaches only starting, uploading and committing photos, which are
    * marked as sealed for the owner.
@@ -378,6 +393,10 @@ export class FakeServer {
         await Promise.resolve();
         if (!member) throw new ApiError(400, 'Not a member');
         return { access: member.access };
+      },
+      stamp: async () => {
+        await Promise.resolve();
+        return { stamp: this.snapshot(space) };
       },
       removeMember: async (id) => {
         ownerOnly();

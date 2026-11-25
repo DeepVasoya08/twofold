@@ -511,6 +511,14 @@ export interface UpdateMemberRequest {
 }
 
 /** What a member's token may do, as the member asks for it. */
+/**
+ * A value that changes whenever what this token can see changes, so an open app knows when
+ * to list again. Compare it with the last one; it means nothing on its own.
+ */
+export interface StampResponse {
+  stamp: string;
+}
+
 export interface MembershipResponse {
   access: MemberAccess;
 }

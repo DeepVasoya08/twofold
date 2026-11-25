@@ -31,6 +31,7 @@ import {
 } from '../mock/data';
 import { FormError } from '@arcafold/core/errors';
 import { GONE, loadTrash, moveAll } from '@arcafold/core/library/trash';
+import { countingWrites, useLiveRefresh } from './live-refresh';
 
 export {
   TRASH_DAYS,
@@ -137,6 +138,8 @@ function withoutCovers(albums: Album[], gone: ReadonlySet<string>): Album[] {
 
 export type VaultAction =
   | { type: 'loaded'; state: VaultState }
+  /** A fresh listing of what's open, with changes made elsewhere; images already shown stay. */
+  | { type: 'refreshed'; state: VaultState }
   | { type: 'set-image'; photoId: string; part: PhotoPart; url: string; viewUrl?: string }
   | { type: 'set-thumbs'; urls: ReadonlyMap<string, string> }
   | { type: 'toggle-favorite'; photoId: string }
@@ -175,6 +178,22 @@ export function vaultReducer(state: VaultState, action: VaultAction): VaultState
       // Stores hand back photos and files together; files go to their own list.
       const { photos, ...rest } = action.state;
       return sortedIn({ ...rest, photos: [] }, photos, 'end');
+    }
+    case 'refreshed': {
+      const shown = new Map(
+        [...state.photos, ...(state.files ?? [])].map((photo) => [photo.id, photo]),
+      );
+      const keep = (photo: Photo): Photo => {
+        const old = shown.get(photo.id);
+        if (!old) return photo;
+        const kept = { ...photo, src: photo.src || old.src };
+        if (kept.fullSrc === undefined && old.fullSrc !== undefined) kept.fullSrc = old.fullSrc;
+        if (kept.viewSrc === undefined && old.viewSrc !== undefined) kept.viewSrc = old.viewSrc;
+        return kept;
+      };
+      const { photos, ...rest } = action.state;
+      const next = sortedIn({ ...rest, photos: [] }, photos.map(keep), 'end');
+      return state.trash ? { ...next, trash: state.trash } : next;
     }
     case 'set-image': {
       const update = (photo: Photo): Photo => {
@@ -533,10 +552,19 @@ const RequestThumbsContext = createContext<VaultValue['requestThumbs']>(noReques
  * Decrypted photos for the open session, in memory only. Mount it with a key that changes
  * whenever keys are dropped, so locking throws everything away.
  */
+/** Actions that only show what loaded, rather than a change made on this device. */
+const QUIET_ACTIONS = new Set<VaultAction['type']>([
+  'loaded',
+  'refreshed',
+  'set-image',
+  'set-thumbs',
+  'set-trash',
+]);
+
 export function VaultProvider({
   children,
   space,
-  store,
+  store: givenStore,
   otherKeys,
   storeFor,
   initialState,
@@ -551,14 +579,27 @@ export function VaultProvider({
   /** Fixed contents instead of loading from the store. */
   initialState?: VaultState | undefined;
 }) {
-  const [state, dispatch] = useReducer(vaultReducer, initialState ?? { photos: [], albums: [] });
+  const [state, show] = useReducer(vaultReducer, initialState ?? { photos: [], albums: [] });
+  // Changes this device has under way, and how many it has shown: a refresh with changes
+  // from elsewhere waits until there are none under way, and is dropped if any were shown
+  // while it listed, so it never undoes one.
+  const counted = useMemo(() => countingWrites(givenStore), [givenStore]);
+  const { store, busy } = counted;
+  const shownChanges = useRef(0);
+  const dispatch = useCallback((action: VaultAction) => {
+    if (!QUIET_ACTIONS.has(action.type)) shownChanges.current += 1;
+    show(action);
+  }, []);
   const [status, setStatus] = useState<VaultStatus>(initialState ? 'ready' : 'loading');
 
   // Stable, so the upload queue can hold on to it across renders.
-  const showUploaded = useCallback((photos: Photo[]) => {
-    // Newest first, like the rest of the timeline.
-    if (photos.length > 0) dispatch({ type: 'add-photos', photos: [...photos].reverse() });
-  }, []);
+  const showUploaded = useCallback(
+    (photos: Photo[]) => {
+      // Newest first, like the rest of the timeline.
+      if (photos.length > 0) dispatch({ type: 'add-photos', photos: [...photos].reverse() });
+    },
+    [dispatch],
+  );
 
   const previews = useCallback<SpaceStore['previews']>(
     (photoIds, onPreview) => store.previews(photoIds, onPreview),
@@ -608,7 +649,24 @@ export function VaultProvider({
       loader.stop();
       store.dispose();
     };
-  }, [store, initialState]);
+  }, [store, initialState, dispatch]);
+
+  const refresh = useCallback(async () => {
+    if (busy()) return false;
+    const before = shownChanges.current;
+    const loaded = await store.list();
+    if (busy() || shownChanges.current !== before) return false;
+    dispatch({ type: 'refreshed', state: loaded });
+    void loadTrash(
+      store,
+      () => false,
+      (trash) => {
+        dispatch({ type: 'set-trash', trash });
+      },
+    );
+    return true;
+  }, [store, busy, dispatch]);
+  useLiveRefresh({ store, enabled: status === 'ready' && !initialState, refresh });
 
   const value = useMemo<VaultValue>(() => {
     const find = (photoId: string): Photo => {
@@ -902,7 +960,18 @@ export function VaultProvider({
       requestThumbs,
       previews,
     };
-  }, [state, status, space, store, otherKeys, storeFor, requestThumbs, showUploaded, previews]);
+  }, [
+    state,
+    status,
+    space,
+    store,
+    otherKeys,
+    storeFor,
+    requestThumbs,
+    showUploaded,
+    previews,
+    dispatch,
+  ]);
 
   return (
     <VaultContext value={value}>

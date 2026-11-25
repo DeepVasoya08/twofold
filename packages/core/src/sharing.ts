@@ -859,20 +859,33 @@ export async function listStillJoined(
   );
 }
 
-/** The stores for every library and album this space joined. */
+/**
+ * The stores for every library and album this space joined. Each is made once and kept in
+ * `stores` across listings, so listing again reuses what it already opened; one no longer
+ * joined is let go.
+ */
 async function sharedSources(
   space: SpaceKeys,
   myName: string,
   makeApi: (token: string) => SpaceApi,
+  stores: Map<string, SpaceStore>,
 ): Promise<SharedSource[]> {
   const crypto = await loadCrypto();
   // Asking what each one may do also finds the ones no longer shared, which are dropped.
-  return (await listStillJoined(space, makeApi)).map((library) => {
+  const joined = await listStillJoined(space, makeApi);
+  const still = new Set(joined.map((library) => `${library.id}/${library.token}`));
+  for (const [id, store] of stores) {
+    if (!still.has(id)) {
+      store.dispose();
+      stores.delete(id);
+    }
+  }
+  return joined.map((library) => {
     const key = crypto.fromBase64Url(library.recordKey) ?? new Uint8Array();
-    const source: SharedSource = {
-      id: library.id,
-      name: library.name,
-      store: remoteStore(
+    const id = `${library.id}/${library.token}`;
+    const store =
+      stores.get(id) ??
+      remoteStore(
         library.album
           ? crypto.albumAccess(library.token, key)
           : crypto.memberAccess(library.token, key),
@@ -883,7 +896,12 @@ async function sharedSources(
           ownerName: library.name,
           ...(library.album && { album: library.album }),
         },
-      ),
+      );
+    stores.set(id, store);
+    const source: SharedSource = {
+      id: library.id,
+      name: library.name,
+      store,
       editable: Promise.resolve(library.access === 'edit'),
     };
     if (library.album) source.album = true;
@@ -933,8 +951,9 @@ export function sessionStore(
   myName: string,
   makeApi: (token: string) => SpaceApi = spaceApi,
 ): SpaceStore {
+  const stores = new Map<string, SpaceStore>();
   return withAlbumMembers(
-    combinedStore(remoteStore(space, makeApi), () => sharedSources(space, myName, makeApi)),
+    combinedStore(remoteStore(space, makeApi), () => sharedSources(space, myName, makeApi, stores)),
     () => listMembers(space, makeApi),
   );
 }

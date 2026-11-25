@@ -60,6 +60,7 @@ const RULES: Record<string, readonly Who[]> = {
   'PUT /space/members/:id': OWNER,
   'DELETE /space/members/:id': OWNER,
   'GET /space/membership': ['libraryEdit', 'libraryView', 'albumEdit', 'albumView'],
+  'GET /space/stamp': ALBUM_READ,
   'GET /space/joined': OWNER,
   'POST /space/joined': OWNER,
   'DELETE /space/joined/:id': OWNER,

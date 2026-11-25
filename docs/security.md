@@ -276,8 +276,9 @@ holds no keys. It gets a way to add photos that can't read anything back
   own (`POST /api/space/upload-tokens`; the server keeps its SHA-256 in `upload_tokens`, at
   most 20 per space, with no timestamps). Sent in place of the space token, it reaches
   only `POST /api/space/photos`, `PUT /api/space/photos/:id/:part` and the commit, and
-  every other route answers 403. It can't list, download, change, trash or delete
-  anything, including the photos it added. The owner revokes a phone with
+  every other route answers 403. It can only upload the files of, and commit, photos it
+  started itself (never an upload the owner started). It can't list, download, change,
+  trash or delete anything, including the photos it added. The owner revokes a phone with
   `DELETE /api/space/upload-tokens/:id`, and wiping the space forgets the key and every
   token. A session is still required, as for every space route.
 - **What the phone keeps** is that token and the public half, nothing that opens anything.
@@ -732,6 +733,25 @@ so photos can later be found by describing them. The server stores only cipherte
   space's requests to the main library's for as long as they're stored.
 - Input is validated with zod at the API boundary (`apps/api/src/schemas.ts`), including
   exact key sizes and KDF bounds.
+- **The server decides who may do what.** Every space request is checked against what its
+  token may do, looked up afresh each time (so a change to someone's access applies to their
+  next request, whatever their screen still shows): the space's own token, a library member
+  (View only or Add and edit), someone given one album, folder or file (View only or Add and
+  edit), or a phone's upload-only token. `apps/api/src/permissions.test.ts` calls every
+  space route with each kind of token and expects a 403 for everything that kind may not
+  do; a route added without a rule there fails it. What the server can't check is what a
+  sealed change means (it can't read it): a change made inside a shared folder is checked by
+  the owner's device before it's made (see Sharing one folder).
+- **Keeping open apps current.** An open app asks `GET /api/space/stamp` every 15 seconds
+  while it's in view (and when it comes back into view), and lists again only when the
+  answer changes. For the space's own token and library members it's a random value
+  (`space_stamps`) replaced after every write that others could see; it's never counted up
+  or dated, so it says no more than the rows themselves. Someone given one album, folder or
+  file gets a SHA-256 of just what they can see (its shared record, the first 32
+  characters of each listed item's sealed record, which hold its random nonce and so change
+  whenever it's sealed again, the changes waiting in it, and their own access), worked out
+  each time, so they learn nothing about when anything else in the space changes. A
+  phone's upload-only token can't ask.
 
 ## In the browser
 

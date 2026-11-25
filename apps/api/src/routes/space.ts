@@ -19,6 +19,7 @@ import type {
   MemberAccess,
   MemberList,
   MembershipResponse,
+  StampResponse,
   PendingInviteList,
   PhotoPage,
   ProfilePhotoResponse,
@@ -132,6 +133,7 @@ import {
   listUploadTokens,
   uploadTokenQuery,
 } from '../upload-db';
+import { albumStamp, bumpStamp, deleteStamp, readStamp } from '../stamp-db';
 import { requireOwner } from './owner';
 import { people } from './people';
 import { deleteSearchData, search } from './search';
@@ -202,6 +204,7 @@ const ALBUM_ROUTES: readonly { method: string; path: RegExp }[] = [
   { method: 'GET', path: /\/space\/(photos|albums|thumbs)$/ },
   { method: 'GET', path: /\/space\/photos\/[^/]+\/(thumb|full)$/ },
   { method: 'GET', path: /\/space\/membership$/ },
+  { method: 'GET', path: /\/space\/stamp$/ },
   { method: 'DELETE', path: /\/space\/membership$/ },
 ];
 
@@ -258,7 +261,20 @@ const limitMemberTokens = createMiddleware<AppEnv>(async (c, next) => {
   return next();
 });
 
-space.use(requireSpace, limitMemberTokens);
+/**
+ * Anything that changes the space gives it a new stamp, so apps open on it (the owner's other
+ * devices, people it's shared with) know to list again. Wiping the space forgets it instead.
+ */
+const stampChanges = createMiddleware<AppEnv>(async (c, next) => {
+  c.set('unseen', false);
+  await next();
+  const wiped = c.req.method === 'DELETE' && /\/space\/?$/.test(c.req.path);
+  if (c.req.method !== 'GET' && c.res.status < 400 && !wiped && !c.get('unseen')) {
+    await bumpStamp(c.env.DB, c.get('space'));
+  }
+});
+
+space.use(requireSpace, limitMemberTokens, stampChanges);
 
 // People are kept per space like everything else, and only for its owner.
 space.route('/', people);
@@ -399,6 +415,8 @@ space.post('/photos', async (c) => {
     await releaseStorage(c.env.DB, accountId, size);
     return c.json({ error: messages.badRequest }, 409);
   }
+  // Nobody sees an upload until it's committed.
+  c.set('unseen', true);
   return c.body(null, 201);
 });
 
@@ -447,6 +465,7 @@ space.put('/photos/:id/:part', async (c) => {
     fullSize: params.part === 'full' ? stored.size : (otherStored?.size ?? -1),
   };
   const committed = otherStored !== null && (await commitPhoto(c.env.DB, tag, params.id, sizes));
+  c.set('unseen', !committed);
   return c.json({ committed } satisfies PutFileResponse);
 });
 
@@ -774,6 +793,7 @@ space.delete('/', requireOwner, async (c) => {
   await deleteAlbums(c.env.DB, tag);
   await deleteSharing(c.env.DB, tag);
   await deleteUploadKeys(c.env.DB, tag);
+  await deleteStamp(c.env.DB, tag);
   const freed =
     (await deleteProfilePhoto(c.env.DB, tag)) +
     (await deleteFaceData(c.env.DB, tag)) +
@@ -925,6 +945,21 @@ space.get('/membership', (c) => {
     return c.json({ error: messages.badRequest }, 400);
   }
   return c.json<MembershipResponse>({ access });
+});
+
+/**
+ * Whether anything this token can see has changed, in one cheap call an open app makes every
+ * so often. Someone given one album gets a stamp of just that album, so they learn nothing
+ * about when the rest of the space changes.
+ */
+space.get('/stamp', async (c) => {
+  const album = c.get('album');
+  const member = c.get('member');
+  const stamp =
+    album !== null && member !== null
+      ? await albumStamp(c.env.DB, c.get('space'), album, member)
+      : await readStamp(c.env.DB, c.get('space'));
+  return c.json<StampResponse>({ stamp });
 });
 
 /** A member leaves: their own token stops working. */

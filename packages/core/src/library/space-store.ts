@@ -255,6 +255,11 @@ export interface SpaceStore {
    * listed), each with its photo's id, for skipping photos already here.
    */
   fingerprints: () => ReadonlyMap<string, string>;
+  /**
+   * A value that changes whenever anything this store lists may have changed, on this device
+   * or any other. Only compared with an earlier one: when it differs, list again.
+   */
+  stamp: () => Promise<string>;
   /** Revokes every object URL this store made. */
   dispose: () => void;
 }
@@ -1738,6 +1743,8 @@ export function remoteStore(
       return found;
     },
 
+    stamp: async () => (await (await remote()).stamp()).stamp,
+
     dispose: () => {
       for (const url of urls.values()) platform.releaseImage(url);
       urls.clear();
@@ -1836,6 +1843,9 @@ export function combinedStore(
       readOnly.clear();
       albumOnly.clear();
       folderOnly.clear();
+      // Listing again starts afresh: what each share holds may have changed since.
+      photoStores.clear();
+      albumStores.clear();
       for (const { source, loaded, viewOnly } of loadedShared) {
         if (viewOnly) readOnly.add(source.store);
         else if (source.album) albumOnly.add(source.store);
@@ -2012,6 +2022,14 @@ export function combinedStore(
     // Imports go to your own library.
     fingerprint: (original) => own.fingerprint(original),
     fingerprints: () => own.fingerprints(),
+    // A share that can't be asked any more (it was stopped) reads as changed, so it's dropped.
+    stamp: async () =>
+      (
+        await Promise.all([
+          own.stamp(),
+          ...shared.map((source) => source.store.stamp().catch(() => 'gone')),
+        ])
+      ).join('.'),
     dispose: () => {
       own.dispose();
       for (const source of shared) source.store.dispose();

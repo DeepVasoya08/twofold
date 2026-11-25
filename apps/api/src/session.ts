@@ -32,6 +32,8 @@ export interface AppEnv {
      * phone's upload-only token (start, upload and commit photos, and nothing else).
      */
     access: MemberAccess | 'upload';
+    /** Set by a write that changed nothing anyone can see yet, so the space keeps its stamp. */
+    unseen: boolean;
   };
 }
 
