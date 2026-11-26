@@ -11,6 +11,7 @@ import {
   leftScreen,
   locked,
   lockOnReturn,
+  withEmail,
   withName,
 } from './state';
 
@@ -87,5 +88,28 @@ describe('withName', () => {
       account: { ...account, name: 'Sam R' },
     });
     expect(withName({ status: 'signed-out' }, 'Sam R')).toEqual({ status: 'signed-out' });
+  });
+});
+
+describe('withEmail', () => {
+  const confirmed = { email: 'kim@example.com', emailVerified: true, mustVerifyEmail: false };
+
+  it('takes the confirmed email and keeps the opened keys', () => {
+    const opened = { space: 'keys' };
+    const session = { account, opened } as unknown as Session;
+    const next = withEmail({ status: 'unlocked', session }, confirmed);
+    expect(next).toEqual({
+      status: 'unlocked',
+      session: { account: { ...account, ...confirmed }, opened },
+    });
+    if (next.status === 'unlocked') expect(next.session.opened).toBe(opened);
+  });
+
+  it('updates a locked account, and leaves a signed-out app alone', () => {
+    expect(withEmail({ status: 'locked', account }, confirmed)).toEqual({
+      status: 'locked',
+      account: { ...account, ...confirmed },
+    });
+    expect(withEmail({ status: 'signed-out' }, confirmed)).toEqual({ status: 'signed-out' });
   });
 });

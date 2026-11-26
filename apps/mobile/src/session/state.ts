@@ -24,6 +24,24 @@ export function withName(state: AccountState, name: string): AccountState {
   return state;
 }
 
+/** The account's email fields as the server now has them (the keys in memory stay as they are). */
+export function withEmail(
+  state: AccountState,
+  changed: Pick<AccountResponse, 'email' | 'emailVerified' | 'mustVerifyEmail'>,
+): AccountState {
+  const fields = {
+    email: changed.email,
+    emailVerified: changed.emailVerified,
+    mustVerifyEmail: changed.mustVerifyEmail,
+  };
+  if (state.status === 'locked') return { ...state, account: { ...state.account, ...fields } };
+  if (state.status === 'unlocked') {
+    const { session } = state;
+    return { ...state, session: { ...session, account: { ...session.account, ...fields } } };
+  }
+  return state;
+}
+
 /** Minutes without a touch, on screen or in the background, before it locks (as on the web). */
 export const AUTO_LOCK_MINUTES = 1;
 

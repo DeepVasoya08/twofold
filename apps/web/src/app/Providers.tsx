@@ -27,6 +27,7 @@ import { FindProvider } from './find';
 import { SearchProvider } from './search';
 import { memorySearchStore, remoteSearchStore } from '@arcafold/core/search/store';
 import { VaultProvider, emptyVaults } from './vault';
+import { ConfirmEmail } from '../screens/ConfirmEmail';
 import type { VaultsState } from './vault';
 import { memoryStore } from './memory-store';
 import { remoteStore } from '@arcafold/core/library/space-store';
@@ -171,7 +172,10 @@ function SessionVault({
   children: ReactNode;
   initialVault?: VaultsState | undefined;
 }) {
-  const { generation, space, state } = useAccount();
+  const { generation, space, state, mustVerifyEmail } = useAccount();
+  // Until the email is confirmed the server refuses library requests, so the library isn't
+  // opened at all: the confirm screen takes its place, keys still in memory.
+  if (state.status === 'unlocked' && mustVerifyEmail) return <ConfirmEmail />;
   return (
     <OpenVault
       key={generation}

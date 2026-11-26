@@ -175,6 +175,12 @@ Google's branding check needs two things from the site:
 - **A privacy policy that covers Google data.** `/privacy` has an "Importing from Google
   Photos" section, including the Limited Use statement Google asks for.
 
+### 7. Account email (optional)
+
+Confirming emails, and later sign-in notices and invites, need Cloudflare Email Service and
+the `EMAIL_CODE_SECRET` secret in the `production` environment. Until both are set up email
+stays off. Steps: [email.md](email.md).
+
 ## Checking a deploy
 
 The Deploy run's "Deploy Worker" step prints the Worker URL

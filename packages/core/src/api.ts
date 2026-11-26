@@ -1,4 +1,4 @@
-import { SPACE_HEADER, ThumbBatchParser } from '@arcafold/types';
+import { SPACE_HEADER, ThumbBatchParser, VERIFY_EMAIL_ERROR } from '@arcafold/types';
 import type {
   AccountResponse,
   AccountStorage,
@@ -15,6 +15,8 @@ import type {
   DeleteAccountRequest,
   DeviceList,
   ErrorResponse,
+  SendEmailCodeRequest,
+  VerifyEmailRequest,
   FaceSegmentPage,
   InviterView,
   JoinedList,
@@ -142,6 +144,16 @@ export function onSessionEnded(listener: (() => void) | null): void {
   sessionEndedListener = listener;
 }
 
+let verifyEmailListener: (() => void) | null = null;
+
+/**
+ * Called when the server refuses a request until the account confirms its email (it can
+ * start asking while the app is open), so the app can show the confirm screen.
+ */
+export function onVerifyEmail(listener: (() => void) | null): void {
+  verifyEmailListener = listener;
+}
+
 function isErrorResponse(body: unknown): body is ErrorResponse {
   return (
     typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
@@ -190,6 +202,9 @@ async function send(
     // A 401 from /auth is a wrong password, not an ended session.
     if (res.status === 401 && !path.startsWith('/auth/')) sessionEndedListener?.();
     const parsed: unknown = await res.json().catch(() => null);
+    if (res.status === 403 && isErrorResponse(parsed) && parsed.code === VERIFY_EMAIL_ERROR) {
+      verifyEmailListener?.();
+    }
     throw new ApiError(
       res.status,
       isErrorResponse(parsed) ? parsed.error : 'Something went wrong. Try again.',
@@ -227,6 +242,11 @@ export const api = {
   preLogin: (body: PreLoginRequest) => call<PreLoginResponse>('POST', '/auth/prelogin', body),
   logIn: (body: LoginRequest) => call<AccountResponse>('POST', '/auth/login', body),
   logOut: () => call<undefined>('POST', '/auth/logout', {}),
+  /** Sends a 6-digit code to confirm an email. */
+  sendEmailCode: (body: SendEmailCodeRequest) =>
+    call<undefined>('POST', '/account/email/code', body),
+  verifyEmail: (body: VerifyEmailRequest) =>
+    call<AccountResponse>('POST', '/account/email/verify', body),
   updateKeyring: (body: UpdateKeyringRequest) =>
     call<AccountResponse>('PUT', '/account/keyring', body),
   deleteAccount: (body: DeleteAccountRequest) => call<undefined>('DELETE', '/account', body),

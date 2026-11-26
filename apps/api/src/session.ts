@@ -3,12 +3,14 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createMiddleware } from 'hono/factory';
 
 import { newSessionToken, sessionTokenHash } from '@arcafold/crypto/webcrypto';
+import { VERIFY_EMAIL_ERROR } from '@arcafold/types';
 import type { MemberAccess } from '@arcafold/types';
 
 import { ACTIVE_STEP_MS, deleteSession, findSession, insertSession, touchSession } from './db';
 import type { AccountRecord } from './db';
 import { describeDevice } from './device';
 import type { Env } from './env';
+import { messages, mustVerifyEmail } from './respond';
 
 export const SESSION_DAYS = 30;
 const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
@@ -105,5 +107,30 @@ export const requireSession = createMiddleware<AppEnv>(async (c, next) => {
   }
   c.set('account', session.account);
   c.set('session', sessionHash);
+  if (mustVerifyEmail(session.account, c.env) && !openWhileUnverified(c)) {
+    return verifyEmailFirst(c);
+  }
   return next();
 });
+
+/** What an account that must confirm its email can still do: see itself and confirm. */
+const OPEN_WHILE_UNVERIFIED: readonly { method: string; path: string }[] = [
+  { method: 'GET', path: '/api/account' },
+  { method: 'POST', path: '/api/account/email/code' },
+  { method: 'POST', path: '/api/account/email/verify' },
+];
+
+function openWhileUnverified(c: Context): boolean {
+  const path = c.req.path.replace(/\/+$/, '');
+  return OPEN_WHILE_UNVERIFIED.some(
+    (route) => route.method === c.req.method && route.path === path,
+  );
+}
+
+/**
+ * The 403 for an account that has to confirm its email first. The server enforces this, not
+ * the app: until the email is confirmed, no library, sharing or account change goes through.
+ */
+export function verifyEmailFirst(c: Context): Response {
+  return c.json({ error: messages.verifyEmail, code: VERIFY_EMAIL_ERROR }, 403);
+}

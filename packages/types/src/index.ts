@@ -6,6 +6,8 @@ export interface HealthResponse {
 /** Error body every failing API route returns. The message is safe to show to the user. */
 export interface ErrorResponse {
   error: string;
+  /** Set on errors the app reacts to, such as VERIFY_EMAIL_ERROR. */
+  code?: string;
 }
 
 /**
@@ -55,7 +57,29 @@ export interface AccountResponse {
   keyring: Keyring;
   /** The answer to the smart features question, or null if it hasn't been asked yet. */
   smartFeatures: SmartFeaturesChoice | null;
+  /** Whether the owner has confirmed they can read mail sent to `email`. */
+  emailVerified: boolean;
+  /**
+   * True while the account must confirm its email before anything else: the server refuses
+   * every library request until it does. False once confirmed, or while email isn't set up.
+   */
+  mustVerifyEmail: boolean;
 }
+
+/** POST /api/account/email/code. `loginKey` is needed for an address other than the account's. */
+export interface SendEmailCodeRequest {
+  email: string;
+  loginKey?: string;
+}
+
+/** POST /api/account/email/verify. */
+export interface VerifyEmailRequest {
+  email: string;
+  code: string;
+}
+
+/** The error code the server answers with (403) while an account must confirm its email. */
+export const VERIFY_EMAIL_ERROR = 'verify-email';
 
 /**
  * The smart features question shown once after sign-up (and once to accounts made before it

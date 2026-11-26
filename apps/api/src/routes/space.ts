@@ -58,7 +58,7 @@ import {
   sessionAccountQuery,
 } from '../db';
 import { deleteFaceData } from '../face-db';
-import { messages, readBody } from '../respond';
+import { messages, mustVerifyEmail, readBody } from '../respond';
 import {
   createAlbumSchema,
   createFolderEditSchema,
@@ -77,7 +77,7 @@ import {
   sharedRecordSchema,
   updateRecordSchema,
 } from '../schemas';
-import { requestSessionHash, sessionEnded } from '../session';
+import { requestSessionHash, sessionEnded, verifyEmailFirst } from '../session';
 import type { AppEnv } from '../session';
 import {
   countAlbumMembers,
@@ -187,6 +187,10 @@ const requireSpace = createMiddleware<AppEnv>(async (c, next) => {
   c.set('account', account);
   c.set('session', sessionHash);
   c.set('album', member?.album ?? null);
+  // A phone's background backup keeps working (it only adds photos); everything else waits
+  // until the account has confirmed its email.
+  const uploadOnly = uploader !== undefined && !member;
+  if (!uploadOnly && mustVerifyEmail(account, c.env)) return verifyEmailFirst(c);
   if (uploader && !member) {
     c.set('space', uploader.space);
     c.set('member', null);

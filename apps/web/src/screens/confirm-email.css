@@ -1,0 +1,35 @@
+.confirm-email__current {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 24px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.confirm-email__label {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.confirm-email__value,
+.confirm-email__address {
+  overflow-wrap: anywhere;
+}
+
+.confirm-email__value {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.confirm-email__code .field__input {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3em;
+}
+
+.confirm-email__links {
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}

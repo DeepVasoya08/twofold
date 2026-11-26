@@ -60,7 +60,9 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
     replaces the keyring; `DELETE /api/account` deletes it; `GET /api/account/devices`
     lists signed-in devices and `DELETE /api/account/devices/:id` signs one out;
     `GET /api/account/storage` is the account's total across spaces, shown in both;
-    `PUT /api/account/smart-features` keeps the answer to the smart features question. See
+    `PUT /api/account/smart-features` keeps the answer to the smart features question;
+    `POST /api/account/email/code` and `/email/verify` confirm the account's email with a
+    6-digit code sent through Cloudflare Email Service ([email.md](email.md)). See
     [security.md](security.md#sessions-and-the-api).
   - `/api/space/*`: one space's encrypted photos and albums, addressed by the
     `x-arcafold-space` header. Uploads are two steps: `POST /photos` (id, sealed metadata,

@@ -4,14 +4,23 @@ import type { z } from 'zod';
 import type { AccountResponse } from '@arcafold/types';
 
 import type { AccountRecord } from './db';
+import type { Env } from './env';
+import { mailSetup } from './mail';
 
-export function toAccountResponse(account: AccountRecord): AccountResponse {
+/** Whether this account must confirm its email before using anything else. */
+export function mustVerifyEmail(account: AccountRecord, env: Env): boolean {
+  return !account.emailVerified && mailSetup(env) !== null;
+}
+
+export function toAccountResponse(account: AccountRecord, env: Env): AccountResponse {
   return {
     email: account.email,
     name: account.name,
     version: account.version,
     keyring: account.keyring,
     smartFeatures: account.smartFeatures,
+    emailVerified: account.emailVerified,
+    mustVerifyEmail: mustVerifyEmail(account, env),
   };
 }
 
@@ -37,4 +46,5 @@ export const messages = {
   wrongPassword: 'That password isn’t right.',
   emailTaken: 'An account with this email already exists. Log in instead.',
   conflict: 'Your account changed on another device. Reload and try again.',
+  verifyEmail: 'Confirm your email to keep going.',
 } as const;

@@ -56,3 +56,77 @@ export function newSessionToken(): string {
 export async function sessionTokenHash(token: string): Promise<string> {
   return toBase64Url(await sha256(new TextEncoder().encode(token)));
 }
+
+/** Digits in an email code. */
+export const EMAIL_CODE_DIGITS = 6;
+
+/** The shortest server secret accepted for keying email codes (32 bytes of base64 or more). */
+export const EMAIL_SECRET_MIN_LENGTH = 32;
+
+/**
+ * A new email code: six digits, each from a uniformly random byte (bytes of 250 and above
+ * are thrown away, so no digit is more likely than another).
+ */
+export function newEmailCode(): string {
+  let code = '';
+  while (code.length < EMAIL_CODE_DIGITS) {
+    for (const byte of randomBytes(EMAIL_CODE_DIGITS)) {
+      if (byte < 250 && code.length < EMAIL_CODE_DIGITS) code += String(byte % 10);
+    }
+  }
+  return code;
+}
+
+async function hmacSha256(secret: string, message: string): Promise<Uint8Array> {
+  if (secret.length < EMAIL_SECRET_MIN_LENGTH) throw new Error('The email secret is too short.');
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(message)));
+}
+
+/**
+ * The name a pending email code is stored under: an HMAC of what it is for, keyed with the
+ * server's secret, so the table holds no account id or address in readable form.
+ */
+export async function emailCodeScope(
+  secret: string,
+  purpose: string,
+  subject: string,
+): Promise<string> {
+  return toBase64Url(await hmacSha256(secret, `arcafold email scope\n${purpose}\n${subject}`));
+}
+
+/**
+ * What is stored for a code: an HMAC of the code bound to its scope and to the address it
+ * was sent to. Six digits are easy to guess from a plain hash, but not without the secret,
+ * so a copy of the database alone gives nothing away.
+ */
+export async function emailCodeTag(
+  secret: string,
+  scope: string,
+  address: string,
+  code: string,
+): Promise<string> {
+  return toBase64Url(
+    await hmacSha256(secret, `arcafold email code\n${scope}\n${address}\n${code}`),
+  );
+}
+
+/** Whether a typed code matches a stored tag, compared in constant time. */
+export async function emailCodeMatches(
+  secret: string,
+  scope: string,
+  address: string,
+  code: string,
+  storedTag: string,
+): Promise<boolean> {
+  const stored = fromBase64Url(storedTag);
+  const candidate = fromBase64Url(await emailCodeTag(secret, scope, address, code));
+  return stored !== null && candidate !== null && constantTimeEqual(stored, candidate);
+}

@@ -11,6 +11,8 @@ export interface AccountRecord {
   keyring: Keyring;
   version: number;
   smartFeatures: SmartFeaturesChoice | null;
+  /** Whether the owner has proved they can read mail sent to `email`. */
+  emailVerified: boolean;
 }
 
 interface AccountRow {
@@ -21,11 +23,12 @@ interface AccountRow {
   version: number;
   smart_choice: string | null;
   smart_version: number | null;
+  email_verified: number;
 }
 
 /** The columns every account read selects, for a query that names accounts `a`. */
 const ACCOUNT_COLUMNS =
-  'a.id, a.email, a.name, a.keyring, a.version, a.smart_choice, a.smart_version';
+  'a.id, a.email, a.name, a.keyring, a.version, a.smart_choice, a.smart_version, a.email_verified';
 
 function smartFeaturesOf(row: AccountRow): SmartFeaturesChoice | null {
   if ((row.smart_choice !== 'on' && row.smart_choice !== 'off') || row.smart_version === null) {
@@ -42,6 +45,7 @@ function toRecord(row: AccountRow): AccountRecord {
     keyring: keyringSchema.parse(JSON.parse(row.keyring)),
     version: row.version,
     smartFeatures: smartFeaturesOf(row),
+    emailVerified: row.email_verified === 1,
   };
 }
 
@@ -59,7 +63,7 @@ export async function findAccountByEmail(
 /** Inserts an account. Returns false if the email is taken. */
 export async function insertAccount(
   db: D1Database,
-  account: Omit<AccountRecord, 'version' | 'smartFeatures'>,
+  account: Omit<AccountRecord, 'version' | 'smartFeatures' | 'emailVerified'>,
   now: number,
 ): Promise<boolean> {
   const result = await db
@@ -153,6 +157,7 @@ export async function releaseStorage(
 export async function deleteAccount(db: D1Database, accountId: string): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM sessions WHERE account_id = ?').bind(accountId),
+    db.prepare('DELETE FROM email_codes WHERE account_id = ?').bind(accountId),
     db.prepare('DELETE FROM accounts WHERE id = ?').bind(accountId),
   ]);
 }

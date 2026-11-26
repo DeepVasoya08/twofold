@@ -38,6 +38,8 @@ describe('GET /api/account', () => {
       version: 1,
       keyring,
       smartFeatures: null,
+      emailVerified: false,
+      mustVerifyEmail: false,
     });
     expect(res.headers.get('cache-control')).toBe('no-store');
   });

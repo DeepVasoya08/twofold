@@ -4,6 +4,7 @@ import type { AccountResponse, Keyring } from '@arcafold/types';
 import { ApiError, api, spaceApi } from './api';
 import { loadCrypto } from './crypto-loader';
 import { FormError } from './errors';
+import { isValidEmail } from './password';
 
 /**
  * Account operations: everything that turns a password or recovery key into keys and talks
@@ -328,4 +329,46 @@ export async function deleteAccount(
     await spaceApi(token).wipe();
   }
   await api.deleteAccount({ loginKey: crypto.toBase64Url(opened.loginKey) });
+}
+
+/** How the server compares emails: no spaces around it, lower case. */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+const NOT_AN_EMAIL = 'Enter an email address like name@example.com.';
+
+/**
+ * Sends a code to confirm `email`. For an address other than the account's (fixing a typo
+ * before it's confirmed), the open session's login key goes too, which the server requires.
+ */
+export async function sendEmailCode(session: Session, email: string): Promise<void> {
+  if (!isValidEmail(email)) throw new FormError(NOT_AN_EMAIL);
+  const address = normalizeEmail(email);
+  if (address === session.account.email) {
+    await api.sendEmailCode({ email: address });
+    return;
+  }
+  const crypto = await loadCrypto();
+  await api.sendEmailCode({
+    email: address,
+    loginKey: crypto.toBase64Url(session.opened.loginKey),
+  });
+}
+
+/** Confirms `email` with the code sent to it. Returns the account as it now is. */
+export async function verifyEmail(session: Session, email: string, code: string): Promise<Session> {
+  const digits = code.replace(/\s/g, '');
+  if (!/^\d{6}$/.test(digits)) throw new FormError('Enter the 6-digit code from the email.');
+  const account = await api.verifyEmail({ email: normalizeEmail(email), code: digits });
+  // Only the email fields are taken from the answer: the keyring in memory stays as it is.
+  return {
+    ...session,
+    account: {
+      ...session.account,
+      email: account.email,
+      emailVerified: account.emailVerified,
+      mustVerifyEmail: account.mustVerifyEmail,
+    },
+  };
 }
