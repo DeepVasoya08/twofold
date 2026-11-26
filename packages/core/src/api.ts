@@ -23,6 +23,7 @@ import type {
   MemberAccess,
   MemberList,
   MembershipResponse,
+  StampResponse,
   PendingInviteList,
   PersonList,
   PhotoPage,
@@ -412,6 +413,8 @@ export function spaceApi(token: string) {
       call<undefined>('PUT', `/space/members/${encodeURIComponent(id)}`, { access }, headers),
     /** With a member's token: what it may do there. */
     membership: () => call<MembershipResponse>('GET', '/space/membership', undefined, headers),
+    /** A value that changes whenever what this token can see does. */
+    stamp: () => call<StampResponse>('GET', '/space/stamp', undefined, headers),
     /** With a member's token: gives up that membership. */
     leave: () => call<undefined>('DELETE', '/space/membership', {}, headers),
     listJoined: () => call<JoinedList>('GET', '/space/joined', undefined, headers),

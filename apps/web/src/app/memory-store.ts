@@ -71,6 +71,7 @@ export function memoryStore(initial: {
     original: () => Promise.reject(new FormError('This preview can’t download photos.')),
     fingerprint: () => Promise.reject(new FormError('This preview can’t import photos.')),
     fingerprints: () => new Map(),
+    stamp: () => Promise.resolve(''),
     dispose: () => undefined,
   };
 }

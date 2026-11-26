@@ -873,6 +873,17 @@ describe('a shared folder', () => {
 
   const ids = (items: readonly { id: string }[]) => items.map((item) => item.id).sort();
 
+  it('lists the same for Bob each time, with the same store', async () => {
+    const { bobs } = await sharedFolder('edit');
+    const store = bobs();
+    const first = await store.list();
+    const again = await store.list();
+    expect(again.folders).toEqual(first.folders);
+    expect(again.photos.map((photo) => photo.albumIds)).toEqual(
+      first.photos.map((photo) => photo.albumIds),
+    );
+  });
+
   it('shows Bob that folder, the folders inside it and what they hold, filed where they are', async () => {
     const { taxes, receipts, inTaxes, inReceipts, bobs } = await sharedFolder();
     const { photos, folders, albums } = await bobs().list();
@@ -1201,6 +1212,36 @@ describe('one file shared on its own', () => {
     await alices.stopSharingAlbum(shareId);
     expect(await listStillJoined(w.bob, w.server.api)).toEqual([]);
     expect(byId((await alices.list()).photos, lease.id).shareId).toBeUndefined();
+  });
+
+  it('tells an open app when anything it shows changes, and only then', async () => {
+    const { w, alices, lease, shareId, bobs } = await sharedFile();
+    const store = bobs();
+    const before = await store.list();
+    expect(before.photos[0]?.viewOnly).toBe(true);
+    const first = await store.stamp();
+    expect(await store.stamp()).toBe(first);
+
+    // Alice renames it: Bob's stamp moves, and listing again with the same store shows it.
+    const own = byId((await alices.list()).photos, lease.id);
+    if (!own.file) throw new Error('not a file');
+    await alices.update({ ...own, file: { ...own.file, name: 'Lease 2026.pdf' } });
+    const renamed = await store.stamp();
+    expect(renamed).not.toBe(first);
+    expect(byId((await store.list()).photos, lease.id).file?.name).toBe('Lease 2026.pdf');
+
+    // So does Alice letting him edit it.
+    const [member] = await listMembers(w.alice, w.server.api);
+    if (!member) throw new Error('no member');
+    await updateMemberAccess(w.alice, member.id, 'edit', w.server.api);
+    expect(await store.stamp()).not.toBe(renamed);
+    expect(byId((await store.list()).photos, lease.id).viewOnly).toBeFalsy();
+    const editable = await store.stamp();
+
+    // And her stopping: the share is gone from his next listing.
+    await alices.stopSharingAlbum(shareId);
+    expect(await store.stamp()).not.toBe(editable);
+    expect((await store.list()).photos).toEqual([]);
   });
 
   it('lets Bob, with Can edit, rename it and upload a new version that takes its place', async () => {

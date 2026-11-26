@@ -252,6 +252,40 @@ async function shareTaxesToEdit(browser: Browser): Promise<{ alice: Page; bob: P
   return { alice, bob };
 }
 
+/**
+ * Waits for `text` to show on a page left open, having it check for changes the way it does
+ * when someone comes back to the tab (the other side may still be finishing its change).
+ */
+async function seesWithoutReload(page: Page, text: string): Promise<void> {
+  await expect(async () => {
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.getByText(text)).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
+}
+
+test('an open page shows what the other person adds to a shared folder, without a reload', async ({
+  browser,
+}) => {
+  test.setTimeout(60_000);
+  const { alice, bob } = await shareTaxesToEdit(browser);
+  await goTo(bob, 'Files');
+  await bob.getByRole('link', { name: 'Open folder Taxes' }).click();
+  await expect(bob.getByText('Donation receipt.pdf')).toBeVisible();
+  await goTo(alice, 'Files');
+  await alice.getByRole('link', { name: 'Open folder Taxes' }).click();
+  await expect(alice.getByText('Donation receipt.pdf')).toBeVisible();
+
+  // Bob adds a file: Alice, with Taxes open, sees it come in.
+  await addFiles(bob, [{ name: 'Rent receipt.pdf', buffer: RECEIPT }]);
+  await expect(bob.getByText('Rent receipt.pdf')).toBeVisible();
+  await seesWithoutReload(alice, 'Rent receipt.pdf');
+
+  // And the other way round.
+  await addFiles(alice, [{ name: 'Insurance.pdf', buffer: FORM }]);
+  await expect(alice.getByText('Insurance.pdf')).toBeVisible();
+  await seesWithoutReload(bob, 'Insurance.pdf');
+});
+
 test('in a folder shared to edit: make, rename, move and delete, which Alice’s library takes in', async ({
   browser,
 }) => {

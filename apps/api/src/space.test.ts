@@ -309,12 +309,13 @@ describe('database round trips', () => {
     expect(await tripsFor(() => client.request('GET', '/space/photos'))).toBe(2);
   });
 
-  it('uploads a photo in nine round trips across its three requests', async () => {
+  it('uploads a photo in ten round trips across its three requests', async () => {
     // Two of them (the abandoned-upload check and the quota reservation) run side by side.
-    // The second file's upload commits the photo, so there is no fourth request.
+    // The second file's upload commits the photo, so there is no fourth request, and gives
+    // the space a new stamp, once the photo can be seen.
     const before = trips.count;
     await upload();
-    expect(trips.count - before).toBe(9);
+    expect(trips.count - before).toBe(10);
   });
 });
 

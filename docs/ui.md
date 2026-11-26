@@ -7,6 +7,12 @@ decrypts the open space; locking or reloading drops everything decrypted. The mo
 "photos" drawn as SVG data URIs) now only decorates the welcome and sign-in screens and
 feeds unit tests. Sharing and invite codes are real too, and so is auto-lock.
 
+An open library keeps itself current: while the page is in view it checks every 15 seconds,
+and when you come back to the tab (unless it just checked), whether anything changed (on another device,
+or by someone it's shared with), and if so loads it again in place, keeping what's on screen
+(`apps/web/src/app/live-refresh.ts`). It waits while a change of yours is still being made,
+uploads included, so it never undoes one.
+
 Arcafold presents itself as a private, end-to-end encrypted photo library for anyone. Sharing
 exists but is low-key (Settings → Sharing).
 
