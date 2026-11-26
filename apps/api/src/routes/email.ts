@@ -1,41 +1,19 @@
 import { Hono } from 'hono';
 
-import {
-  emailCodeMatches,
-  emailCodeScope,
-  emailCodeTag,
-  newEmailCode,
-} from '@arcafold/crypto/webcrypto';
-
-import {
-  deleteEmailCodeQuery,
-  emailInUse,
-  findEmailCode,
-  saveEmailCode,
-  takeEmailCodeTry,
-  verifyEmailQuery,
-} from '../email-db';
-import { mailSetup, sendMail } from '../mail';
+import { CODE_MAX_TRIES, codeMessages, codeScope, checkCode, issueCode } from '../email-codes';
+import { deleteEmailCodeQuery, emailInUse, verifyEmailQuery } from '../email-db';
+import { mailSetup } from '../mail';
 import { confirmEmailMail, emailInUseMail } from '../mail-templates';
 import { checkProof, clientAddress } from '../proof';
 import { messages, readBody, toAccountResponse } from '../respond';
 import { sendEmailCodeSchema, verifyEmailSchema } from '../schemas';
 import type { AppEnv } from '../session';
 
-/** How long a code works. */
-export const CODE_TTL_MS = 10 * 60 * 1000;
-/** Wrong tries a code allows before a new one is needed. */
-export const CODE_MAX_TRIES = 5;
-/** The shortest wait between two codes for the same account. */
-export const RESEND_WAIT_MS = 60 * 1000;
-/** Codes one account can ask for per hour, so nobody can use Arcafold to flood an inbox. */
-export const MAX_SENDS_PER_HOUR = 5;
-const HOUR_MS = 60 * 60 * 1000;
+export { CODE_MAX_TRIES };
+export { MAX_SENDS_PER_HOUR } from '../email-codes';
 
-/** What a verify code is for, mixed into its scope so other kinds of code never match. */
-const VERIFY_PURPOSE = 'verify';
-
-const notReady = 'Email isn’t available yet. Try again later.';
+/** The answer while email isn't set up for this Worker. */
+export const notReady = 'Email isn’t available yet. Try again later.';
 
 /**
  * Confirming the account's email: a 6-digit code sent to it, then typed back. Mounted under
@@ -67,41 +45,23 @@ email.post('/code', async (c) => {
     if (proof === 'wrong') return c.json({ error: messages.wrongPassword }, 403);
   }
 
-  const now = Date.now();
-  const scope = await emailCodeScope(setup.secret, VERIFY_PURPOSE, current.id);
-  const earlier = await findEmailCode(c.env.DB, scope);
-  if (earlier && now - earlier.sentAt < RESEND_WAIT_MS) {
-    return c.json({ error: 'Wait a minute before asking for another code.' }, 429);
-  }
-  const sameHour = earlier !== null && now - earlier.sendsSince < HOUR_MS;
-  const sends = (sameHour ? earlier.sends : 0) + 1;
-  if (sends > MAX_SENDS_PER_HOUR) {
-    return c.json({ error: 'That’s a lot of codes. Try again in an hour.' }, 429);
-  }
-
   // An address that already has an account gets a note instead of a code. The answer here
   // is the same either way, so this can't be used to find out which emails have accounts.
   const taken = changing && (await emailInUse(c.env.DB, body.email, current.id));
-  const code = newEmailCode();
-  const saved = await saveEmailCode(
+  const result = await issueCode(
     c.env.DB,
-    {
-      scope,
-      accountId: current.id,
-      tag: await emailCodeTag(setup.secret, scope, body.email, code),
-      expiresAt: now + CODE_TTL_MS,
-      sentAt: now,
-      sends,
-      sendsSince: sameHour ? earlier.sendsSince : now,
-    },
-    now - RESEND_WAIT_MS,
-  );
-  if (!saved) return c.json({ error: 'Wait a minute before asking for another code.' }, 429);
-  const sent = await sendMail(
     setup,
-    taken ? emailInUseMail(body.email) : confirmEmailMail(body.email, code),
+    {
+      scope: await codeScope(setup, 'verify', current.id),
+      accountId: current.id,
+      address: body.email,
+      mail: (code) => (taken ? emailInUseMail(body.email) : confirmEmailMail(body.email, code)),
+    },
+    Date.now(),
   );
-  if (!sent) return c.json({ error: 'We couldn’t send the email. Try again in a minute.' }, 502);
+  if (result === 'wait') return c.json({ error: codeMessages.wait }, 429);
+  if (result === 'too-many') return c.json({ error: codeMessages.tooMany }, 429);
+  if (result === 'not-sent') return c.json({ error: codeMessages.notSent }, 502);
   return c.body(null, 204);
 });
 
@@ -114,15 +74,10 @@ email.post('/verify', async (c) => {
   if (current.emailVerified && body.email === current.email) {
     return c.json(toAccountResponse(current, c.env));
   }
-  const scope = await emailCodeScope(setup.secret, VERIFY_PURPOSE, current.id);
-  // The try is counted before the code is checked, so parallel guesses still stop at the limit.
-  const tag = await takeEmailCodeTry(c.env.DB, scope, CODE_MAX_TRIES, Date.now());
-  if (!tag) {
-    return c.json({ error: 'That code has run out. Ask for a new one.' }, 400);
-  }
-  if (!(await emailCodeMatches(setup.secret, scope, body.email, body.code, tag))) {
-    return c.json({ error: 'That code isn’t right.' }, 400);
-  }
+  const scope = await codeScope(setup, 'verify', current.id);
+  const result = await checkCode(c.env.DB, setup, scope, body.email, body.code, Date.now());
+  if (result === 'run-out') return c.json({ error: codeMessages.runOut }, 400);
+  if (result === 'wrong') return c.json({ error: codeMessages.wrong }, 400);
   try {
     await c.env.DB.batch([
       deleteEmailCodeQuery(c.env.DB, scope),

@@ -15,6 +15,19 @@ space. Losing the password and the recovery key still means losing the photos.
   D1 keeps only HMACs of the code and of what it is for, keyed with the `EMAIL_CODE_SECRET`
   Worker secret (`email_codes`, migration 0022), so a copy of the database can't be used to
   guess codes or read addresses. A code is bound to the address it was sent to.
+- **Sign-up** (while email is on): after name, email and password, the address gets a code
+  (`POST /api/auth/signup/code`), and typing it back (`/signup/verify`) gives the browser a
+  one-use ticket, valid an hour, that `POST /api/auth/signup` must carry. Keys are only made
+  after that, and the account starts confirmed. An address that already has an account gets
+  a "you already have an account" note instead of a code, and the screen says "check your
+  email" either way. Sign-up codes are also limited to 20 an hour per internet address.
+  While email is off, `signup/code` answers `{ codeSent: false }` and sign-up goes on
+  without a code, as before.
+- **Sign-in** (while email is on) gives an email with no account a made-up salt that is
+  always the same for it, so the first step of sign-in doesn't say whether an account
+  exists.
+- Rows nobody can use any more (codes, tickets and address counts expired a day ago) are
+  deleted whenever a sign-up code is asked for.
 - Until an account has confirmed its email (`accounts.email_verified`), the server refuses
   every library, sharing and account request with `403 { code: "verify-email" }`. Only
   reading the account, asking for a code, confirming and signing out still work. A phone's

@@ -55,7 +55,8 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
   A second Worker, `arcafold-backup` (`src/backup`, `wrangler.backup.jsonc`), has no
   routes: every hour it copies photo files into the backup bucket
   ([backups.md](backups.md)).
-  - `/api/auth/*`: sign-up, prelogin (salt and KDF settings), login, logout.
+  - `/api/auth/*`: sign-up (with `signup/code` and `signup/verify` first while email is
+    on, [email.md](email.md)), prelogin (salt and KDF settings), login, logout.
   - `/api/account`: the signed-in account and its keyring; `PUT /api/account/keyring`
     replaces the keyring; `DELETE /api/account` deletes it; `GET /api/account/devices`
     lists signed-in devices and `DELETE /api/account/devices/:id` signs one out;

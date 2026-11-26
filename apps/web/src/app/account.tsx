@@ -42,7 +42,13 @@ interface AccountValue {
   /** Loads the open space again, e.g. after joining or leaving a shared library. */
   reloadVault: () => void;
   pendingSignUp: PendingSignUp | null;
-  prepareSignUp: (values: { name: string; email: string; password: string }) => Promise<void>;
+  prepareSignUp: (values: {
+    name: string;
+    email: string;
+    password: string;
+    /** Proof the email was confirmed, when the server sends email. */
+    ticket?: string;
+  }) => Promise<void>;
   completeSignUp: () => Promise<void>;
   logIn: (email: string, password: string) => Promise<void>;
   unlock: (password: string) => Promise<void>;
