@@ -25,6 +25,10 @@ never holds the backup bucket. Each run lists both buckets and then:
 3. Removes a copy and its mark 30 days after the mark. A photo deleted by mistake, or by
    someone with access to the photo bucket, can still be restored for those 30 days.
 
+Copies are stored in R2's Infrequent Access class ($0.01 per GB-month instead of $0.015).
+They're only read during a restore, which costs $0.01 per GB read, and every copy lives at
+least 30 days, that class's minimum. Marks stay in Standard.
+
 The files are already encrypted on the device, so the copies are ciphertext; this keeps
 deleted photos' ciphertext for 30 days more. If the photo bucket ever lists empty while
 copies exist, nothing is marked: that's far more likely a broken binding than every photo
@@ -79,6 +83,9 @@ pnpm exec wrangler r2 bucket lock add arcafold-backups d1-30-days d1/ --retentio
 pnpm exec wrangler r2 bucket lifecycle add arcafold-backups d1-expiry d1/ --expire-days 31
 # Photo copies can't be deleted or overwritten for 30 days either.
 pnpm exec wrangler r2 bucket lock add arcafold-backups r2-30-days r2/ --retention-days 30
+# The Worker puts new copies in Infrequent Access. This moves copies made before that once
+# their lock has ended (31 days), so older copies get cheaper too.
+pnpm exec wrangler r2 bucket lifecycle add arcafold-backups r2-infrequent r2/ --ia-transition-days 31
 ```
 
 ### 3. Create the backup API token
@@ -161,8 +168,12 @@ The photo's database record must exist too: if it was deleted, rewind the databa
   and the same for `thumb`. Delete the local files afterwards.
 - **Everything:** wrangler can't list a bucket, so use rclone with an R2 API token
   (**R2 → Manage API tokens**, Object Read & Write on both buckets):
-  `rclone copy r2:arcafold-backups/r2/ r2:arcafold-blobs/ --ignore-existing`. Files that are
-  still there are left alone.
+  `rclone copy r2:arcafold-backups/r2/ r2:arcafold-blobs/ --ignore-existing --s3-storage-class STANDARD`.
+  Files that are still there are left alone. The last flag keeps restored photos in
+  Standard, since the app reads them often.
+
+Reading copies back costs $0.01 per GB (Infrequent Access), so a full restore of 1 TB costs
+about $10.
 
 Practise a restore every quarter on staging, never on production: see
 [staging.md](staging.md#restore-drill-every-quarter).

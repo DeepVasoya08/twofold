@@ -23,6 +23,8 @@ pnpm exec wrangler r2 bucket create arcafold-staging-blobs
 pnpm exec wrangler r2 bucket create arcafold-staging-backups
 ```
 
+The staging backup Worker puts its copies in Infrequent Access too, like production's.
+
 Staging's `robots.txt` blocks search engines. Staging has its own photo backup Worker
 (`arcafold-staging-backup`) copying into `arcafold-staging-backups`, so changes to the backup
 can be tried there first.

@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
   COPY_PREFIX,
+  COPY_STORAGE_CLASS,
   GONE_PREFIX,
   KEEP_DELETED_DAYS,
   MAX_COPIES_PER_RUN,
@@ -30,6 +31,8 @@ beforeAll(() => {
 interface Stored {
   data: Uint8Array;
   uploaded: Date;
+  /** R2 puts objects in Standard unless told otherwise. */
+  storageClass?: string;
 }
 
 /**
@@ -94,11 +97,12 @@ class FakeBucket {
     });
   }
 
-  async put(key: string, value: ReadableStream | Uint8Array) {
+  async put(key: string, value: ReadableStream | Uint8Array, options?: R2PutOptions) {
     this.checkLock(key);
     const data =
       value instanceof Uint8Array ? value : new Uint8Array(await new Response(value).arrayBuffer());
-    this.objects.set(key, { data, uploaded: this.now });
+    const storageClass = options?.storageClass;
+    this.objects.set(key, { data, uploaded: this.now, ...(storageClass ? { storageClass } : {}) });
     return { size: data.length };
   }
 
@@ -232,6 +236,20 @@ describe('photo backup', () => {
     backup.objects.set(`${GONE_PREFIX}a`, { data: new Uint8Array(0), uploaded: at(-60 * DAY) });
     expect(await run(at(2 * DAY))).toMatchObject({ removed: 0, failed: 1 });
     expect(backup.text(`${COPY_PREFIX}a`)).toBe('x');
+  });
+
+  it('puts copies in Infrequent Access and marks in Standard', async () => {
+    const { source, backup, run } = setup();
+    source.add('a', 'x', start);
+    // A file that stays, so the empty-bucket guard doesn't stop the mark.
+    source.add('b', 'y', start);
+    await run(at(SETTLE_MS));
+    expect(COPY_STORAGE_CLASS).toBe('InfrequentAccess');
+    expect(backup.objects.get(`${COPY_PREFIX}a`)?.storageClass).toBe('InfrequentAccess');
+    source.objects.delete('a');
+    await run(at(2 * SETTLE_MS));
+    expect(backup.objects.has(`${GONE_PREFIX}a`)).toBe(true);
+    expect(backup.objects.get(`${GONE_PREFIX}a`)?.storageClass).toBeUndefined();
   });
 
   it('only reads the photo bucket', async () => {
