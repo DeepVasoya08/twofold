@@ -13,6 +13,8 @@ import {
   updateName,
   updateSmartFeatures,
 } from '../db';
+import { mailSetup, sendNotice } from '../mail';
+import { accountDeletedMail } from '../mail-templates';
 import { checkProof, clientAddress } from '../proof';
 import { messages, readBody, toAccountResponse } from '../respond';
 import {
@@ -140,5 +142,7 @@ account.delete('/', async (c) => {
   if (proof === 'wrong') return c.json({ error: messages.wrongPassword }, 403);
   await deleteAccount(c.env.DB, current.id);
   clearSessionCookie(c);
+  const setup = mailSetup(c.env);
+  if (setup && current.emailVerified) await sendNotice(c, setup, accountDeletedMail(current.email));
   return c.body(null, 204);
 });

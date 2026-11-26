@@ -29,9 +29,10 @@ import { Avatar } from '../ui/avatar';
 import { Banner, Button, Field } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { Sheet } from '../ui/sheet';
-import { IconTile, Row, Section } from '../ui/rows';
+import { IconTile, PillButton, Row, Section } from '../ui/rows';
 import { useAppearance } from '../ui/appearance';
 import type { ThemeChoice } from '../ui/appearance-settings';
+import { ChangeEmailSheet } from './ChangeEmailSheet';
 import { ProfileSheet } from './ProfileSheet';
 import { SharingSettings } from './SharingSettings';
 import { SmartSettings } from './SmartSettings';
@@ -388,6 +389,7 @@ export function Settings({
   const palette = usePalette();
   const [askingPassword, setAskingPassword] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [changingEmail, setChangingEmail] = useState(false);
   const profile = useProfile();
   const { name, email } = session.account;
   const fingerprintOn = biometricFor === email;
@@ -528,6 +530,23 @@ export function Settings({
         </Section>
 
         <Section title="Security" palette={palette}>
+          {session.account.emailVerified ? (
+            <Row
+              title="Email"
+              detail="Used for sign-in alerts and codes. It can’t unlock your photos."
+              palette={palette}
+              action={
+                <PillButton
+                  label="Change"
+                  accessibilityLabel="Change email"
+                  palette={palette}
+                  onPress={() => {
+                    setChangingEmail(true);
+                  }}
+                />
+              }
+            />
+          ) : null}
           {showFingerprint ? (
             <Row
               title="Fingerprint or face unlock"
@@ -647,6 +666,13 @@ export function Settings({
         <PasswordSheet
           onDone={() => {
             setAskingPassword(false);
+          }}
+        />
+      ) : null}
+      {changingEmail ? (
+        <ChangeEmailSheet
+          onClose={() => {
+            setChangingEmail(false);
           }}
         />
       ) : null}

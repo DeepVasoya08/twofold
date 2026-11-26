@@ -30,6 +30,7 @@ import { PeopleSettings } from '../components/PeopleSettings';
 import { SearchSettings } from '../components/SearchSettings';
 import type { IconName } from '../components/Icon';
 import { ProfileDialog } from '../components/ProfileDialog';
+import { ChangeEmailDialog } from '../components/ChangeEmailDialog';
 import { StorageMeter } from '../components/StorageMeter';
 import { api } from '@arcafold/core/api';
 import { onVisibleAgain } from '../lib/when-visible';
@@ -83,7 +84,7 @@ const themes: { value: ThemePreference; label: string; icon: IconName }[] = [
   { value: 'dark', label: 'Dark', icon: 'moon' },
 ];
 
-type DialogName = 'profile' | 'main-password' | 'private-password' | 'delete' | null;
+type DialogName = 'profile' | 'email' | 'main-password' | 'private-password' | 'delete' | null;
 
 /** A sharing change waiting for confirmation: stop sharing with someone, or leave a library. */
 type SharingChange = { kind: 'stop'; member: Member } | { kind: 'leave'; library: JoinedLibrary };
@@ -452,6 +453,25 @@ export function Settings() {
             <span className="profile__edit-label">Edit</span>
           </button>
         </div>
+        {account.emailVerified && (
+          <Row
+            icon="mail"
+            title="Email"
+            description="Used for sign-in alerts and codes. It can’t unlock your photos."
+            action={
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                aria-label="Change email"
+                onClick={() => {
+                  setDialog('email');
+                }}
+              >
+                Change
+              </button>
+            }
+          />
+        )}
       </Section>
 
       <Section title="Storage">
@@ -771,6 +791,7 @@ export function Settings() {
       </div>
 
       <ProfileDialog open={dialog === 'profile'} onClose={closeDialog} />
+      <ChangeEmailDialog open={dialog === 'email'} onClose={closeDialog} />
 
       <Dialog open={dialog === 'main-password'} onClose={closeDialog} title="Change main password">
         <form className="form" onSubmit={onChangeMain} noValidate>

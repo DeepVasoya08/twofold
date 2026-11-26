@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
-import { MAIN_PASSWORD, signUp } from './helpers';
+import { MAIN_PASSWORD, goTo, signUp } from './helpers';
 
 /**
  * The local Worker has no email secret, so it never asks to confirm an email. These tests
@@ -167,4 +167,73 @@ test('sign-up can go back to fix the email before the code', async ({ page }) =>
   await page.getByRole('button', { name: 'Change email' }).click();
   await expect(page.getByLabel('Email')).toHaveValue('typo@exmaple.com');
   await expect(page.getByLabel('Your name')).toHaveValue('Sam');
+});
+
+test('a confirmed email can be changed from Settings with a code', async ({ page }) => {
+  const { email } = await signUp(page);
+  const codesSent: { email: string; loginKey?: string }[] = [];
+  let current = email;
+  await page.route('**/api/account', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const response = await route.fetch();
+    const account = (await response.json()) as Record<string, unknown>;
+    await route.fulfill({
+      response,
+      json: { ...account, email: current, emailVerified: true, mustVerifyEmail: false },
+    });
+  });
+  await page.route('**/api/account/email/code', async (route) => {
+    codesSent.push(route.request().postDataJSON() as { email: string; loginKey?: string });
+    await route.fulfill({ status: 204 });
+  });
+  await page.route('**/api/account/email/verify', async (route) => {
+    const body = route.request().postDataJSON() as { email: string; code: string };
+    if (body.code !== '123456') {
+      await route.fulfill({ status: 400, json: { error: 'That code isn’t right.' } });
+      return;
+    }
+    current = body.email;
+    const account = (await (await page.request.get('/api/account')).json()) as Record<
+      string,
+      unknown
+    >;
+    await route.fulfill({
+      json: { ...account, email: body.email, emailVerified: true, mustVerifyEmail: false },
+    });
+  });
+  await unlockAgain(page);
+  await goTo(page, 'Settings');
+
+  await page.getByRole('button', { name: 'Change email' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Change email' });
+  await expect(dialog.getByText(email)).toBeVisible();
+  // The address it already has isn't sent anywhere.
+  await dialog.getByLabel('New email').fill(email);
+  await dialog.getByRole('button', { name: 'Send code' }).click();
+  await expect(dialog.getByText('That’s already your email.')).toBeVisible();
+  expect(codesSent).toEqual([]);
+
+  await dialog.getByLabel('New email').fill('Moved@Example.com');
+  await dialog.getByRole('button', { name: 'Send code' }).click();
+  await expect(dialog.getByText('moved@example.com')).toBeVisible();
+  expect(codesSent).toHaveLength(1);
+  expect(codesSent[0]?.email).toBe('moved@example.com');
+  expect(codesSent[0]?.loginKey).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  expect(JSON.stringify(codesSent)).not.toContain(MAIN_PASSWORD);
+
+  await dialog.getByLabel('Code').fill('000000');
+  await dialog.getByRole('button', { name: 'Change email' }).click();
+  await expect(dialog.getByText('That code isn’t right.')).toBeVisible();
+  await dialog.getByLabel('Code').fill('123456');
+  await dialog.getByRole('button', { name: 'Change email' }).click();
+  await expect(page.getByText('Email changed')).toBeVisible();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('.profile__email')).toHaveText('moved@example.com');
+});
+
+test('an unconfirmed email has no change button in Settings', async ({ page }) => {
+  await signUp(page);
+  await goTo(page, 'Settings');
+  await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Change email' })).toHaveCount(0);
 });

@@ -1,5 +1,7 @@
 import { EMAIL_SECRET_MIN_LENGTH } from '@arcafold/crypto/webcrypto';
 
+import type { Context } from 'hono';
+
 import type { Env } from './env';
 
 /** Who account email comes from. Replies go to a person, not to the no-reply address. */
@@ -45,4 +47,21 @@ export async function sendMail(setup: MailSetup, mail: Mail): Promise<boolean> {
     console.error('Email not sent', error instanceof Error ? error.name : 'unknown');
     return false;
   }
+}
+
+/**
+ * Sends a notice without holding up the answer: the Worker keeps running until it's sent.
+ * Where there is no execution context (tests), it's sent before answering instead.
+ */
+export async function sendNotice(c: Context, setup: MailSetup, mail: Mail): Promise<void> {
+  let ctx: { waitUntil: (promise: Promise<unknown>) => void } | null;
+  try {
+    ctx = c.executionCtx;
+  } catch {
+    // Hono throws here when the app runs without a Worker context.
+    ctx = null;
+  }
+  const sending = sendMail(setup, mail);
+  if (ctx) ctx.waitUntil(sending);
+  else await sending;
 }
