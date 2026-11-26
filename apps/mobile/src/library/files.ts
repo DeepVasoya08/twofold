@@ -1,8 +1,8 @@
 import { CATEGORIES, categoryLabel } from '@arcafold/core/file-categories';
 import type { Category } from '@arcafold/core/file-categories';
-import { fileKindLabel, fileKindOf } from '@arcafold/core/file-types';
+import { cleanFileName, fileKindLabel, fileKindOf } from '@arcafold/core/file-types';
 import { formatBytes } from '@arcafold/core/format-bytes';
-import { itemsIn } from '@arcafold/core/library/folders';
+import { editableFile, inFiles, itemsIn } from '@arcafold/core/library/folders';
 import type { Folder, Photo } from '@arcafold/core/library/model';
 import { groupByMonth } from '@arcafold/core/library/months';
 
@@ -15,12 +15,13 @@ import { groupByMonth } from '@arcafold/core/library/months';
 export type Shown = Category | 'all';
 
 /**
- * Files in the open space: not photos, not ones in Recently deleted, and not ones here only
- * through an album shared with you (those show in the album).
+ * Files in the open space and shared with you: not photos, not ones in Recently deleted, and
+ * not ones here only through an album shared with you (those show in the album). Files in a
+ * folder shared with you, or shared with you on their own, are here.
  */
-export function libraryFiles(items: readonly Photo[]): Photo[] {
+export function libraryFiles(items: readonly Photo[], folders: readonly Folder[]): Photo[] {
   return items.filter(
-    (item) => item.file !== undefined && item.deletedAt === undefined && !item.sharedAlbum,
+    (item) => item.file !== undefined && item.deletedAt === undefined && inFiles(item, folders),
   );
 }
 
@@ -135,4 +136,38 @@ export function folderSummary(counts: { folders: number; items: number }): strin
       : []),
   ];
   return parts.length > 0 ? parts.join(' · ') : 'Empty';
+}
+
+/** What a file's menu offers. */
+export interface FileChoices {
+  /** Yours, or shared with you to edit. */
+  rename: boolean;
+  /** Yours: share it on its own. */
+  share: boolean;
+  /** Shared with you on its own, to edit: upload a new version in its place. */
+  newVersion: boolean;
+  /** Shared with you on its own: take it out of your Files. */
+  leave: boolean;
+}
+
+export function fileChoices(item: Photo, folders: readonly Folder[]): FileChoices {
+  const sharedFile = item.sharedFile === true;
+  const editable = editableFile(item, folders);
+  return {
+    rename: editable,
+    share: !item.sharedAlbum && item.library === undefined,
+    newVersion: sharedFile && editable,
+    leave: sharedFile,
+  };
+}
+
+/** Whether a file's menu has anything in it. */
+export function hasFileChoices(choices: FileChoices): boolean {
+  return choices.rename || choices.share || choices.newVersion || choices.leave;
+}
+
+/** A file name as the rename sheet checks it: something there, made safe to keep. */
+export function checkFileName(name: string): { title: string } | { error: string } {
+  if (name.trim() === '') return { error: 'Give the file a name.' };
+  return { title: cleanFileName(name) };
 }

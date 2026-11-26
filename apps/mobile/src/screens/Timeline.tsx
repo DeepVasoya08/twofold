@@ -9,6 +9,7 @@ import { fonts } from '../theme';
 import { useAppearance } from '../ui/appearance';
 import { useReportPicking } from '../ui/float-space';
 import { Button, Note } from '../ui/kit';
+import { usePullToRefresh } from '../ui/pull-refresh';
 import { usePalette } from '../ui/theme';
 import { PHOTO_CHOICES } from '../ui/view-choices';
 import { ViewSheet } from '../ui/view-sheet';
@@ -57,6 +58,7 @@ export function Timeline({
   const palette = usePalette();
   const rows = useMemo(() => timelineRows(library.photos), [library.photos]);
   const all = useMemo(() => photosInRows(rows), [rows]);
+  const refreshControl = usePullToRefresh(library.refresh);
   const picking = usePickToDelete(library, onOpen, {
     onShare,
     onSave,
@@ -132,6 +134,7 @@ export function Timeline({
         rows={rows}
         thumbs={library.thumbs}
         requestThumbs={library.requestThumbs}
+        refreshControl={refreshControl}
         {...picking.grid}
       />
       {picking.sheet}

@@ -14,7 +14,6 @@ import {
 import type { Session } from '@arcafold/core/account';
 import { errorMessage } from '@arcafold/core/errors';
 import { inviteLinkFor } from '@arcafold/core/invite-input';
-import type { Album } from '@arcafold/core/library/model';
 import { listMembers, removeMember, updateMemberAccess } from '@arcafold/core/sharing';
 import type { Member } from '@arcafold/core/sharing';
 import type { MemberAccess } from '@arcafold/types';
@@ -25,10 +24,13 @@ import { useAccount } from '../session/account';
 import { useInvites } from '../sharing/invites';
 import {
   ACCESS_LABELS,
-  ALBUM_ACCESS_LABELS,
+  accessChangedText,
   inviteMessage,
+  shareAccessLabels,
+  shareIntro,
   spaceName,
 } from '../sharing/sharing-text';
+import type { ShareTarget } from '../sharing/sharing-text';
 import { Banner, Button, Note } from '../ui/kit';
 import { useNotice } from '../ui/notice';
 import { PillButton, Row, Section } from '../ui/rows';
@@ -47,12 +49,12 @@ function AccessPicker({
   onChange,
 }: {
   value: MemberAccess;
-  album: boolean;
+  album: ShareTarget['kind'] | null;
   disabled: boolean;
   palette: Palette;
   onChange: (access: MemberAccess) => void;
 }) {
-  const labels = album ? ALBUM_ACCESS_LABELS : ACCESS_LABELS;
+  const labels = album ? shareAccessLabels(album) : ACCESS_LABELS;
   return (
     <View style={styles.access} accessibilityRole="radiogroup">
       <Text style={[styles.label, { color: palette.text }]}>What can they do?</Text>
@@ -101,7 +103,7 @@ function AccessPicker({
  * valid for a week whether or not this screen is open; when they accept, the request to
  * check the words shows over the library, on any of your devices.
  */
-function InvitePanel({ album, palette }: { album: Album | null; palette: Palette }) {
+function InvitePanel({ album, palette }: { album: ShareTarget | null; palette: Palette }) {
   const { space, onSystemScreen } = useAccount();
   const invites = useInvites();
   const notice = useNotice();
@@ -208,7 +210,7 @@ function InvitePanel({ album, palette }: { album: Album | null; palette: Palette
     <View style={styles.panel}>
       <AccessPicker
         value={picked ?? invite?.access ?? 'view'}
-        album={album !== null}
+        album={album?.kind ?? null}
         disabled={!invite || picked !== null}
         palette={palette}
         onChange={changeAccess}
@@ -270,7 +272,7 @@ function AlbumPeople({
   onSharedWith,
   onStopSharing,
 }: {
-  album: Album;
+  album: ShareTarget;
   keys: SpaceKeys;
   palette: Palette;
   onSharedWith: (names: string[]) => void;
@@ -338,7 +340,7 @@ function AlbumPeople({
           <View key={member.id}>
             <Row
               title={member.name}
-              detail={ALBUM_ACCESS_LABELS[member.access].detail}
+              detail={shareAccessLabels(album.kind)[member.access].detail}
               palette={palette}
               action={
                 <PillButton
@@ -362,8 +364,8 @@ function AlbumPeople({
               {(['view', 'edit'] as const).map((access) => (
                 <PillButton
                   key={access}
-                  label={`${member.access === access ? '✓ ' : ''}${ALBUM_ACCESS_LABELS[access].title}`}
-                  accessibilityLabel={`${member.name}: ${ALBUM_ACCESS_LABELS[access].title}`}
+                  label={`${member.access === access ? '✓ ' : ''}${shareAccessLabels(album.kind)[access].title}`}
+                  accessibilityLabel={`${member.name}: ${shareAccessLabels(album.kind)[access].title}`}
                   disabled={busy}
                   palette={palette}
                   onPress={() => {
@@ -375,9 +377,7 @@ function AlbumPeople({
                           each.id === member.id ? { ...each, access } : each,
                         );
                       },
-                      access === 'edit'
-                        ? `${member.name} can add to “${album.title}” now`
-                        : `${member.name} can only view “${album.title}” now`,
+                      accessChangedText(member.name, album, access),
                     );
                   }}
                 />
@@ -420,8 +420,8 @@ export function ShareScreen({
   onStopSharing,
   onClose,
 }: {
-  /** The album to share, or null for the whole library. */
-  album: Album | null;
+  /** The album, folder or file to share, or null for the whole library. */
+  album: ShareTarget | null;
   keys: SpaceKeys;
   onSharedWith: (albumId: string, names: string[]) => void;
   onStopSharing: (albumId: string) => Promise<void>;
@@ -467,7 +467,7 @@ export function ShareScreen({
       >
         <Text style={[styles.body, { color: palette.muted }]}>
           {album
-            ? 'Invite someone you trust. They get this album’s photos, including ones you add later, and nothing else.'
+            ? shareIntro(album.kind)
             : `Invite someone you trust. They’ll see this ${where} and nothing else.`}
         </Text>
         {album ? (

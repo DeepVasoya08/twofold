@@ -3,6 +3,7 @@ import type { ViewToken } from '@shopify/flash-list';
 import { memo, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import type { RefreshControlProps } from 'react-native';
 
 import { MemoryImage } from '../../modules/memory-image';
 import { layOut } from '../library/layout';
@@ -250,6 +251,7 @@ export function PhotoGrid({
   bottomPadding = 48,
   floatSpace: floatOverride,
   gap = GAP,
+  refreshControl,
 }: {
   rows: readonly TimelineRow[];
   thumbs: ReadonlyMap<string, string>;
@@ -264,6 +266,8 @@ export function PhotoGrid({
   floatSpace?: number;
   /** Space between photos; search results breathe a little more than the timeline. */
   gap?: number;
+  /** Pull to refresh, where the screen offers it. */
+  refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   const palette = usePalette();
   const { width } = useWindowDimensions();
@@ -316,6 +320,7 @@ export function PhotoGrid({
       onViewableItemsChanged={onViewableItemsChanged}
       ListHeaderComponent={header}
       ListFooterComponent={footer}
+      {...(refreshControl && { refreshControl })}
       contentContainerStyle={{ paddingBottom: bottomPadding + floatSpace }}
     />
   );

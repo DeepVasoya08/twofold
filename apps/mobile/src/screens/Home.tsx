@@ -34,6 +34,7 @@ import {
   timelineRows,
 } from '../library/timeline';
 import { useLibrary } from '../library/use-library';
+import type { Library } from '../library/use-library';
 import { useSaveToPhone } from '../library/use-save-to-phone';
 import { personPhotos, usePeople } from '../people/use-people';
 import { useSmartSettings } from '../ai/smart-settings';
@@ -44,6 +45,7 @@ import { searchToSave, smartTitleCheck, teachCountProblem, wordCheck } from '../
 import { useAccount } from '../session/account';
 import { ProfileProvider } from '../session/profile';
 import { InvitesProvider } from '../sharing/invites';
+import type { ShareTarget } from '../sharing/sharing-text';
 import { PhotoAspects } from '../ui/appearance';
 import { FloatSpace } from '../ui/float-space';
 import { Icon } from '../ui/icons';
@@ -204,6 +206,26 @@ interface Viewing {
  * The open space: Photos and Albums tabs, an album when one is open, and what shows over
  * them (the viewer, choosing photos, Settings). The library stays open across all of them.
  */
+
+/** What the sharing screen is for, from what's open now (so a rename shows), or null. */
+function shareTarget(
+  sharing: { albumId: string | null; kind?: 'folder' | 'file' },
+  library: Pick<Library, 'albums' | 'folders' | 'photos'>,
+): ShareTarget | null {
+  const id = sharing.albumId;
+  if (id === null) return null;
+  if (sharing.kind === 'folder') {
+    const folder = library.folders.find((each) => each.id === id);
+    return folder ? { id, title: folder.name, kind: 'folder' } : null;
+  }
+  if (sharing.kind === 'file') {
+    const file = library.photos.find((each) => each.shareId === id);
+    return file?.file ? { id, title: file.file.name, kind: 'file' } : null;
+  }
+  const album = library.albums.find((each) => each.id === id);
+  return album ? { id, title: album.title, kind: 'album' } : null;
+}
+
 export function Home({ session }: { session: Session }) {
   const inset = bottomInset();
   return (
@@ -238,8 +260,14 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [naming, setNaming] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  /** The sharing screen: for one album (by id), or for the whole library. */
-  const [sharing, setSharing] = useState<{ albumId: string | null } | null>(null);
+  /**
+   * The sharing screen: for one album (by id), a folder or file in Files (by the row it's
+   * shared through), or the whole library.
+   */
+  const [sharing, setSharing] = useState<{
+    albumId: string | null;
+    kind?: 'folder' | 'file';
+  } | null>(null);
   const [joining, setJoining] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
   const [smartId, setSmartId] = useState<string | null>(null);
@@ -402,6 +430,11 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
       },
     );
   }, [onSystemScreen, addPhotos, filesFolder]);
+  /** One file from the phone, for a new version of a file in Files. */
+  const pickOneFile = useCallback(
+    () => onSystemScreen(() => PhotoPicker.pickFilesAsync()).then((picked) => picked[0] ?? null),
+    [onSystemScreen],
+  );
   const { deleteOriginals, hideUploads } = library;
   const removeOriginals = useCallback(() => {
     setPickError(null);
@@ -545,7 +578,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
   const { retry: reload } = library;
   const leaveAlbum = useCallback(
     async (joinedId: string | undefined) => {
-      if (!joinedId) throw new Error('That album isn’t one you joined.');
+      if (!joinedId) throw new Error('That isn’t something shared with you.');
       await leaveJoined(keys, joinedId);
       // Its photos leave the open space too.
       reload();
@@ -683,6 +716,9 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
         onSettings={openSettings}
         onAdd={pickFiles}
         {...(onSave ? { onSave } : {})}
+        onShare={setSharing}
+        onLeaveFile={leaveAlbum}
+        pickFile={pickOneFile}
       />
     );
   } else if (tab === 'albums') {
@@ -954,11 +990,7 @@ function HomeScreens({ session, inset }: { session: Session; inset: number }) {
             ) : null}
             {sharing ? (
               <ShareScreen
-                album={
-                  sharing.albumId === null
-                    ? null
-                    : (library.albums.find((each) => each.id === sharing.albumId) ?? null)
-                }
+                album={shareTarget(sharing, library)}
                 keys={keys}
                 onSharedWith={library.setSharedWith}
                 onStopSharing={library.stopSharingAlbum}

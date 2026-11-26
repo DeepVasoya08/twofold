@@ -12,7 +12,8 @@ import { AppState } from 'react-native';
 
 import type { Session } from '@arcafold/core/account';
 import { FormError } from '@arcafold/core/errors';
-import type { Album } from '@arcafold/core/library/model';
+import type { Album, Folder, Photo } from '@arcafold/core/library/model';
+import { sharedThing } from './sharing-text';
 import {
   BACKGROUND_POLL_MS,
   IDLE_POLL_MS,
@@ -95,6 +96,10 @@ export function useInvites(): Invites {
 /** What the invites need from the open library. */
 export interface InviteLibrary {
   albums: Album[];
+  /** Folders in Files, which are shared the same way as albums. */
+  folders: Folder[];
+  /** Photos and files; a file shared on its own names the row it's shared through. */
+  photos: Photo[];
   shareAlbum: (albumId: string) => Promise<Uint8Array>;
   setSharedWith: (albumId: string, names: string[]) => void;
   /** Loads the library again, with what was shared with it. */
@@ -225,8 +230,12 @@ export function InvitesProvider({
   }, [every, check]);
 
   const albums = useRef(library.albums);
+  const folders = useRef(library.folders);
+  const photos = useRef(library.photos);
   useEffect(() => {
     albums.current = library.albums;
+    folders.current = library.folders;
+    photos.current = library.photos;
   });
 
   const start = useCallback(
@@ -290,9 +299,8 @@ export function InvitesProvider({
         if (invite.album === null) {
           member = await confirmInvite(invite, joiner, keys, myName, apis);
         } else {
-          const album = albums.current.find(
-            (each) => each.id === invite.album && each.library === undefined,
-          );
+          // An album, a folder in Files or one file: all are shared the same way.
+          const album = sharedThing(invite.album, albums.current, folders.current, photos.current);
           if (!album) throw new FormError('That album isn’t here anymore. Cancel this invite.');
           // The album gets its own key now, and only that key goes to them.
           const albumKey = await shareAlbum(album.id);

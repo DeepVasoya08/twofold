@@ -27,6 +27,7 @@ import { useAppearance } from '../ui/appearance';
 import { useFloatSpace, useReportPicking } from '../ui/float-space';
 import { Icon } from '../ui/icons';
 import { Button, Note } from '../ui/kit';
+import { usePullToRefresh } from '../ui/pull-refresh';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 import { ALBUM_CHOICES, ALBUM_COLUMNS } from '../ui/view-choices';
@@ -237,6 +238,7 @@ export function Albums({
   const { width } = useWindowDimensions();
   const { albumView, setAlbumView } = useAppearance();
   const floatSpace = useFloatSpace();
+  const refreshControl = usePullToRefresh(library.refresh);
   const columns = ALBUM_COLUMNS[albumView];
   const cardWidth = Math.floor((width - GUTTER * 2 - GAP * (columns - 1)) / columns);
   const [tab, setTab] = useState<AlbumTab>('all');
@@ -465,6 +467,7 @@ export function Albums({
         columnWrapperStyle={styles.row}
         contentContainerStyle={[styles.list, { paddingBottom: 32 + floatSpace }]}
         keyboardShouldPersistTaps="handled"
+        refreshControl={refreshControl}
         extraData={thumbs}
         ListFooterComponent={
           tab === 'all' ? (

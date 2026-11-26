@@ -228,3 +228,34 @@ export function inTrashedFolder(
 export function expiredFolders(folders: readonly Folder[], now = Date.now()): Folder[] {
   return folders.filter((folder) => trashExpired(folder, now));
 }
+
+type SharedItem = Pick<Photo, 'albumIds' | 'sharedAlbum' | 'sharedFile' | 'viewOnly'>;
+
+/** Whether `item` is in a folder someone shared with you (or one inside it). */
+function inSharedFolder(item: SharedItem, folders: readonly Folder[]): boolean {
+  const shared = new Set(folders.filter((folder) => folder.sharedFolder).map((f) => f.id));
+  return item.albumIds.some((id) => shared.has(id));
+}
+
+/**
+ * Whether an item belongs in Files: your own, one in a folder shared with you, or a file
+ * shared with you on its own. What's only in an album shared with you stays out.
+ */
+export function inFiles(item: SharedItem, folders: readonly Folder[]): boolean {
+  return !item.sharedAlbum || item.sharedFile === true || inSharedFolder(item, folders);
+}
+
+/**
+ * Whether a file may be renamed, moved or deleted here: your own (not one in a library you
+ * may only view), or one shared with you to edit, on its own or in a folder shared with you.
+ */
+export function editableFile(item: SharedItem, folders: readonly Folder[]): boolean {
+  if (item.viewOnly) return false;
+  if (!item.sharedAlbum) return true;
+  return item.sharedFile === true || inSharedFolder(item, folders);
+}
+
+/** Whether a folder's menu offers changes: not one you may only view, nor a shared folder itself (that's its owner's). */
+export function changeableHere(folder: Folder): boolean {
+  return !folder.viewOnly && !(folder.sharedFolder && folder.parentId === undefined);
+}
