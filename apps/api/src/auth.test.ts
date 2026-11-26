@@ -38,7 +38,15 @@ describe('POST /api/auth/signup', () => {
     const res = await signUp();
     expect(res.status).toBe(201);
     const body = await res.json<AccountResponse>();
-    expect(body).toEqual({ email: EMAIL, name: 'Sam', smartFeatures: null, version: 1, keyring });
+    expect(body).toEqual({
+      email: EMAIL,
+      name: 'Sam',
+      smartFeatures: null,
+      version: 1,
+      keyring,
+      emailVerified: false,
+      mustVerifyEmail: false,
+    });
     expect(res.headers.get('set-cookie')).toMatch(
       /^__Host-arcafold_session=[\w-]{43}; Max-Age=2592000; Path=\/; HttpOnly; Secure; SameSite=Strict$/,
     );
@@ -148,6 +156,8 @@ describe('POST /api/auth/login', () => {
       email: EMAIL,
       name: 'Sam',
       smartFeatures: null,
+      emailVerified: false,
+      mustVerifyEmail: false,
       version: 1,
       keyring,
     });

@@ -44,6 +44,23 @@ describe('App', () => {
     expect(render('/photos', mainSession(older))).toContain(asked);
   });
 
+  it('shows the confirm-email step instead of the library until the email is confirmed', () => {
+    const unconfirmed = { ...testAccount(), emailVerified: false, mustVerifyEmail: true };
+    for (const session of [mainSession(unconfirmed), privateSession(unconfirmed)]) {
+      const html = render('/photos', session);
+      expect(heading(html)).toBe('Confirm your email');
+      expect(html).toContain('sam@example.com');
+      expect(html).toContain('Use a different email');
+    }
+    expect(heading(render('/settings', mainSession(unconfirmed)))).toBe('Confirm your email');
+    // While locked, unlocking comes first; the step follows once the keys are open.
+    const locked: AccountState = { status: 'locked', account: unconfirmed };
+    expect(heading(render('/unlock', locked))).not.toBe('Confirm your email');
+    // Email not set up yet: the library opens as before.
+    const notAsked = { ...testAccount(), emailVerified: false, mustVerifyEmail: false };
+    expect(heading(render('/photos', mainSession(notAsked)))).not.toBe('Confirm your email');
+  });
+
   it('never asks the smart features question while locked or signed out', () => {
     const unanswered = { ...testAccount(), smartFeatures: null };
     const locked: AccountState = { status: 'locked', account: unanswered };

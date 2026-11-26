@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { View } from 'react-native';
 
+import { ConfirmEmail } from './src/screens/ConfirmEmail';
 import { Home } from './src/screens/Home';
 import { RecoveryWords } from './src/screens/RecoveryWords';
 import { SignIn } from './src/screens/SignIn';
@@ -22,6 +23,8 @@ function Routes() {
       return null;
     case 'timeline':
       return state.status === 'unlocked' ? <Home session={state.session} /> : null;
+    case 'confirm-email':
+      return <ConfirmEmail />;
     case 'unlock':
       return <Unlock />;
     case 'recovery-words':

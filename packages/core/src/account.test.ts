@@ -21,6 +21,7 @@ import type { Session } from './account';
 const server = vi.hoisted(() => ({
   account: null as AccountResponse | null,
   wiped: [] as string[],
+  codes: [] as { email: string; loginKey?: string }[],
 }));
 
 async function matches(account: AccountResponse, loginKey: string): Promise<boolean> {
@@ -46,7 +47,13 @@ vi.mock('./api', async (importOriginal) => {
           ? Promise.resolve({ salt: server.account.keyring.salt, kdf: server.account.keyring.kdf })
           : Promise.reject(new actual.ApiError(404, 'No account')),
       signUp: (body: SignUpRequest) => {
-        server.account = { ...body, version: 1, smartFeatures: null };
+        server.account = {
+          ...body,
+          version: 1,
+          smartFeatures: null,
+          emailVerified: false,
+          mustVerifyEmail: true,
+        };
         return Promise.resolve(server.account);
       },
       logIn: async ({ email, loginKey }: LoginRequest) => {
@@ -68,6 +75,22 @@ vi.mock('./api', async (importOriginal) => {
         server.account = null;
       },
       logOut: () => Promise.resolve(undefined),
+      sendEmailCode: async (body: { email: string; loginKey?: string }) => {
+        const account = current();
+        if (
+          body.email !== account.email &&
+          !(body.loginKey && (await matches(account, body.loginKey)))
+        ) {
+          throw new actual.ApiError(403, 'Wrong password');
+        }
+        server.codes.push(body);
+      },
+      verifyEmail: ({ email, code }: { email: string; code: string }) => {
+        if (code !== '123456')
+          return Promise.reject(new actual.ApiError(400, 'That code isn’t right.'));
+        server.account = { ...current(), email, emailVerified: true, mustVerifyEmail: false };
+        return Promise.resolve(server.account);
+      },
     },
     spaceApi: (token: string) => ({
       wipe: () => {
@@ -91,6 +114,7 @@ async function signUp(): Promise<{ session: Session; words: string }> {
 beforeEach(() => {
   server.account = null;
   server.wiped = [];
+  server.codes = [];
 });
 
 describe('sign-up and unlock', { timeout: 30_000 }, () => {
@@ -295,5 +319,47 @@ describe('deleteAccount', { timeout: 30_000 }, () => {
     expect(server.wiped.sort()).toEqual(tokens.sort());
     // Each space first leaves the libraries it joined.
     expect(left.sort()).toEqual(tokens.sort());
+  });
+});
+
+describe('confirming the email', { timeout: 30_000 }, () => {
+  it('asks for a code at the account’s address without the login key', async () => {
+    const { session } = await signUp();
+    await ops.sendEmailCode(session, ' Sam@Example.com ');
+    expect(server.codes).toEqual([{ email: EMAIL }]);
+  });
+
+  it('sends the login key along for a different address', async () => {
+    const { session } = await signUp();
+    await ops.sendEmailCode(session, 'kim@example.com');
+    expect(server.codes[0]?.email).toBe('kim@example.com');
+    expect(server.codes[0]?.loginKey).toBe(toBase64Url(session.opened.loginKey));
+  });
+
+  it('refuses something that isn’t an email before asking the server', async () => {
+    const { session } = await signUp();
+    await expect(ops.sendEmailCode(session, 'not an email')).rejects.toBeInstanceOf(FormError);
+    expect(server.codes).toEqual([]);
+  });
+
+  it('confirms with the code and keeps the keyring in memory', async () => {
+    const { session } = await signUp();
+    const next = await ops.verifyEmail(session, 'kim@example.com', ' 123 456 ');
+    expect(next.account).toMatchObject({
+      email: 'kim@example.com',
+      emailVerified: true,
+      mustVerifyEmail: false,
+    });
+    expect(next.account.keyring).toBe(session.account.keyring);
+    expect(next.opened).toBe(session.opened);
+  });
+
+  it('refuses a malformed code locally and a wrong one from the server', async () => {
+    const { session } = await signUp();
+    await expect(ops.verifyEmail(session, EMAIL, '12345')).rejects.toBeInstanceOf(FormError);
+    await expect(ops.verifyEmail(session, EMAIL, '654321')).rejects.toThrow(
+      'That code isn’t right.',
+    );
+    expect(current().emailVerified).toBe(false);
   });
 });

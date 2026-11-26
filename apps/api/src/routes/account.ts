@@ -25,13 +25,16 @@ import {
 } from '../schemas';
 import { clearSessionCookie, requireSession } from '../session';
 import type { AppEnv } from '../session';
+import { email } from './email';
 
 /** The signed-in account. Changes need a fresh login key as well as the session cookie. */
 export const account = new Hono<AppEnv>();
 
 account.use(requireSession);
 
-account.get('/', (c) => c.json(toAccountResponse(c.get('account'))));
+account.route('/email', email);
+
+account.get('/', (c) => c.json(toAccountResponse(c.get('account'), c.env)));
 
 /** Renames the account. The name isn't secret (sign-up sends it), so the session is enough. */
 account.put('/name', async (c) => {
@@ -39,7 +42,7 @@ account.put('/name', async (c) => {
   const body = await readBody(c, updateNameSchema);
   if (!body) return c.json({ error: messages.badRequest }, 400);
   await updateName(c.env.DB, current.id, body.name);
-  return c.json(toAccountResponse({ ...current, name: body.name }));
+  return c.json(toAccountResponse({ ...current, name: body.name }, c.env));
 });
 
 /**
@@ -51,7 +54,7 @@ account.put('/smart-features', async (c) => {
   const body = await readBody(c, smartFeaturesSchema);
   if (!body) return c.json({ error: messages.badRequest }, 400);
   await updateSmartFeatures(c.env.DB, current.id, body, Date.now());
-  return c.json(toAccountResponse({ ...current, smartFeatures: body }));
+  return c.json(toAccountResponse({ ...current, smartFeatures: body }, c.env));
 });
 
 /**
@@ -88,7 +91,7 @@ account.put('/keyring', async (c) => {
   // does this, whichever slot changed, so it says nothing about the private slot.
   await deleteOtherSessions(c.env.DB, current.id, c.get('session'));
   return c.json(
-    toAccountResponse({ ...current, keyring: body.keyring, version: body.version + 1 }),
+    toAccountResponse({ ...current, keyring: body.keyring, version: body.version + 1 }, c.env),
   );
 });
 

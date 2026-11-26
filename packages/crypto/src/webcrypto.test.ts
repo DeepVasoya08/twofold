@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   constantTimeEqual,
+  emailCodeMatches,
+  emailCodeScope,
+  emailCodeTag,
   fromBase64Url,
   loginVerifier,
+  newEmailCode,
   newSessionToken,
   sessionTokenHash,
   toBase64Url,
@@ -51,5 +55,64 @@ describe('loginVerifier', () => {
   it('is SHA-256', async () => {
     const verifier = await loginVerifier(new TextEncoder().encode('abc'));
     expect(toBase64Url(verifier)).toBe('ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0');
+  });
+});
+
+describe('email codes', () => {
+  const secret = 'a'.repeat(44);
+
+  it('makes six-digit codes that vary', () => {
+    const codes = new Set(Array.from({ length: 50 }, () => newEmailCode()));
+    for (const code of codes) expect(code).toMatch(/^\d{6}$/);
+    expect(codes.size).toBeGreaterThan(40);
+  });
+
+  it('uses every digit in every position', () => {
+    const seen = Array.from({ length: 6 }, () => new Set<string>());
+    for (let i = 0; i < 400; i++) {
+      const code = newEmailCode();
+      for (let position = 0; position < code.length; position++) {
+        seen[position]?.add(code.charAt(position));
+      }
+    }
+    for (const digits of seen) expect(digits.size).toBe(10);
+  });
+
+  it('accepts the right code for the same scope and address', async () => {
+    const scope = await emailCodeScope(secret, 'verify', 'account-1');
+    const tag = await emailCodeTag(secret, scope, 'sam@example.com', '123456');
+    expect(await emailCodeMatches(secret, scope, 'sam@example.com', '123456', tag)).toBe(true);
+  });
+
+  it('refuses a wrong code, another address, another scope or another secret', async () => {
+    const scope = await emailCodeScope(secret, 'verify', 'account-1');
+    const other = await emailCodeScope(secret, 'verify', 'account-2');
+    const tag = await emailCodeTag(secret, scope, 'sam@example.com', '123456');
+    expect(await emailCodeMatches(secret, scope, 'sam@example.com', '123457', tag)).toBe(false);
+    expect(await emailCodeMatches(secret, scope, 'kim@example.com', '123456', tag)).toBe(false);
+    expect(await emailCodeMatches(secret, other, 'sam@example.com', '123456', tag)).toBe(false);
+    expect(await emailCodeMatches('b'.repeat(44), scope, 'sam@example.com', '123456', tag)).toBe(
+      false,
+    );
+  });
+
+  it('refuses a tampered tag', async () => {
+    const scope = await emailCodeScope(secret, 'verify', 'account-1');
+    const tag = await emailCodeTag(secret, scope, 'sam@example.com', '123456');
+    const flipped = `${tag.slice(0, -2)}${tag.endsWith('AA') ? 'BA' : 'AA'}`;
+    expect(await emailCodeMatches(secret, scope, 'sam@example.com', '123456', flipped)).toBe(false);
+    expect(await emailCodeMatches(secret, scope, 'sam@example.com', '123456', 'not+base64')).toBe(
+      false,
+    );
+  });
+
+  it('keeps scopes apart and never shows what they were made from', async () => {
+    const a = await emailCodeScope(secret, 'verify', 'account-1');
+    expect(a).not.toContain('account-1');
+    expect(a).not.toBe(await emailCodeScope(secret, 'signup', 'account-1'));
+  });
+
+  it('refuses a short secret', async () => {
+    await expect(emailCodeScope('short', 'verify', 'x')).rejects.toThrow();
   });
 });

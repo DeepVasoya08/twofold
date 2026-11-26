@@ -145,8 +145,9 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   photo bucket doesn't, but deleted photos' ciphertext outlives the delete by 30 days. The
   backup bucket is locked for those 30 days, so a stolen token can't wipe it.
 - **Sign-up reveals whether an email is registered** (and `POST /api/auth/prelogin`
-  answers 404 for unknown emails). Hiding it needs email verification, which doesn't exist
-  yet.
+  answers 404 for unknown emails). Now that emails are confirmed with a code
+  ([email.md](email.md)), the next change hides it by sending the code before the account
+  exists.
 - The two passwords must differ; the client refuses a new password that already opens
   another slot.
 
@@ -731,6 +732,15 @@ so photos can later be found by describing them. The server stores only cipherte
   `apps/api/wrangler.jsonc`), only its own error lines. Request logs would keep every
   request's path, headers and client details at Cloudflare, which could link the private
   space's requests to the main library's for as long as they're stored.
+- **Email is confirmed, and is only a way to reach the owner** ([email.md](email.md)). It
+  never resets a password or unlocks anything. Codes are stored only as HMACs keyed with a
+  Worker secret, bound to the address, limited to 5 tries (counted before each check) and
+  10 minutes, with one send a minute and 5 an hour per account. Until an account confirms,
+  the server refuses everything but reading the account, confirming and signing out (a
+  phone's upload-only backup carries on). Moving an unconfirmed account to another address
+  needs the login key, and an address that already has an account gets a note instead of a
+  code with the same answer to the app. Nothing about email depends on which slot opened
+  the session, and no email mentions the private space or is sent from a space route.
 - Input is validated with zod at the API boundary (`apps/api/src/schemas.ts`), including
   exact key sizes and KDF bounds.
 - **The server decides who may do what.** Every space request is checked against what its

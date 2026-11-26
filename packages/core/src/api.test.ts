@@ -9,6 +9,7 @@ import {
   cookieValue,
   onSessionCookie,
   onSessionEnded,
+  onVerifyEmail,
   restoreSessionCookie,
   spaceApi,
 } from './api';
@@ -67,6 +68,7 @@ function fakeFetch(...replies: Reply[]) {
 afterEach(() => {
   configureApi({ origin: '', cookies: 'browser' });
   onSessionEnded(null);
+  onVerifyEmail(null);
 });
 
 describe('requests', () => {
@@ -125,6 +127,33 @@ describe('errors', () => {
     await expect(api.account()).rejects.toMatchObject({ status: 0 });
   });
 
+  it('reports a refusal until the email is confirmed, and no other 403', async () => {
+    const verify = vi.fn();
+    onVerifyEmail(verify);
+    const { fetch } = fakeFetch(
+      { status: 403, json: { error: 'That password isn’t right.' } },
+      { status: 403, json: { error: 'Confirm your email to keep going.', code: 'verify-email' } },
+    );
+    configureApi({ fetch });
+    await expect(api.devices()).rejects.toThrow('That password isn’t right.');
+    expect(verify).not.toHaveBeenCalled();
+    await expect(api.devices()).rejects.toThrow('Confirm your email to keep going.');
+    expect(verify).toHaveBeenCalledOnce();
+  });
+
+  it('sends email codes and checks them on the account routes', async () => {
+    const { fetch, calls } = fakeFetch({ status: 204 }, { json: { emailVerified: true } });
+    configureApi({ fetch });
+    await expect(api.sendEmailCode({ email: 'a@b.c' })).resolves.toBeUndefined();
+    await expect(api.verifyEmail({ email: 'a@b.c', code: '123456' })).resolves.toMatchObject({
+      emailVerified: true,
+    });
+    expect(calls.map((call) => call.url)).toEqual([
+      '/api/account/email/code',
+      '/api/account/email/verify',
+    ]);
+  });
+
   it('reports an ended session on a signed-in 401, not on a wrong password', async () => {
     const ended = vi.fn();
     onSessionEnded(ended);
@@ -138,7 +167,15 @@ describe('errors', () => {
 });
 
 describe('memory cookies', () => {
-  const account = { email: 'a', name: 'n', version: 1, keyring: {}, smartFeatures: null };
+  const account = {
+    email: 'a',
+    name: 'n',
+    version: 1,
+    keyring: {},
+    smartFeatures: null,
+    emailVerified: true,
+    mustVerifyEmail: false,
+  };
 
   it('keeps the session cookie from login and sends it on later requests', async () => {
     const { fetch, calls } = fakeFetch(
@@ -184,7 +221,15 @@ describe('memory cookies', () => {
 });
 
 describe('a kept session cookie', () => {
-  const account = { email: 'a', name: 'n', version: 1, keyring: {}, smartFeatures: null };
+  const account = {
+    email: 'a',
+    name: 'n',
+    version: 1,
+    keyring: {},
+    smartFeatures: null,
+    emailVerified: true,
+    mustVerifyEmail: false,
+  };
 
   it('reports each change, so a phone can keep it across launches', async () => {
     const changes: (string | null)[] = [];

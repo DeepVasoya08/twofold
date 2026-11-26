@@ -15,6 +15,13 @@ describe('routeFor', () => {
     expect(routeFor({ status: 'unlocked', session }, false, false)).toBe('timeline');
   });
 
+  it('asks to confirm the email before the library when the server says so', () => {
+    const unconfirmed = { ...account, emailVerified: false, mustVerifyEmail: true };
+    const waiting = { ...session, account: unconfirmed };
+    expect(routeFor({ status: 'unlocked', session: waiting }, false, false)).toBe('confirm-email');
+    expect(routeFor({ status: 'locked', account: unconfirmed }, false, false)).toBe('unlock');
+  });
+
   it('signed out, shows sign-in unless sign-up was chosen, and the key after sign-up', () => {
     expect(routeFor({ status: 'signed-out' }, false, false)).toBe('sign-in');
     expect(routeFor({ status: 'signed-out' }, false, true)).toBe('sign-up');

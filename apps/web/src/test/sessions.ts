@@ -22,6 +22,9 @@ export function testAccount(privateSlot = filler('C', 118)): AccountResponse {
     },
     // Answered, and off, so screens render as they did before the question existed.
     smartFeatures: { choice: 'off', version: SMART_FEATURES_VERSION },
+    // Confirmed, so screens render the library rather than the confirm-email step.
+    emailVerified: true,
+    mustVerifyEmail: false,
   };
 }
 

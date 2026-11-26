@@ -29,6 +29,10 @@
       "bucket_name": "arcafold-blobs",
     },
   ],
+  // Account email (codes, sign-in notices) through Cloudflare Email Service, only ever from
+  // the no-reply address. Email works once EMAIL_CODE_SECRET is set as a Worker secret
+  // (deploy.yml does it from the GitHub secret); see docs/email.md.
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["no-reply@arcafold.com"] }],
   "d1_databases": [
     {
       "binding": "DB",
@@ -45,6 +49,8 @@
     "staging": {
       "name": "arcafold-staging",
       "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "arcafold-staging-blobs" }],
+      // Staging has no EMAIL_CODE_SECRET, so it never sends email or asks to confirm one.
+      "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["no-reply@arcafold.com"] }],
       "d1_databases": [
         {
           "binding": "DB",

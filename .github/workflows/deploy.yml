@@ -89,6 +89,20 @@ jobs:
         working-directory: apps/api
         run: pnpm exec wrangler deploy
 
+      # Account email needs a secret that keys the stored email codes (docs/email.md). It is
+      # copied from the production environment's EMAIL_CODE_SECRET; until that exists, email
+      # stays off and nobody is asked to confirm theirs. Only this step sees the secret.
+      - name: Set email code secret
+        working-directory: apps/api
+        env:
+          EMAIL_CODE_SECRET: ${{ secrets.EMAIL_CODE_SECRET }}
+        run: |
+          if [ -z "$EMAIL_CODE_SECRET" ]; then
+            echo "EMAIL_CODE_SECRET is not set; account email stays off."
+            exit 0
+          fi
+          printf '%s' "$EMAIL_CODE_SECRET" | pnpm exec wrangler secret put EMAIL_CODE_SECRET
+
       # Copies photo files into the backup bucket every hour (docs/backups.md).
       - name: Deploy backup Worker
         working-directory: apps/api

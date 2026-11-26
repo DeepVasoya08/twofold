@@ -65,6 +65,20 @@ export const deleteAccountSchema = z.strictObject({ loginKey });
 
 export const updateNameSchema = z.strictObject({ name });
 
+/**
+ * Asks for a code at `email`. A different address than the account's needs the login key
+ * too, so a session alone (a device left signed in) can't move the account's email.
+ */
+export const sendEmailCodeSchema = z.strictObject({ email, loginKey: loginKey.optional() });
+
+export const verifyEmailSchema = z.strictObject({
+  email,
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/),
+});
+
 /** Only the current version of the smart features question can be answered. */
 export const smartFeaturesSchema = z.strictObject({
   choice: z.enum(['on', 'off']),

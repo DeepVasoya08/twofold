@@ -12,7 +12,7 @@ import type { ReactNode } from 'react';
 import type { SpaceKeys } from '@arcafold/crypto';
 import type { AccountResponse, SmartFeaturesChoice } from '@arcafold/types';
 
-import { ApiError, api, onSessionEnded } from '@arcafold/core/api';
+import { ApiError, api, onSessionEnded, onVerifyEmail } from '@arcafold/core/api';
 import { onVisibleAgain } from '../lib/when-visible';
 import type { Person } from '../mock/data';
 import { FormError } from '@arcafold/core/errors';
@@ -66,6 +66,15 @@ interface AccountValue {
   /** Changes the name shown on the account (it isn't secret; sign-up sent it too). */
   changeName: (name: string) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
+  /**
+   * True while the account must confirm its email before its library opens. The server
+   * refuses library requests until then; this only decides what the app shows.
+   */
+  mustVerifyEmail: boolean;
+  /** Sends a 6-digit code to the account's email, or to a different one to fix a typo. */
+  sendEmailCode: (email: string) => Promise<void>;
+  /** Confirms the email the code was sent to. */
+  verifyEmail: (email: string, code: string) => Promise<void>;
 }
 
 const SIGNED_OUT_MEANWHILE = 'You signed out before Arcafold finished opening. Try again.';
@@ -81,7 +90,9 @@ function accountOf(state: AccountState): AccountResponse | null {
 /** The same state with some of the account's plain fields changed. */
 function withAccount(
   state: AccountState,
-  changes: Partial<Pick<AccountResponse, 'name' | 'smartFeatures'>>,
+  changes: Partial<
+    Pick<AccountResponse, 'name' | 'smartFeatures' | 'email' | 'emailVerified' | 'mustVerifyEmail'>
+  >,
 ): AccountState {
   if (state.status === 'locked') return { ...state, account: { ...state.account, ...changes } };
   if (state.status === 'unlocked') {
@@ -174,12 +185,35 @@ export function AccountProvider({
     };
   }, [signedIn, dropKeys]);
 
+  // The server can start asking for the email to be confirmed while the app is open (email
+  // was just set up), so a refusal that says so brings up the confirm screen.
+  useEffect(() => {
+    if (!signedIn) return;
+    onVerifyEmail(() => {
+      setState((current) => withAccount(current, { mustVerifyEmail: true }));
+    });
+    return () => {
+      onVerifyEmail(null);
+    };
+  }, [signedIn]);
+
   // A tab left open isn't asking the server anything, so check when it's looked at again
   // (at most every half minute, so flicking between tabs doesn't ask each time).
   useEffect(() => {
     if (!signedIn || initialState) return;
     return onVisibleAgain(() => {
-      api.account().catch(() => undefined);
+      api.account().then(
+        (fresh) => {
+          setState((current) =>
+            withAccount(current, {
+              email: fresh.email,
+              emailVerified: fresh.emailVerified,
+              mustVerifyEmail: fresh.mustVerifyEmail,
+            }),
+          );
+        },
+        () => undefined,
+      );
     });
   }, [signedIn, initialState]);
 
@@ -283,6 +317,23 @@ export function AccountProvider({
         guard(async () => {
           await ops.deleteAccount(requireSession(), password, leaveAll);
           dropKeys({ status: 'signed-out' });
+        }),
+      mustVerifyEmail: account?.mustVerifyEmail ?? false,
+      sendEmailCode: (email) =>
+        guard(async () => {
+          await ops.sendEmailCode(requireSession(), email);
+        }),
+      verifyEmail: (email, code) =>
+        guard(async () => {
+          const next = await ops.verifyEmail(requireSession(), email, code);
+          // Only the email fields change: keys stay as they are, so the library opens now.
+          setState((current) =>
+            withAccount(current, {
+              email: next.account.email,
+              emailVerified: next.account.emailVerified,
+              mustVerifyEmail: next.account.mustVerifyEmail,
+            }),
+          );
         }),
     };
   }, [state, generation, pendingSignUp, open, openFrom, dropKeys, guard]);

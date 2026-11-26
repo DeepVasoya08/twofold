@@ -23,7 +23,13 @@ auth.post('/signup', async (c) => {
   );
   if (!created) return c.json({ error: messages.emailTaken }, 409);
   await startSession(c, id);
-  return c.json(toAccountResponse({ id, ...body, version: 1, smartFeatures: null }), 201);
+  return c.json(
+    toAccountResponse(
+      { id, ...body, version: 1, smartFeatures: null, emailVerified: false },
+      c.env,
+    ),
+    201,
+  );
 });
 
 /** The salt and KDF settings the browser needs before it can derive a login key. */
@@ -50,7 +56,7 @@ auth.post('/login', async (c) => {
   if (result === 'throttled') return c.json({ error: messages.throttled }, 429);
   if (result === 'wrong' || !account) return c.json({ error: messages.wrongLogin }, 401);
   await startSession(c, account.id);
-  return c.json(toAccountResponse(account));
+  return c.json(toAccountResponse(account, c.env));
 });
 
 auth.post('/logout', async (c) => {

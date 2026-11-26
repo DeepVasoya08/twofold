@@ -19,6 +19,7 @@ import {
   api,
   onSessionCookie,
   onSessionEnded,
+  onVerifyEmail,
   restoreSessionCookie,
 } from '@arcafold/core/api';
 import { FormError } from '@arcafold/core/errors';
@@ -45,6 +46,7 @@ import {
   leftScreen,
   locked,
   lockOnReturn,
+  withEmail,
   withName,
 } from './state';
 import type { AccountState } from './state';
@@ -102,6 +104,10 @@ interface AccountValue {
   setAutoLockMinutes: (minutes: number) => void;
   /** Renames the account, as the web's Edit profile does. People you share with see it. */
   changeName: (name: string) => Promise<void>;
+  /** Sends a 6-digit code to the account's email, or to a different one to fix a typo. */
+  sendEmailCode: (email: string) => Promise<void>;
+  /** Confirms the email the code was sent to; the library opens once it is. */
+  verifyEmail: (email: string, code: string) => Promise<void>;
 }
 
 const BIOMETRICS_RESET =
@@ -298,6 +304,22 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     };
   }, [signedIn, dropKeys, turnOffBiometrics]);
 
+  // The server can start asking for the email to be confirmed while the app is open (email
+  // was just set up), so a refusal that says so brings up the confirm screen.
+  useEffect(() => {
+    if (!signedIn) return;
+    onVerifyEmail(() => {
+      setState((current) =>
+        current.status === 'unlocked'
+          ? withEmail(current, { ...current.session.account, mustVerifyEmail: true })
+          : current,
+      );
+    });
+    return () => {
+      onVerifyEmail(null);
+    };
+  }, [signedIn]);
+
   const value = useMemo<AccountValue>(
     () => ({
       state,
@@ -438,6 +460,23 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         const changed = await api.updateName({ name });
         // Only the name is taken from the answer: the keyring in memory stays as it is.
         setState((current) => withName(current, changed.name));
+      },
+      sendEmailCode: async (address) => {
+        if (state.status !== 'unlocked') throw new FormError('Unlock Arcafold first.');
+        await ops.sendEmailCode(state.session, address);
+      },
+      verifyEmail: async (address, code) => {
+        if (state.status !== 'unlocked') throw new FormError('Unlock Arcafold first.');
+        const before = state.session.account.email;
+        const next = await ops.verifyEmail(state.session, address, code);
+        const changed = next.account.email !== before;
+        if (changed) {
+          // Sign-in and fingerprint unlock remember the old address; follow the new one.
+          void rememberEmail(next.account.email);
+          setEmail(next.account.email);
+          if (biometricFor === before) turnOffBiometrics();
+        }
+        setState((current) => withEmail(current, next.account));
       },
     }),
     [
