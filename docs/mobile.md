@@ -291,6 +291,22 @@ or a native module.
   press on files adds Move beside Download and Delete. Searching or filtering by category
   looks through every folder. Recently deleted lists deleted folders above the photos, each
   with what went with it, to Restore or delete for good.
+- Sharing in Files (`screens/FileSheets.tsx`, `src/sharing/sharing-text.ts`, shared rules in
+  `packages/core/src/library/folders.ts`: `inFiles`, `editableFile`, `changeableHere`): the
+  same folder and file sharing as the web, enforced by the server. A folder's sheet has Share
+  for your own folders, which opens the sharing screen with "Can view" / "Can edit". Picking
+  exactly one file adds More to the selection bar: Rename, Share (just that file), Upload new
+  version (for a file shared with you to edit) and Remove from my Files (for a file shared with
+  you on its own). Folders and files shared with you show in Files; a shared folder itself
+  and anything you may only view keep their owner's menu off, and Move and Delete show only
+  when every picked file is yours to change. Deleting inside a folder shared with you says it
+  goes to the owner's Recently deleted.
+- Staying current (`src/library/use-library.ts`, `@arcafold/core/library/counting-writes`,
+  `ui/pull-refresh.tsx`): while the app is in front it asks `GET /space/stamp` every 15
+  seconds, and when it comes back to the front (at most once in 5 seconds), and lists again
+  only when the stamp changed, so what someone else adds or a changed permission shows up
+  without signing out. Pulling down on Photos, Albums or Files lists again at once. A refresh
+  never runs over a change of yours that's under way.
 - Looking at photos (`src/ai/use-scan.ts`, `src/people/face-finder.ts`,
   `src/search/photo-encoder.ts`, `src/search/use-search-index.ts`, `screens/SmartSettings.tsx`):
   with Face grouping and Smart search on (Settings > Smart features, per phone, like the web;

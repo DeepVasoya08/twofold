@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import type { Photo } from '@arcafold/core/library/model';
 
-import { countingWrites } from './live-refresh';
-import { memoryStore } from './memory-store';
 import { vaultReducer } from './vault';
 import type { VaultState } from './vault';
 
@@ -20,25 +18,6 @@ function photo(id: string, extra: Partial<Photo> = {}): Photo {
     ...extra,
   };
 }
-
-describe('counting changes under way', () => {
-  it('is busy while a change is under way, and not while it only reads', async () => {
-    const { store, busy } = countingWrites(memoryStore({ photos: [photo('a')], albums: [] }));
-    const listing = store.list();
-    expect(busy()).toBe(false);
-    await listing;
-    const making = store.createAlbum('Trip');
-    expect(busy()).toBe(true);
-    await making;
-    expect(busy()).toBe(false);
-  });
-
-  it('stops counting a change that fails', async () => {
-    const { store, busy } = countingWrites(memoryStore({ photos: [], albums: [] }));
-    await expect(store.shareFile('a')).rejects.toThrow();
-    expect(busy()).toBe(false);
-  });
-});
 
 describe('a refreshed listing', () => {
   const state: VaultState = {

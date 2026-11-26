@@ -15,7 +15,9 @@ import {
 
 import { categoryLabel } from '@arcafold/core/file-categories';
 import {
+  changeableHere,
   childFolders,
+  editableFile,
   folderCounts,
   folderTrash,
   folderTree,
@@ -25,14 +27,17 @@ import type { Folder, Photo } from '@arcafold/core/library/model';
 import { TRASH_DAYS } from '@arcafold/core/library/trash';
 
 import { MemoryImage } from '../../modules/memory-image';
+import type { PickedPhoto } from '../../modules/memory-image';
 import {
   categoryCounts,
   fileBadge,
+  fileChoices,
   fileDetails,
   fileGridRows,
   fileRows,
   filesHere,
   folderSummary,
+  hasFileChoices,
   hasPreview,
   libraryFiles,
 } from '../library/files';
@@ -45,12 +50,14 @@ import { useAppearance } from '../ui/appearance';
 import { useReportPicking } from '../ui/float-space';
 import { Button, Note } from '../ui/kit';
 import { useNotice } from '../ui/notice';
+import { usePullToRefresh } from '../ui/pull-refresh';
 import { usePalette } from '../ui/theme';
 import type { Palette } from '../ui/theme';
 import { FILE_CHOICES, FILE_COLUMNS } from '../ui/view-choices';
 import { ViewSheet } from '../ui/view-sheet';
 import { AppHeader } from './AppHeader';
 import { ConfirmSheet } from './ConfirmSheet';
+import { FileActionsSheet, FileNameSheet } from './FileSheets';
 import { FolderActionsSheet, FolderCard, FolderNameSheet, MoveToFolderSheet } from './FolderSheets';
 import { usePickToDelete } from './use-pick-to-delete';
 
@@ -267,6 +274,9 @@ export function Files({
   onAdd,
   onSave,
   onPicking,
+  onShare,
+  onLeaveFile,
+  pickFile,
 }: {
   library: Library;
   /** The open folder, or null for the top of Files. */
@@ -281,6 +291,12 @@ export function Files({
   onSave?: (ids: readonly string[]) => void;
   /** Says when selecting or the View sheet starts and stops, so the floating buttons step aside. */
   onPicking?: (picking: boolean) => void;
+  /** Opens the sharing screen for a folder of yours, or a file by the row it's shared through. */
+  onShare: (target: ShareRequest) => void;
+  /** Takes a file shared with you on its own out of your Files, by its record in your space. */
+  onLeaveFile: (joinedId: string | undefined) => Promise<void>;
+  /** Picks one file from the phone, for a new version; null when nothing was picked. */
+  pickFile: () => Promise<PickedPhoto | null>;
 }) {
   const palette = usePalette();
   const { width } = useWindowDimensions();
@@ -290,10 +306,10 @@ export function Files({
   const tileSize = Math.floor((width - GUTTER * 2 - GAP * (FILE_COLUMNS - 1)) / FILE_COLUMNS);
   const notice = useNotice();
   const { opening, open } = useOpenFile(library, notice);
-  const files = useMemo(() => libraryFiles(library.photos), [library.photos]);
+  const { folders } = library;
+  const files = useMemo(() => libraryFiles(library.photos, folders), [library.photos, folders]);
   const counts = useMemo(() => categoryCounts(files), [files]);
   const [shown, setShown] = useState<Shown>('all');
-  const { folders } = library;
   const live = useMemo(() => liveFolders(folders), [folders]);
   const here = folderId === null ? undefined : live.get(folderId);
   const at = here?.id ?? null;
@@ -332,13 +348,32 @@ export function Files({
     },
     [byId, open],
   );
+  const changeable = useCallback(
+    (id: string) => {
+      const item = byId.get(id);
+      return item !== undefined && editableFile(item, folders);
+    },
+    [byId, folders],
+  );
   const picking = usePickToDelete(library, openById, {
     onSave,
     noun: 'file',
+    changeable,
     onMove: (ids) => {
       setSheet({ kind: 'move-items', ids });
     },
+    onMore: (id) => {
+      const item = byId.get(id);
+      if (item && hasFileChoices(fileChoices(item, folders))) {
+        setSheet({ kind: 'file-menu', file: item });
+      } else {
+        notice('There’s nothing more you can do with this file.');
+      }
+    },
   });
+
+  // Pull to refresh lists again now, as the app does by itself every so often.
+  const refreshControl = usePullToRefresh(library.refresh);
 
   // A folder that went (deleted on another device, say) leaves you at the top.
   useEffect(() => {
@@ -502,6 +537,9 @@ export function Files({
       notice={notice}
       onSheet={setSheet}
       onMoved={picking.clear}
+      onShare={onShare}
+      onLeaveFile={onLeaveFile}
+      pickFile={pickFile}
       onLeft={(folder) => {
         if (folder.id === at) up();
       }}
@@ -559,11 +597,12 @@ export function Files({
               summary={folderSummary(folderCounts(folders, files, folder.id))}
               onOpen={onFolder}
               onMenu={
-                folder.viewOnly
-                  ? undefined
-                  : (chosen) => {
+                // A folder shared with you is its owner's to rename, move, delete or share.
+                changeableHere(folder)
+                  ? (chosen) => {
                       setSheet({ kind: 'menu', folder: chosen });
                     }
+                  : undefined
               }
             />
           ))}
@@ -642,6 +681,7 @@ export function Files({
           extraData={[thumbs, chosen, opening]}
           onViewableItemsChanged={onGridViewable}
           ListHeaderComponent={top}
+          refreshControl={refreshControl}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 24 + picking.floatSpace }}
         />
@@ -655,6 +695,7 @@ export function Files({
           extraData={[thumbs, chosen, opening]}
           onViewableItemsChanged={onViewableItemsChanged}
           ListHeaderComponent={top}
+          refreshControl={refreshControl}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 24 + picking.floatSpace }}
         />
@@ -666,7 +707,13 @@ export function Files({
   );
 }
 
-/** Which folder sheet is open in Files. */
+/** What the sharing screen opens for: a folder of yours, or a file by its share row. */
+export interface ShareRequest {
+  albumId: string;
+  kind: 'folder' | 'file';
+}
+
+/** Which folder or file sheet is open in Files. */
 type FolderSheet =
   | { kind: 'new' }
   | { kind: 'menu'; folder: Folder }
@@ -674,9 +721,15 @@ type FolderSheet =
   | { kind: 'delete'; folder: Folder }
   | { kind: 'move-folder'; folder: Folder }
   | { kind: 'move-items'; ids: readonly string[] }
+  | { kind: 'file-menu'; file: Photo }
+  | { kind: 'file-rename'; file: Photo }
+  | { kind: 'file-leave'; file: Photo }
   | null;
 
-/** Making, renaming, moving and deleting folders, and moving files into them. */
+/**
+ * Making, renaming, moving, sharing and deleting folders, moving files into them, and one
+ * file's menu.
+ */
 function FolderSheets({
   library,
   sheet,
@@ -685,6 +738,9 @@ function FolderSheets({
   onSheet,
   onMoved,
   onLeft,
+  onShare,
+  onLeaveFile,
+  pickFile,
 }: {
   library: Library;
   sheet: FolderSheet;
@@ -696,6 +752,9 @@ function FolderSheets({
   onMoved: () => void;
   /** After a folder has gone to Recently deleted. */
   onLeft: (folder: Folder) => void;
+  onShare: (target: ShareRequest) => void;
+  onLeaveFile: (joinedId: string | undefined) => Promise<void>;
+  pickFile: () => Promise<PickedPhoto | null>;
 }) {
   const close = () => {
     onSheet(null);
@@ -731,6 +790,14 @@ function FolderSheets({
           onDelete={() => {
             onSheet({ kind: 'delete', folder: sheet.folder });
           }}
+          // Only your own folders can be shared; a library you joined is its owner's to share.
+          {...(sheet.folder.library === undefined &&
+            !sheet.folder.sharedFolder && {
+              onShare: () => {
+                close();
+                onShare({ albumId: sheet.folder.id, kind: 'folder' });
+              },
+            })}
           onCancel={close}
         />
       );
@@ -754,9 +821,11 @@ function FolderSheets({
         <ConfirmSheet
           title={`Delete “${sheet.folder.name}”?`}
           body={
-            inside === 'Empty'
-              ? `The folder goes to Recently deleted for ${String(TRASH_DAYS)} days.`
-              : `The folder and what’s in it (${inside}) go to Recently deleted for ${String(TRASH_DAYS)} days.`
+            sheet.folder.sharedFolder
+              ? `It goes to ${sheet.folder.library ?? 'its owner'}’s Recently deleted, with what’s inside it, where they can restore it.`
+              : inside === 'Empty'
+                ? `The folder goes to Recently deleted for ${String(TRASH_DAYS)} days.`
+                : `The folder and what’s in it (${inside}) go to Recently deleted for ${String(TRASH_DAYS)} days.`
           }
           action="Delete folder"
           busyLabel="Deleting…"
@@ -794,7 +863,11 @@ function FolderSheets({
               ? 'Move 1 file to…'
               : `Move ${String(sheet.ids.length)} files to…`
           }
-          folders={folders.filter((folder) => !folder.viewOnly)}
+          folders={folders.filter(
+            (folder) =>
+              folder.library === library.photos.find((item) => item.id === sheet.ids[0])?.library &&
+              !folder.viewOnly,
+          )}
           start={at}
           onCreate={(name, parentId) => library.createFolder(name, parentId ?? undefined)}
           onMove={async (target) => {
@@ -807,6 +880,81 @@ function FolderSheets({
                 ? `Moved ${String(result.done.length)} to ${place(target)}. ${String(result.failed.length)} didn’t move.`
                 : `Moved to ${place(target)}`,
             );
+          }}
+          onCancel={close}
+        />
+      );
+    case 'file-menu': {
+      const { file } = sheet;
+      return (
+        <FileActionsSheet
+          file={file}
+          choices={fileChoices(file, folders)}
+          onRename={() => {
+            onSheet({ kind: 'file-rename', file });
+          }}
+          onShare={() => {
+            close();
+            library.shareFile(file.id).then(
+              (shareId) => {
+                onMoved();
+                onShare({ albumId: shareId, kind: 'file' });
+              },
+              () => {
+                notice('This file couldn’t be shared. Try again.');
+              },
+            );
+          }}
+          onNewVersion={() => {
+            close();
+            void pickFile().then(
+              async (picked) => {
+                if (!picked) return;
+                notice('Uploading the new version…');
+                try {
+                  await library.replaceFile(file.id, picked);
+                  onMoved();
+                  notice('New version uploaded');
+                } catch {
+                  notice('The new version couldn’t be uploaded. Try again.');
+                }
+              },
+              () => {
+                notice('The file picker couldn’t open. Try again.');
+              },
+            );
+          }}
+          onLeave={() => {
+            onSheet({ kind: 'file-leave', file });
+          }}
+          onCancel={close}
+        />
+      );
+    }
+    case 'file-rename':
+      return (
+        <FileNameSheet
+          initial={sheet.file.file?.name ?? ''}
+          onSave={async (name) => {
+            await library.renameFile(sheet.file.id, name);
+            close();
+            onMoved();
+          }}
+          onCancel={close}
+        />
+      );
+    case 'file-leave':
+      return (
+        <ConfirmSheet
+          title={`Remove “${sheet.file.file?.name ?? 'this file'}”?`}
+          body={`It leaves your Files. ${sheet.file.library ?? 'Its owner'} keeps it and can share it with you again.`}
+          action="Remove"
+          busyLabel="Removing…"
+          onConfirm={async () => {
+            await onLeaveFile(sheet.file.joinedId);
+            close();
+            onMoved();
+            notice('Removed from your Files');
           }}
           onCancel={close}
         />

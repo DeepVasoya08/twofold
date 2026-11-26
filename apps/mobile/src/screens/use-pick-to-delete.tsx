@@ -42,6 +42,8 @@ export function usePickToDelete(
     onSave,
     onTeach,
     onMove,
+    onMore,
+    changeable,
     filing,
     all,
     noun = 'photo',
@@ -54,6 +56,10 @@ export function usePickToDelete(
     onTeach?: ((photoIds: readonly string[]) => void) | undefined;
     /** Moves the picked files into a folder (Files). */
     onMove?: ((photoIds: readonly string[]) => void) | undefined;
+    /** Opens the menu of the one picked file (Files): rename, share and so on. */
+    onMore?: ((photoId: string) => void) | undefined;
+    /** Whether you may move or delete this one; Move and Delete show only when all are. */
+    changeable?: ((photoId: string) => boolean) | undefined;
     /** Puts the picked photos in an album; left out where that doesn't apply (files). */
     filing?: Filing | undefined;
     /** Every photo on the screen, in order, for Select all. */
@@ -142,6 +148,7 @@ export function usePickToDelete(
     }
   };
 
+  const mayChange = changeable === undefined || picked.every((id) => changeable(id));
   const everything = all !== undefined && all.length > 0 && picked.length === all.length;
   const actions: BarAction[] =
     picked.length === 0
@@ -189,7 +196,7 @@ export function usePickToDelete(
                 },
               ]
             : []),
-          ...(onMove
+          ...(onMove && mayChange
             ? [
                 {
                   key: 'move',
@@ -231,15 +238,32 @@ export function usePickToDelete(
                 },
               ]
             : []),
-          {
-            key: 'delete',
-            label: 'Delete',
-            icon: 'trash' as const,
-            danger: true,
-            onPress: () => {
-              setOpened('delete');
-            },
-          },
+          ...(onMore && picked.length === 1
+            ? [
+                {
+                  key: 'more',
+                  label: 'More',
+                  icon: 'more' as const,
+                  accessibilityLabel: 'More for this file',
+                  onPress: () => {
+                    onMore(picked[0] ?? '');
+                  },
+                },
+              ]
+            : []),
+          ...(mayChange
+            ? [
+                {
+                  key: 'delete',
+                  label: 'Delete',
+                  icon: 'trash' as const,
+                  danger: true,
+                  onPress: () => {
+                    setOpened('delete');
+                  },
+                },
+              ]
+            : []),
         ];
 
   return {

@@ -15,10 +15,17 @@ import {
 import type { Album, Folder, Photo } from '@arcafold/core/library/model';
 import {
   canMoveFolder,
+  editableFile,
   expiredFolders,
   folderName,
   withFolder,
 } from '@arcafold/core/library/folders';
+import {
+  CHECK_EVERY_MS,
+  RECHECK_AFTER_MS,
+  countingWrites,
+} from '@arcafold/core/library/counting-writes';
+import { cleanFileName } from '@arcafold/core/file-types';
 import {
   changeableFolder,
   deleteFolder as deleteFolderIn,
@@ -153,6 +160,17 @@ export interface Library {
   restoreFolder: (folderId: string) => Promise<void>;
   /** Deletes a folder in Recently deleted for good, with what was deleted along with it. */
   deleteFolderForever: (folderId: string) => Promise<void>;
+  /** Renames a file of yours, or one shared with you to edit. */
+  renameFile: (fileId: string, name: string) => Promise<void>;
+  /** Shares one of your files on its own, returning the share's id (an album row's). */
+  shareFile: (fileId: string) => Promise<string>;
+  /** Uploads a picked file as the new version of a file shared with you to edit, in its place. */
+  replaceFile: (fileId: string, picked: PickedPhoto) => Promise<void>;
+  /**
+   * Lists everything again now, with what changed elsewhere (another device, or someone it's
+   * shared with), as pull to refresh does. Skipped while a change of yours is under way.
+   */
+  refresh: () => Promise<void>;
   /** Hides the upload progress; photos still on their way keep going. */
   hideUploads: () => void;
   /**
@@ -234,6 +252,9 @@ export function useLibrary(session: Session): Library {
   const [attempt, setAttempt] = useState(0);
   const loader = useRef<ThumbLoader | null>(null);
   const opened = useRef<SpaceStore | null>(null);
+  // Whether the open store has changes under way, and how many it has started, so a refresh
+  // with changes from elsewhere never lands on top of one of yours.
+  const counting = useRef<{ busy: () => boolean; started: () => number } | null>(null);
   // One uploader per opening of the library, so photos added before a lock can finish
   // with the keys they started with while the next unlock starts its own.
   const uploader = useMemo(() => newUploader(keys, attempt), [keys, attempt]);
@@ -245,7 +266,9 @@ export function useLibrary(session: Session): Library {
 
   useEffect(() => {
     let stopped = false;
-    const store = sessionStore(keys, name.current);
+    const counted = countingWrites(sessionStore(keys, name.current));
+    const { store } = counted;
+    counting.current = counted;
     const thumbLoader = createThumbLoader({
       fetch: (photoIds, onThumb) => store.thumbs(photoIds, onThumb),
       onReady: (urls) => {
@@ -308,6 +331,7 @@ export function useLibrary(session: Session): Library {
       stopped = true;
       loader.current = null;
       opened.current = null;
+      counting.current = null;
       thumbLoader.stop();
       MemoryImages.clear();
       forgetOpened();
@@ -386,7 +410,8 @@ export function useLibrary(session: Session): Library {
         (photoId) => {
           const photo = byId.get(photoId);
           if (!photo) throw new FormError(GONE);
-          if (isViewOnly(photo)) throw new FormError(VIEW_ONLY);
+          const mayDelete = photo.file ? editableFile(photo, folders) : !isViewOnly(photo);
+          if (!mayDelete) throw new FormError(VIEW_ONLY);
         },
       );
       const gone = new Set(result.done);
@@ -398,7 +423,7 @@ export function useLibrary(session: Session): Library {
       setTrash((current) => [...deleted, ...(current ?? [])]);
       return result;
     },
-    [photos],
+    [photos, folders],
   );
 
   const restorePhotos = useCallback(
@@ -665,7 +690,9 @@ export function useLibrary(session: Session): Library {
       const store = opened.current;
       if (!store) throw new Error('The library is closed.');
       return moveToFolderIn(store, folders, photos, itemIds, folderId, folderSink, (item) => {
-        if (isViewOnly(item)) throw new FormError('Files shared with you to view can’t be moved.');
+        if (!editableFile(item, folders)) {
+          throw new FormError('Files shared with you to view can’t be moved.');
+        }
       });
     },
     [folders, photos, folderSink],
@@ -698,6 +725,106 @@ export function useLibrary(session: Session): Library {
     [folders, trash, folderSink],
   );
 
+  const renameFile = useCallback(
+    async (fileId: string, name: string) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      const item = photos.find((each) => each.id === fileId);
+      if (!item?.file) throw new FormError(GONE);
+      if (!editableFile(item, folders)) {
+        throw new FormError('Files shared with you to view can’t be renamed.');
+      }
+      const renamed: Photo = { ...item, file: { ...item.file, name: cleanFileName(name) } };
+      await store.update(renamed);
+      setPhotos((current) => current.map((each) => (each.id === fileId ? renamed : each)));
+    },
+    [photos, folders],
+  );
+
+  const shareFile = useCallback(
+    async (fileId: string) => {
+      const store = opened.current;
+      if (!store) throw new Error('The library is closed.');
+      const item = photos.find((each) => each.id === fileId);
+      if (!item) throw new FormError(GONE);
+      const shareId = await store.shareFile(fileId);
+      if (item.shareId !== shareId) {
+        setPhotos((current) =>
+          current.map((each) => (each.id === fileId ? { ...each, shareId } : each)),
+        );
+      }
+      return shareId;
+    },
+    [photos],
+  );
+
+  const replaceFile = useCallback(async (fileId: string, picked: PickedPhoto) => {
+    const store = opened.current;
+    if (!store) throw new Error('The library is closed.');
+    const added = await store.replaceFile(fileId, await preparePicked(picked, PhotoPicker));
+    setPhotos((current) => [added, ...current.filter((each) => each.id !== fileId)]);
+  }, []);
+
+  /** Lists again and shows it, unless a change of yours started meanwhile; says whether it did. */
+  const relist = useCallback(async (): Promise<boolean> => {
+    const store = opened.current;
+    const counter = counting.current;
+    // A function, so the check after listing reads it afresh.
+    const uploading = () => uploader.running;
+    if (!store || !counter || counter.busy() || uploading()) return false;
+    const before = counter.started();
+    const loaded = await store.list();
+    const stale = () => opened.current !== store;
+    if (stale() || counter.busy() || uploading() || counter.started() !== before) {
+      return false;
+    }
+    setPhotos(loaded.photos);
+    setAlbums(loaded.albums);
+    setFolders(loaded.folders);
+    void loadTrash(store, stale, setTrash);
+    return true;
+  }, [uploader]);
+
+  const refresh = useCallback(async () => {
+    await relist();
+  }, [relist]);
+
+  // While the app is open in front, it asks every so often (and when it comes back to the
+  // front) whether anything changed, and lists again only when something did.
+  useEffect(() => {
+    if (status !== 'ready') return;
+    let stopped = false;
+    const isStopped = () => stopped;
+    let checking = false;
+    let seen: string | null = null;
+    let lastCheck = 0;
+    const check = async () => {
+      const store = opened.current;
+      if (isStopped() || checking || !store || AppState.currentState !== 'active') return;
+      checking = true;
+      lastCheck = Date.now();
+      try {
+        const stamp = await store.stamp();
+        if (seen === null) seen = stamp;
+        else if (stamp !== seen && !isStopped() && (await relist())) seen = stamp;
+      } catch {
+        // Offline: the next check tries again.
+      } finally {
+        checking = false;
+      }
+    };
+    void check();
+    const timer = setInterval(() => void check(), CHECK_EVERY_MS);
+    const watching = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && Date.now() - lastCheck >= RECHECK_AFTER_MS) void check();
+    });
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      watching.remove();
+    };
+  }, [status, relist]);
+
   const hideUploads = useCallback(() => {
     uploader.closeDialog();
   }, [uploader]);
@@ -727,6 +854,20 @@ export function useLibrary(session: Session): Library {
   const setSharedWith = useCallback((albumId: string, names: string[]) => {
     setAlbums((current) =>
       current.map((album) => (album.id === albumId ? { ...album, sharedWith: names } : album)),
+    );
+    setFolders((current) =>
+      current.map((folder) => (folder.id === albumId ? { ...folder, sharedWith: names } : folder)),
+    );
+    // A file shared on its own is shared through its own row, which it names by `shareId`.
+    setPhotos((current) =>
+      current.map((item) => {
+        if (item.shareId !== albumId) return item;
+        if (names.length > 0) return { ...item, sharedWith: names };
+        const rest = { ...item };
+        delete rest.shareId;
+        delete rest.sharedWith;
+        return rest;
+      }),
     );
   }, []);
 
@@ -775,6 +916,10 @@ export function useLibrary(session: Session): Library {
     deleteFolder,
     restoreFolder,
     deleteFolderForever,
+    renameFile,
+    shareFile,
+    replaceFile,
+    refresh,
     hideUploads,
     originals: originalCount,
     deleteOriginals,

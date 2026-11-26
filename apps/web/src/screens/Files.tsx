@@ -8,25 +8,20 @@ import { useToast } from '../app/toast';
 import { prepareFile, useUploads } from '../app/uploads';
 import { documentPhotos, useDocumentLooks } from '../app/document-photos';
 import { useDocumentPhotosView, useFileView } from '../app/views';
-import {
-  TRASH_DAYS,
-  allItems,
-  foldersOf,
-  isViewOnly,
-  timelinePhotos,
-  trashNote,
-  useVault,
-} from '../app/vault';
+import { TRASH_DAYS, allItems, foldersOf, timelinePhotos, trashNote, useVault } from '../app/vault';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
 import type { PhotoContext } from '../app/routes';
 import {
+  changeableHere,
   childFolders,
+  editableFile,
   folderCounts,
   folderOf,
   folderPath,
   folderTrash,
   folderTree,
+  inFiles,
   itemsIn,
   liveFolders,
 } from '@arcafold/core/library/folders';
@@ -145,16 +140,13 @@ export function Files({ folderId }: { folderId?: string } = {}) {
   );
   // Of what single shares hold, only files shared on their own or in a folder shared with you
   // belong in Files.
-  const files = useMemo(() => {
-    const sharedFolders = new Set(folders.filter((each) => each.sharedFolder).map((f) => f.id));
-    const belongs = (item: Photo) =>
-      !item.sharedAlbum ||
-      item.sharedFile === true ||
-      item.albumIds.some((id) => sharedFolders.has(id));
-    return [...(state.files ?? [])]
-      .filter(belongs)
-      .sort((a, b) => b.takenAt.localeCompare(a.takenAt));
-  }, [state.files, folders]);
+  const files = useMemo(
+    () =>
+      [...(state.files ?? [])]
+        .filter((item) => inFiles(item, folders))
+        .sort((a, b) => b.takenAt.localeCompare(a.takenAt)),
+    [state.files, folders],
+  );
   const total = files.reduce((sum, item) => sum + (item.size ?? 0), 0);
   const looks = useDocumentLooks();
   const counts = useMemo(() => categoryCounts(files, looks), [files, looks]);
@@ -255,11 +247,7 @@ export function Files({ folderId }: { folderId?: string } = {}) {
   };
 
   /** Whether a file is yours to change, or in a folder shared with you to edit. */
-  const editable = (item: Photo) =>
-    item.sharedAlbum
-      ? !item.viewOnly &&
-        (item.sharedFile === true || item.albumIds.some((id) => live.get(id)?.sharedFolder))
-      : !isViewOnly(item);
+  const editable = (item: Photo) => editableFile(item, folders);
 
   /** Leaves a file shared with you on its own: it goes from your Files. */
   const leaveFile = (item: Photo) => {
@@ -392,7 +380,7 @@ export function Files({ folderId }: { folderId?: string } = {}) {
   // A folder shared with you to edit can be changed inside, but it is its owner's to rename,
   // move, delete or share.
   const folderMenu = (folder: Folder): MenuItem[] =>
-    folder.viewOnly || (folder.sharedFolder && folder.parentId === undefined)
+    !changeableHere(folder)
       ? []
       : [
           {

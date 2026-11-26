@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   canMoveFolder,
+  changeableHere,
   childFolders,
+  editableFile,
   expiredFolders,
   folderCounts,
   folderName,
@@ -11,6 +13,7 @@ import {
   folderRestore,
   folderTrash,
   folderTree,
+  inFiles,
   inTrashedFolder,
   itemsIn,
   liveFolders,
@@ -184,5 +187,47 @@ describe('deleting and restoring', () => {
         .sort(),
     ).toEqual(['old', 'receipts', 'taxes']);
     expect(expiredFolders(deleted, Date.parse('2026-11-25T00:00:00Z'))).toEqual([]);
+  });
+});
+
+describe('shared with you', () => {
+  const shared: Folder[] = [
+    ...folders,
+    { id: 'lease', name: 'Lease', library: 'Alice', sharedFolder: true },
+    { id: 'signed', name: 'Signed', library: 'Alice', sharedFolder: true, parentId: 'lease' },
+    { id: 'look', name: 'Look', library: 'Sam', sharedFolder: true, viewOnly: true },
+  ];
+
+  it('keeps in Files your own files, files in shared folders and files shared on their own', () => {
+    expect(inFiles(item('mine', ['taxes']), shared)).toBe(true);
+    expect(inFiles(item('theirs', ['signed'], { sharedAlbum: true }), shared)).toBe(true);
+    expect(inFiles(item('one', [], { sharedAlbum: true, sharedFile: true }), shared)).toBe(true);
+    // Only in an album shared with you: that's for Albums.
+    expect(inFiles(item('album', ['trip'], { sharedAlbum: true }), shared)).toBe(false);
+  });
+
+  it('lets you change your own files and those shared with you to edit', () => {
+    expect(editableFile(item('mine', ['taxes']), shared)).toBe(true);
+    expect(editableFile(item('theirs', ['signed'], { sharedAlbum: true }), shared)).toBe(true);
+    expect(editableFile(item('one', [], { sharedAlbum: true, sharedFile: true }), shared)).toBe(
+      true,
+    );
+    expect(
+      editableFile(item('looked', ['look'], { sharedAlbum: true, viewOnly: true }), shared),
+    ).toBe(false);
+    expect(editableFile(item('album', ['trip'], { sharedAlbum: true }), shared)).toBe(false);
+  });
+
+  it('leaves a shared folder itself, and folders you may only view, to their owner', () => {
+    const byId = new Map(shared.map((folder) => [folder.id, folder]));
+    const changeable = (id: string) => {
+      const folder = byId.get(id);
+      if (!folder) throw new Error(id);
+      return changeableHere(folder);
+    };
+    expect(changeable('taxes')).toBe(true);
+    expect(changeable('signed')).toBe(true);
+    expect(changeable('lease')).toBe(false);
+    expect(changeable('look')).toBe(false);
   });
 });

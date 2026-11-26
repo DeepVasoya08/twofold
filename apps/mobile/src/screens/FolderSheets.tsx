@@ -50,16 +50,19 @@ export function FolderNameSheet({
   );
 }
 
-/** A folder's menu: rename, move or delete it. */
+/** A folder's menu: rename, share (your own), move or delete it. */
 export function FolderActionsSheet({
   folder,
   onRename,
+  onShare,
   onMove,
   onDelete,
   onCancel,
 }: {
   folder: Folder;
   onRename: () => void;
+  /** Left out for a folder that isn't yours to share. */
+  onShare?: () => void;
   onMove: () => void;
   onDelete: () => void;
   onCancel: () => void;
@@ -67,6 +70,13 @@ export function FolderActionsSheet({
   return (
     <Sheet title={folder.name} onCancel={onCancel}>
       <SheetOption label="Rename" onPress={onRename} />
+      {onShare ? (
+        <SheetOption
+          label="Share"
+          detail="Invite someone to view or edit this folder"
+          onPress={onShare}
+        />
+      ) : null}
       <SheetOption label="Move to folder" onPress={onMove} />
       <SheetOption label="Delete folder" danger onPress={onDelete} />
     </Sheet>
