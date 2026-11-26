@@ -130,3 +130,13 @@ export async function emailCodeMatches(
   const candidate = fromBase64Url(await emailCodeTag(secret, scope, address, code));
   return stored !== null && candidate !== null && constantTimeEqual(stored, candidate);
 }
+
+/**
+ * A salt for an email with no account, so the sign-in's first step looks the same whether
+ * or not the account exists: always the same for one email, and unguessable without the
+ * server's secret.
+ */
+export async function decoySalt(secret: string, email: string, length: number): Promise<string> {
+  const mac = await hmacSha256(secret, `arcafold decoy salt\n${email}`);
+  return toBase64Url(mac.slice(0, length));
+}

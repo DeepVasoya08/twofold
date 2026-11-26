@@ -103,7 +103,41 @@ export interface SignUpRequest {
   email: string;
   name: string;
   keyring: Keyring;
+  /**
+   * From POST /api/auth/signup/verify: proves the email was confirmed. Needed whenever the
+   * server sends email; without email set up, sign-up works without it.
+   */
+  ticket?: string;
 }
+
+/** POST /api/auth/signup/code: sends a code to an email before the account exists. */
+export interface SignUpCodeRequest {
+  email: string;
+}
+
+/** POST /api/auth/signup/verify. */
+export interface SignUpVerifyRequest {
+  email: string;
+  code: string;
+}
+
+/**
+ * The answer to POST /api/auth/signup/code. False while the server sends no email: sign-up
+ * then goes on without a code.
+ */
+export interface SignUpCodeResponse {
+  codeSent: boolean;
+}
+
+export interface SignUpTicketResponse {
+  ticket: string;
+}
+
+/**
+ * The error code (503) the email routes answer with while email isn't set up, so sign-up
+ * carries on without a code.
+ */
+export const EMAIL_OFF_ERROR = 'email-off';
 
 export interface PreLoginRequest {
   email: string;

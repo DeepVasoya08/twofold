@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   constantTimeEqual,
+  decoySalt,
   emailCodeMatches,
   emailCodeScope,
   emailCodeTag,
@@ -114,5 +115,17 @@ describe('email codes', () => {
 
   it('refuses a short secret', async () => {
     await expect(emailCodeScope('short', 'verify', 'x')).rejects.toThrow();
+  });
+});
+
+describe('decoySalt', () => {
+  const secret = 'a'.repeat(44);
+
+  it('is the same for one email, differs between emails and secrets, and has the salt size', async () => {
+    const first = await decoySalt(secret, 'kim@example.com', 16);
+    expect(await decoySalt(secret, 'kim@example.com', 16)).toBe(first);
+    expect(await decoySalt(secret, 'sam@example.com', 16)).not.toBe(first);
+    expect(await decoySalt('b'.repeat(44), 'kim@example.com', 16)).not.toBe(first);
+    expect(fromBase64Url(first)).toHaveLength(16);
   });
 });

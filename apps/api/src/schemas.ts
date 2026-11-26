@@ -49,7 +49,17 @@ export const keyringSchema = z.strictObject({
   verifiers: z.tuple([verifier, verifier, verifier]),
 });
 
-export const signUpSchema = z.strictObject({ email, name, keyring: keyringSchema });
+/** A sign-up ticket: 32 random bytes, base64url. */
+const ticket = base64Url(32);
+
+export const signUpSchema = z.strictObject({
+  email,
+  name,
+  keyring: keyringSchema,
+  ticket: ticket.optional(),
+});
+
+export const signUpCodeSchema = z.strictObject({ email });
 
 export const preLoginSchema = z.strictObject({ email });
 
@@ -71,13 +81,14 @@ export const updateNameSchema = z.strictObject({ name });
  */
 export const sendEmailCodeSchema = z.strictObject({ email, loginKey: loginKey.optional() });
 
-export const verifyEmailSchema = z.strictObject({
-  email,
-  code: z
-    .string()
-    .trim()
-    .regex(/^\d{6}$/),
-});
+const code = z
+  .string()
+  .trim()
+  .regex(/^\d{6}$/);
+
+export const verifyEmailSchema = z.strictObject({ email, code });
+
+export const signUpVerifySchema = z.strictObject({ email, code });
 
 /** Only the current version of the smart features question can be answered. */
 export const smartFeaturesSchema = z.strictObject({

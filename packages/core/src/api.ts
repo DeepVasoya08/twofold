@@ -15,6 +15,10 @@ import type {
   DeleteAccountRequest,
   DeviceList,
   ErrorResponse,
+  SignUpCodeRequest,
+  SignUpCodeResponse,
+  SignUpTicketResponse,
+  SignUpVerifyRequest,
   SendEmailCodeRequest,
   VerifyEmailRequest,
   FaceSegmentPage,
@@ -53,6 +57,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** The server's error code, for errors the app reacts to (EMAIL_OFF_ERROR, …). */
+    readonly code?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -208,6 +214,7 @@ async function send(
     throw new ApiError(
       res.status,
       isErrorResponse(parsed) ? parsed.error : 'Something went wrong. Try again.',
+      isErrorResponse(parsed) ? parsed.code : undefined,
     );
   }
   return res;
@@ -239,6 +246,12 @@ async function download(
 export const api = {
   account: () => call<AccountResponse>('GET', '/account'),
   signUp: (body: SignUpRequest) => call<AccountResponse>('POST', '/auth/signup', body),
+  /** Sign-up step 1 while email is set up: a code to the address. */
+  signUpCode: (body: SignUpCodeRequest) =>
+    call<SignUpCodeResponse>('POST', '/auth/signup/code', body),
+  /** Sign-up step 2: the code, swapped for a ticket the sign-up itself carries. */
+  signUpVerify: (body: SignUpVerifyRequest) =>
+    call<SignUpTicketResponse>('POST', '/auth/signup/verify', body),
   preLogin: (body: PreLoginRequest) => call<PreLoginResponse>('POST', '/auth/prelogin', body),
   logIn: (body: LoginRequest) => call<AccountResponse>('POST', '/auth/login', body),
   logOut: () => call<undefined>('POST', '/auth/logout', {}),

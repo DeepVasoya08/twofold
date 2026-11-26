@@ -76,14 +76,37 @@ export interface PendingSignUp {
   keyring: Keyring;
   opened: OpenedSlot;
   recoveryWords: string[];
+  /** Proof the email was confirmed (while the server sends email), sent with the sign-up. */
+  ticket?: string;
+}
+
+/**
+ * Sign-up's first step: asks the server to email a code to the address. Answers 'code-sent'
+ * (the screen asks for the code next; an address that already has an account gets a note
+ * instead, and the answer here is the same), or 'no-code' when the server doesn't send
+ * email and sign-up goes on without one.
+ */
+export async function startSignUp(email: string): Promise<'code-sent' | 'no-code'> {
+  const { codeSent } = await api.signUpCode({ email: normalizeEmail(email) });
+  return codeSent ? 'code-sent' : 'no-code';
+}
+
+/** Sign-up's second step: the code from the email, swapped for the ticket sign-up needs. */
+export async function confirmSignUpEmail(email: string, code: string): Promise<string> {
+  const digits = code.replace(/\s/g, '');
+  if (!/^\d{6}$/.test(digits)) throw new FormError('Enter the 6-digit code from the email.');
+  const { ticket } = await api.signUpVerify({ email: normalizeEmail(email), code: digits });
+  return ticket;
 }
 
 export async function prepareSignUp(values: {
   name: string;
   email: string;
   password: string;
+  /** From confirmSignUpEmail. Without one (email off), a taken email is caught here instead. */
+  ticket?: string;
 }): Promise<PendingSignUp> {
-  if (!(await isEmailFree(values.email))) {
+  if (!values.ticket && !(await isEmailFree(values.email))) {
     throw new FormError('An account with this email already exists. Log in instead.');
   }
   await nextFrame();
@@ -96,6 +119,7 @@ export async function prepareSignUp(values: {
     keyring,
     opened: main,
     recoveryWords: await crypto.recoveryKeyToWords(recoveryKey),
+    ...(values.ticket ? { ticket: values.ticket } : {}),
   };
 }
 
@@ -104,6 +128,7 @@ export async function completeSignUp(pending: PendingSignUp): Promise<Session> {
     email: pending.email,
     name: pending.name,
     keyring: pending.keyring,
+    ...(pending.ticket ? { ticket: pending.ticket } : {}),
   });
   return { account, opened: pending.opened };
 }

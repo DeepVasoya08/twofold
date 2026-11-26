@@ -22,6 +22,8 @@ const server = vi.hoisted(() => ({
   account: null as AccountResponse | null,
   wiped: [] as string[],
   codes: [] as { email: string; loginKey?: string }[],
+  emailOff: false,
+  signUps: [] as SignUpRequest[],
 }));
 
 async function matches(account: AccountResponse, loginKey: string): Promise<boolean> {
@@ -47,6 +49,7 @@ vi.mock('./api', async (importOriginal) => {
           ? Promise.resolve({ salt: server.account.keyring.salt, kdf: server.account.keyring.kdf })
           : Promise.reject(new actual.ApiError(404, 'No account')),
       signUp: (body: SignUpRequest) => {
+        server.signUps.push(body);
         server.account = {
           ...body,
           version: 1,
@@ -85,6 +88,15 @@ vi.mock('./api', async (importOriginal) => {
         }
         server.codes.push(body);
       },
+      signUpCode: ({ email }: { email: string }) => {
+        if (server.emailOff) return Promise.resolve({ codeSent: false });
+        server.codes.push({ email });
+        return Promise.resolve({ codeSent: true });
+      },
+      signUpVerify: ({ code }: { email: string; code: string }) =>
+        code === '123456'
+          ? Promise.resolve({ ticket: 'ticket-for-tests' })
+          : Promise.reject(new actual.ApiError(400, 'That code isn’t right.')),
       verifyEmail: ({ email, code }: { email: string; code: string }) => {
         if (code !== '123456')
           return Promise.reject(new actual.ApiError(400, 'That code isn’t right.'));
@@ -115,6 +127,8 @@ beforeEach(() => {
   server.account = null;
   server.wiped = [];
   server.codes = [];
+  server.emailOff = false;
+  server.signUps = [];
 });
 
 describe('sign-up and unlock', { timeout: 30_000 }, () => {
@@ -361,5 +375,30 @@ describe('confirming the email', { timeout: 30_000 }, () => {
       'That code isn’t right.',
     );
     expect(current().emailVerified).toBe(false);
+  });
+});
+
+describe('sign-up with an email code', { timeout: 30_000 }, () => {
+  it('sends a code, swaps it for a ticket and signs up with it', async () => {
+    expect(await ops.startSignUp(' New@Example.com ')).toBe('code-sent');
+    expect(server.codes).toEqual([{ email: 'new@example.com' }]);
+    const ticket = await ops.confirmSignUpEmail('new@example.com', '123 456');
+    expect(ticket).toBe('ticket-for-tests');
+    const pending = await ops.prepareSignUp({ name: 'Sam', email: EMAIL, password: MAIN, ticket });
+    await ops.completeSignUp(pending);
+    expect(server.signUps[0]?.ticket).toBe('ticket-for-tests');
+  });
+
+  it('goes on without a code when the server sends no email', async () => {
+    server.emailOff = true;
+    expect(await ops.startSignUp(EMAIL)).toBe('no-code');
+    const pending = await ops.prepareSignUp({ name: 'Sam', email: EMAIL, password: MAIN });
+    await ops.completeSignUp(pending);
+    expect(server.signUps[0]?.ticket).toBeUndefined();
+  });
+
+  it('refuses a malformed code here and a wrong one from the server', async () => {
+    await expect(ops.confirmSignUpEmail(EMAIL, '12')).rejects.toBeInstanceOf(FormError);
+    await expect(ops.confirmSignUpEmail(EMAIL, '654321')).rejects.toThrow('That code isn’t right.');
   });
 });

@@ -110,3 +110,61 @@ test('signing out from the confirm step works', async ({ page }) => {
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL(/\/login/);
 });
+
+test('sign-up asks for the emailed code before making keys', async ({ page }) => {
+  const email = `e2e-code-${String(Date.now())}@example.com`;
+  const codesSent: string[] = [];
+  let signUpBody: Record<string, unknown> | null = null;
+  await page.route('**/api/auth/signup/code', async (route) => {
+    codesSent.push((route.request().postDataJSON() as { email: string }).email);
+    await route.fulfill({ json: { codeSent: true } });
+  });
+  await page.route('**/api/auth/signup/verify', async (route) => {
+    const { code } = route.request().postDataJSON() as { code: string };
+    await (code === '123456'
+      ? route.fulfill({ json: { ticket: 'A'.repeat(43) } })
+      : route.fulfill({ status: 400, json: { error: 'That code isn’t right.' } }));
+  });
+  await page.route('**/api/auth/signup', async (route) => {
+    signUpBody = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fallback();
+  });
+
+  await page.goto('/signup');
+  await page.getByLabel('Your name').fill('Sam');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password', { exact: true }).fill(MAIN_PASSWORD);
+  await page.getByLabel('Confirm password').fill(MAIN_PASSWORD);
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Check your email' })).toBeVisible();
+  expect(codesSent).toEqual([email]);
+  await page.getByLabel('Code').fill('000000');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText('That code isn’t right.')).toBeVisible();
+
+  await page.getByLabel('Code').fill('123456');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page).toHaveURL('/signup/recovery-key');
+  await page.getByLabel("I've saved my recovery key somewhere safe").check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
+  expect(signUpBody).toMatchObject({ email, ticket: 'A'.repeat(43) });
+  expect(JSON.stringify(signUpBody)).not.toContain(MAIN_PASSWORD);
+});
+
+test('sign-up can go back to fix the email before the code', async ({ page }) => {
+  await page.route('**/api/auth/signup/code', (route) =>
+    route.fulfill({ json: { codeSent: true } }),
+  );
+  await page.goto('/signup');
+  await page.getByLabel('Your name').fill('Sam');
+  await page.getByLabel('Email').fill('typo@exmaple.com');
+  await page.getByLabel('Password', { exact: true }).fill(MAIN_PASSWORD);
+  await page.getByLabel('Confirm password').fill(MAIN_PASSWORD);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText('typo@exmaple.com')).toBeVisible();
+  await page.getByRole('button', { name: 'Change email' }).click();
+  await expect(page.getByLabel('Email')).toHaveValue('typo@exmaple.com');
+  await expect(page.getByLabel('Your name')).toHaveValue('Sam');
+});

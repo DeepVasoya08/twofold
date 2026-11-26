@@ -63,14 +63,21 @@ export async function findAccountByEmail(
 /** Inserts an account. Returns false if the email is taken. */
 export async function insertAccount(
   db: D1Database,
-  account: Omit<AccountRecord, 'version' | 'smartFeatures' | 'emailVerified'>,
+  account: Omit<AccountRecord, 'version' | 'smartFeatures'>,
   now: number,
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      'INSERT INTO accounts (id, email, name, keyring, version, created_at) VALUES (?, ?, ?, ?, 1, ?) ON CONFLICT (email) DO NOTHING',
+      'INSERT INTO accounts (id, email, name, keyring, version, created_at, email_verified) VALUES (?, ?, ?, ?, 1, ?, ?) ON CONFLICT (email) DO NOTHING',
     )
-    .bind(account.id, account.email, account.name, JSON.stringify(account.keyring), now)
+    .bind(
+      account.id,
+      account.email,
+      account.name,
+      JSON.stringify(account.keyring),
+      now,
+      account.emailVerified ? 1 : 0,
+    )
     .run();
   return result.meta.changes === 1;
 }

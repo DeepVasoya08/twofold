@@ -65,3 +65,14 @@ export function emailInUseMail(to: string): Mail {
     'If that was you, sign in with this email instead. If it wasn’t, you can ignore this email: nothing has changed.',
   ]);
 }
+
+/**
+ * Sent instead of a sign-up code to an address that already has an account. The sign-up
+ * screen says "check your email" either way, so only the address's owner learns this.
+ */
+export function alreadySignedUpMail(to: string): Mail {
+  return compose(to, 'You already have an Arcafold account', [
+    'Someone tried to create an Arcafold account with this email, but it already has one.',
+    'If that was you, sign in instead. If you’ve lost your password, your recovery key can set a new one. If it wasn’t you, you can ignore this email: nothing has changed.',
+  ]);
+}

@@ -98,6 +98,38 @@ export async function takeEmailCodeTry(
   return row?.tag ?? null;
 }
 
+/**
+ * Counts a send against a limit-only scope (no code), starting the count again once the
+ * hour since `sends_since` has passed. Returns the sends counted in this hour.
+ */
+export function countSendQuery(
+  db: D1Database,
+  scope: string,
+  now: number,
+  hourAgo: number,
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO email_codes (scope, account_id, tag, expires_at, tries, sent_at, sends, sends_since)
+       VALUES (?1, NULL, '', ?2 + 3600000, 0, ?2, 1, ?2)
+       ON CONFLICT (scope) DO UPDATE SET
+         sends = CASE WHEN email_codes.sends_since <= ?3 THEN 1 ELSE email_codes.sends + 1 END,
+         sends_since = CASE WHEN email_codes.sends_since <= ?3 THEN ?2 ELSE email_codes.sends_since END,
+         sent_at = ?2,
+         expires_at = ?2 + 3600000
+       RETURNING sends`,
+    )
+    .bind(scope, now, hourAgo);
+}
+
+/**
+ * Deletes rows nobody can use any more: expired a day ago (ticket and code rows, and the
+ * hourly counts of sign-up addresses), so the table doesn't grow.
+ */
+export function deleteStaleCodesQuery(db: D1Database, now: number): D1PreparedStatement {
+  return db.prepare('DELETE FROM email_codes WHERE expires_at < ?').bind(now - 24 * 60 * 60 * 1000);
+}
+
 /** Forgets a scope's code once it has been used. */
 export function deleteEmailCodeQuery(db: D1Database, scope: string): D1PreparedStatement {
   return db.prepare('DELETE FROM email_codes WHERE scope = ?').bind(scope);

@@ -47,10 +47,16 @@ let mailbox: TestMailbox;
 let client: Client;
 let keys: [Uint8Array, Uint8Array, Uint8Array];
 
+/**
+ * Makes an unconfirmed account, as accounts made before email existed are: signed up with
+ * email off, then signed in on `c`.
+ */
 async function signUp(c: Client, email: string, loginKeys = keys): Promise<void> {
   const keyring = await makeKeyring(loginKeys);
-  const res = await c.request('POST', '/auth/signup', { email, name: 'Sam', keyring });
+  const before = new Client({ DB: env.DB, BLOBS: env.BLOBS });
+  const res = await before.request('POST', '/auth/signup', { email, name: 'Sam', keyring });
   expect(res.status).toBe(201);
+  c.cookie = before.cookie;
 }
 
 /** Lets the resend wait pass, as if the last code was sent over a minute ago. */

@@ -68,7 +68,13 @@ interface AccountValue {
   /** The last email that signed in here, to fill in on the sign-in screen. */
   email: string | null;
   pendingSignUp: PendingSignUp | null;
-  prepareSignUp: (values: { name: string; email: string; password: string }) => Promise<void>;
+  prepareSignUp: (values: {
+    name: string;
+    email: string;
+    password: string;
+    /** Proof the email was confirmed, when the server sends email. */
+    ticket?: string;
+  }) => Promise<void>;
   completeSignUp: () => Promise<void>;
   cancelSignUp: () => void;
   logIn: (email: string, password: string) => Promise<void>;

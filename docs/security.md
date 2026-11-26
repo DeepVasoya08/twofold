@@ -144,10 +144,13 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   copies are the same ciphertext under the same random names, so they reveal nothing the
   photo bucket doesn't, but deleted photos' ciphertext outlives the delete by 30 days. The
   backup bucket is locked for those 30 days, so a stolen token can't wipe it.
-- **Sign-up reveals whether an email is registered** (and `POST /api/auth/prelogin`
-  answers 404 for unknown emails). Now that emails are confirmed with a code
-  ([email.md](email.md)), the next change hides it by sending the code before the account
-  exists.
+- **Who has an account is hidden only while email is set up.** Sign-up then emails a code
+  before the account exists and answers the same for a taken address (its owner gets a
+  note instead of a code), and prelogin gives an unknown email a made-up salt that is always
+  the same for it (an HMAC with the email secret) and the usual KDF settings, so the login
+  that follows fails like a wrong password. Without email set up, sign-up still says an
+  address is taken and prelogin answers 404 for unknown emails. Timing can still differ a
+  little (a real account's row is read either way, but the made-up salt costs one HMAC).
 - The two passwords must differ; the client refuses a new password that already opens
   another slot.
 
@@ -732,7 +735,10 @@ so photos can later be found by describing them. The server stores only cipherte
   `apps/api/wrangler.jsonc`), only its own error lines. Request logs would keep every
   request's path, headers and client details at Cloudflare, which could link the private
   space's requests to the main library's for as long as they're stored.
-- **Email is confirmed, and is only a way to reach the owner** ([email.md](email.md)). It
+- **Email is confirmed, and is only a way to reach the owner** ([email.md](email.md)). New
+  accounts confirm theirs at sign-up: the code is swapped for a one-use ticket (256 bits,
+  kept only as an HMAC, valid an hour) that the sign-up must carry, and sign-up codes are
+  also limited to 20 an hour from one internet address. It
   never resets a password or unlocks anything. Codes are stored only as HMACs keyed with a
   Worker secret, bound to the address, limited to 5 tries (counted before each check) and
   10 minutes, with one send a minute and 5 an hour per account. Until an account confirms,
