@@ -117,8 +117,9 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   replaces any existing one without being able to delete its photos, and deleting an
   account can only wipe spaces whose keys are on the device. What's left can never be
   decrypted or reached again, but it isn't deleted.
-- **The storage quota keeps a total per account.** Each account may keep 1 GB of
-  ciphertext across every space it uploads to (`stored_bytes` on `accounts`). Only the total
+- **The storage quota keeps a total per account.** Each account may keep its plan's
+  storage of ciphertext (1 GB on Free) across every space it uploads to (`stored_bytes` on
+  `accounts`, the limit from `billing`; see [billing.md](billing.md)). Only the total
   is stored, never which photos or spaces it is made of, but with few accounts the total can
   be matched against the sizes of spaces (500 MB = 300 + 200) and so show which spaces,
   including a private one, belong to an account. Deepu chose an exact per-account cap over a
@@ -258,10 +259,13 @@ name, parent?, deletedAt? }`: it has a `name` rather than an album's `title`, so
   Deepu chose this knowing the trade-off: someone with only the main password can see the
   total is larger than the main library's photos explain, which hints that a private space
   exists (photos added to libraries shared with you also count, which gives an innocent
-  explanation, but not a strong one). The settings say the 1 GB limit
+  explanation, but not a strong one). The settings say the limit
   covers everything the account stores, which is also true without a private space (photos
   added to libraries shared with you count too), so a "storage full" message before the main
-  library reaches 1 GB has an innocent explanation.
+  library reaches the limit has an innocent explanation.
+- **Plans belong to the account, never a space.** A plan only sets the account's storage
+  limit; every feature is on every plan, so no plan, price or billing record says whether a
+  private space exists. The limit and the storage-full message are the same in both spaces.
 - **Deleting the account** first wipes every space the device holds keys for (the open
   one, the other one if its password was typed this session, and the one the confirming
   password opens), then the account.

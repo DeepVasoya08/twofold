@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 
-import { STORAGE_SIZES } from '@arcafold/types';
 import type { AccountStorage, DeviceList } from '@arcafold/types';
 
 import {
@@ -8,6 +7,7 @@ import {
   deleteOtherSession,
   deleteOtherSessions,
   listDevices,
+  storageLimit,
   storedBytes,
   updateKeyring,
   updateName,
@@ -97,10 +97,14 @@ account.put('/keyring', async (c) => {
   );
 });
 
-/** How much of the account's limit is used, across both spaces. Both spaces show it. */
+/** How much of the account's limit (its plan's) is used, across both spaces. Both spaces show it. */
 account.get('/storage', async (c) => {
-  const used = await storedBytes(c.env.DB, c.get('account').id);
-  return c.json<AccountStorage>({ used, limit: STORAGE_SIZES.accountQuota });
+  const accountId = c.get('account').id;
+  const [used, limit] = await Promise.all([
+    storedBytes(c.env.DB, accountId),
+    storageLimit(c.env.DB, accountId, Date.now()),
+  ]);
+  return c.json<AccountStorage>({ used, limit });
 });
 
 /** Every device signed in to this account, this one first. */

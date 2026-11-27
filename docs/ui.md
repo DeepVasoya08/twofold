@@ -372,7 +372,8 @@ to save the search again.
   `app/profile-photo.ts`, `components/ProfileDialog.tsx`).
 - Storage used shows in Settings → Storage and at the bottom of the sidebar as "19.1 MB of
   1 GB used": the account's total across both spaces, the same in either one, against the
-  one shared 1 GB (`app/storage.tsx`, `lib/storage-usage.ts`).
+  account's limit from its plan, as the server reports it (1 GB until it answers;
+  `app/storage.tsx`, `lib/storage-usage.ts`).
 - State lives in `app/account.tsx` (who is signed in, which slot is open) and
   `@arcafold/core/account` (every operation that touches keys); `app/access.ts` decides
   redirects.

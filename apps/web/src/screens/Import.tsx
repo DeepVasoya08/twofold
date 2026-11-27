@@ -1,4 +1,3 @@
-import { STORAGE_SIZES } from '@arcafold/types';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -6,7 +5,7 @@ import { useImports } from '../app/imports';
 import type { ImportJob } from '../app/importer';
 import { Link, useRouter } from '../app/router';
 import { paths } from '../app/routes';
-import { useStorageUsage } from '../app/storage';
+import { useStorageLimit, useStorageUsage } from '../app/storage';
 import { useUploads } from '../app/uploads';
 import { useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
@@ -253,7 +252,8 @@ function ReviewPlan({ plan, onCancel }: { plan: ImportPlan; onCancel: () => void
   const vault = useVault();
   const imports = useImports();
   const used = useStorageUsage();
-  const free = Math.max(0, STORAGE_SIZES.accountQuota - used);
+  const limit = useStorageLimit();
+  const free = Math.max(0, limit - used);
   const isPrivate = vault.space === 'private';
   const { items, hidden } = useMemo(
     () => itemsForSpace(plan.items, isPrivate),

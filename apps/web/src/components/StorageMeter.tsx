@@ -1,15 +1,14 @@
-import { STORAGE_SIZES } from '@arcafold/types';
-
-import { useStorageUsage } from '../app/storage';
+import { useStorageLimit, useStorageUsage } from '../app/storage';
 import { usageLabel, usedFraction } from '../lib/storage-usage';
 
 import './storage-meter.css';
 
-/** How much of the account's 1 GB is used, across both spaces, as a bar and a label. */
+/** How much of the account's limit is used, across both spaces, as a bar and a label. */
 export function StorageMeter({ compact = false }: { compact?: boolean }) {
   const bytes = useStorageUsage();
-  const fraction = usedFraction(bytes);
-  const label = usageLabel(bytes);
+  const limit = useStorageLimit();
+  const fraction = usedFraction(bytes, limit);
+  const label = usageLabel(bytes, limit);
   return (
     <div className={`storage-meter${compact ? ' storage-meter--compact' : ''}`}>
       <div
@@ -17,7 +16,7 @@ export function StorageMeter({ compact = false }: { compact?: boolean }) {
         role="meter"
         aria-label="Storage"
         aria-valuemin={0}
-        aria-valuemax={STORAGE_SIZES.accountQuota}
+        aria-valuemax={limit}
         aria-valuenow={bytes}
         aria-valuetext={label}
       >

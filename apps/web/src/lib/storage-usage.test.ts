@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { STORAGE_SIZES } from '@arcafold/types';
+import { PLAN_STORAGE, STORAGE_SIZES } from '@arcafold/types';
 
-import { formatBytes, shownUsage, spaceBytes, usageLabel, usedFraction } from './storage-usage';
+import {
+  DEFAULT_LIMIT,
+  formatBytes,
+  shownUsage,
+  spaceBytes,
+  usageLabel,
+  usedFraction,
+} from './storage-usage';
 import type { Photo } from '@arcafold/core/library/model';
 
 const photo = (id: string, size?: number, library?: string): Photo => ({
@@ -54,10 +61,17 @@ describe('shownUsage', () => {
 });
 
 describe('usedFraction and usageLabel', () => {
-  it('measures against the 1 GB account limit, within 0 and 1', () => {
-    expect(usedFraction(STORAGE_SIZES.accountQuota / 4)).toBe(0.25);
-    expect(usedFraction(STORAGE_SIZES.accountQuota * 2)).toBe(1);
-    expect(usedFraction(-1)).toBe(0);
-    expect(usageLabel(3 * 1024 * 1024)).toBe('3 MB of 1 GB used');
+  it('measures against the account’s limit, within 0 and 1', () => {
+    expect(usedFraction(DEFAULT_LIMIT / 4, DEFAULT_LIMIT)).toBe(0.25);
+    expect(usedFraction(DEFAULT_LIMIT * 2, DEFAULT_LIMIT)).toBe(1);
+    expect(usedFraction(-1, DEFAULT_LIMIT)).toBe(0);
+    expect(usedFraction(1, 0)).toBe(1);
+    expect(usageLabel(3 * 1024 * 1024, DEFAULT_LIMIT)).toBe('3 MB of 1 GB used');
+  });
+
+  it('shows a paid plan’s limit', () => {
+    expect(usedFraction(PLAN_STORAGE.plus / 2, PLAN_STORAGE.plus)).toBe(0.5);
+    expect(usageLabel(2 * 1024 * 1024 * 1024, PLAN_STORAGE.plus)).toBe('2 GB of 50 GB used');
+    expect(usageLabel(0, PLAN_STORAGE.max)).toBe('0 B of 1 TB used');
   });
 });

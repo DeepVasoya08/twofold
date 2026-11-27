@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 
 import { fromBase64Url } from '@arcafold/crypto/webcrypto';
-import { FACE_SEGMENT_PAGE, MAX_FACE_SEGMENTS, MAX_PEOPLE, STORAGE_SIZES } from '@arcafold/types';
+import { FACE_SEGMENT_PAGE, MAX_FACE_SEGMENTS, MAX_PEOPLE } from '@arcafold/types';
 import type { FaceSegmentPage, PersonList } from '@arcafold/types';
 
 import { releaseStorage, reserveStorage } from '../db';
@@ -42,7 +42,7 @@ people.use('/face-data', requireOwner);
 people.use('/people', requireOwner);
 people.use('/people/*', requireOwner);
 
-const storageFull = 'Your storage is full. Delete some photos to make room.';
+const storageFull = messages.storageFull;
 
 people.get('/faces', async (c) => {
   const after = c.req.query('after') ?? '';
@@ -65,7 +65,7 @@ people.put('/faces/:id', async (c) => {
     return c.json({ error: 'Too many face results are waiting to be merged.' }, 409);
   }
   const accountId = c.get('account').id;
-  if (!(await reserveStorage(c.env.DB, accountId, data.length, STORAGE_SIZES.accountQuota))) {
+  if (!(await reserveStorage(c.env.DB, accountId, data.length, Date.now()))) {
     return c.json({ error: storageFull }, 413);
   }
   if (!(await insertFaceSegment(c.env.DB, tag, { id: id.data, data: body.data }, data.length))) {

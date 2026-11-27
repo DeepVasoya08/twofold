@@ -9,7 +9,6 @@ import {
   MAX_MEMBERS,
   MAX_PENDING_INVITES,
   SPACE_HEADER,
-  STORAGE_SIZES,
   THUMB_BATCH_MAX,
 } from '@arcafold/types';
 import type {
@@ -298,9 +297,7 @@ async function deletePhotos(c: Context<AppEnv>, tag: string, photos: PhotoSize[]
   await releaseStorage(c.env.DB, c.get('account').id, bytes);
 }
 
-const storageFull = `Your storage is full. Arcafold keeps up to ${String(
-  STORAGE_SIZES.accountQuota / (1024 * 1024 * 1024),
-)} GB per account; delete some photos to make room.`;
+const storageFull = messages.storageFull;
 
 space.get('/photos', async (c) => {
   const after = c.req.query('after') ?? '';
@@ -402,7 +399,7 @@ space.post('/photos', async (c) => {
   // it is tried once more.
   const size = body.thumbSize + body.fullSize;
   const accountId = c.get('account').id;
-  const reserve = () => reserveStorage(c.env.DB, accountId, size, STORAGE_SIZES.accountQuota);
+  const reserve = () => reserveStorage(c.env.DB, accountId, size, now);
   const [, reserved] = await Promise.all([
     stalePendingPhotos(c.env.DB, tag, now - PENDING_TTL_MS).then((stale) =>
       deletePhotos(c, tag, stale).then(() => stale.length),
@@ -862,7 +859,7 @@ space.put('/profile-photo', requireOwner, async (c) => {
   const image = body && fromBase64Url(body.image);
   if (!body || !image) return c.json({ error: messages.badRequest }, 400);
   const accountId = c.get('account').id;
-  if (!(await reserveStorage(c.env.DB, accountId, image.length, STORAGE_SIZES.accountQuota))) {
+  if (!(await reserveStorage(c.env.DB, accountId, image.length, Date.now()))) {
     return c.json({ error: storageFull }, 413);
   }
   const replaced = await replaceProfilePhoto(c.env.DB, c.get('space'), body, image.length);

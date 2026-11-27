@@ -1,6 +1,14 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
-import { KEY_SIZES, SLOT_COUNT, ThumbBatchParser, readThumbBatch } from './index';
+import {
+  KEY_SIZES,
+  PLAN_IDS,
+  PLAN_STORAGE,
+  SLOT_COUNT,
+  STORAGE_SIZES,
+  ThumbBatchParser,
+  readThumbBatch,
+} from './index';
 import type { HealthResponse, Keyring } from './index';
 
 describe('HealthResponse', () => {
@@ -61,5 +69,15 @@ describe('ThumbBatchParser', () => {
     expect(extra.finished).toBe(false);
     const huge = new ThumbBatchParser(1);
     expect(huge.push(new Uint8Array([0xff, 0xff, 0xff, 0xff]))).toBeNull();
+  });
+});
+
+describe('plans', () => {
+  it('start with Free at the 1 GB every account has, and only grow', () => {
+    expect(PLAN_IDS[0]).toBe('free');
+    expect(PLAN_STORAGE.free).toBe(STORAGE_SIZES.accountQuota);
+    const sizes = PLAN_IDS.map((plan) => PLAN_STORAGE[plan]);
+    expect(sizes).toEqual([...sizes].sort((a, b) => a - b));
+    expect(new Set(sizes).size).toBe(PLAN_IDS.length);
   });
 });
