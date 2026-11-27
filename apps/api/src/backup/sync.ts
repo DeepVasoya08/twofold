@@ -17,6 +17,12 @@ export const KEEP_DELETED_DAYS = 30;
 export const SETTLE_MS = 60 * 60 * 1000;
 /** Per run, so a big first backup spreads over several runs. */
 export const MAX_COPIES_PER_RUN = 500;
+/**
+ * Copies go straight into Infrequent Access: they're only read during a restore, and every
+ * copy lives at least 30 days (the bucket lock), which is that class's minimum. Marks stay
+ * in Standard, where writes cost half as much and an empty object costs nothing to keep.
+ */
+export const COPY_STORAGE_CLASS = 'InfrequentAccess';
 /** Each copy holds two connections (read and write); a Worker gets six at once. */
 const COPY_CONCURRENCY = 2;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -64,10 +70,10 @@ async function copy(source: R2Bucket, backup: R2Bucket, key: string): Promise<bo
   // A fixed-length stream lets R2 take the body without holding it all in memory.
   const { readable, writable } = new FixedLengthStream(object.size);
   const [stored] = await Promise.all([
-    backup.put(`${COPY_PREFIX}${key}`, readable),
+    backup.put(`${COPY_PREFIX}${key}`, readable, { storageClass: COPY_STORAGE_CLASS }),
     object.body.pipeTo(writable),
   ]);
-  return stored?.size === object.size;
+  return stored.size === object.size;
 }
 
 /** Runs `task` over `items`, `limit` at a time; returns how many succeeded. */
