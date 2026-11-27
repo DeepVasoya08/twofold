@@ -199,6 +199,24 @@ export interface DeviceList {
  */
 export const SPACE_HEADER = 'x-arcafold-space';
 
+/**
+ * The plans an account can be on (docs/billing.md). A plan only ever sets one thing: how
+ * many encrypted bytes the whole account may keep, across every space. Every feature is on
+ * every plan, so a plan says nothing about which spaces exist.
+ */
+export const PLAN_IDS = ['free', 'plus', 'pro', 'max'] as const;
+export type PlanId = (typeof PLAN_IDS)[number];
+
+const GIB = 1024 * 1024 * 1024;
+
+/** Each plan's storage limit for the whole account, in encrypted bytes. */
+export const PLAN_STORAGE: Readonly<Record<PlanId, number>> = {
+  free: GIB,
+  plus: 50 * GIB,
+  pro: 200 * GIB,
+  max: 1024 * GIB,
+};
+
 export const STORAGE_SIZES = {
   /** The space access token: the space id from the key slot. */
   spaceToken: 16,
@@ -214,8 +232,11 @@ export const STORAGE_SIZES = {
   /** Largest encrypted thumbnail and full-size photo, in bytes. */
   maxThumb: 1024 * 1024,
   maxFull: 64 * 1024 * 1024,
-  /** Most encrypted bytes one account can upload and keep, across every space. */
-  accountQuota: 1024 * 1024 * 1024,
+  /**
+   * Most encrypted bytes an account on the Free plan can upload and keep, across every
+   * space. It's also every account's limit while no paid plan is current (`PLAN_STORAGE`).
+   */
+  accountQuota: GIB,
   /** Largest encrypted profile photo, in bytes. The browser shrinks photos well below this. */
   maxProfilePhoto: 128 * 1024,
 } as const;

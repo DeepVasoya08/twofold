@@ -21,6 +21,29 @@ const PNG = Buffer.from(
 const profileImage = (page: Page) => page.locator('.profile img.avatar__image');
 const storage = (page: Page) => page.locator('.settings-storage');
 
+test('the storage limit is the one the server gives, the same in both spaces', async ({ page }) => {
+  // Paid plans arrive with billing (docs/billing.md); here the server's answer is changed to
+  // a 50 GB plan's limit, to check the web shows whatever limit the server decides.
+  await page.route('**/api/account/storage', async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as { used: number; limit: number };
+    await route.fulfill({ response, json: { ...body, limit: 50 * 1024 * 1024 * 1024 } });
+  });
+  await signUp(page);
+  await goTo(page, 'Settings');
+  await expect(storage(page)).toContainText('0 B of 50 GB used');
+  await expect(storage(page).getByRole('meter', { name: 'Storage' })).toHaveAttribute(
+    'aria-valuemax',
+    String(50 * 1024 * 1024 * 1024),
+  );
+
+  await setUpPrivateSpace(page);
+  await lock(page);
+  await unlockWith(page, PRIVATE_PASSWORD);
+  await goTo(page, 'Settings');
+  await expect(storage(page)).toContainText('0 B of 50 GB used');
+});
+
 test('both spaces show the same storage total, counting both', async ({ page }) => {
   const meter = () => storage(page).getByRole('meter', { name: 'Storage' });
   const shown = async () => Number(await meter().getAttribute('aria-valuenow'));

@@ -2,7 +2,13 @@ import { fromBase64Url, randomBytes, sha256, toBase64Url } from '@arcafold/crypt
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { SPACE_HEADER, STORAGE_SIZES, THUMB_BATCH_MAX, readThumbBatch } from '@arcafold/types';
+import {
+  PLAN_STORAGE,
+  SPACE_HEADER,
+  STORAGE_SIZES,
+  THUMB_BATCH_MAX,
+  readThumbBatch,
+} from '@arcafold/types';
 import type { AlbumList, PhotoPage, ProfilePhotoResponse, StoredPhoto } from '@arcafold/types';
 
 import type { Env } from './env';
@@ -477,6 +483,71 @@ describe('storage quota', () => {
     expect(results.filter((res) => res.status === 201)).toHaveLength(2);
     expect(results.filter((res) => res.status === 413)).toHaveLength(8);
     expect(stored()).toBe(QUOTA - 300);
+  });
+
+  describe('with a paid plan', () => {
+    const HOUR = 60 * 60 * 1000;
+    const PLUS = PLAN_STORAGE.plus;
+    /** A plan row as billing will write it; times are relative to now. */
+    const setPlan = (paidFor: number, grace: number | null = null) => {
+      const now = Date.now();
+      sqlite
+        .prepare(
+          'INSERT INTO billing (account_id, plan, storage_bytes, paid_until, grace_until, updated_at) SELECT id, ?, ?, ?, ?, ? FROM accounts',
+        )
+        .run('plus', PLUS, now + paidFor, grace === null ? null : now + grace, now);
+    };
+    const limit = async () =>
+      (await (await client.request('GET', '/account/storage')).json<{ limit: number }>()).limit;
+
+    it('raises the limit to the plan’s while it is paid for', async () => {
+      setPlan(HOUR);
+      expect(await limit()).toBe(PLUS);
+      setStored(QUOTA);
+      expect((await start()).status).toBe(201);
+      setStored(PLUS - 1100);
+      expect((await start()).status).toBe(201);
+      expect(stored()).toBe(PLUS);
+      expect((await start()).status).toBe(413);
+    });
+
+    it('falls back to Free once paid time and grace have run out, deleting nothing', async () => {
+      await upload();
+      setPlan(-HOUR, -1);
+      expect(await limit()).toBe(QUOTA);
+      setStored(QUOTA);
+      expect((await start()).status).toBe(413);
+      expect(sqlite.prepare('SELECT * FROM photos').all()).toHaveLength(1);
+    });
+
+    it('keeps the plan during grace after a failed renewal', async () => {
+      setPlan(-HOUR, HOUR);
+      expect(await limit()).toBe(PLUS);
+      setStored(QUOTA);
+      expect((await start()).status).toBe(201);
+    });
+
+    it('is the same limit in every space of the account', async () => {
+      setPlan(HOUR);
+      useSpace(client, toBase64Url(randomBytes(16)));
+      expect(await limit()).toBe(PLUS);
+      setStored(QUOTA);
+      expect((await start()).status).toBe(201);
+    });
+
+    it('can’t be raced at the plan’s limit either', async () => {
+      setPlan(HOUR);
+      setStored(PLUS - 2500);
+      const results = await Promise.all(Array.from({ length: 10 }, () => start()));
+      expect(results.filter((res) => res.status === 201)).toHaveLength(2);
+      expect(stored()).toBe(PLUS - 300);
+    });
+
+    it('says storage is full with no price or plan name, as the phone apps show it', async () => {
+      setStored(QUOTA);
+      const { error } = await (await start()).json<{ error: string }>();
+      expect(error).toBe('Your storage is full. Delete some photos or files to make room.');
+    });
   });
 
   it('gives the bytes back when a photo, an abandoned upload or a whole space is deleted', async () => {

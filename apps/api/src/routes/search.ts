@@ -6,7 +6,6 @@ import {
   MAX_SMART_ALBUMS,
   MAX_WORDS,
   SEARCH_SEGMENT_PAGE,
-  STORAGE_SIZES,
 } from '@arcafold/types';
 import type { SearchSegmentPage, SmartAlbumList, StoredWord, WordList } from '@arcafold/types';
 
@@ -78,8 +77,8 @@ search.put('/search/:id', async (c) => {
     return c.json({ error: 'Too many search results are waiting to be merged.' }, 409);
   }
   const accountId = c.get('account').id;
-  if (!(await reserveStorage(c.env.DB, accountId, data.length, STORAGE_SIZES.accountQuota))) {
-    return c.json({ error: 'Your storage is full. Delete some photos to make room.' }, 413);
+  if (!(await reserveStorage(c.env.DB, accountId, data.length, Date.now()))) {
+    return c.json({ error: messages.storageFull }, 413);
   }
   const segment = { id: id.data, data: body.data };
   if (!(await insertSegment(c.env.DB, TABLE, tag, segment, data.length))) {

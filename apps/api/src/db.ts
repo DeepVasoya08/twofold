@@ -1,3 +1,4 @@
+import { STORAGE_SIZES } from '@arcafold/types';
 import type { Device, DeviceKind, Keyring, SmartFeaturesChoice } from '@arcafold/types';
 
 import type { DeviceLabel } from './device';
@@ -121,22 +122,47 @@ export async function updateSmartFeatures(
 }
 
 /**
- * Adds an upload's bytes to the account's total, only if that stays within `limit`. One
- * statement, so parallel uploads can't together go over. Returns false if it would.
+ * The account's storage limit at `now`, as SQL: its paid plan's while that is paid for or in
+ * grace (the `billing` table), otherwise the Free plan's (?3). Expects the account id in ?2
+ * and `now` in ?4.
+ */
+const LIMIT_SQL = `COALESCE(
+  (SELECT storage_bytes FROM billing
+    WHERE account_id = ?2 AND MAX(paid_until, COALESCE(grace_until, 0)) > ?4),
+  ?3)`;
+
+/**
+ * Adds an upload's bytes to the account's total, only if that stays within the account's
+ * limit (its plan's). One statement, so parallel uploads can't together go over, and a plan
+ * ending mid-upload can't be raced. Returns false if it would go over.
  */
 export async function reserveStorage(
   db: D1Database,
   accountId: string,
   bytes: number,
-  limit: number,
+  now: number,
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      'UPDATE accounts SET stored_bytes = stored_bytes + ?1 WHERE id = ?2 AND stored_bytes + ?1 <= ?3',
+      `UPDATE accounts SET stored_bytes = stored_bytes + ?1
+        WHERE id = ?2 AND stored_bytes + ?1 <= ${LIMIT_SQL}`,
     )
-    .bind(bytes, accountId, limit)
+    .bind(bytes, accountId, STORAGE_SIZES.accountQuota, now)
     .run();
   return result.meta.changes === 1;
+}
+
+/** The account's storage limit at `now`, across every space. */
+export async function storageLimit(
+  db: D1Database,
+  accountId: string,
+  now: number,
+): Promise<number> {
+  const row = await db
+    .prepare(`SELECT ${LIMIT_SQL} AS limit_bytes`)
+    .bind(0, accountId, STORAGE_SIZES.accountQuota, now)
+    .first<{ limit_bytes: number }>();
+  return row?.limit_bytes ?? STORAGE_SIZES.accountQuota;
 }
 
 /** How many bytes the account stores across all its spaces (uploads in progress included). */
