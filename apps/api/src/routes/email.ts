@@ -5,6 +5,7 @@ import { deleteEmailCodeQuery, emailInUse, verifyEmailQuery } from '../email-db'
 import { mailSetup, sendNotice } from '../mail';
 import { confirmEmailMail, emailChangedMail, emailInUseMail } from '../mail-templates';
 import { checkProof, clientAddress } from '../proof';
+import { requestInfo } from '../request-info';
 import { messages, readBody, toAccountResponse } from '../respond';
 import { sendEmailCodeSchema, verifyEmailSchema } from '../schemas';
 import type { AppEnv } from '../session';
@@ -56,7 +57,8 @@ email.post('/code', async (c) => {
       scope: await codeScope(setup, 'verify', current.id),
       accountId: current.id,
       address: body.email,
-      mail: (code) => (taken ? emailInUseMail(body.email) : confirmEmailMail(body.email, code)),
+      mail: (code) =>
+        taken ? emailInUseMail(body.email, requestInfo(c)) : confirmEmailMail(body.email, code),
     },
     Date.now(),
   );
@@ -91,7 +93,7 @@ email.post('/verify', async (c) => {
   // A confirmed address that was replaced hears about it, so a change nobody meant to make
   // doesn't go unseen. Sending is best effort: the change has already happened.
   if (current.emailVerified && body.email !== current.email) {
-    await sendNotice(c, setup, emailChangedMail(current.email, body.email));
+    await sendNotice(c, setup, emailChangedMail(current.email, body.email, requestInfo(c)));
   }
   return c.json(toAccountResponse({ ...current, email: body.email, emailVerified: true }, c.env));
 });

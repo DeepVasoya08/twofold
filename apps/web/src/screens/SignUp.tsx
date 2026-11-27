@@ -154,6 +154,7 @@ export function SignUp() {
             }}
             error={error}
           />
+          <p className="confirm-email__hint">{NO_CODE_SIGN_UP}</p>
           <button
             type="submit"
             className="btn btn--primary btn--block btn--lg"
@@ -162,7 +163,6 @@ export function SignUp() {
           >
             {busy ? 'Creating your keys…' : 'Continue'}
           </button>
-          <p className="confirm-email__hint">{NO_CODE_SIGN_UP}</p>
           <div className="form__row form__row--center confirm-email__links">
             <button
               type="button"

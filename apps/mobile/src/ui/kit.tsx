@@ -160,6 +160,24 @@ export function Banner({ children }: { children: ReactNode }) {
   );
 }
 
+/** A warning that stays on screen (not an error just made): amber, with a "!" mark. */
+export function Callout({ children }: { children: ReactNode }) {
+  const palette = usePalette();
+  return (
+    <View
+      style={[
+        styles.banner,
+        { backgroundColor: `${palette.warning}26`, borderColor: palette.warning },
+      ]}
+    >
+      <View style={[styles.bannerMark, { backgroundColor: palette.warning }]}>
+        <Text style={[styles.bannerMarkText, { color: palette.surface }]}>!</Text>
+      </View>
+      <Text style={[styles.bannerText, { color: palette.text }]}>{children}</Text>
+    </View>
+  );
+}
+
 export function Button({
   label,
   busyLabel,
