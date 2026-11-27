@@ -3,6 +3,10 @@
   "name": "arcafold",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
+  // Production is served only at its custom domain (added in the dashboard, docs/deployment.md),
+  // never at a workers.dev address, which would be a second origin outside the zone's HTTPS
+  // and security settings. Staging turns it back on below.
+  "workers_dev": false,
   // Keep the Worker's own console logs (which never include keys, tokens or ids), but no
   // per-request logs or traces: those would store every request's path, headers and client
   // details at Cloudflare, which could link a private space's requests to the main
@@ -48,6 +52,8 @@
     // bucket. Bindings aren't inherited, so both are listed again.
     "staging": {
       "name": "arcafold-staging",
+      // Staging has no custom domain: it's served at its workers.dev address (docs/staging.md).
+      "workers_dev": true,
       "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "arcafold-staging-blobs" }],
       // Staging has no EMAIL_CODE_SECRET, so it never sends email or asks to confirm one.
       "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["no-reply@arcafold.com"] }],

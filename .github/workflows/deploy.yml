@@ -81,7 +81,7 @@ jobs:
       - name: Keep recent builds' files
         working-directory: apps/web
         run: |
-          origin="${SITE_URL:-https://arcafold.deepvasoya08.workers.dev}"
+          origin="${SITE_URL:-https://arcafold.com}"
           node scripts/keep-old-assets.mjs "${origin%/}"
 
       # One Worker serves the web app (static assets) and the API (/api/*) on one origin.

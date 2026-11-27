@@ -3,6 +3,7 @@ import { secureHeaders } from 'hono/secure-headers';
 
 import type { HealthResponse } from '@arcafold/types';
 
+import { plainHttpOutsideDev } from './https';
 import { messages } from './respond';
 import { account } from './routes/account';
 import { auth } from './routes/auth';
@@ -12,6 +13,13 @@ import type { AppEnv } from './session';
 
 /** API routes. The Worker only receives /api/* requests; static assets handle the rest. */
 export const app = new Hono<AppEnv>().basePath('/api');
+
+// Nothing is answered over plain http outside local development, so a login key or a
+// session cookie never crosses the network in the clear.
+app.use(async (c, next) => {
+  if (plainHttpOutsideDev(new URL(c.req.url))) return c.json({ error: messages.httpsOnly }, 403);
+  return next();
+});
 
 // API responses are JSON, never documents: lock them down harder than the web app's CSP.
 app.use(

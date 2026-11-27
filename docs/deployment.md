@@ -138,7 +138,11 @@ The product's domain is `arcafold.com`. Moving to it, in order:
 1. Add `arcafold.com` to Cloudflare as a zone (change the nameservers at the registrar to
    the two Cloudflare shows), then add it as a Custom Domain on the `arcafold` Worker as
    above. Add `www.arcafold.com` too if you want it.
-2. Set `SITE_URL` to `https://arcafold.com` and redeploy.
+2. Set `SITE_URL` to `https://arcafold.com` and redeploy. Production's `workers.dev`
+   address is off (`workers_dev: false` in `wrangler.jsonc`), so the custom domain is the
+   only way in. In the zone's **SSL/TLS → Edge Certificates**, turn on **Always Use HTTPS**
+   and **HSTS**: static pages are served before the Worker runs, so only that setting sends
+   a plain-http visit to https (the Worker itself refuses the API over http).
 3. Google Photos (step 6): add `https://arcafold.com` as an Authorized JavaScript origin and
    `https://arcafold.com/import/google/done` as a redirect URI, and set the home page and
    privacy policy links on the consent screen to the new domain. Keep the workers.dev
