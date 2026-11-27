@@ -459,7 +459,11 @@ the same View only or Add and edit.
   device (or a library member who can edit) checks each change against the folder as it
   is (it must stay inside the shared folder, a new folder's id must be new, a folder can't
   go inside itself, and the shared folder itself can't be renamed, moved or deleted), makes
-  it in its own records, and tells the server to forget it. Folder changes are made before
+  it in its own records, and tells the server to forget it. "New" is checked on the device,
+  not taken from the server's answer: a new folder whose id is already in use in the space
+  (an album or folder row, a photo, or an album a photo is filed in) is dropped, so neither a
+  member nor the server can file one of the owner's other folders or albums, or a change
+  played again, into the shared folder. Folder changes are made before
   files open, so a file put in a new folder finds it. A change that no longer makes sense,
   or doesn't open, is dropped; one that fails for a passing reason waits, with those after
   it. Deleting goes to the owner's Recently deleted, with the time the member deleted it,

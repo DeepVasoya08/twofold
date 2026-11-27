@@ -1,9 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { albumAccess, newInviteKeys, newSpace, openRecord, ownerAccess } from '@arcafold/crypto';
+import {
+  albumAccess,
+  fromBase64Url,
+  newInviteKeys,
+  newRecordId,
+  newSpace,
+  openRecord,
+  ownerAccess,
+  sealRecord,
+} from '@arcafold/crypto';
 import type { SpaceKeys } from '@arcafold/crypto';
 import type { MemberAccess } from '@arcafold/types';
 
+import { ApiError } from './api';
+import type { SpaceApi } from './api';
+import { encodeJson } from './records';
 import { FakeInvites, FakeServer } from './testing/fake-server';
 import {
   abandonJoin,
@@ -1005,7 +1017,7 @@ describe('changes inside a folder shared to edit', () => {
     const file = await alices.add(FILE, [taxes.id]);
     const inReceipts = await alices.add(PHOTO, [receipts.id]);
     await alices.list();
-    await shareAlbumWithBob(w, alices, taxes.id, 'edit');
+    const grant = await shareAlbumWithBob(w, alices, taxes.id, 'edit');
     const bobs = async () => {
       const store = sessionStore(w.bob, 'Bob', w.server.api);
       const listed = await store.list();
@@ -1013,7 +1025,34 @@ describe('changes inside a folder shared to edit', () => {
     };
     const alice = () => remoteStore(w.alice, w.server.api);
     const waiting = () => w.server.folderEdits.get(taxes.id)?.length ?? 0;
-    return { w, taxes, receipts, inTaxes, file, inReceipts, bobs, alice, waiting };
+    return { w, grant, taxes, receipts, inTaxes, file, inReceipts, bobs, alice, waiting };
+  }
+
+  /** A server that says an album id already in use in Alice's space is free. */
+  async function sayingTakenIdsAreFree(w: World) {
+    const aliceToken = (await ownerAccess(w.alice)).token;
+    return (token: string): SpaceApi => {
+      const real = w.server.api(token);
+      if (token !== aliceToken) return real;
+      return {
+        ...real,
+        createAlbum: async (album) => {
+          await real.createAlbum(album).catch((error: unknown) => {
+            if (!(error instanceof ApiError && error.status === 409)) throw error;
+          });
+        },
+      };
+    };
+  }
+
+  /** The photos someone holding the shared folder's token and key gets from the server. */
+  async function readableWith(w: World, grant: { token: string; recordKey: string }) {
+    const key = fromBase64Url(grant.recordKey);
+    if (!key) throw new Error('no key');
+    const { photos } = await w.server.api(grant.token).listPhotos();
+    const access = albumAccess(grant.token, key);
+    for (const photo of photos) await openRecord(access, 'photo', photo.id, photo.meta);
+    return photos.map((photo) => photo.id);
   }
 
   const byId = <T extends { id: string }>(items: readonly T[], id: string) => {
@@ -1133,6 +1172,63 @@ describe('changes inside a folder shared to edit', () => {
     ).rejects.toThrow();
     await expect(store.trash([inReceipts.id], at)).rejects.toThrow();
     expect(w.server.folderEdits.get(taxes.id)).toBeUndefined();
+  });
+
+  it('never files another of Alice’s folders or albums into it, whatever the server says', async () => {
+    const { w, grant, taxes, inTaxes, file, inReceipts, alice, waiting } = await editable();
+    const alices = alice();
+    const mine = await alices.createFolder('Private');
+    const holiday = await alices.createAlbum('Holiday');
+    const inMine = await alices.add(PHOTO, [mine.id]);
+    const inHoliday = await alices.add(PHOTO, [holiday.id]);
+    // "New" folders inside Taxes named with ids Alice already uses, sealed with the folder's
+    // key as someone given it could; the server queues them, and says those ids are free.
+    const key = fromBase64Url(grant.recordKey);
+    if (!key) throw new Error('no key');
+    const access = albumAccess(grant.token, key);
+    const forged = [];
+    for (const id of [mine.id, holiday.id, inMine.id]) {
+      const row = await newRecordId();
+      const edit = { v: 1, op: 'make-folder', id, name: 'Moved in', parent: taxes.id };
+      forged.push({
+        id: row,
+        meta: await sealRecord(access, 'folder-edit', row, encodeJson(edit)),
+      });
+    }
+    w.server.folderEdits.set(taxes.id, forged);
+
+    const { folders, albums } = await remoteStore(w.alice, await sayingTakenIdsAreFree(w)).list();
+    expect(byId(folders, mine.id)).toMatchObject({ name: 'Private' });
+    expect(byId(folders, mine.id).parentId).toBeUndefined();
+    expect(albums.map((album) => album.id)).toContain(holiday.id);
+    expect(folders.map((folder) => folder.id)).not.toContain(holiday.id);
+    expect(waiting()).toBe(0);
+    // Only what is in Taxes reaches the folder's people.
+    expect((await readableWith(w, grant)).sort()).toEqual(
+      [inTaxes.id, file.id, inReceipts.id].sort(),
+    );
+    expect(await readableWith(w, grant)).not.toContain(inHoliday.id);
+  });
+
+  it('lets go of an old change played again after Alice moved that folder out', async () => {
+    const { w, grant, taxes, bobs, alice } = await editable();
+    const { store } = await bobs();
+    const kids = await store.createFolder('Kids', taxes.id);
+    const kept = [...(w.server.folderEdits.get(taxes.id) ?? [])];
+    const { folders } = await alice().list();
+    // Alice takes Kids out of Taxes, then adds a photo to it.
+    const alices = alice();
+    const top = { ...byId(folders, kids.id) };
+    delete top.parentId;
+    await alices.list();
+    await alices.saveFolder(top);
+    const later = await alices.add(PHOTO, [kids.id]);
+
+    // The server plays Bob's old change again, and says Kids' id is free.
+    w.server.folderEdits.set(taxes.id, kept);
+    const after = await remoteStore(w.alice, await sayingTakenIdsAreFree(w)).list();
+    expect(byId(after.folders, kids.id).parentId).toBeUndefined();
+    expect(await readableWith(w, grant)).not.toContain(later.id);
   });
 
   it('lets go of a change that doesn’t open or no longer makes sense', async () => {
