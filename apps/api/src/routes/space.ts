@@ -78,6 +78,7 @@ import {
 } from '../schemas';
 import { requestSessionHash, sessionEnded, verifyEmailFirst } from '../session';
 import type { AppEnv } from '../session';
+import { limitWrites } from '../write-limit';
 import {
   countAlbumMembers,
   countJoined,
@@ -277,7 +278,7 @@ const stampChanges = createMiddleware<AppEnv>(async (c, next) => {
   }
 });
 
-space.use(requireSpace, limitMemberTokens, stampChanges);
+space.use(requireSpace, limitMemberTokens, limitWrites, stampChanges);
 
 // People are kept per space like everything else, and only for its owner.
 space.route('/', people);

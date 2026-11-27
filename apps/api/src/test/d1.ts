@@ -44,16 +44,26 @@ class Statement {
     return Promise.resolve({ meta: { changes: Number(result.changes) } });
   }
 
-  /** What D1 gives for each statement in a batch: rows (for a query) and the change count. */
-  runInBatch(): { results: unknown[]; meta: { changes: number } } {
+  /**
+   * What D1 gives for each statement in a batch: rows (for a query), the change count, and
+   * the database's size after it.
+   */
+  runInBatch(): { results: unknown[]; meta: { changes: number; size_after: number } } {
     const statement = this.db.prepare(this.sql);
     if (statement.columns().length === 0) {
       const result = statement.run(...this.params);
-      return { results: [], meta: { changes: Number(result.changes) } };
+      return { results: [], meta: { changes: Number(result.changes), size_after: this.size() } };
     }
     const results = statement.all(...this.params);
     const changes = Number(this.db.prepare('SELECT changes() AS n').get()?.n ?? 0);
-    return { results, meta: { changes: /^\s*select/i.test(this.sql) ? 0 : changes } };
+    const meta = { changes: /^\s*select/i.test(this.sql) ? 0 : changes, size_after: this.size() };
+    return { results, meta };
+  }
+
+  private size(): number {
+    const pages = this.db.prepare('PRAGMA page_count').get()?.page_count;
+    const pageSize = this.db.prepare('PRAGMA page_size').get()?.page_size;
+    return Number(pages ?? 0) * Number(pageSize ?? 0);
   }
 }
 
@@ -75,7 +85,9 @@ class TestD1 {
     return new Statement(this.sqlite, this.trips, sql);
   }
 
-  batch(statements: Statement[]): Promise<{ results: unknown[]; meta: { changes: number } }[]> {
+  batch(
+    statements: Statement[],
+  ): Promise<{ results: unknown[]; meta: { changes: number; size_after: number } }[]> {
     this.trips.count += 1;
     this.sqlite.exec('BEGIN');
     try {
