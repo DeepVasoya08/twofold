@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { SubmitEvent } from 'react';
 
-import { normalizeEmail } from '@arcafold/core/account';
+import { NO_CODE_CHANGE, normalizeEmail } from '@arcafold/core/account';
 import { useAccount, useMe } from '../app/account';
 import { useSubmit } from '../app/use-submit';
 import { useToast } from '../app/toast';
@@ -134,6 +134,7 @@ function ChangeEmailForm({ onClose }: { onClose: () => void }) {
         }}
         error={error}
       />
+      <p className="confirm-email__hint">{NO_CODE_CHANGE}</p>
       <div className="form__row">
         <button
           type="button"

@@ -9,7 +9,7 @@ import { AuthLayout } from '../components/AuthLayout';
 import { PasswordField, TextField } from '../components/Field';
 import { FormAlert } from '../components/FormAlert';
 import { Icon } from '../components/Icon';
-import { confirmSignUpEmail, startSignUp } from '@arcafold/core/account';
+import { NO_CODE_SIGN_UP, confirmSignUpEmail, startSignUp } from '@arcafold/core/account';
 import { MIN_PASSWORD_LENGTH, isValidEmail, passwordStrength } from '@arcafold/core/password';
 import { RESEND_SECONDS } from './ConfirmEmail';
 
@@ -162,6 +162,7 @@ export function SignUp() {
           >
             {busy ? 'Creating your keys…' : 'Continue'}
           </button>
+          <p className="confirm-email__hint">{NO_CODE_SIGN_UP}</p>
           <div className="form__row form__row--center confirm-email__links">
             <button
               type="button"

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { NO_CODE_CHANGE } from '@arcafold/core/account';
+
 import { useAccount } from '../session/account';
 import { Banner, Button, Field, Note, Screen, useSubmit } from '../ui/kit';
 
@@ -136,6 +138,7 @@ export function ConfirmEmail() {
         />
         {error ? <Banner>{error}</Banner> : null}
         <Button label="Confirm email" busyLabel="Checking…" busy={busy} onPress={submit} />
+        {address !== state.session.account.email ? <Note>{NO_CODE_CHANGE}</Note> : null}
         <Button
           kind="secondary"
           label={secondsLeft > 0 ? `Send a new code in ${String(secondsLeft)}s` : 'Send a new code'}

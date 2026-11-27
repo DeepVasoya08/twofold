@@ -139,6 +139,9 @@ test('sign-up asks for the emailed code before making keys', async ({ page }) =>
 
   await expect(page.getByRole('heading', { level: 1, name: 'Check your email' })).toBeVisible();
   expect(codesSent).toEqual([email]);
+  // An address that already has an account gets a note instead, and the screen says so
+  // without saying which it was.
+  await expect(page.getByText(/If this email already has an Arcafold account/)).toBeVisible();
   await page.getByLabel('Code').fill('000000');
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByText('That code isn’t right.')).toBeVisible();
@@ -216,6 +219,7 @@ test('a confirmed email can be changed from Settings with a code', async ({ page
   await dialog.getByLabel('New email').fill('Moved@Example.com');
   await dialog.getByRole('button', { name: 'Send code' }).click();
   await expect(dialog.getByText('moved@example.com')).toBeVisible();
+  await expect(dialog.getByText(/we sent it a note instead\. Use a different email/)).toBeVisible();
   expect(codesSent).toHaveLength(1);
   expect(codesSent[0]?.email).toBe('moved@example.com');
   expect(codesSent[0]?.loginKey).toMatch(/^[A-Za-z0-9_-]{43}$/);
