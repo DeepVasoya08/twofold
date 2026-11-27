@@ -12,6 +12,8 @@ import {
   newSessionToken,
   sessionTokenHash,
   toBase64Url,
+  webhookSignature,
+  webhookSignatureMatches,
 } from './webcrypto';
 
 describe('base64url', () => {
@@ -127,5 +129,41 @@ describe('decoySalt', () => {
     expect(await decoySalt(secret, 'sam@example.com', 16)).not.toBe(first);
     expect(await decoySalt('b'.repeat(44), 'kim@example.com', 16)).not.toBe(first);
     expect(fromBase64Url(first)).toHaveLength(16);
+  });
+});
+
+describe('webhook signatures', () => {
+  const SECRET = 'test-webhook-secret-123';
+  const BODY = '{"event":"subscription.charged"}';
+  // Worked out separately with Python's hmac module.
+  const KNOWN = '16cd65108bf4f8b620fae362ed98b487e7f1e23f8c0128ebf0f11baec8ae6112';
+
+  it('matches a known HMAC-SHA256 in lowercase hex', async () => {
+    expect(await webhookSignature(SECRET, BODY)).toBe(KNOWN);
+    expect(await webhookSignatureMatches(SECRET, BODY, KNOWN)).toBe(true);
+  });
+
+  it('rejects a wrong secret', async () => {
+    expect(await webhookSignatureMatches('another-webhook-secret-1', BODY, KNOWN)).toBe(false);
+  });
+
+  it('rejects a changed body, even by one space', async () => {
+    expect(await webhookSignatureMatches(SECRET, BODY.replace(':', ': '), KNOWN)).toBe(false);
+    expect(await webhookSignatureMatches(SECRET, `${BODY}\n`, KNOWN)).toBe(false);
+  });
+
+  it('rejects a changed, short, uppercase or missing signature', async () => {
+    const flipped = `${KNOWN.slice(0, -1)}${KNOWN.endsWith('2') ? '3' : '2'}`;
+    expect(await webhookSignatureMatches(SECRET, BODY, flipped)).toBe(false);
+    expect(await webhookSignatureMatches(SECRET, BODY, KNOWN.slice(2))).toBe(false);
+    expect(await webhookSignatureMatches(SECRET, BODY, KNOWN.toUpperCase())).toBe(false);
+    expect(await webhookSignatureMatches(SECRET, BODY, '')).toBe(false);
+  });
+
+  it('refuses a secret too short to be safe', async () => {
+    const short = 'short';
+    expect(await webhookSignatureMatches(short, BODY, await webhookSignature(short, BODY))).toBe(
+      false,
+    );
   });
 });

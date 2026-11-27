@@ -493,7 +493,7 @@ describe('storage quota', () => {
       const now = Date.now();
       sqlite
         .prepare(
-          'INSERT INTO billing (account_id, plan, storage_bytes, paid_until, grace_until, updated_at) SELECT id, ?, ?, ?, ?, ? FROM accounts',
+          "INSERT INTO billing (source_id, account_id, plan, storage_bytes, paid_until, grace_until, updated_at) SELECT 'sub_test', id, ?, ?, ?, ?, ? FROM accounts",
         )
         .run('plus', PLUS, now + paidFor, grace === null ? null : now + grace, now);
     };

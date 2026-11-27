@@ -2,11 +2,15 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
   KEY_SIZES,
+  PAID_PLAN_IDS,
   PLAN_IDS,
+  PLAN_PERIODS,
+  PLAN_PRICES_INR,
   PLAN_STORAGE,
   SLOT_COUNT,
   STORAGE_SIZES,
   ThumbBatchParser,
+  isSubscribable,
   readThumbBatch,
 } from './index';
 import type { HealthResponse, Keyring } from './index';
@@ -79,5 +83,25 @@ describe('plans', () => {
     const sizes = PLAN_IDS.map((plan) => PLAN_STORAGE[plan]);
     expect(sizes).toEqual([...sizes].sort((a, b) => a - b));
     expect(new Set(sizes).size).toBe(PLAN_IDS.length);
+  });
+
+  it('price a year at 11 months, in whole rupees', () => {
+    for (const plan of PAID_PLAN_IDS) {
+      const { monthly, yearly } = PLAN_PRICES_INR[plan];
+      expect(yearly).toBe(monthly * 11);
+      expect(monthly % 100).toBe(0);
+    }
+    expect(PAID_PLAN_IDS).toEqual(PLAN_IDS.filter((plan) => plan !== 'free'));
+  });
+
+  it('sell every plan as a subscription except yearly Max (over the UPI AutoPay limit)', () => {
+    const UPI_AUTOPAY_LIMIT = 1_500_000;
+    for (const plan of PAID_PLAN_IDS) {
+      for (const period of PLAN_PERIODS) {
+        expect(isSubscribable(plan, period)).toBe(
+          PLAN_PRICES_INR[plan][period] <= UPI_AUTOPAY_LIMIT,
+        );
+      }
+    }
   });
 });

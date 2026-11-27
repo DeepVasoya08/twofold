@@ -122,14 +122,14 @@ export async function updateSmartFeatures(
 }
 
 /**
- * The account's storage limit at `now`, as SQL: its paid plan's while that is paid for or in
- * grace (the `billing` table), otherwise the Free plan's (?3). Expects the account id in ?2
- * and `now` in ?4.
+ * The account's storage limit at `now`, as SQL: the largest plan among its `billing` rows
+ * that are still paid for or in grace, otherwise the Free plan's (?3). Never below Free.
+ * Expects the account id in ?2 and `now` in ?4.
  */
-const LIMIT_SQL = `COALESCE(
-  (SELECT storage_bytes FROM billing
+const LIMIT_SQL = `MAX(?3, COALESCE(
+  (SELECT MAX(storage_bytes) FROM billing
     WHERE account_id = ?2 AND MAX(paid_until, COALESCE(grace_until, 0)) > ?4),
-  ?3)`;
+  0))`;
 
 /**
  * Adds an upload's bytes to the account's total, only if that stays within the account's

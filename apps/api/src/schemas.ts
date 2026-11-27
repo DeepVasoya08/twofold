@@ -7,6 +7,8 @@ import {
   SEARCH_SEGMENT_DELETE_MAX,
   SEARCH_SIZES,
   MEMBER_ACCESS,
+  PAID_PLAN_IDS,
+  PLAN_PERIODS,
   SHARE_SIZES,
   SMART_FEATURES_VERSION,
   STORAGE_SIZES,
@@ -235,4 +237,15 @@ export const searchSegmentSchema = z.strictObject({
 
 export const deleteSearchSegmentsSchema = z.strictObject({
   ids: z.array(recordId).min(1).max(SEARCH_SEGMENT_DELETE_MAX),
+});
+
+/** POST /account/billing/subscribe. Yearly Max is refused by the route (not a subscription). */
+export const subscribeSchema = z.strictObject({
+  plan: z.enum(PAID_PLAN_IDS),
+  period: z.enum(PLAN_PERIODS),
+});
+
+/** POST /account/billing/confirm, after Razorpay Checkout closes. */
+export const confirmSubscriptionSchema = z.strictObject({
+  subscriptionId: z.string().regex(/^sub_[A-Za-z0-9]{1,40}$/),
 });

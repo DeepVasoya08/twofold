@@ -7,6 +7,7 @@ import { messages } from './respond';
 import { account } from './routes/account';
 import { auth } from './routes/auth';
 import { invites } from './routes/invites';
+import { razorpay } from './routes/razorpay';
 import { space } from './routes/space';
 import type { AppEnv } from './session';
 
@@ -47,6 +48,7 @@ app.route('/auth', auth);
 app.route('/account', account);
 app.route('/space', space);
 app.route('/invites', invites);
+app.route('/billing/razorpay', razorpay);
 
 app.onError((error, c) => {
   console.error('Unhandled API error', error.name);

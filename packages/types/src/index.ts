@@ -217,6 +217,77 @@ export const PLAN_STORAGE: Readonly<Record<PlanId, number>> = {
   max: 1024 * GIB,
 };
 
+/** Plans that are paid for. Free needs no payment and has no billing record. */
+export const PAID_PLAN_IDS = ['plus', 'pro', 'max'] as const;
+export type PaidPlanId = (typeof PAID_PLAN_IDS)[number];
+
+export const PLAN_PERIODS = ['monthly', 'yearly'] as const;
+export type PlanPeriod = (typeof PLAN_PERIODS)[number];
+
+/**
+ * Each paid plan's price in paise (₹1 = 100 paise), GST included. A year costs 11 months.
+ * The server checks every payment against these, so a change here only reaches people who
+ * buy or change plan afterwards (existing subscriptions keep the price they started on).
+ */
+export const PLAN_PRICES_INR: Readonly<Record<PaidPlanId, Readonly<Record<PlanPeriod, number>>>> = {
+  plus: { monthly: 11_900, yearly: 130_900 },
+  pro: { monthly: 44_900, yearly: 493_900 },
+  max: { monthly: 224_900, yearly: 2_473_900 },
+};
+
+/**
+ * Plan and period pairs sold as a Razorpay subscription. Yearly Max is above UPI AutoPay's
+ * ₹15,000 limit for a debit without the buyer's approval, so it will be a one-time yearly
+ * payment instead (docs/billing.md).
+ */
+export function isSubscribable(plan: PaidPlanId, period: PlanPeriod): boolean {
+  return !(plan === 'max' && period === 'yearly');
+}
+
+/** `GET /api/account/billing`: the account's plan as the server sees it. */
+export interface BillingStatus {
+  plan: PlanId;
+  /** Null on the Free plan. */
+  period: PlanPeriod | null;
+  /** The end of the time paid for (ms), or null on the Free plan. */
+  paidUntil: number | null;
+  /** After a failed renewal, the plan keeps counting until this time (ms). */
+  graceUntil: number | null;
+  /** Whether a subscription will charge again at the end of the period. */
+  renews: boolean;
+  /** Whether the latest renewal failed and the payment provider is retrying or gave up. */
+  paymentFailed: boolean;
+  /** Whether Razorpay is set up on this server; plans can't be bought until it is. */
+  available: boolean;
+}
+
+/** `POST /api/account/billing/subscribe`: what the browser opens Razorpay Checkout with. */
+export interface SubscribeResponse {
+  subscriptionId: string;
+  /** Razorpay's public key id, which Checkout needs. Not a secret. */
+  keyId: string;
+}
+
+export const PAYMENT_STATUSES = ['paid', 'failed', 'refunded'] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+/** One line of `GET /api/account/billing/payments`, newest first. */
+export interface BillingPayment {
+  id: string;
+  /** When it was paid or failed (ms). */
+  at: number;
+  plan: PaidPlanId;
+  period: PlanPeriod;
+  /** In the smallest unit of `currency` (paise for INR). */
+  amount: number;
+  /** How much of it was refunded, in the same unit. */
+  refunded: number;
+  currency: string;
+  status: PaymentStatus;
+  /** Ours, in order (ARC-2026-00001); only paid payments get one. */
+  invoiceNumber: string | null;
+}
+
 export const STORAGE_SIZES = {
   /** The space access token: the space id from the key slot. */
   spaceToken: 16,

@@ -266,6 +266,11 @@ name, parent?, deletedAt? }`: it has a `name` rather than an album's `title`, so
 - **Plans belong to the account, never a space.** A plan only sets the account's storage
   limit; every feature is on every plan, so no plan, price or billing record says whether a
   private space exists. The limit and the storage-full message are the same in both spaces.
+- **Payments (Razorpay).** Razorpay knows an account only by a random billing reference,
+  never its id, email or name. Its notifications are only acted on after the HMAC-SHA256
+  signature over the raw body checks out, and a plan only changes from Razorpay's own state
+  (fetched by the server), never from what the browser says. Razorpay's keys are Worker
+  secrets, and payloads are never logged. See [billing.md](billing.md).
 - **Deleting the account** first wipes every space the device holds keys for (the open
   one, the other one if its password was typed this session, and the one the confirming
   password opens), then the account.
