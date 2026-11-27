@@ -287,14 +287,29 @@ space.route('/', search);
  * Deletes photos and their files, and gives their bytes back to the account deleting them.
  * Storage isn't linked to accounts, so that's the only account it can go to: usually the
  * one that uploaded them. Only rows this call actually deleted count, so a photo deleted
- * twice at once is given back once.
+ * twice at once is given back once. The rows go before the files: a file still on its way
+ * looks for its row once it's stored, and takes itself back out if the row has gone.
  */
 async function deletePhotos(c: Context<AppEnv>, tag: string, photos: PhotoSize[]) {
   if (photos.length === 0) return;
-  await c.env.BLOBS.delete(photos.flatMap((photo) => objectKeys(photo.id)));
   const deleted = await deletePhotoRows(c.env.DB, tag, photos);
+  await c.env.BLOBS.delete(photos.flatMap((photo) => objectKeys(photo.id)));
   const bytes = deleted.reduce((total, photo) => total + photo.size, 0);
   await releaseStorage(c.env.DB, c.get('account').id, bytes);
+}
+
+/**
+ * Lets `work` run to the end even if the client goes away first, since a Worker's tasks are
+ * otherwise cancelled when its client disconnects. Without a Worker context (tests) it just
+ * runs.
+ */
+function finishEvenIfClientLeaves<T>(c: Context, work: Promise<T>): Promise<T> {
+  try {
+    c.executionCtx.waitUntil(work);
+  } catch {
+    // Hono throws here when the app runs without a Worker context.
+  }
+  return work;
 }
 
 const storageFull = messages.storageFull;
@@ -437,6 +452,8 @@ function parsePhotoParams(params: { id: string; part?: string }) {
   return id.success && part.success ? { id: id.data, part: part.data } : null;
 }
 
+const unfinished = 'The upload didn’t finish. Try again.';
+
 /**
  * Uploads one encrypted file of a pending photo. Its size must match what was declared. If
  * the other file is already there, this commits the photo too, which saves the browser a
@@ -454,20 +471,40 @@ space.put('/photos/:id/:part', async (c) => {
   const body = c.req.raw.body;
   if (length !== expected || !body) return c.json({ error: messages.badRequest }, 400);
   const key = objectKey(params.id, params.part);
-  const stored = await c.env.BLOBS.put(key, body);
-  if (stored?.size !== expected) {
-    await c.env.BLOBS.delete(key);
-    return c.json({ error: messages.badRequest }, 400);
-  }
-  const other = params.part === 'thumb' ? 'full' : 'thumb';
-  const otherStored = await c.env.BLOBS.head(objectKey(params.id, other));
-  const sizes = {
-    thumbSize: params.part === 'thumb' ? stored.size : (otherStored?.size ?? -1),
-    fullSize: params.part === 'full' ? stored.size : (otherStored?.size ?? -1),
+  const other = objectKey(params.id, params.part === 'thumb' ? 'full' : 'thumb');
+  const store = async () => {
+    // R2 stores the file only if none is there yet, checking as part of the write itself, so
+    // an upload that arrives late can't replace the file its photo was committed with.
+    const stored = await c.env.BLOBS.put(key, body, {
+      onlyIf: new Headers({ 'if-none-match': '*' }),
+    });
+    if (stored && stored.size !== expected) {
+      await c.env.BLOBS.delete(key);
+      return c.json({ error: messages.badRequest }, 400);
+    }
+    // The photo is looked for again now that the file is in. One deleted meanwhile would
+    // leave the file with nothing to delete it, charged to nobody, so it's taken back out.
+    const [file, otherStored, still] = await Promise.all([
+      stored ?? c.env.BLOBS.head(key),
+      c.env.BLOBS.head(other),
+      findPhoto(c.env.DB, tag, params.id),
+    ]);
+    if (!still) {
+      await c.env.BLOBS.delete(key);
+      return c.json({ error: notFound }, 404);
+    }
+    // A file already there (from a try whose answer was lost) is kept if it's the right size.
+    if (file?.size !== expected) return c.json({ error: unfinished }, 409);
+    const sizes = {
+      thumbSize: params.part === 'thumb' ? file.size : (otherStored?.size ?? -1),
+      fullSize: params.part === 'full' ? file.size : (otherStored?.size ?? -1),
+    };
+    const committed = otherStored !== null && (await commitPhoto(c.env.DB, tag, params.id, sizes));
+    c.set('unseen', !committed);
+    return c.json({ committed } satisfies PutFileResponse);
   };
-  const committed = otherStored !== null && (await commitPhoto(c.env.DB, tag, params.id, sizes));
-  c.set('unseen', !committed);
-  return c.json({ committed } satisfies PutFileResponse);
+  // A file that does get stored is always looked at again, even if the client goes away.
+  return finishEvenIfClientLeaves(c, store());
 });
 
 /**
@@ -500,7 +537,7 @@ space.post('/photos/:id/commit', async (c) => {
   const photo = await findPhoto(c.env.DB, tag, id.data);
   if (!photo) return c.json({ error: notFound }, 404);
   if (!photo.pending) return c.body(null, 204);
-  return c.json({ error: 'The upload didn’t finish. Try again.' }, 409);
+  return c.json({ error: unfinished }, 409);
 });
 
 space.get('/photos/:id/:part', async (c) => {

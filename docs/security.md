@@ -184,8 +184,14 @@ other accounts; see [Sharing](#sharing).
   again after R2 stores them). The second file to land commits the photo, and the commit
   itself checks both sizes against what was declared; a separate commit call is a
   fallback. Nothing is listed or served until commit,
-  and a committed photo's files can't be overwritten. Records are at most 2 KiB, previews
-  1 MiB and originals 64 MiB of ciphertext.
+  and a committed photo's files can't be overwritten. A file is only ever stored where
+  none is yet (`If-None-Match: *`, which R2 checks as part of the write), so even an
+  upload that was already under way when its photo was committed can't replace a file
+  afterwards; a retry finds the earlier file and keeps it. Once a file is stored, the
+  upload looks for its photo again and takes the file back out if the photo was deleted
+  meanwhile (deleting removes rows before files, and the upload carries on even if the
+  client disconnects), so no file is left that nothing refers to and nobody is charged
+  for. Records are at most 2 KiB, previews 1 MiB and originals 64 MiB of ciphertext.
 - **Recently deleted.** Deleting a photo first sets a `trashed` flag on its row and
   replaces its sealed record in the same statement (`POST /api/space/trash`); restoring
   clears it (`POST /api/space/trash/restore`). The record carries when it was deleted;
