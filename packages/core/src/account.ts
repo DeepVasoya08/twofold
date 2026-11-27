@@ -364,6 +364,16 @@ export function normalizeEmail(email: string): string {
 const NOT_AN_EMAIL = 'Enter an email address like name@example.com.';
 
 /**
+ * Shown under a code box. An address that already has an account gets a note instead of a
+ * code, and the server answers the same either way so nobody can find out which emails have
+ * accounts. These lines tell the person what happened without saying which case it is.
+ */
+export const NO_CODE_SIGN_UP =
+  'No code? If this email already has an Arcafold account, we sent it a note instead. Log in with it, or change the email.';
+export const NO_CODE_CHANGE =
+  'No code? If this email already has an Arcafold account, we sent it a note instead. Use a different email.';
+
+/**
  * Sends a code to confirm `email`. For an address other than the account's (fixing a typo
  * before it's confirmed, or changing it from Settings), the open session's login key goes
  * too, which the server requires.

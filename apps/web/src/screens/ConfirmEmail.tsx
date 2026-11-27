@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { SubmitEvent } from 'react';
 
+import { NO_CODE_CHANGE } from '@arcafold/core/account';
 import { useAccount, useMe } from '../app/account';
 import { useSubmit } from '../app/use-submit';
 import { AuthLayout } from '../components/AuthLayout';
@@ -176,6 +177,7 @@ export function ConfirmEmail() {
           >
             {busy ? 'Checking…' : 'Confirm email'}
           </button>
+          {address !== me.email && <p className="confirm-email__hint">{NO_CODE_CHANGE}</p>}
           <div className="form__row form__row--center confirm-email__links">
             <button
               type="button"

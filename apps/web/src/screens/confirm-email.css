@@ -33,3 +33,10 @@
   flex-wrap: wrap;
   gap: 8px 20px;
 }
+
+.confirm-email__hint {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
+}

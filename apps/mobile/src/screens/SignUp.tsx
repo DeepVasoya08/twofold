@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { TextInputInstance } from 'react-native';
 
-import { confirmSignUpEmail, startSignUp } from '@arcafold/core/account';
+import { NO_CODE_SIGN_UP, confirmSignUpEmail, startSignUp } from '@arcafold/core/account';
 
 import { useAccount } from '../session/account';
 import { firstProblem, signUpErrors } from '../session/forms';
@@ -117,6 +117,7 @@ export function SignUp({ onSignIn }: { onSignIn: () => void }) {
         />
         {error ? <Banner>{error}</Banner> : null}
         <Button label="Continue" busyLabel="Creating your keys…" busy={busy} onPress={confirm} />
+        <Note>{NO_CODE_SIGN_UP}</Note>
         <Button
           kind="secondary"
           label={secondsLeft > 0 ? `Send a new code in ${String(secondsLeft)}s` : 'Send a new code'}
