@@ -98,6 +98,36 @@ export function folderPath(folders: readonly Folder[], folderId: string): Folder
   return path;
 }
 
+/**
+ * The folders a share may show you: none whose id is already taken (one of yours, or one
+ * another share showed first), and none inside a folder that was left out, so nothing a share
+ * lists can sit inside one of your folders. A folder whose parent isn't listed at all shows at
+ * the top, as anywhere else, unless that parent's id is taken. Folders naming each other in a
+ * loop are left out.
+ */
+export function foldersOfShare(
+  folders: readonly Folder[],
+  taken: (id: string) => boolean,
+): Folder[] {
+  const listed = new Set(folders.map((folder) => folder.id));
+  const kept = new Set<string>();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const folder of folders) {
+      if (kept.has(folder.id) || taken(folder.id)) continue;
+      const parent = folder.parentId;
+      const placed =
+        parent === undefined || (listed.has(parent) ? kept.has(parent) : !taken(parent));
+      if (placed) {
+        kept.add(folder.id);
+        grew = true;
+      }
+    }
+  }
+  return folders.filter((folder) => kept.has(folder.id));
+}
+
 /** `folderId` and every folder inside it, however deep, among `folders`. */
 export function folderTree(folders: readonly Folder[], folderId: string): Set<string> {
   const tree = new Set([folderId]);
