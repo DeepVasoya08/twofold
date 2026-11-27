@@ -47,7 +47,8 @@ space. Losing the password and the recovery key still means losing the photos.
   for a code to the address the account already has is refused.
 - **New sign-in**: each successful sign-in to a confirmed account emails it "New sign-in to
   Arcafold" with the kind of device (as in the Devices list, such as "Chrome on Android")
-  and the time in UTC. The email is the same whichever password or key signed in, so it
+  the approximate location (city and country, from Cloudflare's guess for the internet
+  address) and the time in UTC. The email is the same whichever password or key signed in, so it
   never says whether the private space was opened. A wrong password sends nothing.
 - **Account deleted**: deleting the account emails a short confirmation to a confirmed
   address once it's gone. There is no email for a password change: the server can't tell
@@ -55,6 +56,11 @@ space. Losing the password and the recovery key still means losing the photos.
   record of one.
 - Notices are sent after the response is ready (`waitUntil`), and a failed send never
   undoes the change it is about.
+- The "already has an account" notes and the "email was changed" notice show the same
+  device, rough location ("Near Pune, India") and time, so the owner can tell whether it was them. None of
+  this is stored or logged: it is read from the request for that one email.
+- Emails start with the app icon, loaded from `https://arcafold.com/icon-192.png`. Mail
+  apps that hide images until asked still show the "Arcafold" name beside it.
 - Templates live in `apps/api/src/mail-templates.ts`. They are plain and short, carry no
   links, and end by saying Arcafold never emails a link to unlock photos.
 

@@ -121,7 +121,7 @@ export function ChangeEmailSheet({ onClose }: { onClose: () => void }) {
       />
       <Callout>{NO_CODE_CHANGE}</Callout>
       {error ? <Banner>{error}</Banner> : null}
-      <Button label="Change email" busyLabel="Checking…" busy={busy} onPress={submit} />
+      <Button label="Confirm code" busyLabel="Checking…" busy={busy} onPress={submit} />
       <Button
         kind="secondary"
         label={secondsLeft > 0 ? `Send a new code in ${String(secondsLeft)}s` : 'Send a new code'}

@@ -159,7 +159,7 @@ function ChangeEmailForm({ onClose }: { onClose: () => void }) {
           Back
         </button>
         <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy}>
-          {busy ? 'Checking…' : 'Change email'}
+          {busy ? 'Checking…' : 'Confirm code'}
         </button>
       </div>
     </form>

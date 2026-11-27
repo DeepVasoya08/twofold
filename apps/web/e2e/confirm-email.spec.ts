@@ -226,10 +226,10 @@ test('a confirmed email can be changed from Settings with a code', async ({ page
   expect(JSON.stringify(codesSent)).not.toContain(MAIN_PASSWORD);
 
   await dialog.getByLabel('Code').fill('000000');
-  await dialog.getByRole('button', { name: 'Change email' }).click();
+  await dialog.getByRole('button', { name: 'Confirm code' }).click();
   await expect(dialog.getByText('That code isn’t right.')).toBeVisible();
   await dialog.getByLabel('Code').fill('123456');
-  await dialog.getByRole('button', { name: 'Change email' }).click();
+  await dialog.getByRole('button', { name: 'Confirm code' }).click();
   await expect(page.getByText('Email changed')).toBeVisible();
   await expect(dialog).toBeHidden();
   await expect(page.locator('.profile__email')).toHaveText('moved@example.com');

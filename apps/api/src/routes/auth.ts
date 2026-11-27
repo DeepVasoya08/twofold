@@ -15,7 +15,7 @@ import {
   swapForTicket,
 } from '../email-codes';
 import { countSendQuery, deleteEmailCodeQuery, deleteStaleCodesQuery } from '../email-db';
-import { describeDevice } from '../device';
+import { requestInfo } from '../request-info';
 import { mailSetup, sendNotice } from '../mail';
 import { alreadySignedUpMail, confirmEmailMail, newSignInMail } from '../mail-templates';
 import { checkProof, clientAddress } from '../proof';
@@ -72,7 +72,9 @@ auth.post('/signup/code', async (c) => {
       accountId: null,
       address: body.email,
       mail: (code) =>
-        taken ? alreadySignedUpMail(body.email) : confirmEmailMail(body.email, code),
+        taken
+          ? alreadySignedUpMail(body.email, requestInfo(c, now))
+          : confirmEmailMail(body.email, code),
     },
     now,
   );
@@ -194,8 +196,7 @@ auth.post('/login', async (c) => {
   // the same whichever password or key was used. Best effort: sign-in doesn't wait on mail.
   const setup = mailSetup(c.env);
   if (setup && account.emailVerified) {
-    const device = describeDevice(c.req.header('user-agent')).name;
-    await sendNotice(c, setup, newSignInMail(account.email, device, Date.now()));
+    await sendNotice(c, setup, newSignInMail(account.email, requestInfo(c)));
   }
   return c.json(toAccountResponse(account, c.env));
 });

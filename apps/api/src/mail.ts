@@ -6,6 +6,12 @@ import type { Env } from './env';
 
 /** Who account email comes from. Replies go to a person, not to the no-reply address. */
 export const MAIL_FROM = { name: 'Arcafold', email: 'no-reply@arcafold.com' } as const;
+
+/**
+ * The logo at the top of every email: the app icon, a static file of the site. Mail apps
+ * that hide images until asked show the "Arcafold" name beside it either way.
+ */
+export const MAIL_LOGO_URL = 'https://arcafold.com/icon-192.png';
 export const MAIL_REPLY_TO = 'support@arcafold.com';
 
 export interface Mail {

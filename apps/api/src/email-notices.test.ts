@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { AccountResponse, SignUpTicketResponse } from '@arcafold/types';
 
 import type { Env } from './env';
-import { mailTime, maskEmail } from './mail-templates';
+import { emailInUseMail, mailTime, maskEmail, newSignInMail } from './mail-templates';
+import { describePlace } from './request-info';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
@@ -197,6 +198,32 @@ describe('mail helpers', () => {
     expect(maskEmail('sam@example.com')).toBe('s•••@example.com');
     expect(maskEmail('a@b.co')).toBe('a•••@b.co');
     expect(maskEmail('nonsense')).toBe('•••');
+  });
+
+  it('name a rough place from Cloudflare’s guess, or nothing', () => {
+    expect(describePlace({ city: 'Mumbai', country: 'IN' })).toBe('Mumbai, India');
+    expect(describePlace({ country: 'DE' })).toBe('Germany');
+    expect(describePlace({ city: 'Somewhere', country: 'T1' })).toBeNull();
+    expect(describePlace({ country: 'XX' })).toBeNull();
+    expect(describePlace({ country: '<b>' })).toBeNull();
+    expect(describePlace(undefined)).toBeNull();
+  });
+
+  it('show the device, place and time, escaped, and the logo', () => {
+    const info = {
+      device: 'Chrome on Android',
+      place: 'Pune, <India>',
+      when: Date.UTC(2026, 10, 27, 8, 5),
+    };
+    const mail = newSignInMail('sam@example.com', info);
+    expect(mail.text).toContain('Device: Chrome on Android');
+    expect(mail.text).toContain('Location: Near Pune, <India>');
+    expect(mail.text).toContain('Time: 27 Nov 2026, 08:05 UTC');
+    expect(mail.html).toContain('Pune, &lt;India&gt;');
+    expect(mail.html).toContain('src="https://arcafold.com/icon-192.png"');
+    const note = emailInUseMail('sam@example.com', { ...info, place: null });
+    expect(note.text).toContain('Device: Chrome on Android');
+    expect(note.text).not.toContain('Location');
   });
 
   it('write times in UTC', () => {
