@@ -731,10 +731,12 @@ so photos can later be found by describing them. The server stores only cipherte
   each other, and may not change the salt or KDF settings.
 - Failed logins (and failed proofs) are limited to 10 per email from one internet address
   per 15 minutes, and 200 per email from all addresses together, counted for unknown emails
-  too. Guessing from one address can't lock anyone else out, and a lockout needs 20
-  addresses. Each attempt is counted, in one statement, before its key is checked (a right
-  key then clears the counts), so parallel requests can't get more guesses than that. The
-  address is stored only as a SHA-256, and every count is deleted once its window passes.
+  too. An IPv6 address counts by its first 64 bits, since one connection is given a whole
+  /64. Only attempts an address's own limit lets through count towards the 200, so guessing
+  from one address can't lock anyone else out, and a lockout needs 20 addresses (or /64s).
+  Each attempt is counted, in one transaction, before its key is checked (a right key then
+  clears the counts), so parallel requests can't get more guesses than that. The address is
+  stored only as a SHA-256, and every count is deleted once its window passes.
 - The Worker keeps no per-request logs or traces (`observability` in
   `apps/api/wrangler.jsonc`), only its own error lines. Request logs would keep every
   request's path, headers and client details at Cloudflare, which could link the private
@@ -742,7 +744,7 @@ so photos can later be found by describing them. The server stores only cipherte
 - **Email is confirmed, and is only a way to reach the owner** ([email.md](email.md)). New
   accounts confirm theirs at sign-up: the code is swapped for a one-use ticket (256 bits,
   kept only as an HMAC, valid an hour) that the sign-up must carry, and sign-up codes are
-  also limited to 20 an hour from one internet address. It
+  also limited to 20 an hour from one internet address (an IPv6 one by its /64). It
   never resets a password or unlocks anything. Codes are stored only as HMACs keyed with a
   Worker secret, bound to the address, limited to 5 tries (counted before each check) and
   10 minutes, with one send a minute and 5 an hour per account. Until an account confirms,

@@ -196,6 +196,26 @@ describe('sign-up with an email code', () => {
         .status,
     ).toBe(200);
   });
+
+  it('counts IPv6 addresses by their first 64 bits for sign-up codes', async () => {
+    for (let i = 0; i < MAX_SENDS_PER_ADDRESS; i++) {
+      client.headers = { 'cf-connecting-ip': `2001:db8:1:2::${(i + 1).toString(16)}` };
+      const res = await client.request('POST', '/auth/signup/code', {
+        email: `p${String(i)}@example.com`,
+      });
+      expect(res.status).toBe(200);
+    }
+    client.headers = { 'cf-connecting-ip': '2001:db8:1:2:ffff::9' };
+    const res = await client.request('POST', '/auth/signup/code', {
+      email: 'one-more@example.com',
+    });
+    expect(res.status).toBe(429);
+    client.headers = { 'cf-connecting-ip': '2001:db8:1:3::1' };
+    expect(
+      (await client.request('POST', '/auth/signup/code', { email: 'elsewhere@example.com' }))
+        .status,
+    ).toBe(200);
+  });
 });
 
 describe('not telling who has an account', () => {
