@@ -34,6 +34,12 @@ Nightly database backups run in a separate workflow (`backup.yml`) with their ow
 setup and restore are in [backups.md](backups.md). A separate staging copy, deployed by
 hand, is described in [staging.md](staging.md).
 
+Dependency updates come from Dependabot (`.github/dependabot.yml`). Security fixes open a
+PR as soon as an advisory is published. Routine minor and patch bumps arrive once a month
+in one grouped PR (plus one for GitHub Actions), and each major version gets its own PR,
+with Expo SDK majors grouped. Avoid broad `ignore` rules there, because they also stop
+security PRs.
+
 ## One-time setup
 
 Do these steps in order, before the first push to `main`. Each one maps to a deploy
