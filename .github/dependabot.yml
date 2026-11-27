@@ -1,18 +1,32 @@
+# Dependabot: keep pull requests few.
+#
+# - Security fixes still come as soon as an advisory is published, one PR each. They are
+#   not affected by the schedule or the groups below (groups only apply to version updates).
+#   Do not add broad `ignore` rules here: ignore rules also stop security PRs.
+# - Routine minor and patch bumps, production and dev alike, arrive together in one PR
+#   per month.
+# - Major versions still get their own PR, since they can break things. Expo SDK majors
+#   arrive as one PR, because the expo packages must move together.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
+      interval: monthly
+    open-pull-requests-limit: 5
     ignore:
       # Node type definitions must match the runtime in .nvmrc (Node 22); bump them together.
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
     groups:
-      dev-dependencies:
-        dependency-type: development
+      minor-and-patch:
+        applies-to: version-updates
+        patterns: ['*']
         update-types: [minor, patch]
+      expo-sdk:
+        applies-to: version-updates
+        patterns: ['expo', 'expo-*', '@expo/*', 'react-native', 'react-native-*']
+        update-types: [major]
     commit-message:
       prefix: chore
       include: scope
@@ -20,9 +34,10 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       github-actions:
+        applies-to: version-updates
         patterns: ['*']
     commit-message:
       prefix: ci
