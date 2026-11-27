@@ -371,6 +371,11 @@ under). It never gets the space key or the space id.
   sealed metadata, so the owner (and other members) see "Added by" without the server
   learning it. Photos from a joined library appear in the joiner's open space, marked with
   the owner's name, and can't be moved to the joiner's other space.
+- **Your own ids win.** A joined library, album or folder lists its albums and folders in
+  records its owner seals, so it could name one of yours. The joiner's device leaves out
+  any entry with an id of its own albums or folders, with any folder listed inside one, and
+  keeps a share's photos out of its own albums. What you add to, make in or rename in your
+  own album or folder stays in your own space, sealed under your keys.
 - **Stopping.** The owner removes a member (`DELETE /api/space/members/:id`) and that share
   token stops working at once; a member can also leave (`DELETE /api/space/membership`).
   Deleting an account leaves the libraries its reachable spaces joined, and wiping a space

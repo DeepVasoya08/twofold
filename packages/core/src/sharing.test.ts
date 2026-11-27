@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { albumAccess, newInviteKeys, newSpace, openRecord, ownerAccess } from '@arcafold/crypto';
+import {
+  albumAccess,
+  fromBase64Url,
+  newInviteKeys,
+  newSpace,
+  openRecord,
+  ownerAccess,
+  sealSharedFolder,
+} from '@arcafold/crypto';
 import type { SpaceKeys } from '@arcafold/crypto';
 import type { MemberAccess } from '@arcafold/types';
 
@@ -31,7 +39,8 @@ import {
 } from './sharing';
 import type { Invite, Join } from './sharing';
 import { FormError } from './errors';
-import { VIEW_ONLY_LIBRARY, remoteStore } from './library/space-store';
+import { VIEW_ONLY_LIBRARY, combinedStore, remoteStore } from './library/space-store';
+import { encodeFolderShareMeta } from './records';
 import type { NewPhoto, SpaceStore } from './library/space-store';
 
 const PHOTO: NewPhoto = {
@@ -1291,5 +1300,117 @@ describe('one file shared on its own', () => {
     const store = bobs();
     await store.list();
     await expect(store.shareFile(lease.id)).rejects.toThrow(FormError);
+  });
+});
+
+describe('a share that names your own albums or folders', () => {
+  /**
+   * Bob keeps a Medical folder and a Holiday album to himself. Alice shares her folder
+   * From Alice with him to add to, then rewrites its record (she holds its key) so it lists
+   * Bob's Medical inside it, and a folder of hers inside Bob's Medical.
+   */
+  async function claimed() {
+    const w = await world();
+    const bobsOwn = remoteStore(w.bob, w.server.api);
+    const medical = await bobsOwn.createFolder('Medical');
+    const holiday = await bobsOwn.createAlbum('Holiday');
+    await bobsOwn.list();
+    const alices = remoteStore(w.alice, w.server.api);
+    const from = await alices.createFolder('From Alice');
+    await alices.list();
+    const grant = await shareAlbumWithBob(w, alices, from.id, 'edit');
+    const folderKey = fromBase64Url(grant.recordKey);
+    if (!folderKey) throw new Error('expected a folder key');
+    const aliceToken = (await ownerAccess(w.alice)).token;
+    const record = encodeFolderShareMeta({
+      v: 1,
+      kind: 'folder',
+      name: 'From Alice',
+      folders: [
+        { id: medical.id, name: 'Medical', parent: from.id },
+        { id: 'trapAAAAAAAAAAAAAAAAAA', name: 'Upload here', parent: medical.id },
+      ],
+    });
+    await w.server
+      .api(aliceToken)
+      .shareAlbum(
+        from.id,
+        await sealSharedFolder(albumAccess(aliceToken, folderKey), from.id, record),
+      );
+    const bobToken = (await ownerAccess(w.bob)).token;
+    return { w, medical, holiday, from, aliceToken, bobToken };
+  }
+
+  it('shows Bob his own folder once, as his, and nothing of hers inside it', async () => {
+    const { w, medical, from } = await claimed();
+    const { folders } = await sessionStore(w.bob, 'Bob', w.server.api).list();
+    expect(folders.map((folder) => [folder.id, folder.library])).toEqual([
+      [medical.id, undefined],
+      [from.id, 'Alice'],
+    ]);
+  });
+
+  it('keeps what Bob adds to his own folder in his own library, out of Alice’s reach', async () => {
+    const { w, medical, aliceToken, bobToken } = await claimed();
+    const bobs = sessionStore(w.bob, 'Bob', w.server.api);
+    await bobs.list();
+    const added = await bobs.add(PHOTO, [medical.id]);
+    expect(added.library).toBeUndefined();
+    expect(w.server.photos.get(added.id)?.token).toBe(bobToken);
+    expect(w.server.photos.get(added.id)?.token).not.toBe(aliceToken);
+    const alices = await remoteStore(w.alice, w.server.api).list();
+    expect(alices.photos.map((photo) => photo.id)).not.toContain(added.id);
+  });
+
+  it('keeps Bob’s new folders and renames in his own library', async () => {
+    const { w, medical, bobToken } = await claimed();
+    const bobs = sessionStore(w.bob, 'Bob', w.server.api);
+    await bobs.list();
+    const scans = await bobs.createFolder('Scans', medical.id);
+    expect(scans.library).toBeUndefined();
+    await bobs.saveFolder({ ...medical, name: 'Health' });
+    expect(w.server.albums.get(scans.id)?.token).toBe(bobToken);
+    expect(w.server.albums.get(medical.id)?.token).toBe(bobToken);
+    const own = await remoteStore(w.bob, w.server.api).list();
+    expect(own.folders.find((folder) => folder.id === medical.id)?.name).toBe('Health');
+  });
+
+  it('lets Bob share and stop sharing his own folder as before', async () => {
+    const { w, medical } = await claimed();
+    const bobs = sessionStore(w.bob, 'Bob', w.server.api);
+    await bobs.list();
+    await expect(bobs.shareAlbum(medical.id)).resolves.toBeInstanceOf(Uint8Array);
+    await expect(bobs.stopSharingAlbum(medical.id)).resolves.toBeUndefined();
+  });
+
+  it('keeps a shared library’s albums and photos out of Bob’s own albums', async () => {
+    const { w, holiday, bobToken } = await claimed();
+    // A server that lists Bob's album, and puts Alice's photos in it, as part of her library.
+    await remoteStore(w.alice, w.server.api).add(PHOTO, []);
+    const theirs = remoteStore(w.alice, w.server.api);
+    const lying: SpaceStore = {
+      ...theirs,
+      list: async () => {
+        const listed = await theirs.list();
+        return {
+          ...listed,
+          albums: [...listed.albums, { ...holiday, title: 'Holiday' }],
+          photos: listed.photos.map((photo) => ({
+            ...photo,
+            albumIds: [...photo.albumIds, holiday.id],
+          })),
+        };
+      },
+    };
+    const bobs = combinedStore(remoteStore(w.bob, w.server.api), () =>
+      Promise.resolve([{ id: 'joined', name: 'Alice', store: lying }]),
+    );
+    const { albums, photos } = await bobs.list();
+    expect(albums.filter((album) => album.id === holiday.id)).toEqual([
+      expect.not.objectContaining({ library: 'Alice' }),
+    ]);
+    expect(photos.some((photo) => photo.albumIds.includes(holiday.id))).toBe(false);
+    const added = await bobs.add(PHOTO, [holiday.id]);
+    expect(w.server.photos.get(added.id)?.token).toBe(bobToken);
   });
 });
