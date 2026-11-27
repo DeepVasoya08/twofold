@@ -9,6 +9,7 @@ import {
   SETTLE_MS,
   syncBackup,
 } from './sync';
+import type { SyncLimits } from './sync';
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -122,10 +123,10 @@ class FakeBucket {
 function setup() {
   const source = new FakeBucket();
   const backup = new FakeBucket({ prefix: COPY_PREFIX, days: KEEP_DELETED_DAYS });
-  const run = (now: Date) => {
+  const run = (now: Date, limits?: Partial<SyncLimits>) => {
     source.now = now;
     backup.now = now;
-    return syncBackup(source.asBucket, backup.asBucket, now);
+    return syncBackup(source.asBucket, backup.asBucket, now, limits);
   };
   return { source, backup, run };
 }
@@ -162,6 +163,38 @@ describe('photo backup', () => {
     for (let i = 0; i < MAX_COPIES_PER_RUN + 2; i++) source.add(`f${String(i)}`, 'x', start);
     expect(await run(at(SETTLE_MS))).toMatchObject({ copied: MAX_COPIES_PER_RUN, pending: 2 });
     expect(await run(at(2 * SETTLE_MS))).toMatchObject({ copied: 2, pending: 0 });
+  });
+
+  it('copies the oldest files first, whatever they’re called', async () => {
+    // File names are photo ids, which uploads choose. Names that sort first mustn't let
+    // newer files keep an older photo out of the backup.
+    const { source, backup, run } = setup();
+    source.add('photos/zz/full', 'older photo', start);
+    for (let i = 0; i < 3; i++) source.add(`photos/-${String(i)}/full`, 'x', at(60_000));
+    const result = await run(at(SETTLE_MS + 60_000), { copies: 3 });
+    expect(result).toMatchObject({ copied: 3, pending: 1 });
+    expect(backup.text(`${COPY_PREFIX}photos/zz/full`)).toBe('older photo');
+  });
+
+  it('starts no copy once the run has had its time', async () => {
+    const { source, run } = setup();
+    for (let i = 0; i < 5; i++) source.add(`f${String(i)}`, 'x', start);
+    // A clock that moves a minute every time it's read.
+    let minutes = 0;
+    const clock = () => minutes++ * 60_000;
+    const result = await run(at(SETTLE_MS), { copyMs: 3 * 60_000, clock });
+    expect(result).toMatchObject({ copied: 2, pending: 3, failed: 0 });
+  });
+
+  it('says how long the oldest file still to copy has waited', async () => {
+    const { source, run } = setup();
+    source.add('a', 'x', start);
+    source.add('b', 'x', at(HOUR));
+    expect(await run(at(SETTLE_MS + 3 * HOUR), { copies: 1 })).toMatchObject({
+      pending: 1,
+      behindMs: 2 * HOUR,
+    });
+    expect(await run(at(SETTLE_MS + 4 * HOUR))).toMatchObject({ pending: 0, behindMs: 0 });
   });
 
   it('keeps a deleted file 30 days after it was first missed, then removes it', async () => {

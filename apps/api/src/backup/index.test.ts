@@ -11,7 +11,10 @@ const result: sync.SyncResult = {
   removed: 0,
   failed: 0,
   guarded: false,
+  behindMs: 0,
 };
+
+const HOUR = 60 * 60 * 1000;
 
 function scheduled() {
   const env = { SOURCE: {} as R2Bucket, BACKUP: {} as R2Bucket };
@@ -42,5 +45,15 @@ describe('backup Worker', () => {
     await expect(scheduled()).rejects.toThrow('incomplete');
     // Counts only, never file names.
     for (const [message] of error.mock.calls) expect(String(message)).not.toMatch(/photos\//);
+  });
+
+  it('fails the run when the backup has fallen hours behind', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(sync, 'syncBackup').mockResolvedValue({ ...result, pending: 9, behindMs: HOUR });
+    await scheduled();
+    expect(error).not.toHaveBeenCalled();
+    vi.spyOn(sync, 'syncBackup').mockResolvedValue({ ...result, pending: 9, behindMs: 7 * HOUR });
+    await expect(scheduled()).rejects.toThrow('incomplete');
+    expect(String(error.mock.calls[0]?.[0])).toMatch(/9 files.*7 hours/);
   });
 });

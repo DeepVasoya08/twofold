@@ -18,8 +18,11 @@ every hour at minute 17. It holds the photo bucket and the backup bucket; the ap
 never holds the backup bucket. Each run lists both buckets and then:
 
 1. Copies every file that isn't backed up yet to `arcafold-backups/r2/<same name>`, once
-   the file is an hour old (a pending upload may still be retried). A first backup of many
-   files spreads over several runs, at most 500 files per run.
+   the file is an hour old (a pending upload may still be retried). The oldest files go
+   first, not the first by name: names are photo ids, which uploads choose. A run copies at
+   most 3,000 files (two R2 calls each, within a run's 10,000) and starts no copy after 10
+   minutes (a scheduled run may take 15), so a first backup of many files spreads over
+   several runs.
 2. Marks copies whose file has disappeared, with an empty `gone/<name>`. Its upload time
    is when the file was first missed.
 3. Removes a copy and its mark 30 days after the mark. A photo deleted by mistake, or by
@@ -33,7 +36,9 @@ The files are already encrypted on the device, so the copies are ciphertext; thi
 deleted photos' ciphertext for 30 days more. If the photo bucket ever lists empty while
 copies exist, nothing is marked: that's far more likely a broken binding than every photo
 deleted at once. Failed copies are retried the next hour, and a run with failures shows as
-an error in the Worker's logs and metrics. It logs only counts, never file names.
+an error in the Worker's logs and metrics. So does a run that has fallen behind: one whose
+oldest file still to copy settled more than 6 hours ago, because more files are arriving
+than runs can copy. It logs only counts, never file names.
 
 ## How the nightly export works
 
