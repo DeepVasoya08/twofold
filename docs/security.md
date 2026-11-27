@@ -557,13 +557,22 @@ This matters for one attack the pin can't stop on its own. The pin lives in the 
 sealed record, on the server. A compromised server that kept an old copy of that record (from
 before the pin) and showed it again, while claiming the inviter's key was never revealed,
 could get a device to reveal a second time, to a joiner key chosen _after_ learning the
-inviter's key from the first reveal. A browser that keeps nothing on the device can't tell an
-old copy from the current one. What the server would then need is a joiner key whose words
-match the joiner's: about 2^44 tries. With a plain hash that is cheap enough to do within
-the 7 days. With the words behind Argon2id it is about 2^44 runs at 64 MiB each: at roughly
-0.2 s per run that is around 10^5 CPU-years, and memory-hard, so far beyond an invite's
-lifetime. So even with a rollback, the server's chance of matching words stays at a guess,
-about 2^-44 per reveal it gets.
+inviter's key from the first reveal. What the server would then need is a joiner key whose
+words match the joiner's: about 2^44 tries. With a plain hash that is cheap enough to do
+within the 7 days. With the words behind Argon2id it is about 2^44 runs at 64 MiB each: at
+roughly 0.2 s per run that is around 10^5 CPU-years (and still hundreds to thousands of
+GPU-years), and memory-hard, so far beyond an invite's lifetime.
+
+Timing such a rollback for _after_ the two people compared the right words, and before the
+inviter taps "They match, share", would need no matching words at all: only that nobody
+reads the new ones. So each device keeps, in memory for as long as the space stays open, the
+joiner key each invite showed there (`SeenJoiners` in `packages/core/src/sharing-pass.ts`),
+and that key wins over the record: a record that lost it gets it back, and a record or an
+invite showing another key ends the invite ("This invite couldn't be verified") instead of
+showing new words. Confirming shares only with the key behind the words on screen
+(`shownJoiner`). A device that never showed the words (another device, or the same one after
+a reload) can't tell an old copy from the current one; there the request shows the new words,
+and the server's chance of making them match stays at a guess, about 2^-44 per reveal it gets.
 
 Every sealed message starts with a purpose label (`hello`, `intro` or `grant`), so one
 can't be replayed as another. Each side's steps need its own secret: the code or link token
@@ -584,8 +593,6 @@ than minutes. A live server can still link the sessions on both sides, as it cou
 
 ### Trade-offs we accepted
 
-### Trade-offs we accepted
-
 - **Stopping sharing is enforced by the server, not by new keys.** A removed member still
   knows the records key (or album key) and the per-photo keys of photos it saw, and could
   decrypt any ciphertext it got hold of later. The server refuses its token from the moment it's
@@ -595,10 +602,13 @@ than minutes. A live server can still link the sessions on both sides, as it cou
   trust.
 - **The safety phrase is only as good as the comparison.** If nobody checks the words, a
   compromised server could put itself in the middle of that invite.
-- **A rollback can still get a second reveal.** A server that replays the inviter's record
-  from before the pin can get its key revealed again, to a joiner key it chooses. Matching
-  words would then cost about 2^44 Argon2id evaluations (see above), which is out of reach,
-  so this needs an actively malicious server and still comes down to a guess.
+- **A rollback can still get a second reveal where the words weren't shown.** A server that
+  replays the inviter's record from before the pin can get its key revealed again, to a
+  joiner key it chooses. On the device that showed the words, that ends the invite. On
+  another device, or the same one after a reload, the request shows new words: making them
+  match would cost about 2^44 Argon2id evaluations (see above), so this needs an actively
+  malicious server and an inviter who taps "They match, share" without reading the words
+  shown there.
 - **The inviter's name goes to whoever accepts first.** It is sealed to the key that
   accepted, before the words are checked, so someone else holding the link (or a server in
   the middle) learns the inviter's display name, which the server stores in plain text

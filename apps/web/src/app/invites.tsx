@@ -25,12 +25,13 @@ import {
   confirmInvite,
   defaultApis,
   setInviteAccess,
+  shownJoiner,
   startInvite,
   startJoin,
 } from '@arcafold/core/sharing';
 import type { Invite, Join, Member, SharingApis } from '@arcafold/core/sharing';
 import { advancePending, grantedText, passInterval } from '@arcafold/core/sharing-pass';
-import type { InviteEntry, JoinEntry } from '@arcafold/core/sharing-pass';
+import type { InviteEntry, JoinEntry, SeenJoiners } from '@arcafold/core/sharing-pass';
 import { useToast } from './toast';
 import { foldersOf, useVault } from './vault';
 import { FormError } from '@arcafold/core/errors';
@@ -67,8 +68,8 @@ interface PendingInvitesValue {
   cancel: (inviteId: string) => Promise<void>;
   /** Changes what a library invite will let them do, until it's confirmed. */
   setAccess: (inviteId: string, access: MemberAccess) => Promise<void>;
-  /** The safety words match: share. */
-  confirm: (inviteId: string) => Promise<Member>;
+  /** The safety words shown for `shownKey` match: share with that key. */
+  confirm: (inviteId: string, shownKey: string) => Promise<Member>;
   /** Accepts an invite by its code or link token. */
   accept: (ref: string) => Promise<Join>;
   /** Gives up on an invite this space accepted. */
@@ -150,6 +151,8 @@ function LivePendingInvites({
 
   /** Invites and joins finished or cancelled here, which a check already running mustn't bring back. */
   const settled = useRef(new Set<string>());
+  /** The joiner key each invite showed here, which later passes are held to. */
+  const seen = useRef<SeenJoiners>(new Map());
   const running = useRef(false);
   const again = useRef(false);
   const endInvites = useCallback((ids: string[]) => {
@@ -179,7 +182,14 @@ function LivePendingInvites({
       joins: new Map(joins.map((entry) => [entry.join.id, entry.progress])),
     };
     runner.current = async () => {
-      const result = await advancePending(keys, myName, sharing, settled.current, before);
+      const result = await advancePending(
+        keys,
+        myName,
+        sharing,
+        settled.current,
+        before,
+        seen.current,
+      );
       for (const each of result.granted) settled.current.add(each.joinId);
       for (const problem of result.problems) toast.show(problem);
       // Something settled meanwhile (on this device) stays settled.
@@ -304,10 +314,9 @@ function LivePendingInvites({
           ),
         );
       },
-      confirm: async (inviteId) => {
+      confirm: async (inviteId, shownKey) => {
         const { invite, progress } = find(inviteId);
-        if (progress.stage !== 'confirm') throw new FormError('They haven’t joined yet.');
-        const joiner = { name: progress.name, joinerKey: progress.joinerKey };
+        const joiner = shownJoiner(progress, shownKey);
         let member: Member;
         if (invite.album === null) {
           member = await confirmInvite(invite, joiner, keys, myName, sharing);

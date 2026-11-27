@@ -373,14 +373,24 @@ export async function setInviteAccess(
  * revealed (with `myName` sealed to theirs). From then on only the pinned key is used: a
  * server that showed a different one later, chosen after seeing this side's key, could
  * otherwise search for one that gives the same safety words.
+ *
+ * The sealed record is kept by the server, which could put back an older copy (from before
+ * the pin) after the two people compared their words, and show a key of its own. So `seen`,
+ * the key this device already saw for the invite, wins over the record: a record without it
+ * gets it back, and one with another key ends the invite instead of showing new words.
  */
 export async function advanceInvite(
   invite: Invite,
   myName: string,
   space: SpaceKeys,
   apis: SharingApis = defaultApis,
+  seen?: string,
 ): Promise<InviteProgress> {
   const crypto = await loadCrypto();
+  if (seen !== undefined && invite.joinerKey !== seen) {
+    if (invite.joinerKey !== null) throw new FormError(BROKEN);
+    await pinJoiner(invite, seen, space, apis);
+  }
   let view: InviterView;
   try {
     view = await apis.invites.inviterView(invite.handle);
@@ -418,6 +428,20 @@ export async function advanceInvite(
   if (!hello) throw new FormError(BROKEN);
   const phrase = await crypto.safetyPhrase(invite.keys.publicKey, joinerKey);
   return { stage: 'confirm', name: hello.name, phrase, joinerKey };
+}
+
+/**
+ * Who to share with when the person taps "They match, share" on a request that showed the
+ * words for `shownKey`. Refuses if the request has moved on since (a key other than the one
+ * behind the words they compared), so the access only ever goes to that key.
+ */
+export function shownJoiner(
+  progress: InviteProgress,
+  shownKey: string,
+): { name: string; joinerKey: string } {
+  if (progress.stage !== 'confirm') throw new FormError('They haven’t joined yet.');
+  if (progress.joinerKey !== shownKey) throw new FormError(BROKEN);
+  return { name: progress.name, joinerKey: progress.joinerKey };
 }
 
 /** One album to share instead of the whole library: its id, and the key `shareAlbum` gave. */
