@@ -103,6 +103,27 @@ jobs:
           fi
           printf '%s' "$EMAIL_CODE_SECRET" | pnpm exec wrangler secret put EMAIL_CODE_SECRET
 
+      # Razorpay (docs/billing.md): the API key, the webhook secret and the plan ids, copied
+      # from the production environment's secrets. Until all four exist, plans can't be
+      # bought. Only this step sees them.
+      - name: Set Razorpay secrets
+        working-directory: apps/api
+        env:
+          RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}
+          RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
+          RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
+          RAZORPAY_PLANS: ${{ secrets.RAZORPAY_PLANS }}
+        run: |
+          for name in RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET RAZORPAY_PLANS; do
+            if [ -z "${!name}" ]; then
+              echo "$name is not set; plans can't be bought yet."
+              exit 0
+            fi
+          done
+          for name in RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET RAZORPAY_PLANS; do
+            printf '%s' "${!name}" | pnpm exec wrangler secret put "$name"
+          done
+
       # Copies photo files into the backup bucket every hour (docs/backups.md).
       - name: Deploy backup Worker
         working-directory: apps/api

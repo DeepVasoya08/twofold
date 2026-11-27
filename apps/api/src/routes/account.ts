@@ -13,6 +13,7 @@ import {
   updateName,
   updateSmartFeatures,
 } from '../db';
+import { stopBillingForDeletion } from '../billing';
 import { mailSetup, sendNotice } from '../mail';
 import { accountDeletedMail } from '../mail-templates';
 import { checkProof, clientAddress } from '../proof';
@@ -27,6 +28,7 @@ import {
 } from '../schemas';
 import { clearSessionCookie, requireSession } from '../session';
 import type { AppEnv } from '../session';
+import { billing } from './billing';
 import { email } from './email';
 
 /** The signed-in account. Changes need a fresh login key as well as the session cookie. */
@@ -35,6 +37,7 @@ export const account = new Hono<AppEnv>();
 account.use(requireSession);
 
 account.route('/email', email);
+account.route('/billing', billing);
 
 account.get('/', (c) => c.json(toAccountResponse(c.get('account'), c.env)));
 
@@ -144,6 +147,11 @@ account.delete('/', async (c) => {
   );
   if (proof === 'throttled') return c.json({ error: messages.throttled }, 429);
   if (proof === 'wrong') return c.json({ error: messages.wrongPassword }, 403);
+  // A plan that could still charge is stopped first; if Razorpay can't be reached, the
+  // account stays, so nobody is charged for an account that no longer exists.
+  if (!(await stopBillingForDeletion(c.env, current.id, Date.now()))) {
+    return c.json({ error: messages.paymentsUnreachable }, 502);
+  }
   await deleteAccount(c.env.DB, current.id);
   clearSessionCookie(c);
   const setup = mailSetup(c.env);

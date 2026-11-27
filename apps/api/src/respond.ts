@@ -52,4 +52,8 @@ export const messages = {
    * apps show it too, and they never point to a purchase (docs/billing.md).
    */
   storageFull: 'Your storage is full. Delete some photos or files to make room.',
+  plansUnavailable: 'Plans aren’t available yet.',
+  paymentsUnreachable: 'Payments can’t be reached right now. Try again in a few minutes.',
+  planExists: 'You already have a plan. Change it from Plan and billing.',
+  billingBusy: 'Your plan is already being set up. Try again in a moment.',
 } as const;

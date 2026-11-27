@@ -79,6 +79,10 @@ export function newEmailCode(): string {
 
 async function hmacSha256(secret: string, message: string): Promise<Uint8Array> {
   if (secret.length < EMAIL_SECRET_MIN_LENGTH) throw new Error('The email secret is too short.');
+  return hmacSha256Raw(secret, message);
+}
+
+async function hmacSha256Raw(secret: string, message: string): Promise<Uint8Array> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',
@@ -139,4 +143,34 @@ export async function emailCodeMatches(
 export async function decoySalt(secret: string, email: string, length: number): Promise<string> {
   const mac = await hmacSha256(secret, `arcafold decoy salt\n${email}`);
   return toBase64Url(mac.slice(0, length));
+}
+
+/** The shortest webhook secret accepted for checking a payment provider's signatures. */
+export const WEBHOOK_SECRET_MIN_LENGTH = 16;
+
+function toHex(bytes: Uint8Array): string {
+  let hex = '';
+  for (const byte of bytes) hex += byte.toString(16).padStart(2, '0');
+  return hex;
+}
+
+/**
+ * Whether `signature` is the lowercase hex HMAC-SHA256 of `body` under `secret`, as payment
+ * providers such as Razorpay sign their notifications. `body` must be the raw text exactly as
+ * received: parsing and re-encoding JSON would change it. Compared in constant time.
+ */
+export async function webhookSignatureMatches(
+  secret: string,
+  body: string,
+  signature: string,
+): Promise<boolean> {
+  if (secret.length < WEBHOOK_SECRET_MIN_LENGTH) return false;
+  if (!/^[0-9a-f]{64}$/.test(signature)) return false;
+  const expected = new TextEncoder().encode(toHex(await hmacSha256Raw(secret, body)));
+  return constantTimeEqual(expected, new TextEncoder().encode(signature));
+}
+
+/** The signature `webhookSignatureMatches` accepts; for tests and local replays only. */
+export async function webhookSignature(secret: string, body: string): Promise<string> {
+  return toHex(await hmacSha256Raw(secret, body));
 }
