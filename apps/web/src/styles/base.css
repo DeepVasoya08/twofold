@@ -43,6 +43,8 @@
 
   --danger: #c0392b;
   --danger-soft: #fbe4e1;
+  --warning: #8a5a00;
+  --warning-soft: #fff3d6;
   --success: #2a7a52;
 
   /* The arch logo, and the soft light behind it on larger brand moments. */
@@ -89,6 +91,8 @@
     --plum-soft: #1c2036;
     --danger: #f08070;
     --danger-soft: #3e1f1d;
+    --warning: #f0c060;
+    --warning-soft: #3a2f14;
     --success: #6fcf9a;
     --logo-a: #7d8fff;
     --logo-b: #ececea;
@@ -120,6 +124,8 @@
   --plum-soft: #1c2036;
   --danger: #f08070;
   --danger-soft: #3e1f1d;
+  --warning: #f0c060;
+  --warning-soft: #3a2f14;
   --success: #6fcf9a;
   --logo-a: #7d8fff;
   --logo-b: #ececea;
@@ -155,6 +161,8 @@
   --plum-soft: #18204f;
   --danger: #ff8f8f;
   --danger-soft: #3a1a2a;
+  --warning: #f0c060;
+  --warning-soft: #3a2f14;
   --success: #6fcf9a;
   --logo-a: #8c9cff;
   --logo-b: #c9d0ff;

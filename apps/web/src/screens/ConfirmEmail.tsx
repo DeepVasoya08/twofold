@@ -169,6 +169,7 @@ export function ConfirmEmail() {
             }}
             error={error}
           />
+          {address !== me.email && <p className="confirm-email__hint">{NO_CODE_CHANGE}</p>}
           <button
             type="submit"
             className="btn btn--primary btn--block btn--lg"
@@ -177,7 +178,6 @@ export function ConfirmEmail() {
           >
             {busy ? 'Checking…' : 'Confirm email'}
           </button>
-          {address !== me.email && <p className="confirm-email__hint">{NO_CODE_CHANGE}</p>}
           <div className="form__row form__row--center confirm-email__links">
             <button
               type="button"

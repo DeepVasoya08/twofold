@@ -6,7 +6,7 @@ import { NO_CODE_SIGN_UP, confirmSignUpEmail, startSignUp } from '@arcafold/core
 import { useAccount } from '../session/account';
 import { firstProblem, signUpErrors } from '../session/forms';
 import type { SignUpErrors, SignUpValues } from '../session/forms';
-import { Banner, Button, Field, Note, Screen, StrengthMeter, useSubmit } from '../ui/kit';
+import { Banner, Button, Callout, Field, Note, Screen, StrengthMeter, useSubmit } from '../ui/kit';
 
 /** Seconds before another code can be asked for (the server waits a minute too). */
 const RESEND_SECONDS = 60;
@@ -115,9 +115,9 @@ export function SignUp({ onSignIn }: { onSignIn: () => void }) {
           onSubmitEditing={confirm}
           returnKeyType="done"
         />
+        <Callout>{NO_CODE_SIGN_UP}</Callout>
         {error ? <Banner>{error}</Banner> : null}
         <Button label="Continue" busyLabel="Creating your keys…" busy={busy} onPress={confirm} />
-        <Note>{NO_CODE_SIGN_UP}</Note>
         <Button
           kind="secondary"
           label={secondsLeft > 0 ? `Send a new code in ${String(secondsLeft)}s` : 'Send a new code'}

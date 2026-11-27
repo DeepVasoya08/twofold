@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { NO_CODE_CHANGE, normalizeEmail } from '@arcafold/core/account';
 
 import { useAccount } from '../session/account';
-import { Banner, Button, Field, Note, useSubmit } from '../ui/kit';
+import { Banner, Button, Callout, Field, useSubmit } from '../ui/kit';
 import { useNotice } from '../ui/notice';
 import { Sheet } from '../ui/sheet';
 
@@ -119,9 +119,9 @@ export function ChangeEmailSheet({ onClose }: { onClose: () => void }) {
         onSubmitEditing={submit}
         returnKeyType="done"
       />
+      <Callout>{NO_CODE_CHANGE}</Callout>
       {error ? <Banner>{error}</Banner> : null}
       <Button label="Change email" busyLabel="Checking…" busy={busy} onPress={submit} />
-      <Note>{NO_CODE_CHANGE}</Note>
       <Button
         kind="secondary"
         label={secondsLeft > 0 ? `Send a new code in ${String(secondsLeft)}s` : 'Send a new code'}
