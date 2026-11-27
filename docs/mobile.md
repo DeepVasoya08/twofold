@@ -110,10 +110,14 @@ or a native module.
   notification and a partial wake lock while any photo is on its way
   (`library/background-uploads.ts`). When the last one is in and Arcafold isn't on screen, a
   notification says how many were added (it asks for the notification permission after the
-  first pick, from Android 13). Notifications give counts only, never names, and read the
-  same whichever space the photos went to. If the app locks mid-upload, the photos already
-  added still finish with the keys they started with, which are then dropped; they show at
-  the next unlock. Only photos for now, no videos or other files.
+  first pick, from Android 13). Notifications give counts only, never names. If the app
+  locks mid-upload, the main library's photos already added still finish with the keys they
+  started with, which are then dropped; they show at the next unlock. The private space's
+  stop at the lock instead, and never get the notice at the end (`library/close-uploads.ts`):
+  that notice stays after the lock, and a main library without those photos would give the
+  private space away. Its upload card says to keep Arcafold open until they're in (a photo
+  already being sent as it locks lands quietly and shows at its next opening). Only photos
+  for now, no videos or other files.
 - Fingerprint and face unlock (`session/biometric.ts`, `expo-secure-store`), for the main
   library only. After the main password opens the library, the app offers it once ("Not now"
   isn't asked again). Turning it on keeps the main password's secret (what Argon2id makes of

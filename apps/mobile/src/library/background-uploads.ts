@@ -1,3 +1,4 @@
+import { isUploadRunning } from '@arcafold/core/upload/progress';
 import type { UploadStatus } from '@arcafold/core/upload/progress';
 import type { UploaderState } from '@arcafold/core/upload/uploader';
 
@@ -17,22 +18,52 @@ export interface Watched {
   getState: () => UploaderState;
 }
 
+/** How one uploader is followed. */
+export interface WatchOptions {
+  /**
+   * Whether the notice at the end may count its photos. That notice stays after the app
+   * locks, so photos added to the private space never get one: whoever unlocks the main
+   * library next would find a notice for photos it doesn't have.
+   */
+  notice: boolean;
+}
+
+/** Following one uploader. Whichever is called first counts; calling again does nothing. */
+export interface Watching {
+  /** Stops following it. The photos it finished still count once the rest are in. */
+  stop: () => void;
+  /** Stops following it and takes back everything it counted, as if it had never run. */
+  drop: () => void;
+}
+
+/** What one uploader has done since the service last started. */
+interface Tally {
+  /** Each photo's status when last looked at, so each one finishing counts once. */
+  statuses: Map<number, UploadStatus>;
+  running: number;
+  done: number;
+  failed: number;
+  notice: boolean;
+  /** Whether it's still followed. One that isn't keeps its counts until the run ends. */
+  followed: boolean;
+}
+
 /**
  * Keeps Android from pausing uploads in the background: while any uploader has photos on
  * their way, a foreground service runs with a progress notification. When the last one is
  * in, the service stops and, if Arcafold isn't on screen, a notification says how it went.
- * Several uploaders can run at once (one per unlock: locking lets the last one finish), so
- * this counts across all of them. The notifications say only counts, never names, and read
- * the same whichever space the photos went to.
+ * Several uploaders can run at once (one per unlock: locking lets the main library's last
+ * one finish), so this counts across all of them. The notifications say only counts, never
+ * names. Photos added to the private space are never in the notice at the end, and stop
+ * when it locks (see `closeUploads`), so nothing about them is left in the notification
+ * shade once it has.
  */
 export class BackgroundUploads {
-  private readonly seen = new Map<Watched, Map<number, UploadStatus>>();
-  private running = new Map<Watched, number>();
+  /** Every uploader followed, and those that stopped being followed during this run. */
+  private readonly tallies = new Set<Tally>();
   private active = false;
-  private done = 0;
-  private failed = 0;
   private shown = '';
-  /** What the latest uploads were, for the notification's wording. */
+  /** What the latest uploads the notice counts were, for its wording. */
   private noun: UploadNoun = 'photo';
 
   constructor(
@@ -40,60 +71,86 @@ export class BackgroundUploads {
     private readonly onScreen: () => boolean,
   ) {}
 
-  /** Follows an uploader until the returned function is called. */
-  watch(uploader: Watched): () => void {
-    const update = () => {
-      this.update(uploader);
+  /** Follows an uploader until the returned `stop` or `drop` is called. */
+  watch(uploader: Watched, { notice }: WatchOptions): Watching {
+    const tally: Tally = {
+      statuses: new Map(),
+      running: 0,
+      done: 0,
+      failed: 0,
+      notice,
+      followed: true,
     };
-    const unsubscribe = uploader.subscribe(update);
-    update();
-    return () => {
+    this.tallies.add(tally);
+    const unsubscribe = uploader.subscribe(() => {
+      this.update(uploader, tally);
+    });
+    this.update(uploader, tally);
+    const end = (keepCounts: boolean) => {
+      if (!tally.followed) return;
       unsubscribe();
-      this.seen.delete(uploader);
-      this.running.delete(uploader);
+      tally.followed = false;
+      tally.running = 0;
+      tally.statuses.clear();
+      if (!keepCounts) this.tallies.delete(tally);
       this.refresh();
+    };
+    return {
+      stop: () => {
+        end(true);
+      },
+      drop: () => {
+        end(false);
+      },
     };
   }
 
-  private update(uploader: Watched): void {
+  private update(uploader: Watched, tally: Tally): void {
     const { items } = uploader.getState();
-    if (items.length > 0) this.noun = uploadNoun(items);
-    const before = this.seen.get(uploader) ?? new Map<number, UploadStatus>();
-    const now = new Map<number, UploadStatus>();
+    if (tally.notice && items.length > 0) this.noun = uploadNoun(items);
+    const statuses = new Map<number, UploadStatus>();
     let running = 0;
     for (const item of items) {
-      now.set(item.id, item.status);
-      if (
-        item.status === 'waiting' ||
-        item.status === 'encrypting' ||
-        item.status === 'uploading'
-      ) {
-        running += 1;
-      }
+      statuses.set(item.id, item.status);
+      if (isUploadRunning(item.status)) running += 1;
     }
-    this.running.set(uploader, running);
-    if (!this.active && running > 0) {
-      this.active = true;
-      this.done = 0;
-      this.failed = 0;
-      this.shown = '';
-    }
+    tally.running = running;
+    if (!this.active && running > 0) this.start();
     if (this.active) {
-      for (const [id, status] of now) {
-        if (before.get(id) === status) continue;
-        if (status === 'done') this.done += 1;
-        if (status === 'failed') this.failed += 1;
+      for (const [id, status] of statuses) {
+        if (tally.statuses.get(id) === status) continue;
+        if (status === 'done') tally.done += 1;
+        if (status === 'failed') tally.failed += 1;
       }
     }
-    this.seen.set(uploader, now);
+    tally.statuses = statuses;
     this.refresh();
+  }
+
+  /** A new run counts from nothing. */
+  private start(): void {
+    this.active = true;
+    this.shown = '';
+    for (const tally of this.tallies) {
+      tally.done = 0;
+      tally.failed = 0;
+    }
   }
 
   private refresh(): void {
     if (!this.active) return;
     let running = 0;
-    for (const count of this.running.values()) running += count;
-    const finished = this.done + this.failed;
+    let finished = 0;
+    let done = 0;
+    let failed = 0;
+    for (const tally of this.tallies) {
+      running += tally.running;
+      finished += tally.done + tally.failed;
+      if (tally.notice) {
+        done += tally.done;
+        failed += tally.failed;
+      }
+    }
     const total = finished + running;
     if (running > 0) {
       const text = `${String(finished)} of ${String(total)}`;
@@ -104,20 +161,12 @@ export class BackgroundUploads {
       return;
     }
     this.active = false;
+    for (const tally of this.tallies) if (!tally.followed) this.tallies.delete(tally);
     this.service.stop();
-    if (finished > 0 && !this.onScreen()) {
+    if (done + failed > 0 && !this.onScreen()) {
       this.service.notifyFinished(
         'Arcafold',
-        uploadHeadline(
-          {
-            total: finished,
-            done: this.done,
-            failed: this.failed,
-            running: 0,
-            percent: 100,
-          },
-          this.noun,
-        ),
+        uploadHeadline({ total: done + failed, done, failed, running: 0, percent: 100 }, this.noun),
       );
     }
   }

@@ -55,6 +55,7 @@ import type { DeleteResult, PickedPhoto } from '../../modules/memory-image';
 import { forgetOpened } from '../../modules/save-file';
 import { UploadService } from '../../modules/upload-service';
 import { BackgroundUploads } from './background-uploads';
+import { closeUploads } from './close-uploads';
 import { Originals } from './originals';
 import { preparePicked } from './prepare';
 
@@ -96,6 +97,12 @@ export interface Library {
   uploads: UploaderState;
   /** Whether photos are on their way up from this phone now. */
   uploading: boolean;
+  /**
+   * Whether photos on their way stop if the app locks: in the private space they do, so
+   * nothing about them is left on the phone for whoever unlocks next. The main library's
+   * finish, and show at the next unlock.
+   */
+  uploadsStopOnLock: boolean;
   /**
    * Encrypts and uploads picked photos, a few at a time, then shows them all together. With
    * `albumId` they go in that album too.
@@ -298,7 +305,7 @@ export function useLibrary(session: Session): Library {
       },
       preview: memoryPreviews,
     });
-    const unwatch = backgroundUploads.watch(uploader);
+    const watching = backgroundUploads.watch(uploader, { notice: !moving });
     store.list().then(
       (loaded) => {
         if (stopped) return;
@@ -335,23 +342,15 @@ export function useLibrary(session: Session): Library {
       thumbLoader.stop();
       MemoryImages.clear();
       forgetOpened();
-      const close = () => {
-        uploader.dispose();
-        uploader.connect(CLOSED);
-        unwatch();
-        store.dispose();
-      };
-      if (!uploader.running) {
-        close();
-        return;
-      }
-      // Photos on their way when the app locks still finish, then the keys they used go.
-      // They show in the timeline at the next unlock.
-      uploader.connect({ prepare, upload, onStored: () => undefined, preview: lockedPreviews });
-      const stop = uploader.subscribe(() => {
-        if (uploader.running) return;
-        stop();
-        close();
+      // The main library's photos on their way still finish, then the keys they used go;
+      // the private space's stop here (see closeUploads).
+      closeUploads(uploader, watching, {
+        stop: moving,
+        finishing: { prepare, upload, onStored: () => undefined, preview: lockedPreviews },
+        closed: CLOSED,
+        done: () => {
+          store.dispose();
+        },
       });
     };
   }, [keys, attempt, uploader, originals, moving]);
@@ -894,6 +893,7 @@ export function useLibrary(session: Session): Library {
     retry,
     uploads,
     uploading: uploads.items.some((item) => isUploadRunning(item.status)),
+    uploadsStopOnLock: moving,
     addPhotos,
     createAlbum,
     renameAlbum,
