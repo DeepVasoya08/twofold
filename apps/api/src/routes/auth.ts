@@ -15,8 +15,9 @@ import {
   swapForTicket,
 } from '../email-codes';
 import { countSendQuery, deleteEmailCodeQuery, deleteStaleCodesQuery } from '../email-db';
-import { mailSetup } from '../mail';
-import { alreadySignedUpMail, confirmEmailMail } from '../mail-templates';
+import { describeDevice } from '../device';
+import { mailSetup, sendNotice } from '../mail';
+import { alreadySignedUpMail, confirmEmailMail, newSignInMail } from '../mail-templates';
 import { checkProof, clientAddress } from '../proof';
 import { messages, readBody, toAccountResponse } from '../respond';
 import {
@@ -189,6 +190,13 @@ auth.post('/login', async (c) => {
   if (result === 'throttled') return c.json({ error: messages.throttled }, 429);
   if (result === 'wrong' || !account) return c.json({ error: messages.wrongLogin }, 401);
   await startSession(c, account.id);
+  // Every sign-in starts a new device's session, so its owner hears about it. The email is
+  // the same whichever password or key was used. Best effort: sign-in doesn't wait on mail.
+  const setup = mailSetup(c.env);
+  if (setup && account.emailVerified) {
+    const device = describeDevice(c.req.header('user-agent')).name;
+    await sendNotice(c, setup, newSignInMail(account.email, device, Date.now()));
+  }
   return c.json(toAccountResponse(account, c.env));
 });
 

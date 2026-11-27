@@ -76,3 +76,62 @@ export function alreadySignedUpMail(to: string): Mail {
     'If that was you, sign in instead. If you’ve lost your password, your recovery key can set a new one. If it wasn’t you, you can ignore this email: nothing has changed.',
   ]);
 }
+
+/** Hides most of an address for a notice to someone else's inbox: "s•••@example.com". */
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return '•••';
+  return `${email.slice(0, 1)}•••${email.slice(at)}`;
+}
+
+/** A time anyone can read without knowing their time zone: "26 Nov 2026, 10:48 UTC". */
+export function mailTime(when: number): string {
+  const date = new Date(when);
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${String(date.getUTCDate())} ${months[date.getUTCMonth()] ?? ''} ${String(date.getUTCFullYear())}, ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} UTC`;
+}
+
+/**
+ * Sent to the old address once the account's email has moved, so a change nobody meant to
+ * make doesn't go unseen. It carries no undo link: a link that changes the account would be
+ * a way into it.
+ */
+export function emailChangedMail(oldAddress: string, newAddress: string): Mail {
+  return compose(oldAddress, 'Your Arcafold email was changed', [
+    `The email for your Arcafold account was changed to ${maskEmail(newAddress)}. This address won’t get Arcafold emails any more.`,
+    'If you didn’t do this, sign in with your password and change your password in Settings: that signs out every other device. Then write to support@arcafold.com.',
+  ]);
+}
+
+/**
+ * Sent when a new device signs in. It's the same whichever password or key was used, so it
+ * says nothing about what was opened.
+ */
+export function newSignInMail(to: string, device: string, when: number): Mail {
+  return compose(to, 'New sign-in to Arcafold', [
+    `Arcafold was signed in on a new device: ${device}, ${mailTime(when)}.`,
+    'If this was you, there’s nothing to do. If it wasn’t, open Settings, then Devices, sign that device out and change your password.',
+  ]);
+}
+
+/** Sent once the account and everything in it is gone. */
+export function accountDeletedMail(to: string): Mail {
+  return compose(to, 'Your Arcafold account was deleted', [
+    'Your Arcafold account and everything in it has been deleted. It can’t be brought back.',
+    'If you didn’t do this, write to support@arcafold.com.',
+  ]);
+}

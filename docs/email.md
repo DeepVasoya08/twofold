@@ -1,7 +1,8 @@
 # Account email
 
-Arcafold emails people about their own account: a 6-digit code to confirm their address, and
-(in later changes) new sign-in notices and invites. Email is only ever a way to reach the
+Arcafold emails people about their own account: a 6-digit code to confirm or change their
+address, a notice when it changes, a note on each new sign-in, a confirmation when the
+account is deleted, and (in a later change) invites. Email is only ever a way to reach the
 owner. It never resets a password, never unlocks anything and never mentions the private
 space. Losing the password and the recovery key still means losing the photos.
 
@@ -37,6 +38,22 @@ space. Losing the password and the recovery key still means losing the photos.
   as well as the session, and an address that already has an account gets a short "this
   email already has an account" note instead of a code, while the app gets the same answer
   either way.
+- **Changing a confirmed email** (Settings > Email > Change, on web and phone) works the
+  same way: the login key and the session ask for a code at the new address, and the
+  account moves only once it's typed back. The old address then gets "Your Arcafold email
+  was changed", which shows the new address only partly (`s•••@example.com`) and has no
+  link, so it can't be used to undo the change or hand the account to someone else. Asking
+  for a code to the address the account already has is refused.
+- **New sign-in**: each successful sign-in to a confirmed account emails it "New sign-in to
+  Arcafold" with the kind of device (as in the Devices list, such as "Chrome on Android")
+  and the time in UTC. The email is the same whichever password or key signed in, so it
+  never says whether the private space was opened. A wrong password sends nothing.
+- **Account deleted**: deleting the account emails a short confirmation to a confirmed
+  address once it's gone. There is no email for a password change: the server can't tell
+  a main password change from setting up a private space, and a dated email would be a
+  record of one.
+- Notices are sent after the response is ready (`waitUntil`), and a failed send never
+  undoes the change it is about.
 - Templates live in `apps/api/src/mail-templates.ts`. They are plain and short, carry no
   links, and end by saying Arcafold never emails a link to unlock photos.
 

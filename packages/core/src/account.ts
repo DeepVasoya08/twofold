@@ -365,12 +365,14 @@ const NOT_AN_EMAIL = 'Enter an email address like name@example.com.';
 
 /**
  * Sends a code to confirm `email`. For an address other than the account's (fixing a typo
- * before it's confirmed), the open session's login key goes too, which the server requires.
+ * before it's confirmed, or changing it from Settings), the open session's login key goes
+ * too, which the server requires.
  */
 export async function sendEmailCode(session: Session, email: string): Promise<void> {
   if (!isValidEmail(email)) throw new FormError(NOT_AN_EMAIL);
   const address = normalizeEmail(email);
   if (address === session.account.email) {
+    if (session.account.emailVerified) throw new FormError('That’s already your email.');
     await api.sendEmailCode({ email: address });
     return;
   }

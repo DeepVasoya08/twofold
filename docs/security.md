@@ -745,8 +745,12 @@ so photos can later be found by describing them. The server stores only cipherte
   the server refuses everything but reading the account, confirming and signing out (a
   phone's upload-only backup carries on). Moving an unconfirmed account to another address
   needs the login key, and an address that already has an account gets a note instead of a
-  code with the same answer to the app. Nothing about email depends on which slot opened
-  the session, and no email mentions the private space or is sent from a space route.
+  code with the same answer to the app. Changing a confirmed address works the same way and
+  then tells the old address, without a link and with the new one only partly shown. Each
+  sign-in to a confirmed account and each deletion is emailed to the owner. Nothing about
+  email depends on which slot opened the session (the sign-in email is identical for every
+  password and key), no email mentions the private space or is sent from a space route,
+  and there is no password-change email, since it would date a private space's setup.
 - Input is validated with zod at the API boundary (`apps/api/src/schemas.ts`), including
   exact key sizes and KDF bounds.
 - **The server decides who may do what.** Every space request is checked against what its

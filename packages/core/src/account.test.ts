@@ -350,6 +350,13 @@ describe('confirming the email', { timeout: 30_000 }, () => {
     expect(server.codes[0]?.loginKey).toBe(toBase64Url(session.opened.loginKey));
   });
 
+  it('doesn’t send a code to the address a confirmed account already has', async () => {
+    const { session } = await signUp();
+    const confirmed = { ...session, account: { ...session.account, emailVerified: true } };
+    await expect(ops.sendEmailCode(confirmed, EMAIL)).rejects.toThrow('That’s already your email.');
+    expect(server.codes).toEqual([]);
+  });
+
   it('refuses something that isn’t an email before asking the server', async () => {
     const { session } = await signUp();
     await expect(ops.sendEmailCode(session, 'not an email')).rejects.toBeInstanceOf(FormError);

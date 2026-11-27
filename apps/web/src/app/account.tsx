@@ -77,6 +77,8 @@ interface AccountValue {
    * refuses library requests until then; this only decides what the app shows.
    */
   mustVerifyEmail: boolean;
+  /** True once the account's email is confirmed, so it can be changed from Settings. */
+  emailVerified: boolean;
   /** Sends a 6-digit code to the account's email, or to a different one to fix a typo. */
   sendEmailCode: (email: string) => Promise<void>;
   /** Confirms the email the code was sent to. */
@@ -325,6 +327,7 @@ export function AccountProvider({
           dropKeys({ status: 'signed-out' });
         }),
       mustVerifyEmail: account?.mustVerifyEmail ?? false,
+      emailVerified: account?.emailVerified ?? false,
       sendEmailCode: (email) =>
         guard(async () => {
           await ops.sendEmailCode(requireSession(), email);

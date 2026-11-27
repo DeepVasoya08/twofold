@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 
 import { CODE_MAX_TRIES, codeMessages, codeScope, checkCode, issueCode } from '../email-codes';
 import { deleteEmailCodeQuery, emailInUse, verifyEmailQuery } from '../email-db';
-import { mailSetup } from '../mail';
-import { confirmEmailMail, emailInUseMail } from '../mail-templates';
+import { mailSetup, sendNotice } from '../mail';
+import { confirmEmailMail, emailChangedMail, emailInUseMail } from '../mail-templates';
 import { checkProof, clientAddress } from '../proof';
 import { messages, readBody, toAccountResponse } from '../respond';
 import { sendEmailCodeSchema, verifyEmailSchema } from '../schemas';
@@ -16,9 +16,10 @@ export { MAX_SENDS_PER_HOUR } from '../email-codes';
 export const notReady = 'Email isn’t available yet. Try again later.';
 
 /**
- * Confirming the account's email: a 6-digit code sent to it, then typed back. Mounted under
- * /api/account, so a live session is needed. While the email is unconfirmed, the code can
- * go to a different address (to fix a typo), which needs the login key too.
+ * Confirming or changing the account's email: a 6-digit code sent to it, then typed back.
+ * Mounted under /api/account, so a live session is needed. A code for a different address
+ * (a typo before confirming, or a change from Settings) needs the login key too, and once a
+ * confirmed address is replaced, it gets a notice.
  */
 export const email = new Hono<AppEnv>();
 
@@ -28,10 +29,10 @@ email.post('/code', async (c) => {
   const body = await readBody(c, sendEmailCodeSchema);
   if (!body) return c.json({ error: messages.badRequest }, 400);
   const current = c.get('account');
-  if (current.emailVerified) {
+  const changing = body.email !== current.email;
+  if (current.emailVerified && !changing) {
     return c.json({ error: 'Your email is already confirmed.' }, 409);
   }
-  const changing = body.email !== current.email;
   if (changing) {
     if (!body.loginKey) return c.json({ error: messages.badRequest }, 400);
     const proof = await checkProof(
@@ -86,6 +87,11 @@ email.post('/verify', async (c) => {
   } catch {
     // Another account took this address after the code was sent.
     return c.json({ error: 'That email can’t be used. Try another one.' }, 409);
+  }
+  // A confirmed address that was replaced hears about it, so a change nobody meant to make
+  // doesn't go unseen. Sending is best effort: the change has already happened.
+  if (current.emailVerified && body.email !== current.email) {
+    await sendNotice(c, setup, emailChangedMail(current.email, body.email));
   }
   return c.json(toAccountResponse({ ...current, email: body.email, emailVerified: true }, c.env));
 });
