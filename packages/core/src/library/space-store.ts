@@ -389,6 +389,8 @@ export function remoteStore(
   const folderMetas = new Map<string, FolderMeta>();
   /** Files of yours shared on their own: each one's album row, with which file it is. */
   const fileShares = new Map<string, FileShareMeta>();
+  /** Every album row this space has listed, including any that didn't open. */
+  const listedAlbums = new Set<string>();
   /** The album row a file of yours is shared through, if it is. */
   const fileShareOf = (photoId: string) => {
     for (const [id, meta] of fileShares) if (meta.file === photoId) return id;
@@ -770,6 +772,18 @@ export function remoteStore(
     }
   };
 
+  /**
+   * Whether `id` already names something in this space: an album row (an album, a folder, a
+   * file shared on its own), a photo, or an album a photo is filed in.
+   */
+  const inUse = (id: string) =>
+    listedAlbums.has(id) ||
+    folderMetas.has(id) ||
+    albumMetas.has(id) ||
+    fileShares.has(id) ||
+    known.has(id) ||
+    [...known.values()].some((entry) => entry.meta.albumIds.includes(id));
+
   /** Changes people given your shared folders made inside them, waiting to be made here. */
   let waitingEdits: { root: string; edits: StoredFolderEdit[] }[] = [];
   /** Shared folders changes were made in, to bring up to date for their people. */
@@ -809,8 +823,12 @@ export function remoteStore(
           left.push(stored);
           continue;
         }
+        // A folder made inside a shared folder is a new one. A change naming an id already in
+        // use here (another of your folders or albums, say) is let go, whatever the server
+        // says, so nothing of yours outside the folder can be filed into it.
+        const reused = edit?.op === 'make-folder' && inUse(edit.id);
         // Someone given one file can rename it or upload a new version, nothing else.
-        if (edit && (!fileShares.has(waiting.root) || changesOneFile(edit))) {
+        if (edit && !reused && (!fileShares.has(waiting.root) || changesOneFile(edit))) {
           const before = new Set([waiting.root, ...state.folders.keys()]);
           const tree =
             edit.op === 'delete-folder' && state.folders.has(edit.id)
@@ -1136,6 +1154,7 @@ export function remoteStore(
       waitingEdits = [];
       const opening = storedAlbums.then(async ({ albums: stored }) => {
         for (const each of stored) {
+          listedAlbums.add(each.id);
           const opened = await crypto
             .openRecord(keys, 'album', each.id, each.meta)
             .catch(() => null);
