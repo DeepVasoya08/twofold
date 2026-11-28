@@ -1,6 +1,6 @@
 /**
- * A small in-memory R2 stand-in with the parts of R2Bucket the API uses: put (streams too),
- * get, head and delete.
+ * A small in-memory R2 stand-in with the parts of R2Bucket the API uses: put (streams too,
+ * and only if nothing is stored yet when asked with If-None-Match: *), get, head and delete.
  *
  * Like a real Worker, it allows only CONNECTION_LIMIT objects whose bodies haven't been read
  * yet: getting one more closes the oldest, so its body fails when read.
@@ -55,11 +55,21 @@ export class TestR2 {
   /** Objects got but not read yet, oldest first. */
   readonly unread: TestObject[] = [];
 
-  async put(key: string, value: ReadableStream | ArrayBuffer | Uint8Array): Promise<TestObject> {
+  async put(
+    key: string,
+    value: ReadableStream | ArrayBuffer | Uint8Array,
+    options?: { onlyIf?: Headers },
+  ): Promise<TestObject | null> {
+    const onlyIf = options?.onlyIf ? [...options.onlyIf.entries()] : [];
+    if (onlyIf.some(([name, given]) => name !== 'if-none-match' || given !== '*')) {
+      throw new Error('Only If-None-Match: * is supported here');
+    }
     const data =
       value instanceof ReadableStream
         ? new Uint8Array(await new Response(value).arrayBuffer())
         : new Uint8Array(value);
+    // Like R2, the condition is checked when the write lands, not when it starts.
+    if (onlyIf.length > 0 && this.objects.has(key)) return null;
     this.objects.set(key, data);
     return new TestObject(key, data);
   }

@@ -11,6 +11,7 @@ import {
 } from '@arcafold/types';
 import type { AlbumList, PhotoPage, ProfilePhotoResponse, StoredPhoto } from '@arcafold/types';
 
+import { app } from './app';
 import type { Env } from './env';
 import { PAGE_SIZE, PENDING_TTL_MS } from './routes/space';
 import { STALE_PENDING_SQL } from './space-db';
@@ -198,6 +199,20 @@ describe('uploading', () => {
     expect((await putFile(client, photo.id, 'thumb', randomBytes(100))).status).toBe(404);
   });
 
+  it('keeps the file an earlier try stored, for a retry whose answer was lost', async () => {
+    const full = randomBytes(20);
+    const photo = { id: newId(), meta: newMeta(), thumbSize: 10, fullSize: full.length };
+    await client.request('POST', '/space/photos', photo);
+    const first = await putFile(client, photo.id, 'full', full);
+    expect(await first.json()).toEqual({ committed: false });
+    const again = await putFile(client, photo.id, 'full', randomBytes(20));
+    expect(await again.json()).toEqual({ committed: false });
+    const thumb = await putFile(client, photo.id, 'thumb', randomBytes(10));
+    expect(await thumb.json()).toEqual({ committed: true });
+    const res = await client.request('GET', `/space/photos/${photo.id}/full`);
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(full);
+  });
+
   it('refuses a taken id, bad parts and oversized or malformed requests', async () => {
     const { photo } = await upload();
     expect((await client.request('POST', '/space/photos', photo)).status).toBe(409);
@@ -251,6 +266,82 @@ async function getThumbs(ids: string[], c = client) {
   if (res.status !== 200) return res.status;
   return readThumbBatch(new Uint8Array(await res.arrayBuffer()), ids.length);
 }
+
+describe('a file still on its way', () => {
+  /** Starts uploading one file whose body the test hands over bit by bit, like a slow line. */
+  function slowPut(id: string, part: 'thumb' | 'full', size: number) {
+    let feed: ReadableStreamDefaultController<Uint8Array> | undefined;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        feed = controller;
+      },
+    });
+    const headers: Record<string, string> = {
+      ...client.headers,
+      cookie: client.cookie ?? '',
+      'content-type': 'application/octet-stream',
+      'content-length': String(size),
+    };
+    const init = { method: 'PUT', headers, body, duplex: 'half' } as RequestInit;
+    const response = app.request(`https://arcafold.test/api/space/photos/${id}/${part}`, init, env);
+    if (!feed) throw new Error('The stream didn’t start');
+    return { feed, response };
+  }
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+  const stored = () =>
+    (sqlite.prepare('SELECT stored_bytes FROM accounts').get() as { stored_bytes: number })
+      .stored_bytes;
+
+  it('is taken back out if its photo is deleted meanwhile, so nothing is kept uncharged', async () => {
+    const photo = { id: newId(), meta: newMeta(), thumbSize: 10, fullSize: 60_000 };
+    expect((await client.request('POST', '/space/photos', photo)).status).toBe(201);
+    const late = slowPut(photo.id, 'full', photo.fullSize);
+    late.feed.enqueue(randomBytes(30_000));
+    await tick();
+    expect((await client.request('DELETE', `/space/photos/${photo.id}`, {})).status).toBe(204);
+    expect(stored()).toBe(0);
+    late.feed.enqueue(randomBytes(30_000));
+    late.feed.close();
+    expect((await late.response).status).toBe(404);
+    expect(r2.objects.size).toBe(0);
+  });
+
+  it('never replaces a file its photo was committed with', async () => {
+    const thumb = randomBytes(10);
+    const original = randomBytes(5_000);
+    const photo = {
+      id: newId(),
+      meta: newMeta(),
+      thumbSize: thumb.length,
+      fullSize: original.length,
+    };
+    await client.request('POST', '/space/photos', photo);
+    const late = slowPut(photo.id, 'full', original.length);
+    late.feed.enqueue(randomBytes(100));
+    await tick();
+    expect((await putFile(client, photo.id, 'thumb', thumb)).status).toBe(200);
+    const full = await putFile(client, photo.id, 'full', original);
+    expect(await full.json()).toEqual({ committed: true });
+    late.feed.enqueue(randomBytes(original.length - 100));
+    late.feed.close();
+    expect(await (await late.response).json()).toEqual({ committed: false });
+    const res = await client.request('GET', `/space/photos/${photo.id}/full`);
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(original);
+  });
+
+  it('sees a deleted photo as gone: its row goes before its files', async () => {
+    const { photo } = await upload();
+    const rowsAtFileDelete: unknown[] = [];
+    const remove = r2.delete.bind(r2);
+    r2.delete = (keys) => {
+      rowsAtFileDelete.push(sqlite.prepare('SELECT id FROM photos WHERE id = ?').get(photo.id));
+      return remove(keys);
+    };
+    expect((await client.request('DELETE', `/space/photos/${photo.id}`, {})).status).toBe(204);
+    expect(rowsAtFileDelete).toEqual([undefined]);
+    expect(r2.objects.size).toBe(0);
+  });
+});
 
 describe('thumbnail batches', () => {
   it('returns many thumbnails in the order asked', async () => {
@@ -315,13 +406,14 @@ describe('database round trips', () => {
     expect(await tripsFor(() => client.request('GET', '/space/photos'))).toBe(2);
   });
 
-  it('uploads a photo in ten round trips across its three requests', async () => {
+  it('uploads a photo in twelve round trips across its three requests', async () => {
     // Two of them (the abandoned-upload check and the quota reservation) run side by side.
-    // The second file's upload commits the photo, so there is no fourth request, and gives
-    // the space a new stamp, once the photo can be seen.
+    // Each file's upload looks for its photo again once the file is stored, beside its look
+    // for the other file, so that adds no wait. The second file's upload commits the photo,
+    // so there is no fourth request, and gives the space a new stamp, once it can be seen.
     const before = trips.count;
     await upload();
-    expect(trips.count - before).toBe(10);
+    expect(trips.count - before).toBe(12);
   });
 });
 
