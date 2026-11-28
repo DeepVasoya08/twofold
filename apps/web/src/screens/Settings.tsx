@@ -20,6 +20,7 @@ import type { JoinedLibrary, Member } from '@arcafold/core/sharing';
 import { useTheme } from '../app/theme';
 import type { ThemePreference } from '../app/theme';
 import { useToast } from '../app/toast';
+import { WAIT_FOR_TRANSFERS, useTransfersRunning } from '../app/transfers';
 import { TRASH_DAYS, useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { Avatar } from '../components/Brand';
@@ -84,7 +85,8 @@ const themes: { value: ThemePreference; label: string; icon: IconName }[] = [
   { value: 'dark', label: 'Dark', icon: 'moon' },
 ];
 
-type DialogName = 'profile' | 'email' | 'main-password' | 'private-password' | 'delete' | null;
+type DialogName =
+  'profile' | 'email' | 'main-password' | 'recovery-key' | 'private-password' | 'delete' | null;
 
 /** A sharing change waiting for confirmation: stop sharing with someone, or leave a library. */
 type SharingChange = { kind: 'stop'; member: Member } | { kind: 'leave'; library: JoinedLibrary };
@@ -271,6 +273,7 @@ export function Settings() {
   const [confirm, setConfirm] = useState('');
   const [passwordError, setPasswordError] = useState<PasswordError | null>(null);
   const autoLock = useAutoLock();
+  const transfersRunning = useTransfersRunning();
   const keys = account.state.status === 'unlocked' ? account.state.session.opened.space : null;
   const sharing = useSharingLists(keys);
   const [change, setChange] = useState<SharingChange | null>(null);
@@ -306,25 +309,47 @@ export function Settings() {
       });
   };
 
+  /**
+   * Starts a new main password (`password` set) or a new recovery key alone: either way the
+   * new recovery words are shown next, and the change is made once they're saved.
+   */
+  const startKeyChange = (password: string | null, otherwise: ErrorInput) => {
+    if (transfersRunning) {
+      showError(otherwise, WAIT_FOR_TRANSFERS);
+      return;
+    }
+    runInDialog(
+      () => account.prepareKeyChange(current, password),
+      () => {
+        closeDialog();
+        navigate(paths.recoveryKey);
+      },
+      otherwise,
+    );
+  };
+
   const onChangeMain = (event: SubmitEvent) => {
     event.preventDefault();
     if (busy) return;
     if (!current) {
-      showError('current', 'Enter your current password.');
+      showError('current', 'Enter your current main password.');
       return;
     }
     if (next.length < MIN_PASSWORD_LENGTH) {
       showError('new', `Use at least ${String(MIN_PASSWORD_LENGTH)} characters.`);
       return;
     }
-    runInDialog(
-      () => account.changeMainPassword(current, next),
-      () => {
-        closeDialog();
-        toast.show('Password changed');
-      },
-      'new',
-    );
+    startKeyChange(next, 'new');
+  };
+
+  const onNewRecoveryKey = (event: SubmitEvent) => {
+    event.preventDefault();
+    if (busy) return;
+    if (!current) {
+      showError('current', 'Enter your main password.');
+      return;
+    }
+    startKeyChange(null, 'current');
   };
 
   // In the main library this always reads "set up", whether or not a private space exists.
@@ -709,7 +734,7 @@ export function Settings() {
                 type="button"
                 className="btn btn--secondary btn--sm"
                 onClick={() => {
-                  navigate(paths.recoveryKey);
+                  setDialog('recovery-key');
                 }}
               >
                 New key
@@ -793,10 +818,15 @@ export function Settings() {
       <ProfileDialog open={dialog === 'profile'} onClose={closeDialog} />
       <ChangeEmailDialog open={dialog === 'email'} onClose={closeDialog} />
 
-      <Dialog open={dialog === 'main-password'} onClose={closeDialog} title="Change main password">
+      <Dialog
+        open={dialog === 'main-password'}
+        onClose={closeDialog}
+        title="Change main password"
+        description="You’ll save new recovery words next. Your old password and recovery words stop working, and your other devices are signed out. People you share your library with keep their access."
+      >
         <form className="form" onSubmit={onChangeMain} noValidate>
           <PasswordField
-            label="Current password"
+            label={isPrivate ? 'Current main password' : 'Current password'}
             autoComplete="current-password"
             value={current}
             onChange={(event) => {
@@ -821,7 +851,35 @@ export function Settings() {
               Cancel
             </button>
             <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy}>
-              {busy ? 'Changing…' : 'Change password'}
+              {busy ? 'Checking…' : 'Next'}
+            </button>
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={dialog === 'recovery-key'}
+        onClose={closeDialog}
+        title="Make a new recovery key"
+        description="Your old recovery words stop working, and your other devices are signed out. Your main password stays the same."
+      >
+        <form className="form" onSubmit={onNewRecoveryKey} noValidate>
+          <PasswordField
+            label="Main password"
+            autoComplete="current-password"
+            value={current}
+            onChange={(event) => {
+              setCurrent(event.currentTarget.value);
+              setPasswordError(null);
+            }}
+            error={errorAt('current')}
+          />
+          <div className="dialog__actions">
+            <button type="button" className="btn btn--ghost" onClick={closeDialog}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy}>
+              {busy ? 'Checking…' : 'Next'}
             </button>
           </div>
         </form>

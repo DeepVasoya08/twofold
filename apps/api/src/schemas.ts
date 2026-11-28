@@ -65,10 +65,13 @@ export const preLoginSchema = z.strictObject({ email });
 
 export const loginSchema = z.strictObject({ email, loginKey });
 
+const spaceToken = base64Url(STORAGE_SIZES.spaceToken);
+
 export const updateKeyringSchema = z.strictObject({
   loginKey,
   version: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
   keyring: keyringSchema,
+  move: z.strictObject({ from: spaceToken, to: spaceToken }).optional(),
 });
 
 export const deleteAccountSchema = z.strictObject({ loginKey });
@@ -108,7 +111,7 @@ const sealedRecord = z
   .max(base64UrlLength(STORAGE_SIZES.maxRecord))
   .regex(/^[A-Za-z0-9_-]+$/);
 
-export const spaceTokenSchema = base64Url(STORAGE_SIZES.spaceToken);
+export const spaceTokenSchema = spaceToken;
 
 export const recordIdSchema = recordId;
 

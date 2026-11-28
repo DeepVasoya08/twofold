@@ -85,6 +85,14 @@ export interface VerifyEmailRequest {
 export const VERIFY_EMAIL_ERROR = 'verify-email';
 
 /**
+ * The error code the server answers with (410) for a library's old token, once a new main
+ * password or recovery key has moved the library to a new one. A device that still uses it
+ * holds keys from before the change, so the app locks and the next unlock fetches the new
+ * keyring.
+ */
+export const SPACE_MOVED_ERROR = 'space-moved';
+
+/**
  * The smart features question shown once after sign-up (and once to accounts made before it
  * existed). Bumped if what it asks changes, so everyone is asked again.
  */
@@ -158,6 +166,15 @@ export interface LoginRequest {
   loginKey: string;
 }
 
+/**
+ * Moves a space's storage from one access token to another: every row kept under `from`'s
+ * tag is kept under `to`'s instead. Both are space tokens (base64url, 16 bytes).
+ */
+export interface SpaceMove {
+  from: string;
+  to: string;
+}
+
 /** Replaces the whole keyring. Sending all slots every time hides which one changed. */
 export interface UpdateKeyringRequest {
   /** Proves the caller knows a password (or the recovery key), not just the session cookie. */
@@ -165,6 +182,13 @@ export interface UpdateKeyringRequest {
   /** The version the change started from; a different one means another device got there first. */
   version: number;
   keyring: Keyring;
+  /**
+   * Moves the main library to the id its new slots hold, in the same step as the keyring, so
+   * its old id stops working. The app sends one with every keyring change: when the main
+   * library stays put, both tokens are fresh random ones, so nothing moves and the request
+   * looks the same.
+   */
+  move?: SpaceMove;
 }
 
 export interface DeleteAccountRequest {

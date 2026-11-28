@@ -1,4 +1,9 @@
-import { SPACE_HEADER, ThumbBatchParser, VERIFY_EMAIL_ERROR } from '@arcafold/types';
+import {
+  SPACE_HEADER,
+  SPACE_MOVED_ERROR,
+  ThumbBatchParser,
+  VERIFY_EMAIL_ERROR,
+} from '@arcafold/types';
 import type {
   AccountResponse,
   AccountStorage,
@@ -160,6 +165,37 @@ export function onVerifyEmail(listener: (() => void) | null): void {
   verifyEmailListener = listener;
 }
 
+let spaceMovedListener: (() => void) | null = null;
+
+/**
+ * Called when a library request is refused because the library moved to a new id: its main
+ * password or recovery key changed in another tab or on another device. The keys in memory
+ * are from before the change, so the app locks, and the next unlock fetches the new keyring.
+ */
+export function onSpaceMoved(listener: (() => void) | null): void {
+  spaceMovedListener = listener;
+}
+
+/**
+ * Tokens this device is moving a library away from. Requests still on their way with one are
+ * refused once the move lands, which is expected here, not a sign of keys out of date.
+ */
+const movingAway = new Set<string>();
+
+/**
+ * Runs a move of a library away from `token` (a keyring change). If it fails, the token may
+ * still be in use, so its refusals count again.
+ */
+export async function whileMovingAway<T>(token: string, move: () => Promise<T>): Promise<T> {
+  movingAway.add(token);
+  try {
+    return await move();
+  } catch (error) {
+    movingAway.delete(token);
+    throw error;
+  }
+}
+
 function isErrorResponse(body: unknown): body is ErrorResponse {
   return (
     typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
@@ -210,6 +246,16 @@ async function send(
     const parsed: unknown = await res.json().catch(() => null);
     if (res.status === 403 && isErrorResponse(parsed) && parsed.code === VERIFY_EMAIL_ERROR) {
       verifyEmailListener?.();
+    }
+    const token = headers[SPACE_HEADER];
+    if (
+      res.status === 410 &&
+      isErrorResponse(parsed) &&
+      parsed.code === SPACE_MOVED_ERROR &&
+      token !== undefined &&
+      !movingAway.has(token)
+    ) {
+      spaceMovedListener?.();
     }
     throw new ApiError(
       res.status,

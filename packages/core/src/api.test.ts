@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { SPACE_HEADER } from '@arcafold/types';
+import { SPACE_HEADER, SPACE_MOVED_ERROR } from '@arcafold/types';
 
 import {
   ApiError,
@@ -9,9 +9,11 @@ import {
   cookieValue,
   onSessionCookie,
   onSessionEnded,
+  onSpaceMoved,
   onVerifyEmail,
   restoreSessionCookie,
   spaceApi,
+  whileMovingAway,
 } from './api';
 import type { ApiFetch, ApiRequest, ApiResponse } from './api';
 
@@ -69,6 +71,7 @@ afterEach(() => {
   configureApi({ origin: '', cookies: 'browser' });
   onSessionEnded(null);
   onVerifyEmail(null);
+  onSpaceMoved(null);
 });
 
 describe('requests', () => {
@@ -163,6 +166,48 @@ describe('errors', () => {
     expect(ended).not.toHaveBeenCalled();
     await expect(api.account()).rejects.toBeInstanceOf(ApiError);
     expect(ended).toHaveBeenCalledOnce();
+  });
+});
+
+describe('a library that moved', () => {
+  const moved = { status: 410, json: { error: 'Unlock again.', code: SPACE_MOVED_ERROR } };
+
+  it('is reported when a library request is refused for it, and nothing else is', async () => {
+    const report = vi.fn();
+    onSpaceMoved(report);
+    const { fetch } = fakeFetch({ status: 410, json: { error: 'Gone' } }, moved, moved);
+    configureApi({ fetch });
+    await expect(spaceApi('old').listAlbums()).rejects.toMatchObject({ status: 410 });
+    expect(report).not.toHaveBeenCalled();
+    await expect(api.account()).rejects.toMatchObject({ status: 410 });
+    expect(report).not.toHaveBeenCalled();
+    await expect(spaceApi('old').listAlbums()).rejects.toMatchObject({ status: 410 });
+    expect(report).toHaveBeenCalledOnce();
+  });
+
+  it('is not reported for a token this device is moving away from', async () => {
+    const report = vi.fn();
+    onSpaceMoved(report);
+    const { fetch } = fakeFetch({ json: { version: 2 } }, moved, moved);
+    configureApi({ fetch });
+    await whileMovingAway('mine', () => api.account());
+    await expect(spaceApi('mine').listAlbums()).rejects.toMatchObject({ status: 410 });
+    expect(report).not.toHaveBeenCalled();
+    // Another tab's move of a different library is news.
+    await expect(spaceApi('other').listAlbums()).rejects.toMatchObject({ status: 410 });
+    expect(report).toHaveBeenCalledOnce();
+  });
+
+  it('is reported again for a token whose move failed, since it may still be in use', async () => {
+    const report = vi.fn();
+    onSpaceMoved(report);
+    const { fetch } = fakeFetch({ status: 409, json: { error: 'Conflict' } }, moved);
+    configureApi({ fetch });
+    await expect(whileMovingAway('stuck', () => api.account())).rejects.toMatchObject({
+      status: 409,
+    });
+    await expect(spaceApi('stuck').listAlbums()).rejects.toMatchObject({ status: 410 });
+    expect(report).toHaveBeenCalledOnce();
   });
 });
 

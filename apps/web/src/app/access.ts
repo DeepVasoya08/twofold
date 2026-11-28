@@ -10,7 +10,13 @@ import type { Route } from './routes';
 export function redirectFor(
   route: Route,
   state: AccountState,
-  options: { space: Space | null; signingUp: boolean; search?: string },
+  options: {
+    space: Space | null;
+    signingUp: boolean;
+    /** A new main password or recovery key is waiting for its new words to be saved. */
+    changingKeys?: boolean;
+    search?: string;
+  },
 ): string | null {
   const { status } = state;
   // An invite link someone followed before signing in, to come back to afterwards.
@@ -36,9 +42,10 @@ export function redirectFor(
       if (status === 'unlocked') return null;
       return withNext(status === 'locked' ? paths.unlock : paths.login, paths.joinCode);
     case 'recovery-key':
-      // Step 2 of sign-up, or a new key from Settings (main library only).
+      // Step 2 of sign-up, or the new words for a new main password or recovery key from
+      // Settings. Once those are saved (or with nothing waiting) Settings is where to be.
       if (options.signingUp) return null;
-      if (status === 'unlocked') return options.space === 'main' ? null : paths.settings;
+      if (status === 'unlocked') return options.changingKeys ? null : paths.settings;
       return status === 'locked' ? paths.unlock : paths.signup;
     case 'gallery':
     case 'albums':

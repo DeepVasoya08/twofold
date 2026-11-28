@@ -122,6 +122,16 @@ export async function newSpace(): Promise<SpaceKeys> {
   };
 }
 
+/**
+ * The same space at a new random id. The id is the token its storage is reached with, so
+ * once the server has moved the space there, the old id reaches nothing. The key stays, so
+ * nothing sealed under it has to be sealed again.
+ */
+export async function withNewSpaceId(space: SpaceKeys): Promise<SpaceKeys> {
+  const sodium = await getSodium();
+  return { spaceKey: space.spaceKey.slice(), spaceId: sodium.randombytes_buf(SPACE_ID_BYTES) };
+}
+
 async function sealSlot(space: SpaceKeys, wrapKey: Uint8Array): Promise<string> {
   const sodium = await getSodium();
   const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);

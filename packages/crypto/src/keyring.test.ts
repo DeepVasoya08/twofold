@@ -9,11 +9,13 @@ import {
   SLOT,
   createKeyring,
   deriveFromPassword,
+  deriveFromRecoveryKey,
   newSpace,
   replaceSlot,
   unlockWithPassword,
   unlockWithRecoveryKey,
   validateKeyring,
+  withNewSpaceId,
 } from './keyring';
 import type { NewAccountKeys } from './keyring';
 import { generateRecoveryKey } from './recovery-key';
@@ -166,5 +168,63 @@ describe('private space', () => {
       slots: [withPrivate.slots[0], withPrivate.slots[1], flipByte(withPrivate.slots[2], 87)],
     };
     expect(await unlockWithPassword(tampered, PRIVATE)).toBeNull();
+  });
+});
+
+describe('moving the main library to a new id', () => {
+  const NEXT = 'a password chosen after a leak';
+  let newRecoveryKey: Uint8Array;
+  let moved: Keyring;
+  let space: Awaited<ReturnType<typeof withNewSpaceId>>;
+
+  beforeAll(async () => {
+    const { salt, kdf } = account.keyring;
+    const secret = await deriveFromPassword(PRIVATE, salt, kdf);
+    const withPrivate = await replaceSlot(account.keyring, SLOT.private, await newSpace(), secret);
+    newRecoveryKey = await generateRecoveryKey();
+    space = await withNewSpaceId(account.main.space);
+    const password = await deriveFromPassword(NEXT, salt, kdf);
+    const recovery = await deriveFromRecoveryKey(newRecoveryKey, salt);
+    moved = await replaceSlot(
+      await replaceSlot(withPrivate, SLOT.main, space, password),
+      SLOT.recovery,
+      space,
+      recovery,
+    );
+  });
+
+  it('keeps the space key and picks a new random id', async () => {
+    expect(space.spaceKey).toEqual(account.main.space.spaceKey);
+    expect(space.spaceId).toHaveLength(account.main.space.spaceId.length);
+    expect(space.spaceId).not.toEqual(account.main.space.spaceId);
+    expect((await withNewSpaceId(account.main.space)).spaceId).not.toEqual(space.spaceId);
+  });
+
+  it('opens the new id with the new password and the new recovery key', async () => {
+    for (const opened of [
+      await unlockWithPassword(moved, NEXT),
+      await unlockWithRecoveryKey(moved, newRecoveryKey),
+    ]) {
+      expect(opened?.space.spaceId).toEqual(space.spaceId);
+      expect(opened?.space.spaceKey).toEqual(account.main.space.spaceKey);
+    }
+  });
+
+  it('opens nothing with the old password or the old recovery key', async () => {
+    expect(await unlockWithPassword(moved, MAIN)).toBeNull();
+    expect(await unlockWithRecoveryKey(moved, recoveryKey)).toBeNull();
+  });
+
+  it('leaves the private slot as it was', async () => {
+    expect((await unlockWithPassword(moved, PRIVATE))?.slot).toBe(SLOT.private);
+  });
+
+  it('refuses a tampered main or recovery slot', async () => {
+    const tampered: Keyring = {
+      ...moved,
+      slots: [flipByte(moved.slots[0], 40), flipByte(moved.slots[1], 40), moved.slots[2]],
+    };
+    expect(await unlockWithPassword(tampered, NEXT)).toBeNull();
+    expect(await unlockWithRecoveryKey(tampered, newRecoveryKey)).toBeNull();
   });
 });

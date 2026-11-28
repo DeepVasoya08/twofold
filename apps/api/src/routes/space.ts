@@ -9,6 +9,7 @@ import {
   MAX_MEMBERS,
   MAX_PENDING_INVITES,
   SPACE_HEADER,
+  SPACE_MOVED_ERROR,
   THUMB_BATCH_MAX,
 } from '@arcafold/types';
 import type {
@@ -132,6 +133,7 @@ import {
   listUploadTokens,
   uploadTokenQuery,
 } from '../upload-db';
+import { movedQuery } from '../space-move';
 import { albumStamp, bumpStamp, deleteStamp, readStamp } from '../stamp-db';
 import { requireOwner } from './owner';
 import { people } from './people';
@@ -159,8 +161,9 @@ export const space = new Hono<AppEnv>();
 
 /**
  * Checks the session and resolves the space header in one database round trip: the session's
- * account, and whether the token is a member's share token. `space` is the tag rows are
- * stored under. Without a live session the answer is 401, as for every signed-in route.
+ * account, whether the token is a member's share token or a phone's upload token, and whether
+ * its space moved away (space-move.ts). `space` is the tag rows are stored under. Without a
+ * live session the answer is 401, as for every signed-in route.
  */
 const requireSpace = createMiddleware<AppEnv>(async (c, next) => {
   const sessionHash = await requestSessionHash(c);
@@ -173,16 +176,23 @@ const requireSpace = createMiddleware<AppEnv>(async (c, next) => {
     return account ? c.json({ error: messages.badRequest }, 400) : sessionEnded(c);
   }
   const hash = toBase64Url(await sha256(bytes));
-  const [session, members, uploaders] = await c.env.DB.batch([
+  const [session, members, uploaders, moved] = await c.env.DB.batch([
     sessionAccountQuery(c.env.DB, sessionHash, now),
     memberByTokenQuery(c.env.DB, hash),
     uploadTokenQuery(c.env.DB, hash),
+    movedQuery(c.env.DB, hash),
   ]);
   const account = sessionAccountFrom(session?.results ?? []);
   if (!account) return sessionEnded(c);
   const member = members?.results[0] as
     { id: string; space: string; album: string | null; access: MemberAccess } | undefined;
   const uploader = uploaders?.results[0] as { id: string; space: string } | undefined;
+  // A space's own token that it moved away from reaches nothing, not even an empty space: so
+  // a tab still holding the old keys can't add photos where nobody would find them again.
+  // Share and upload tokens are looked up by their own hash, so they never count as moved.
+  if (!member && !uploader && (moved?.results.length ?? 0) > 0) {
+    return c.json({ error: messages.spaceMoved, code: SPACE_MOVED_ERROR }, 410);
+  }
   c.set('account', account);
   c.set('session', sessionHash);
   c.set('album', member?.album ?? null);

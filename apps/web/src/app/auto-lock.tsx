@@ -5,9 +5,7 @@ import { loadAutoLock, saveAutoLock } from '../lib/auto-lock';
 import type { AutoLockMinutes } from '../lib/auto-lock';
 import { IdleTimer } from '../lib/idle-timer';
 import { useAccount } from './account';
-import { useDownloads } from './downloads';
-import { useImports } from './imports';
-import { useUploads } from './uploads';
+import { useTransfersRunning } from './transfers';
 
 interface AutoLockValue {
   minutes: AutoLockMinutes;
@@ -57,10 +55,7 @@ const ACTIVITY = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'
 export function IdleLock() {
   const { state, lock } = useAccount();
   const { minutes } = useAutoLock();
-  const uploads = useUploads();
-  const downloads = useDownloads();
-  const imports = useImports();
-  const running = uploads.running || downloads.running || imports.running;
+  const running = useTransfersRunning();
   const unlocked = state.status === 'unlocked';
   // The latest lock, without restarting the countdown each time the account value changes.
   const lockRef = useRef(lock);

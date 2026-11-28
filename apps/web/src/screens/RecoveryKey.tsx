@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { useAccount } from '../app/account';
-import { newRecoveryWords } from '@arcafold/core/account';
 import { useRouter } from '../app/router';
 import { parseNext, paths } from '../app/routes';
 import { useToast } from '../app/toast';
+import { WAIT_FOR_TRANSFERS, useTransfersRunning } from '../app/transfers';
 import { useSubmit } from '../app/use-submit';
 import { AuthLayout } from '../components/AuthLayout';
 import { FormAlert } from '../components/FormAlert';
@@ -14,33 +14,36 @@ import { RECOVERY_FILE_NAME, recoveryFile } from '../lib/recovery-file';
 
 import './recovery-key.css';
 
+/** What the screen says for each change started from Settings, and once it's made. */
+const CHANGES = {
+  password: {
+    subtitle:
+      'Your new main password comes with a new recovery key. Save these 12 words: your old ones stop working once you continue.',
+    done: 'Password changed',
+  },
+  'recovery-key': {
+    subtitle:
+      'These 12 words replace your old recovery key, which stops working once you continue.',
+    done: 'New recovery key saved',
+  },
+} as const;
+
 /**
- * Step 2 of sign-up, or a replacement key from Settings. The words are made on this device
- * and are never sent anywhere; only a slot sealed with them is.
+ * Step 2 of sign-up, or the new words for a new main password or recovery key from Settings.
+ * The words are made on this device and are never sent anywhere; only a slot sealed with them
+ * is.
  */
 export function RecoveryKey() {
   const { navigate, search } = useRouter();
   const toast = useToast();
-  const { pendingSignUp, completeSignUp, saveRecoveryKey } = useAccount();
-  const { busy, error, run } = useSubmit();
+  const { pendingSignUp, completeSignUp, pendingKeyChange, completeKeyChange } = useAccount();
+  const transfersRunning = useTransfersRunning();
+  const { busy, error, setError, run } = useSubmit();
   const [saved, setSaved] = useState(false);
   // Ticking the box saves a copy once; the Download button is there for another.
   const [downloaded, setDownloaded] = useState(false);
   const signingUp = pendingSignUp !== null;
-  const [renewal, setRenewal] = useState<{ key: Uint8Array; words: string[] } | null>(null);
-
-  useEffect(() => {
-    if (signingUp) return;
-    let cancelled = false;
-    void newRecoveryWords().then((made) => {
-      if (!cancelled) setRenewal(made);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [signingUp]);
-
-  const words = pendingSignUp?.recoveryWords ?? renewal?.words ?? [];
+  const words = pendingSignUp?.recoveryWords ?? pendingKeyChange?.recoveryWords ?? [];
 
   const copy = () => {
     void navigator.clipboard.writeText(words.join(' ')).then(
@@ -66,11 +69,17 @@ export function RecoveryKey() {
       });
       return;
     }
-    if (!renewal) return;
-    void run(() => saveRecoveryKey(renewal.key)).then((ok) => {
+    if (!pendingKeyChange) return;
+    if (transfersRunning) {
+      setError(WAIT_FOR_TRANSFERS);
+      return;
+    }
+    const { done } = CHANGES[pendingKeyChange.kind];
+    void run(completeKeyChange).then((ok) => {
       if (!ok) return;
-      toast.show('New recovery key saved');
-      navigate(paths.settings);
+      toast.show(done);
+      // In place of this screen: its words are no use any more.
+      navigate(paths.settings, { replace: true });
     });
   };
 
@@ -78,9 +87,9 @@ export function RecoveryKey() {
     <AuthLayout
       title="Save your recovery key"
       subtitle={
-        signingUp
-          ? 'If you ever forget your password, these 12 words are the only way back into your photos. Not even we can help without them.'
-          : 'These 12 words replace your old recovery key, which stops working once you continue.'
+        pendingKeyChange && !signingUp
+          ? CHANGES[pendingKeyChange.kind].subtitle
+          : 'If you ever forget your password, these 12 words are the only way back into your photos. Not even we can help without them.'
       }
       {...(signingUp ? { step: { current: 2, total: 2 } } : {})}
     >
