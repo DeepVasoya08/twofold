@@ -38,7 +38,9 @@ const RULES: Record<string, readonly Who[]> = {
   'GET /space/albums': ALBUM_READ,
   'POST /space/albums': LIBRARY_EDIT,
   'PUT /space/albums/:id': LIBRARY_EDIT,
-  'DELETE /space/albums/:id': LIBRARY_EDIT,
+  // The album these run against is shared, and deleting it would stop its sharing: only
+  // the owner may. Library editors may delete an album that isn't (album-sharing.test.ts).
+  'DELETE /space/albums/:id': OWNER,
   'PUT /space/albums/:id/shared': LIBRARY_EDIT,
   'DELETE /space/albums/:id/shared': OWNER,
   'GET /space/albums/:id/items': LIBRARY_READ,

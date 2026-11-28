@@ -304,9 +304,20 @@ export async function updateAlbumMeta(
 }
 
 /** Deletes one album; its photos stay. Returns false if it isn't in the space. */
-export async function deleteAlbum(db: D1Database, space: string, id: string): Promise<boolean> {
+/**
+ * Deletes an album. With `unsharedOnly`, only while it isn't shared: deleting a shared album
+ * also stops its sharing, which is the owner's to do.
+ */
+export async function deleteAlbum(
+  db: D1Database,
+  space: string,
+  id: string,
+  unsharedOnly = false,
+): Promise<boolean> {
   const result = await db
-    .prepare('DELETE FROM albums WHERE id = ? AND space = ?')
+    .prepare(
+      `DELETE FROM albums WHERE id = ? AND space = ?${unsharedOnly ? ' AND shared_meta IS NULL' : ''}`,
+    )
     .bind(id, space)
     .run();
   return result.meta.changes === 1;

@@ -629,6 +629,8 @@ space.post('/albums', async (c) => {
 });
 
 const albumNotFound = 'That album isn’t here anymore.';
+const sharedAlbumOwnerOnly =
+  'Only the library’s owner can delete an album while it’s shared. Ask them to stop sharing it first.';
 
 /** Replaces an album's sealed metadata (renaming it). */
 space.put('/albums/:id', async (c) => {
@@ -650,7 +652,13 @@ space.delete('/albums/:id', async (c) => {
   if (!id.success || !(await readBody(c, emptySchema))) {
     return c.json({ error: messages.badRequest }, 400);
   }
-  if (!(await deleteAlbum(c.env.DB, c.get('space'), id.data))) {
+  // Deleting a shared album stops its sharing, which only the owner may do (as on the route
+  // below), so someone the library is shared with can delete it only once it isn't shared.
+  const byMember = c.get('member') !== null;
+  if (byMember && (await isAlbumShared(c.env.DB, c.get('space'), id.data))) {
+    return c.json({ error: sharedAlbumOwnerOnly }, 403);
+  }
+  if (!(await deleteAlbum(c.env.DB, c.get('space'), id.data, byMember))) {
     return c.json({ error: albumNotFound }, 404);
   }
   // Nobody keeps seeing an album that's gone.
