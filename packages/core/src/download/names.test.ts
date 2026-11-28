@@ -71,6 +71,17 @@ describe('copyName', () => {
     );
   });
 
+  it('never names a copy with a folder in it, whatever the record says', () => {
+    for (const name of ['../../x.txt', '/sdcard/x.txt', '..\\x.txt', '..', 'a/..']) {
+      const copy = copyName({ takenAt: 'x', type: 'text/plain', name });
+      expect(copy).not.toMatch(/[\\/]/);
+      expect(copy).not.toBe('..');
+    }
+    expect(copyNames([{ takenAt: 'x', type: 'text/plain', name: '../../x.txt' }])).toEqual([
+      'x.txt',
+    ]);
+  });
+
   it('leaves telling same-named copies apart to the device', () => {
     const at = local(2026, 1, 2, 3, 4, 5);
     expect(copyName({ takenAt: at, type: 'image/png' })).toBe(

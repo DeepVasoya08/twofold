@@ -26,10 +26,12 @@ private const val FOLDER = "Arcafold"
 object GallerySaver {
   fun save(context: Context, bytes: ByteBuffer, name: String, type: String, takenAt: Long) {
     val media = type.startsWith("image/") || type.startsWith("video/")
+    // Only ever a name, never a path, whatever the app passed: nothing lands outside the folder.
+    val safeName = File(name).name.takeUnless { it.isBlank() || it == "." || it == ".." } ?: "File"
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      saveToMediaStore(context, bytes, name, type, takenAt, media)
+      saveToMediaStore(context, bytes, safeName, type, takenAt, media)
     } else {
-      saveToFolder(context, bytes, name, type, takenAt, media)
+      saveToFolder(context, bytes, safeName, type, takenAt, media)
     }
   }
 
@@ -93,6 +95,9 @@ object GallerySaver {
       throw IllegalStateException("The Arcafold folder couldn't be made.")
     }
     val file = freeFile(folder, name)
+    if (file.canonicalFile.parentFile != folder.canonicalFile) {
+      throw IllegalArgumentException("That name can't be saved here.")
+    }
     try {
       FileOutputStream(file).use { write(it, bytes) }
     } catch (error: Exception) {

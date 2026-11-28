@@ -6,7 +6,7 @@
  */
 import { isCategory } from './file-categories';
 import type { Category } from './file-categories';
-import { MAX_FILE_NAME, cleanFileType } from './file-types';
+import { MAX_FILE_NAME, cleanFileName, cleanFileType } from './file-types';
 import { parseKeywords } from './keywords';
 import { isPhotoType } from './photo-types';
 
@@ -133,7 +133,8 @@ export function parsePhotoMeta(value: unknown): PhotoMeta | null {
   if (fp !== undefined) meta.fp = fp;
   if (value.kind === 'file' && typeof value.name === 'string') {
     meta.kind = 'file';
-    meta.name = value.name;
+    // Cleaned again here: a member's record can carry any name, folders and `..` included.
+    meta.name = cleanFileName(value.name);
     if (typeof value.bytes === 'number' && Number.isSafeInteger(value.bytes) && value.bytes >= 0) {
       meta.bytes = value.bytes;
     }
