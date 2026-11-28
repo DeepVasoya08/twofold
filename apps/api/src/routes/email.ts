@@ -55,6 +55,9 @@ email.post('/code', async (c) => {
     setup,
     {
       scope: await codeScope(setup, 'verify', current.id),
+      // Codes to a new address are counted across all accounts too, as sign-up codes are, so
+      // many accounts get no more guesses at an address than one. Notes count the same.
+      ...(changing && { addressScope: await codeScope(setup, 'verify-to', body.email) }),
       accountId: current.id,
       address: body.email,
       mail: (code) =>
