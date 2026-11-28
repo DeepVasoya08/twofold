@@ -833,8 +833,8 @@ export function Settings() {
         title={isPrivate ? 'Change private password' : 'Set up a private space'}
         description={
           isPrivate
-            ? undefined
-            : 'Choose a second password. Open Arcafold with it to see a separate space with its own photos and albums. Your main password will never show that it exists. If you set one up before, this replaces it, and your recovery key cannot open it.'
+            ? 'Your other devices are signed out. Someone who knows your main password and saved your account data before this could tell the private password changed.'
+            : 'Choose a second password. Open Arcafold with it to see a separate space with its own photos and albums. Your main password alone never shows that it exists, but someone who knows it and saved your account data before this could tell a private space was set up. If you set one up before, this replaces it, and your recovery key cannot open it. Your other devices are signed out.'
         }
       >
         <form className="form" onSubmit={onSetPrivate} noValidate>

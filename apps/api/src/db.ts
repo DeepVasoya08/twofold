@@ -2,6 +2,7 @@ import { STORAGE_SIZES } from '@arcafold/types';
 import type { Device, DeviceKind, Keyring, SmartFeaturesChoice } from '@arcafold/types';
 
 import type { DeviceLabel } from './device';
+import { newKeyringVersion } from './keyring-version';
 import { keyringSchema } from './schemas';
 
 /** An account row with its keyring parsed. */
@@ -61,21 +62,22 @@ export async function findAccountByEmail(
   return row ? toRecord(row) : null;
 }
 
-/** Inserts an account. Returns false if the email is taken. */
+/** Inserts an account, its keyring at a random version. Returns false if the email is taken. */
 export async function insertAccount(
   db: D1Database,
-  account: Omit<AccountRecord, 'version' | 'smartFeatures'>,
+  account: Omit<AccountRecord, 'smartFeatures'>,
   now: number,
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      'INSERT INTO accounts (id, email, name, keyring, version, created_at, email_verified) VALUES (?, ?, ?, ?, 1, ?, ?) ON CONFLICT (email) DO NOTHING',
+      'INSERT INTO accounts (id, email, name, keyring, version, created_at, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (email) DO NOTHING',
     )
     .bind(
       account.id,
       account.email,
       account.name,
       JSON.stringify(account.keyring),
+      account.version,
       now,
       account.emailVerified ? 1 : 0,
     )
@@ -83,18 +85,22 @@ export async function insertAccount(
   return result.meta.changes === 1;
 }
 
-/** Replaces the keyring if the version still matches. Returns false on a conflicting update. */
+/**
+ * Replaces the keyring if the version still matches, giving it a new random version (see
+ * keyring-version.ts). Returns the new version, or null on a conflicting update.
+ */
 export async function updateKeyring(
   db: D1Database,
   accountId: string,
   expectedVersion: number,
   keyring: Keyring,
-): Promise<boolean> {
+): Promise<number | null> {
+  const version = newKeyringVersion();
   const result = await db
-    .prepare('UPDATE accounts SET keyring = ?, version = version + 1 WHERE id = ? AND version = ?')
-    .bind(JSON.stringify(keyring), accountId, expectedVersion)
+    .prepare('UPDATE accounts SET keyring = ?, version = ? WHERE id = ? AND version = ?')
+    .bind(JSON.stringify(keyring), version, accountId, expectedVersion)
     .run();
-  return result.meta.changes === 1;
+  return result.meta.changes === 1 ? version : null;
 }
 
 /** Changes the account's name. */

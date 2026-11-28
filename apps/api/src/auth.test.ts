@@ -42,7 +42,7 @@ describe('POST /api/auth/signup', () => {
       email: EMAIL,
       name: 'Sam',
       smartFeatures: null,
-      version: 1,
+      version: expect.any(Number) as number,
       keyring,
       emailVerified: false,
       mustVerifyEmail: false,
@@ -51,6 +51,17 @@ describe('POST /api/auth/signup', () => {
       /^__Host-arcafold_session=[\w-]{43}; Max-Age=2592000; Path=\/; HttpOnly; Secure; SameSite=Strict$/,
     );
     expect((await client.request('GET', '/account')).status).toBe(200);
+  });
+
+  it('starts each keyring at a random version, so a copy can’t show it never changed', async () => {
+    const versions = await Promise.all(
+      ['a@example.com', 'b@example.com', 'c@example.com'].map(async (email) => {
+        const res = await signUp(new Client(env), email);
+        return (await res.json<AccountResponse>()).version;
+      }),
+    );
+    expect(new Set(versions).size).toBe(versions.length);
+    expect(versions).not.toContain(1);
   });
 
   it('stores only a hash of the session token', async () => {
@@ -142,8 +153,10 @@ describe('POST /api/auth/prelogin', () => {
 });
 
 describe('POST /api/auth/login', () => {
+  let version: number;
+
   beforeEach(async () => {
-    await signUp(new Client(env));
+    version = (await (await signUp(new Client(env))).json<AccountResponse>()).version;
   });
 
   const login = (loginKey: Uint8Array, email = EMAIL) =>
@@ -158,7 +171,7 @@ describe('POST /api/auth/login', () => {
       smartFeatures: null,
       emailVerified: false,
       mustVerifyEmail: false,
-      version: 1,
+      version,
       keyring,
     });
     expect(client.cookie).toMatch(/^__Host-arcafold_session=/);

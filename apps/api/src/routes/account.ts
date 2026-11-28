@@ -86,15 +86,13 @@ account.put('/keyring', async (c) => {
   );
   if (proof === 'throttled') return c.json({ error: messages.throttled }, 429);
   if (proof === 'wrong') return c.json({ error: messages.wrongPassword }, 403);
-  if (!(await updateKeyring(c.env.DB, current.id, body.version, body.keyring))) {
-    return c.json({ error: messages.conflict }, 409);
-  }
+  const version = await updateKeyring(c.env.DB, current.id, body.version, body.keyring);
+  if (version === null) return c.json({ error: messages.conflict }, 409);
   // A new password (or recovery key) signs out every other device. Every keyring change
-  // does this, whichever slot changed, so it says nothing about the private slot.
+  // does this, whichever slot changed, so the server never has to tell them apart. (Someone
+  // who knows the main password can still sign back in and compare; see docs/security.md.)
   await deleteOtherSessions(c.env.DB, current.id, c.get('session'));
-  return c.json(
-    toAccountResponse({ ...current, keyring: body.keyring, version: body.version + 1 }, c.env),
-  );
+  return c.json(toAccountResponse({ ...current, keyring: body.keyring, version }, c.env));
 });
 
 /** How much of the account's limit (its plan's) is used, across both spaces. Both spaces show it. */

@@ -52,7 +52,10 @@ export interface Keyring {
 export interface AccountResponse {
   email: string;
   name: string;
-  /** Bumped on every keyring change; updates must name the version they started from. */
+  /**
+   * The keyring's version: random and new on every change, never a count, so one copy says
+   * nothing about past changes. A change must name the version it started from.
+   */
   version: number;
   keyring: Keyring;
   /** The answer to the smart features question, or null if it hasn't been asked yet. */
@@ -159,6 +162,7 @@ export interface LoginRequest {
 export interface UpdateKeyringRequest {
   /** Proves the caller knows a password (or the recovery key), not just the session cookie. */
   loginKey: string;
+  /** The version the change started from; a different one means another device got there first. */
   version: number;
   keyring: Keyring;
 }
