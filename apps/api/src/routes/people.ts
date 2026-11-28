@@ -4,7 +4,7 @@ import { fromBase64Url } from '@arcafold/crypto/webcrypto';
 import { FACE_SEGMENT_PAGE, MAX_FACE_SEGMENTS, MAX_PEOPLE } from '@arcafold/types';
 import type { FaceSegmentPage, PersonList } from '@arcafold/types';
 
-import { releaseStorage, reserveStorage } from '../db';
+import { releaseStorage, reserveStorage } from '../account-counts';
 import {
   countFaceSegments,
   countPeople,
@@ -64,12 +64,11 @@ people.put('/faces/:id', async (c) => {
   if ((await countFaceSegments(c.env.DB, tag)) >= MAX_FACE_SEGMENTS) {
     return c.json({ error: 'Too many face results are waiting to be merged.' }, 409);
   }
-  const accountId = c.get('account').id;
-  if (!(await reserveStorage(c.env.DB, accountId, data.length, Date.now()))) {
+  if (!(await reserveStorage(c, data.length, Date.now()))) {
     return c.json({ error: storageFull }, 413);
   }
   if (!(await insertFaceSegment(c.env.DB, tag, { id: id.data, data: body.data }, data.length))) {
-    await releaseStorage(c.env.DB, accountId, data.length);
+    await releaseStorage(c, data.length);
     return c.json({ error: messages.badRequest }, 409);
   }
   return c.body(null, 201);
@@ -80,18 +79,14 @@ people.delete('/faces', async (c) => {
   const body = await readBody(c, deleteFaceSegmentsSchema);
   if (!body) return c.json({ error: messages.badRequest }, 400);
   const freed = await deleteFaceSegments(c.env.DB, c.get('space'), [...new Set(body.ids)]);
-  await releaseStorage(c.env.DB, c.get('account').id, freed);
+  await releaseStorage(c, freed);
   return c.body(null, 204);
 });
 
 /** Forgets every face and person in the space. */
 people.delete('/face-data', async (c) => {
   if (!(await readBody(c, emptySchema))) return c.json({ error: messages.badRequest }, 400);
-  await releaseStorage(
-    c.env.DB,
-    c.get('account').id,
-    await deleteFaceData(c.env.DB, c.get('space')),
-  );
+  await releaseStorage(c, await deleteFaceData(c.env.DB, c.get('space')));
   return c.body(null, 204);
 });
 

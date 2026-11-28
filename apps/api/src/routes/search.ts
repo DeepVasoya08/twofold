@@ -9,7 +9,7 @@ import {
 } from '@arcafold/types';
 import type { SearchSegmentPage, SmartAlbumList, StoredWord, WordList } from '@arcafold/types';
 
-import { releaseStorage, reserveStorage } from '../db';
+import { releaseStorage, reserveStorage } from '../account-counts';
 import { messages, readBody } from '../respond';
 import {
   deleteSearchSegmentsSchema,
@@ -76,13 +76,12 @@ search.put('/search/:id', async (c) => {
   if ((await countSegments(c.env.DB, TABLE, tag)) >= MAX_SEARCH_SEGMENTS) {
     return c.json({ error: 'Too many search results are waiting to be merged.' }, 409);
   }
-  const accountId = c.get('account').id;
-  if (!(await reserveStorage(c.env.DB, accountId, data.length, Date.now()))) {
+  if (!(await reserveStorage(c, data.length, Date.now()))) {
     return c.json({ error: messages.storageFull }, 413);
   }
   const segment = { id: id.data, data: body.data };
   if (!(await insertSegment(c.env.DB, TABLE, tag, segment, data.length))) {
-    await releaseStorage(c.env.DB, accountId, data.length);
+    await releaseStorage(c, data.length);
     return c.json({ error: messages.badRequest }, 409);
   }
   return c.body(null, 201);
@@ -93,7 +92,7 @@ search.delete('/search', async (c) => {
   const body = await readBody(c, deleteSearchSegmentsSchema);
   if (!body) return c.json({ error: messages.badRequest }, 400);
   const freed = await deleteSegments(c.env.DB, TABLE, c.get('space'), [...new Set(body.ids)]);
-  await releaseStorage(c.env.DB, c.get('account').id, freed);
+  await releaseStorage(c, freed);
   return c.body(null, 204);
 });
 
@@ -157,7 +156,7 @@ recordRoutes(
 search.delete('/search-data', async (c) => {
   if (!(await readBody(c, emptySchema))) return c.json({ error: messages.badRequest }, 400);
   const freed = await deleteSearchData(c.env.DB, c.get('space'));
-  await releaseStorage(c.env.DB, c.get('account').id, freed);
+  await releaseStorage(c, freed);
   return c.body(null, 204);
 });
 

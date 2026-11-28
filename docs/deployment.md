@@ -67,7 +67,10 @@ Keep the ID that `wrangler d1 create` prints (`database_id = "…"`); step 3 nee
 `wrangler d1 list` shows it again later.
 
 The Worker itself needs no setup; the first `wrangler deploy` creates it. Leave Workers
-Builds (Git integration) off for it, because GitHub Actions deploys it.
+Builds (Git integration) off for it, because GitHub Actions deploys it. Its Durable Object
+(`AccountCounters`, each account's storage total and counts) needs none either:
+`wrangler deploy` creates it from `migrations` in `apps/api/wrangler.jsonc`, and Durable
+Objects take the Worker's own permissions, so the token below needs nothing more.
 
 ### 2. Create the Cloudflare API token
 

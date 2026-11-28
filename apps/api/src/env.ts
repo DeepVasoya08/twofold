@@ -1,6 +1,10 @@
+import type { AccountCounters } from './counters';
+
 /** Bindings available to the Worker, as declared in wrangler.jsonc. */
 export interface Env {
   BLOBS: R2Bucket;
+  /** Each account's storage total and counts, kept outside the database (src/counters.ts). */
+  COUNTERS: DurableObjectNamespace<AccountCounters>;
   DB: D1Database;
   /**
    * Sends account email (Cloudflare Email Service). Missing in tests and local runs that

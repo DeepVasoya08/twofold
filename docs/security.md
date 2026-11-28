@@ -118,11 +118,12 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   account can only wipe spaces whose keys are on the device. What's left can never be
   decrypted or reached again, but it isn't deleted.
 - **The storage quota keeps a total per account.** Each account may keep its plan's
-  storage of ciphertext (1 GB on Free) across every space it uploads to (`stored_bytes` on
-  `accounts`, the limit from `billing`; see [billing.md](billing.md)). Only the total
-  is stored, never which photos or spaces it is made of, but with few accounts the total can
-  be matched against the sizes of spaces (500 MB = 300 + 200) and so show which spaces,
-  including a private one, belong to an account. Deepu chose an exact per-account cap over a
+  storage of ciphertext (1 GB on Free) across every space it uploads to (the total in the
+  account's counters, outside the database, and the limit from `billing`; see
+  [below](#account-totals-live-outside-the-database) and [billing.md](billing.md)). Only the
+  total is stored, never which photos or spaces it is made of, but with few accounts the
+  current total can be matched against the sizes of spaces (500 MB = 300 + 200) and so show
+  which spaces, including a private one, belong to an account. Deepu chose an exact per-account cap over a
   per-space one knowing this. Uploads are charged to the uploading account when they start,
   and deleted photos are given back to the account that deletes them (storage doesn't know
   who uploaded them), so a member deleting an owner's photo frees the member's quota, not
@@ -131,20 +132,21 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   storage, but sealed records, search and face data and invites live in D1, which is far
   smaller than R2 and serves everyone, and spaces are unlimited (any token opens one). So
   every JSON write to `/api/space/*` and `/api/invites` counts its body (at least 512 bytes)
-  against a daily limit per account, before it runs, in one statement, so parallel writes
-  can't get past it: 32 MiB a day on Free, or 1/256 of a paid plan's storage if that's more
-  (`write_budgets`, `apps/api/src/write-limit.ts`). That is far more than a Free library's
-  records, and a whole paid library's import stays under it. The counter is keyed by an
-  HMAC of the account id under the Worker's secret, so a copy of the database alone doesn't
-  say whose it is, and it is deleted when its day has passed. Once D1 is over 5 GB, every
-  counted write logs its size, so a filling database shows up long before its 10 GB limit.
+  against a daily limit per account, before it runs, and each count runs whole, so parallel
+  writes can't get past it: 32 MiB a day on Free, or 1/256 of a paid plan's storage if
+  that's more (`apps/api/src/write-limit.ts`). That is far more than a Free library's
+  records, and a whole paid library's import stays under it. The day's count is kept with
+  the account's other counts, outside the database
+  ([below](#account-totals-live-outside-the-database)). Once D1 is over 5 GB, every counted
+  write logs its size, so a filling database shows up long before its 10 GB limit.
 - **Infrastructure keeps its own history.** R2 records when each object was uploaded, and
   D1 keeps point-in-time history for its Time Travel window, so a deleted photo's sealed
   row (not its key or contents) can outlive the delete for that long.
 - **Backups keep 30 days of history too.** A nightly export of D1 is kept for 30 days
   ([backups.md](backups.md)). It holds what D1 holds (sealed records, salts, login
-  verifiers, emails, the per-account storage total), so it carries the same signals as Time
-  Travel: earlier copies of each keyring row, and deleted rows for up to 30 days. Each export
+  verifiers, emails, but not the account totals and counts, which live outside it), so it
+  carries the same signals as Time Travel: earlier copies of each keyring row, and deleted
+  rows for up to 30 days. Each export
   is sealed (`crypto_box_seal` of a fresh secretstream key, `@arcafold/crypto/backup`) to a
   public key whose secret half is kept offline, so a leaked export can't be used for
   offline password guessing. A restore drill opens one on the owner's own computer and
@@ -165,6 +167,47 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   little (a real account's row is read either way, but the made-up salt costs one HMAC).
 - The two passwords must differ; the client refuses a new password that already opens
   another slot.
+
+### Account totals live outside the database
+
+Some counts belong to an account and change whenever one of its spaces does: its storage
+total (an upload or a delete in any space), what it added to the database today (any write
+to a space) and its recent wrong invite codes (joining a library from a space). Kept in D1,
+each change would land next to the space rows that changed with it, and D1 keeps earlier
+copies: Time Travel for 30 days and a nightly export kept for 30 days. Two copies a day
+apart would show which accounts' counts moved and which spaces' rows changed in between,
+and with few accounts that lines a private space up with its owner.
+
+So they live in a Durable Object per account instead (`AccountCounters` in
+`apps/api/src/counters.ts`, bound as `COUNTERS`, named after the account id): the storage
+total, and a window for each count (its start and its total). It holds no space ids and no
+list of changes, only the current values, and while an account's spaces change, no row
+outside the spaces' own rows changes in the database (`account-counts.test.ts` checks
+every table that isn't kept per space). Each call reads and writes the object's storage
+synchronously, so it runs whole before the next one starts and parallel uploads can't
+together go over the limit. Deleting the account deletes its counters.
+
+What's left:
+
+- **The counters' storage has Cloudflare's own 30-day history.** Every Durable Object kept
+  in SQLite (the only kind a new Worker can create) has point-in-time recovery for 30 days,
+  and it can't be turned off. Only code running inside the object can reach it: there is no
+  export or dashboard view of past values, and going back means rewinding the object. So
+  reading it takes deploying changed Worker code, and someone who can deploy the Worker can
+  already watch which session uses which space token (above).
+- **The current total can still be matched** against the sizes of spaces by someone who can
+  read both the counters and the database, as the storage quota trade-off above says.
+- **Accounts made before this change** kept their totals in D1 (`stored_bytes` on
+  `accounts`). The first request that needs an account's total moves what is left there to
+  its counters, only once even when requests run in parallel, and leaves 0. Until then the
+  old value doesn't change, so it says nothing about later uploads.
+- **Account routes record a session's last use, to the hour** (`last_active` on
+  `sessions`), and joining a library goes through `/api/invites`, an account route. An hour
+  is far coarser than the changes above, and space routes never record it.
+- **A database restore doesn't rewind the counters**, and they can't be rebuilt from the
+  database or the photo bucket, because nothing there says which spaces are whose. After a
+  rewind, a total still counts photos uploaded after the restore point
+  ([backups.md](backups.md#restore)).
 
 ## Photo storage
 
@@ -265,8 +308,8 @@ name, parent?, deletedAt? }`: it has a `name` rather than an album's `title`, so
   most 128 KiB of ciphertext), and wiping the space removes it. The account's **name** is
   not secret: sign-up sends it in plaintext, and `PUT /api/account/name` changes it with the
   session alone.
-- **Storage used.** Both spaces show the account's total (`GET /api/account/storage`,
-  `stored_bytes`), asked for once the space has loaded and again after its photos change.
+- **Storage used.** Both spaces show the account's total (`GET /api/account/storage`, from
+  its counters), asked for once the space has loaded and again after its photos change.
   Deepu chose this knowing the trade-off: someone with only the main password can see the
   total is larger than the main library's photos explain, which hints that a private space
   exists (photos added to libraries shared with you also count, which gives an innocent

@@ -6,6 +6,7 @@ import { SPACE_HEADER } from '@arcafold/types';
 import type { PhotoPage, UploadKeyResponse, UploadTokenList } from '@arcafold/types';
 
 import type { Env } from './env';
+import { createTestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
@@ -53,7 +54,7 @@ async function listPhotos(c: Client): Promise<PhotoPage> {
 beforeEach(async () => {
   const db = createTestDb();
   sqlite = db.sqlite;
-  env = { DB: db.db, BLOBS: createTestR2().bucket };
+  env = { DB: db.db, BLOBS: createTestR2().bucket, COUNTERS: createTestCounters().namespace };
   owner = new Client(env);
   const keyring = await makeKeyring([newLoginKey(), newLoginKey(), newLoginKey()]);
   await owner.request('POST', '/auth/signup', { email: 'sam@example.com', name: 'Sam', keyring });

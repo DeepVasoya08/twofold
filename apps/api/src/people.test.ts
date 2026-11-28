@@ -13,11 +13,14 @@ import {
 import type { FaceSegmentPage, PersonList } from '@arcafold/types';
 
 import type { Env } from './env';
+import { createTestCounters } from './test/counters';
+import type { TestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
 
 let env: Env;
+let counters: TestCounters;
 let sqlite: DatabaseSync;
 let client: Client;
 
@@ -36,14 +39,19 @@ async function signUp(email: string): Promise<Client> {
   return c;
 }
 
-const stored = () =>
-  (sqlite.prepare('SELECT stored_bytes FROM accounts LIMIT 1').get() as { stored_bytes: number })
-    .stored_bytes;
+const samId = () =>
+  (
+    sqlite.prepare("SELECT id FROM accounts WHERE email = 'sam@example.com'").get() as {
+      id: string;
+    }
+  ).id;
+const stored = () => counters.stored(samId());
 
 beforeEach(async () => {
   const db = createTestDb();
   sqlite = db.sqlite;
-  env = { DB: db.db, BLOBS: createTestR2().bucket };
+  counters = createTestCounters();
+  env = { DB: db.db, BLOBS: createTestR2().bucket, COUNTERS: counters.namespace };
   client = await signUp('sam@example.com');
   useSpace(client, toBase64Url(randomBytes(16)));
 });
@@ -108,11 +116,11 @@ describe('face segments', () => {
   });
 
   it('are refused when storage is full, or too many are waiting', async () => {
-    sqlite.prepare('UPDATE accounts SET stored_bytes = ?').run(STORAGE_SIZES.accountQuota - 10);
+    counters.setStored(samId(), STORAGE_SIZES.accountQuota - 10);
     expect(
       (await client.request('PUT', `/space/faces/${newId()}`, { data: segmentData(100) })).status,
     ).toBe(413);
-    sqlite.prepare('UPDATE accounts SET stored_bytes = 0').run();
+    counters.setStored(samId(), 0);
     const insert = sqlite.prepare(
       'INSERT INTO face_segments (space, id, data, size) VALUES ((SELECT space FROM face_segments LIMIT 1), ?, ?, 1)',
     );

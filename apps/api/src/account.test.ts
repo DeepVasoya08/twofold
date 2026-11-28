@@ -5,6 +5,7 @@ import { KEY_SIZES, SMART_FEATURES_VERSION } from '@arcafold/types';
 import type { AccountResponse, Keyring } from '@arcafold/types';
 
 import type { Env } from './env';
+import { createTestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 
@@ -14,7 +15,7 @@ let keys: [Uint8Array, Uint8Array, Uint8Array];
 let keyring: Keyring;
 
 beforeEach(async () => {
-  env = { DB: createTestDb().db, BLOBS: {} as R2Bucket };
+  env = { DB: createTestDb().db, BLOBS: {} as R2Bucket, COUNTERS: createTestCounters().namespace };
   client = new Client(env);
   keys = [newLoginKey(), newLoginKey(), newLoginKey()];
   keyring = await makeKeyring(keys);

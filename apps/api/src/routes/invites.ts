@@ -6,7 +6,7 @@ import { fromBase64Url, sha256, toBase64Url } from '@arcafold/crypto/webcrypto';
 import { INVITE_TTL_MS } from '@arcafold/types';
 import type { InviterView, JoinerView } from '@arcafold/types';
 
-import { returnAttempt, takeAttempt } from '../db';
+import { countersOf } from '../account-counts';
 import { FAILURE_WINDOW_MS, MAX_FAILURES } from '../proof';
 import { messages, readBody } from '../respond';
 import {
@@ -57,11 +57,6 @@ async function hashToken(schema: typeof inviteHandleSchema, token: string) {
 
 const hashHandle = (handle: string) => hashToken(inviteHandleSchema, handle);
 
-/** Codes are short, so wrong ones are limited per account like wrong passwords. */
-function throttleKey(c: Context<AppEnv>): string {
-  return `invite:${c.get('account').id}`;
-}
-
 invites.post('/', async (c) => {
   const body = await readBody(c, createInviteSchema);
   const handleHash = body && (await hashHandle(body.handle));
@@ -102,14 +97,17 @@ async function joinerSide(c: Context<AppEnv>): Promise<JoinerRef | Response> {
     ? { side: 'code_hash', hash: await hashText(code.data) }
     : { side: 'link_hash', hash: linkHash ?? '' };
   const now = Date.now();
-  const key = throttleKey(c);
-  if ((await takeAttempt(c.env.DB, key, now, now - FAILURE_WINDOW_MS)) > MAX_FAILURES) {
+  // Codes are short, so wrong ones are limited per account like wrong passwords. They're
+  // counted with the account's other counts, outside the database, so that no row there
+  // changes for the account when one of its spaces joins a library.
+  const counters = countersOf(c.env, c.get('account').id);
+  if ((await counters.count('invite tries', 1, now, FAILURE_WINDOW_MS)) > MAX_FAILURES) {
     return c.json({ error: messages.throttled }, 429);
   }
   if (!(await findInvite(c.env.DB, found.side, found.hash, now))) {
     return c.json({ error: gone }, 404);
   }
-  await returnAttempt(c.env.DB, key);
+  await counters.giveBack('invite tries', 1);
   return found;
 }
 

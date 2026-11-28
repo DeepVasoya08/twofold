@@ -6,6 +6,7 @@ import type { DeviceList, Keyring } from '@arcafold/types';
 
 import { ACTIVE_STEP_MS } from './db';
 import type { Env } from './env';
+import { createTestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 
@@ -47,7 +48,7 @@ async function devices(client: Client): Promise<DeviceList['devices']> {
 beforeEach(async () => {
   const test = createTestDb();
   sqlite = test.sqlite;
-  env = { DB: test.db, BLOBS: {} as R2Bucket };
+  env = { DB: test.db, BLOBS: {} as R2Bucket, COUNTERS: createTestCounters().namespace };
   keys = [newLoginKey(), newLoginKey(), newLoginKey()];
   keyring = await makeKeyring(keys);
   laptop = clientOn(MAC_CHROME);

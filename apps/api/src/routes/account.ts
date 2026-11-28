@@ -2,13 +2,13 @@ import { Hono } from 'hono';
 
 import type { AccountStorage, DeviceList } from '@arcafold/types';
 
+import { countersOf, storedBytes } from '../account-counts';
 import {
   deleteAccount,
   deleteOtherSession,
   deleteOtherSessions,
   listDevices,
   storageLimit,
-  storedBytes,
   updateKeyring,
   updateName,
   updateSmartFeatures,
@@ -99,10 +99,9 @@ account.put('/keyring', async (c) => {
 
 /** How much of the account's limit (its plan's) is used, across both spaces. Both spaces show it. */
 account.get('/storage', async (c) => {
-  const accountId = c.get('account').id;
   const [used, limit] = await Promise.all([
-    storedBytes(c.env.DB, accountId),
-    storageLimit(c.env.DB, accountId, Date.now()),
+    storedBytes(c),
+    storageLimit(c.env.DB, c.get('account').id, Date.now()),
   ]);
   return c.json<AccountStorage>({ used, limit });
 });
@@ -145,6 +144,8 @@ account.delete('/', async (c) => {
   if (proof === 'throttled') return c.json({ error: messages.throttled }, 429);
   if (proof === 'wrong') return c.json({ error: messages.wrongPassword }, 403);
   await deleteAccount(c.env.DB, current.id);
+  // Its storage total and counts go with it.
+  await countersOf(c.env, current.id).forget();
   clearSessionCookie(c);
   const setup = mailSetup(c.env);
   if (setup && current.emailVerified) await sendNotice(c, setup, accountDeletedMail(current.email));

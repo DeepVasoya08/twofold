@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PLAN_STORAGE, SPACE_HEADER } from '@arcafold/types';
 
 import type { Env } from './env';
+import { createTestCounters } from './test/counters';
+import type { TestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
@@ -12,10 +14,12 @@ import {
   FREE_DAILY_WRITE_BYTES,
   MIN_WRITE_BYTES,
   PLAN_WRITE_SHARE,
+  WRITE_WINDOW_MS,
   spendWrite,
 } from './write-limit';
 
 let env: Env;
+let counters: TestCounters;
 let sqlite: DatabaseSync;
 
 const newId = () => toBase64Url(randomBytes(16));
@@ -24,7 +28,8 @@ const newMeta = () => toBase64Url(randomBytes(300));
 beforeEach(() => {
   const db = createTestDb();
   sqlite = db.sqlite;
-  env = { DB: db.db, BLOBS: createTestR2().bucket };
+  counters = createTestCounters();
+  env = { DB: db.db, BLOBS: createTestR2().bucket, COUNTERS: counters.namespace };
 });
 
 async function signedIn(email: string): Promise<Client> {
@@ -37,13 +42,12 @@ async function signedIn(email: string): Promise<Client> {
 
 const accountId = (email: string) =>
   (sqlite.prepare('SELECT id FROM accounts WHERE email = ?').get(email) as { id: string }).id;
-const budgets = () =>
-  sqlite.prepare('SELECT key, window_start, bytes FROM write_budgets').all() as {
-    key: string;
-    window_start: number;
-    bytes: number;
-  }[];
-const spentToday = () => budgets().reduce((total, row) => total + row.bytes, 0);
+/** What Sam's account has added to the database today. */
+const spentToday = () => counters.window(accountId('sam@example.com'), 'writes')?.total ?? 0;
+/** Sets what Sam's account has added today, in a day that started at `start`. */
+const setSpent = (total: number, start = Date.now()) => {
+  counters.setWindow(accountId('sam@example.com'), 'writes', { start, total });
+};
 const newAlbum = (c: Client) =>
   c.request('POST', '/space/albums', { id: newId(), meta: newMeta() });
 
@@ -65,7 +69,7 @@ describe('the daily limit on what an account adds to the database', () => {
     const sam = await signedIn('sam@example.com');
     const alex = await signedIn('alex@example.com');
     expect((await newAlbum(sam)).status).toBe(201);
-    sqlite.prepare('UPDATE write_budgets SET bytes = ?').run(FREE_DAILY_WRITE_BYTES - 10);
+    setSpent(FREE_DAILY_WRITE_BYTES - 10);
     const refused = await newAlbum(sam);
     expect(refused.status).toBe(429);
     expect(await refused.json()).toEqual({
@@ -97,9 +101,7 @@ describe('the daily limit on what an account adds to the database', () => {
   it('starts a new day once the old one has passed', async () => {
     const sam = await signedIn('sam@example.com');
     await newAlbum(sam);
-    sqlite
-      .prepare('UPDATE write_budgets SET bytes = ?, window_start = 0')
-      .run(FREE_DAILY_WRITE_BYTES);
+    setSpent(FREE_DAILY_WRITE_BYTES, Date.now() - WRITE_WINDOW_MS);
     expect((await newAlbum(sam)).status).toBe(201);
     expect(spentToday()).toBeLessThan(FREE_DAILY_WRITE_BYTES);
   });
@@ -113,25 +115,26 @@ describe('the daily limit on what an account adds to the database', () => {
          VALUES (?, 'plus', ?, ?, 0)`,
       )
       .run(accountId('sam@example.com'), PLAN_STORAGE.plus, Date.now() + 86_400_000);
-    sqlite.prepare('UPDATE write_budgets SET bytes = ?').run(FREE_DAILY_WRITE_BYTES);
+    setSpent(FREE_DAILY_WRITE_BYTES);
     expect((await newAlbum(sam)).status).toBe(201);
-    sqlite.prepare('UPDATE write_budgets SET bytes = ?').run(PLAN_STORAGE.plus / PLAN_WRITE_SHARE);
+    setSpent(PLAN_STORAGE.plus / PLAN_WRITE_SHARE);
     expect((await newAlbum(sam)).status).toBe(429);
   });
 
-  it('keeps no account id in readable form when the Worker has its secret', async () => {
-    env.EMAIL_CODE_SECRET = 'x'.repeat(40);
+  it('keeps the day’s count out of the database', async () => {
     const sam = await signedIn('sam@example.com');
+    const account = () => sqlite.prepare('SELECT * FROM accounts').all();
+    const before = account();
     await newAlbum(sam);
-    const [row] = budgets();
-    expect(row?.key).toBeDefined();
-    expect(row?.key).not.toContain(accountId('sam@example.com'));
+    expect(spentToday()).toBeGreaterThan(0);
+    expect(account()).toEqual(before);
+    expect(sqlite.prepare('SELECT * FROM write_budgets').all()).toEqual([]);
   });
 
   it('can’t be raced: parallel writes stop at the limit', async () => {
     const sam = await signedIn('sam@example.com');
     await newAlbum(sam);
-    sqlite.prepare('UPDATE write_budgets SET bytes = ?').run(FREE_DAILY_WRITE_BYTES - 3000);
+    setSpent(FREE_DAILY_WRITE_BYTES - 3000);
     const results = await Promise.all(Array.from({ length: 10 }, () => newAlbum(sam)));
     const allowed = results.filter((res) => res.status === 201).length;
     expect(allowed).toBeGreaterThan(0);
@@ -144,11 +147,9 @@ describe('the daily limit on what an account adds to the database', () => {
     const sam = await signedIn('sam@example.com');
     await newAlbum(sam);
     const id = accountId('sam@example.com');
-    expect(await spendWrite(env.DB, 'key', id, 600, Date.now(), Number.MAX_SAFE_INTEGER)).toBe(
-      true,
-    );
+    expect(await spendWrite(env, id, 600, Date.now(), Number.MAX_SAFE_INTEGER)).toBe(true);
     expect(error).not.toHaveBeenCalled();
-    expect(await spendWrite(env.DB, 'key', id, 600, Date.now(), 1)).toBe(true);
+    expect(await spendWrite(env, id, 600, Date.now(), 1)).toBe(true);
     expect(error).toHaveBeenCalledTimes(1);
     expect(String(error.mock.calls[0]?.[0])).toMatch(/^The database is \d+ MB/);
     error.mockRestore();

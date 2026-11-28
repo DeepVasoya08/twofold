@@ -14,6 +14,11 @@ export interface AccountRecord {
   smartFeatures: SmartFeaturesChoice | null;
   /** Whether the owner has proved they can read mail sent to `email`. */
   emailVerified: boolean;
+  /**
+   * Bytes of the account's storage total still in the database from before totals moved to
+   * its counters (src/counters.ts). Moved there the first time the total is used.
+   */
+  unmovedBytes: number;
 }
 
 interface AccountRow {
@@ -25,11 +30,13 @@ interface AccountRow {
   smart_choice: string | null;
   smart_version: number | null;
   email_verified: number;
+  stored_bytes: number;
 }
 
 /** The columns every account read selects, for a query that names accounts `a`. */
 const ACCOUNT_COLUMNS =
-  'a.id, a.email, a.name, a.keyring, a.version, a.smart_choice, a.smart_version, a.email_verified';
+  'a.id, a.email, a.name, a.keyring, a.version, a.smart_choice, a.smart_version, ' +
+  'a.email_verified, a.stored_bytes';
 
 function smartFeaturesOf(row: AccountRow): SmartFeaturesChoice | null {
   if ((row.smart_choice !== 'on' && row.smart_choice !== 'off') || row.smart_version === null) {
@@ -47,6 +54,7 @@ function toRecord(row: AccountRow): AccountRecord {
     version: row.version,
     smartFeatures: smartFeaturesOf(row),
     emailVerified: row.email_verified === 1,
+    unmovedBytes: row.stored_bytes,
   };
 }
 
@@ -64,7 +72,7 @@ export async function findAccountByEmail(
 /** Inserts an account. Returns false if the email is taken. */
 export async function insertAccount(
   db: D1Database,
-  account: Omit<AccountRecord, 'version' | 'smartFeatures'>,
+  account: Omit<AccountRecord, 'version' | 'smartFeatures' | 'unmovedBytes'>,
   now: number,
 ): Promise<boolean> {
   const result = await db
@@ -131,27 +139,6 @@ export const LIMIT_SQL = `COALESCE(
     WHERE account_id = ?2 AND MAX(paid_until, COALESCE(grace_until, 0)) > ?4),
   ?3)`;
 
-/**
- * Adds an upload's bytes to the account's total, only if that stays within the account's
- * limit (its plan's). One statement, so parallel uploads can't together go over, and a plan
- * ending mid-upload can't be raced. Returns false if it would go over.
- */
-export async function reserveStorage(
-  db: D1Database,
-  accountId: string,
-  bytes: number,
-  now: number,
-): Promise<boolean> {
-  const result = await db
-    .prepare(
-      `UPDATE accounts SET stored_bytes = stored_bytes + ?1
-        WHERE id = ?2 AND stored_bytes + ?1 <= ${LIMIT_SQL}`,
-    )
-    .bind(bytes, accountId, STORAGE_SIZES.accountQuota, now)
-    .run();
-  return result.meta.changes === 1;
-}
-
 /** The account's storage limit at `now`, across every space. */
 export async function storageLimit(
   db: D1Database,
@@ -165,26 +152,23 @@ export async function storageLimit(
   return row?.limit_bytes ?? STORAGE_SIZES.accountQuota;
 }
 
-/** How many bytes the account stores across all its spaces (uploads in progress included). */
-export async function storedBytes(db: D1Database, accountId: string): Promise<number> {
-  const row = await db
-    .prepare('SELECT stored_bytes FROM accounts WHERE id = ?')
-    .bind(accountId)
-    .first<{ stored_bytes: number }>();
-  return row?.stored_bytes ?? 0;
-}
-
-/** Gives bytes back to the account that deleted them (never below zero). */
-export async function releaseStorage(
+/**
+ * Takes `bytes` of the storage total the database still holds for the account from before
+ * totals moved to its counters (src/counters.ts), if it still holds that much. Returns
+ * whether it took them, so that only one of several requests moves them.
+ */
+export async function takeUnmovedBytes(
   db: D1Database,
   accountId: string,
   bytes: number,
-): Promise<void> {
-  if (bytes <= 0) return;
-  await db
-    .prepare('UPDATE accounts SET stored_bytes = MAX(stored_bytes - ?, 0) WHERE id = ?')
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      'UPDATE accounts SET stored_bytes = stored_bytes - ?1 WHERE id = ?2 AND stored_bytes >= ?1',
+    )
     .bind(bytes, accountId)
     .run();
+  return result.meta.changes === 1;
 }
 
 export async function deleteAccount(db: D1Database, accountId: string): Promise<void> {
@@ -405,25 +389,6 @@ export function attemptCount(rows: readonly unknown[]): number {
   const row = rows[0] as { failures: number } | undefined;
   if (!row) throw new Error('The attempt was not counted');
   return row.failures;
-}
-
-/** Counts one attempt (see attemptQuery) and returns the count including it. */
-export async function takeAttempt(
-  db: D1Database,
-  email: string,
-  now: number,
-  windowStart: number,
-): Promise<number> {
-  const { results } = await attemptQuery(db, email, now, windowStart).all();
-  return attemptCount(results);
-}
-
-/** Gives back an attempt that turned out not to be a failure. */
-export async function returnAttempt(db: D1Database, email: string): Promise<void> {
-  await db
-    .prepare('UPDATE login_failures SET failures = failures - 1 WHERE email = ? AND failures > 0')
-    .bind(email)
-    .run();
 }
 
 /** Forgets failure counts whose window has passed, and the emails typed with them. */
