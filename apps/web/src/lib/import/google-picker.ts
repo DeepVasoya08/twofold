@@ -5,7 +5,9 @@ import type { ImportItem } from './takeout';
  * Brings photos over from Google Photos with Google's Photos Picker API: the person picks
  * photos in Google Photos itself, and this browser downloads each one and encrypts it before
  * it goes anywhere. Arcafold's server never sees the photos or the Google sign-in; the access
- * token lives in memory only, for as long as the import runs.
+ * token lives in memory only, for as long as the import runs, and is then revoked at Google.
+ * Google's sign-in hands it over in an address that the browser may keep in its history, so
+ * it has to stop working once the import no longer needs it.
  *
  * Google gives each picked photo's file name, media type and creation time, but not its
  * albums, and at most 2,000 photos per pick.
@@ -13,6 +15,8 @@ import type { ImportItem } from './takeout';
 
 export const PICKER_SCOPE = 'https://www.googleapis.com/auth/photospicker.mediaitems.readonly';
 const API = 'https://photospicker.googleapis.com/v1';
+/** Where an access token is ended before it runs out. */
+export const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 
 /** Google's own cap on photos picked at once. */
 export const PICKER_MAX_ITEMS = 2000;
@@ -178,6 +182,28 @@ export function pickerClient(token: string, fetcher: Fetcher = fetch.bind(global
     /** Ends a session once its photos are in, as Google asks. */
     deleteSession: async (id: string): Promise<void> => {
       await call(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+
+    /**
+     * Signs out of Google once nothing more is needed: ends the session, if one was started,
+     * then revokes the token, so it stops working at once rather than when it runs out within
+     * the hour. Best effort, and never throws: a token that can't be revoked still runs out.
+     */
+    signOut: async (sessionId: string | null): Promise<void> => {
+      if (sessionId !== null) {
+        await call(`/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }).catch(
+          () => undefined,
+        );
+      }
+      try {
+        await fetcher(GOOGLE_REVOKE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ token }).toString(),
+        });
+      } catch {
+        // It runs out within the hour anyway.
+      }
     },
   };
 }

@@ -22,8 +22,11 @@ import type { NewPhoto } from '@arcafold/core/library/space-store';
 interface ImportsValue extends ImporterState {
   /** Whether an import is going. */
   running: boolean;
-  /** Starts an import; `onDone` is called when it ends. */
-  start: (jobs: readonly ImportJob[], onDone?: () => void) => void;
+  /**
+   * Starts an import; `onDone` is called when it ends, including when the vault locks.
+   * Returns false, starting nothing, while another one runs.
+   */
+  start: (jobs: readonly ImportJob[], onDone?: () => void) => boolean;
   stop: () => void;
   /** Clears a finished import, for another. */
   reset: () => void;

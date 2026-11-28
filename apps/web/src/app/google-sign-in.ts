@@ -6,7 +6,8 @@ import { PICKER_SCOPE } from '../lib/import/google-picker';
  * GOOGLE_REDIRECT_PATH with an access token in the URL fragment, which never reaches any
  * server; that page hands the token to this one over a BroadcastChannel (the app's
  * Cross-Origin-Opener-Policy cuts the window off from its opener) and closes. The token is
- * only ever held in memory.
+ * only ever held in memory, but the browser may keep that address in its history, so it is
+ * revoked at Google once the import no longer needs it (`signOut` in google-picker.ts).
  */
 
 export const GOOGLE_REDIRECT_PATH = '/import/google/done';

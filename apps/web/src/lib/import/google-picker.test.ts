@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  GOOGLE_REVOKE_URL,
   PICKED_PHOTO_SIZE_ESTIMATE,
   PickerError,
   parseDuration,
@@ -126,6 +127,35 @@ describe('pickerClient', () => {
       Promise.resolve(json({ ...SESSION, pickerUri: 'javascript:alert(1)' })),
     );
     await expect(notHttps.createSession()).rejects.toThrow(PickerError);
+  });
+
+  it('signs out by ending the session, then revoking the token at Google', async () => {
+    const fetcher = vi.fn<Fetch>(() => Promise.resolve(new Response(null, { status: 200 })));
+    await pickerClient('token-3', fetcher).signOut('session-1');
+    expect(fetcher.mock.calls.map(([url, init]) => [init?.method, url])).toEqual([
+      ['DELETE', 'https://photospicker.googleapis.com/v1/sessions/session-1'],
+      ['POST', GOOGLE_REVOKE_URL],
+    ]);
+    const revoke = fetcher.mock.calls[1]?.[1];
+    expect(revoke?.headers).toEqual({ 'Content-Type': 'application/x-www-form-urlencoded' });
+    // In the body, never the address, so it isn't kept in logs along the way.
+    expect(revoke?.body).toBe('token=token-3');
+    expect(GOOGLE_REVOKE_URL).toBe('https://oauth2.googleapis.com/revoke');
+  });
+
+  it('still revokes when the session can’t be ended, and never throws', async () => {
+    const fetcher = vi.fn<Fetch>((url) =>
+      url === GOOGLE_REVOKE_URL
+        ? Promise.reject(new TypeError('Failed to fetch'))
+        : Promise.resolve(json({}, 401)),
+    );
+    await expect(pickerClient('t', fetcher).signOut('session-1')).resolves.toBeUndefined();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls[1]?.[0]).toBe(GOOGLE_REVOKE_URL);
+    // Without a session, only the token is revoked.
+    const plain = vi.fn<Fetch>(() => Promise.resolve(new Response(null, { status: 200 })));
+    await pickerClient('t', plain).signOut(null);
+    expect(plain.mock.calls.map(([url]) => url)).toEqual([GOOGLE_REVOKE_URL]);
   });
 });
 

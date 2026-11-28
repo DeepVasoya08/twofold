@@ -148,7 +148,7 @@ describe('Importer', () => {
     expect(importer.getState()).toMatchObject({ phase: 'done', imported: 1, stopped: true });
   });
 
-  it('drops everything when the vault locks', async () => {
+  it('drops everything when the vault locks, and says the import ended, once', async () => {
     const { importer, shown } = setup();
     const onDone = vi.fn();
     importer.start([job('a.jpg')], onDone);
@@ -157,6 +157,18 @@ describe('Importer', () => {
     await settle();
     expect(importer.getState().phase).toBe('idle');
     expect(shown).toEqual([]);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    importer.dispose();
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts nothing while another import runs, and says so', async () => {
+    const { importer } = setup();
+    const onDone = vi.fn();
+    expect(importer.start([job('a.jpg')])).toBe(true);
+    expect(importer.start([job('b.jpg')], onDone)).toBe(false);
+    await finish(importer);
+    expect(importer.getState()).toMatchObject({ phase: 'done', total: 1 });
     expect(onDone).not.toHaveBeenCalled();
   });
 });
