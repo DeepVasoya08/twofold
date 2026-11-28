@@ -50,7 +50,8 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
   (`run_worker_first`); other paths are answered from assets when a file matches, and
   unknown `/api/*` routes return 404 rather than the app shell. Stores and serves
   ciphertext; never receives plaintext photos, passwords, or keys. R2 object keys are
-  random IDs. D1 holds metadata. Schema changes are SQL files in `apps/api/migrations`,
+  random names the server picks for each upload. D1 holds metadata, keyed by space and id:
+  ids are unique only within their space. Schema changes are SQL files in `apps/api/migrations`,
   applied on deploy.
   A second Worker, `arcafold-backup` (`src/backup`, `wrangler.backup.jsonc`), has no
   routes: every hour it copies photo files into the backup bucket
@@ -68,7 +69,7 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
   - `/api/space/*`: one space's encrypted photos and albums, addressed by the
     `x-arcafold-space` header. Uploads are two steps: `POST /photos` (id, sealed metadata,
     sizes), then `PUT /photos/:id/thumb` and `/full` together (ciphertext, streamed to R2 at
-    `photos/<id>/<part>`). Whichever file lands second sees the other and commits the photo,
+    `photos/<blob>/<part>`, where `blob` is the photo row's random name for its files). Whichever file lands second sees the other and commits the photo,
     answering `{ committed: true }`; `POST /photos/:id/commit` is only a fallback for when
     neither saw the other. Also listing (paged by id),
     downloads, `GET /thumbs?ids=a,b,c` (up to 48 encrypted previews in one response, each

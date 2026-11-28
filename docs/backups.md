@@ -162,9 +162,9 @@ Copies keep the photo bucket's names, so a restore copies `r2/<name>` back to `<
 The photo's database record must exist too: if it was deleted, rewind the database first
 (Time Travel, above).
 
-- **One photo:** with its ID (from the database row),
-  `pnpm exec wrangler r2 object get arcafold-backups/r2/photos/<id>/full --file full --remote`
-  then `pnpm exec wrangler r2 object put arcafold-blobs/photos/<id>/full --file full --remote`,
+- **One photo:** with the name of its files (the `blob` column of its database row),
+  `pnpm exec wrangler r2 object get arcafold-backups/r2/photos/<blob>/full --file full --remote`
+  then `pnpm exec wrangler r2 object put arcafold-blobs/photos/<blob>/full --file full --remote`,
   and the same for `thumb`. Delete the local files afterwards.
 - **Everything:** wrangler can't list a bucket, so use rclone with an R2 API token
   (**R2 → Manage API tokens**, Object Read & Write on both buckets):

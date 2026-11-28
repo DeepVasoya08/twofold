@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 import { App } from './App';
 import type { AccountState } from './app/account';
+import { forgetNames } from './app/addresses';
 import { Providers } from './app/Providers';
 import { MemoryRouter } from './app/router';
+import { paths } from './app/routes';
 import { emptyVaults, mockVaults } from './app/vault';
 import type { VaultsState } from './app/vault';
 import {
@@ -70,8 +72,8 @@ describe('App', () => {
   it.each([
     ['/photos', 'Photos'],
     ['/albums', 'Albums'],
-    ['/albums/kyoto', 'Kyoto in autumn'],
-    ['/albums/missing', 'Album not found'],
+    [paths.album('kyoto'), 'Kyoto in autumn'],
+    [paths.album('missing'), 'Album not found'],
     ['/favorites', 'Favorites'],
     ['/files', 'Files'],
     ['/search', 'Search'],
@@ -151,9 +153,27 @@ describe('App', () => {
   });
 
   it('opens a photo with its details', () => {
-    const html = render('/photos/p006');
+    const html = render(paths.photo('p006'));
     expect(html).toContain('Kyoto, Japan');
     expect(html).toContain('aria-label="Next photo"');
+    // Saving it names it by when it was taken, never by its id.
+    expect(html).toMatch(/download="\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}"/);
+    expect(html).not.toContain('p006');
+  });
+
+  it('never puts an id in an address it links to', () => {
+    const ids = /\/(p\d{3}|kyoto|lisbon|monsoon|celebrations|sundays|someday)\b/;
+    for (const path of ['/photos', '/albums', paths.album('kyoto'), '/files']) {
+      const hrefs = [...render(path).matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
+      expect(hrefs.length).toBeGreaterThan(0);
+      for (const href of hrefs) expect(href).not.toMatch(ids);
+    }
+  });
+
+  it('sends an address from before Arcafold locked on to its list, showing nothing of it', () => {
+    const before = [paths.album('kyoto'), paths.photo('p006'), paths.shareAlbum('kyoto')];
+    forgetNames();
+    for (const path of before) expect(heading(render(path))).toBeUndefined();
   });
 
   it('shows empty states for an empty library', () => {
@@ -161,7 +181,7 @@ describe('App', () => {
     expect(render('/photos', mainSession(), empty)).toContain('Your library is ready');
     expect(render('/favorites', mainSession(), empty)).toContain('No favorites yet');
     expect(render('/files', mainSession(), empty)).toContain('No files yet');
-    expect(render('/photos/p001', mainSession(), empty)).toContain(
+    expect(render(paths.photo('p001'), mainSession(), empty)).toContain(
       'isn&#x27;t in your vault anymore',
     );
   });
@@ -172,11 +192,11 @@ describe('App', () => {
     expect(html).toContain('aria-label="Select all of October 2026"');
     expect(html).toMatch(/aria-label="Select photo from [^"]+" aria-pressed="false"/);
     expect(render('/favorites')).toContain('>Select<');
-    expect(render('/albums/kyoto')).toContain('>Select<');
+    expect(render(paths.album('kyoto'))).toContain('>Select<');
   });
 
   it('offers actions on every album', () => {
-    expect(render('/albums/kyoto')).toContain('aria-label="Actions for Kyoto in autumn"');
+    expect(render(paths.album('kyoto'))).toContain('aria-label="Actions for Kyoto in autumn"');
     expect(render('/albums')).toContain('aria-label="Actions for Lisbon weekend"');
   });
 
@@ -185,7 +205,7 @@ describe('App', () => {
   });
 
   it('never hints at a private space from the main library', () => {
-    for (const path of ['/photos', '/albums', '/favorites', '/settings', '/photos/p006']) {
+    for (const path of ['/photos', '/albums', '/favorites', '/settings', paths.photo('p006')]) {
       const html = render(path);
       expect(html).not.toContain('>Private<');
       expect(html).not.toContain('Keepsakes');

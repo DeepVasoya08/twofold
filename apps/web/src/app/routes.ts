@@ -1,4 +1,10 @@
-/** Every screen the app can show, parsed from the URL path. */
+import { idNamed, nameFor } from './addresses';
+
+/**
+ * Every screen the app can show, parsed from the URL path. Addresses name photos, albums,
+ * files, folders and people by random names that last until Arcafold locks (see
+ * `addresses.ts`), never by their ids; a route holds the id the name stands for.
+ */
 export type Route =
   | { name: 'welcome' }
   | { name: 'privacy' }
@@ -31,13 +37,19 @@ export type Route =
   | { name: 'settings' }
   /** Bringing photos in from a Google Photos export. */
   | { name: 'import' }
-  | { name: 'share' }
+  /** Inviting someone to the library, or to one album, folder or file (`albumId`). */
+  | { name: 'share'; albumId: string | null }
   /** Someone's invite link. The token only names the invite; it holds no key. */
   | { name: 'join'; token: string }
   /** Typing in an invite code someone sent. */
   | { name: 'join-code' }
   /** A hidden page that measures how fast this device runs Smart search. */
   | { name: 'speed-test' }
+  /**
+   * An address from before Arcafold last locked, whose name stands for nothing now: it goes
+   * on to the list it was in (`to`), the same wherever it came from.
+   */
+  | { name: 'gone'; to: string }
   | { name: 'not-found' };
 
 export const paths = {
@@ -51,11 +63,11 @@ export const paths = {
   recover: '/recover',
   gallery: '/photos',
   albums: '/albums',
-  album: (albumId: string) => `/albums/${encodeURIComponent(albumId)}`,
-  smartAlbum: (albumId: string) => `/albums/smart/${encodeURIComponent(albumId)}`,
+  album: (albumId: string) => `/albums/${nameFor(albumId)}`,
+  smartAlbum: (albumId: string) => `/albums/smart/${nameFor(albumId)}`,
   favorites: '/favorites',
   files: '/files',
-  folder: (folderId: string) => `/files/folder/${encodeURIComponent(folderId)}`,
+  folder: (folderId: string) => `/files/folder/${nameFor(folderId)}`,
   /**
    * A file, opened from an album (by its id) or a folder when `from` says so, so its back
    * link returns there.
@@ -64,14 +76,14 @@ export const paths = {
     const context: PhotoContext | undefined =
       typeof from === 'string' ? { kind: 'album', albumId: from } : from;
     const query = context && context.kind !== 'all' ? `?from=${formatContext(context)}` : '';
-    return `/files/${encodeURIComponent(fileId)}${query}`;
+    return `/files/${nameFor(fileId)}${query}`;
   },
   trash: '/recently-deleted',
   search: '/search',
   people: '/people',
-  person: (groupId: string) => `/people/${encodeURIComponent(groupId)}`,
+  person: (groupId: string) => `/people/${nameFor(groupId)}`,
   photo: (photoId: string, from?: PhotoContext) => {
-    const base = `/photos/${encodeURIComponent(photoId)}`;
+    const base = `/photos/${nameFor(photoId)}`;
     return from && from.kind !== 'all' ? `${base}?from=${formatContext(from)}` : base;
   },
   settings: '/settings',
@@ -80,7 +92,7 @@ export const paths = {
   importFrom: (from: 'apple') => `/settings/import?from=${from}`,
   share: '/settings/share',
   /** Inviting someone to one album rather than the whole library. */
-  shareAlbum: (albumId: string) => `/settings/share?album=${encodeURIComponent(albumId)}`,
+  shareAlbum: (albumId: string) => `/settings/share/${nameFor(albumId)}`,
   /** An invite link's path. */
   join: (token: string) => `/join/${token}`,
   /** Where an invite code is typed in. */
@@ -108,12 +120,6 @@ export function withNext(path: string, next: string | null): string {
   return next === null ? path : `${path}?next=${encodeURIComponent(next)}`;
 }
 
-/** The album a share link names, if it's for one album. */
-export function parseShareAlbum(search: string): string | null {
-  const album = new URLSearchParams(search).get('album');
-  return album === null ? null : decodeSegment(album);
-}
-
 const staticRoutes: Record<string, Route> = {
   '/': { name: 'welcome' },
   '/privacy': { name: 'privacy' },
@@ -132,52 +138,74 @@ const staticRoutes: Record<string, Route> = {
   '/people': { name: 'people' },
   '/settings': { name: 'settings' },
   '/settings/import': { name: 'import' },
-  '/settings/share': { name: 'share' },
+  '/settings/share': { name: 'share', albumId: null },
   '/join': { name: 'join-code' },
   '/lab/speed': { name: 'speed-test' },
 };
 
-function decodeSegment(segment: string): string | null {
-  try {
-    const decoded = decodeURIComponent(segment);
-    return decoded.length > 0 && !decoded.includes('/') ? decoded : null;
-  } catch {
-    return null;
-  }
+/** What every name in an address looks like (see `addresses.ts`). */
+const NAME = /^[A-Za-z0-9_-]{22}$/;
+
+/** The id a name in an address or query stands for, or null if it names nothing now. */
+function namedId(segment: string | undefined): string | null {
+  return segment !== undefined && NAME.test(segment) ? idNamed(segment) : null;
 }
+
+/** Addresses that end in a name: where each leads, and the list it goes back to if stale. */
+const namedRoutes: readonly { pattern: RegExp; route: (id: string) => Route; list: string }[] = [
+  {
+    pattern: /^\/albums\/smart\/([^/]+)$/,
+    route: (albumId) => ({ name: 'smart-album', albumId }),
+    list: paths.albums,
+  },
+  {
+    pattern: /^\/albums\/([^/]+)$/,
+    route: (albumId) => ({ name: 'album', albumId }),
+    list: paths.albums,
+  },
+  {
+    pattern: /^\/people\/([^/]+)$/,
+    route: (groupId) => ({ name: 'person', groupId }),
+    list: paths.people,
+  },
+  {
+    pattern: /^\/files\/folder\/([^/]+)$/,
+    route: (folderId) => ({ name: 'folder', folderId }),
+    list: paths.files,
+  },
+  {
+    pattern: /^\/files\/([^/]+)$/,
+    route: (fileId) => ({ name: 'file', fileId }),
+    list: paths.files,
+  },
+  {
+    pattern: /^\/photos\/([^/]+)$/,
+    route: (photoId) => ({ name: 'photo', photoId }),
+    list: paths.gallery,
+  },
+  {
+    pattern: /^\/settings\/share\/([^/]+)$/,
+    route: (albumId) => ({ name: 'share', albumId }),
+    list: paths.albums,
+  },
+];
 
 export function matchRoute(pathname: string): Route {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   const staticRoute = staticRoutes[path];
   if (staticRoute) return staticRoute;
 
-  const smart = /^\/albums\/smart\/([^/]+)$/.exec(path);
-  const smartId = smart?.[1] === undefined ? null : decodeSegment(smart[1]);
-  if (smartId) return { name: 'smart-album', albumId: smartId };
-
-  const album = /^\/albums\/([^/]+)$/.exec(path);
-  const albumId = album?.[1] === undefined ? null : decodeSegment(album[1]);
-  if (albumId) return { name: 'album', albumId };
-
-  const person = /^\/people\/([^/]+)$/.exec(path);
-  const groupId = person?.[1] === undefined ? null : decodeSegment(person[1]);
-  if (groupId) return { name: 'person', groupId };
-
   const join = /^\/join\/([^/]+)$/.exec(path);
   if (join?.[1] !== undefined && LINK_TOKEN.test(join[1])) return { name: 'join', token: join[1] };
 
-  const folder = /^\/files\/folder\/([^/]+)$/.exec(path);
-  const folderId = folder?.[1] === undefined ? null : decodeSegment(folder[1]);
-  if (folderId) return { name: 'folder', folderId };
-
-  const file = /^\/files\/([^/]+)$/.exec(path);
-  const fileId = file?.[1] === undefined ? null : decodeSegment(file[1]);
-  if (fileId) return { name: 'file', fileId };
-
-  const photo = /^\/photos\/([^/]+)$/.exec(path);
-  const photoId = photo?.[1] === undefined ? null : decodeSegment(photo[1]);
-  if (photoId) return { name: 'photo', photoId };
-
+  for (const { pattern, route, list } of namedRoutes) {
+    const segment = pattern.exec(path)?.[1];
+    if (segment === undefined) continue;
+    // Anything but one of the app's own names was never an address it made.
+    if (!NAME.test(segment)) return { name: 'not-found' };
+    const id = namedId(segment);
+    return id === null ? { name: 'gone', to: list } : route(id);
+  }
   return { name: 'not-found' };
 }
 
@@ -196,41 +224,41 @@ export type PhotoContext =
   | { kind: 'smart'; albumId: string }
   | { kind: 'person'; groupId: string };
 
+/** The `from` of an address: the list's kind, and its name where it is one album or person. */
 function formatContext(context: PhotoContext): string {
   switch (context.kind) {
     case 'album':
-      return `album:${encodeURIComponent(context.albumId)}`;
+      return `album:${nameFor(context.albumId)}`;
     case 'folder':
-      return `folder:${encodeURIComponent(context.folderId)}`;
+      return `folder:${nameFor(context.folderId)}`;
     case 'smart':
-      return `smart:${encodeURIComponent(context.albumId)}`;
+      return `smart:${nameFor(context.albumId)}`;
     case 'person':
-      return `person:${encodeURIComponent(context.groupId)}`;
+      return `person:${nameFor(context.groupId)}`;
     default:
       return context.kind;
   }
 }
 
+/** Which list a photo was opened from. A name from before Arcafold last locked means none. */
 export function parsePhotoContext(search: string): PhotoContext {
   const from = new URLSearchParams(search).get('from');
   if (from === 'favorites') return { kind: 'favorites' };
   if (from === 'search') return { kind: 'search' };
   if (from === 'documents') return { kind: 'documents' };
-  if (from?.startsWith('album:')) {
-    const albumId = decodeSegment(from.slice('album:'.length));
-    if (albumId) return { kind: 'album', albumId };
+  const [kind, name] = from?.split(':') ?? [];
+  const id = namedId(name);
+  if (id === null) return { kind: 'all' };
+  switch (kind) {
+    case 'album':
+      return { kind: 'album', albumId: id };
+    case 'folder':
+      return { kind: 'folder', folderId: id };
+    case 'smart':
+      return { kind: 'smart', albumId: id };
+    case 'person':
+      return { kind: 'person', groupId: id };
+    default:
+      return { kind: 'all' };
   }
-  if (from?.startsWith('folder:')) {
-    const folderId = decodeSegment(from.slice('folder:'.length));
-    if (folderId) return { kind: 'folder', folderId };
-  }
-  if (from?.startsWith('smart:')) {
-    const albumId = decodeSegment(from.slice('smart:'.length));
-    if (albumId) return { kind: 'smart', albumId };
-  }
-  if (from?.startsWith('person:')) {
-    const groupId = decodeSegment(from.slice('person:'.length));
-    if (groupId) return { kind: 'person', groupId };
-  }
-  return { kind: 'all' };
 }

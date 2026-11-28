@@ -20,6 +20,16 @@ export function takenName(takenAt: string): string {
   return `${localDate(date)} ${time}`;
 }
 
+/**
+ * The name of a photo saved straight from the viewer, which hands the browser the decrypted
+ * original as it is: when it was taken, without dots (`2026-10-19 14-32-05`), so that the
+ * browser adds the extension of the file's own type. Never anything that names the photo,
+ * like its id.
+ */
+export function viewerSaveName(takenAt: string): string {
+  return takenName(takenAt).replace(/\./g, '-');
+}
+
 /** A file's own name split into its base and extension (without the dot). */
 function splitName(name: string): { base: string; extension: string } {
   const length = fileExtension(name).length;

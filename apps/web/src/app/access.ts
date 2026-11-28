@@ -35,6 +35,10 @@ export function redirectFor(
     case 'join-code':
       if (status === 'unlocked') return null;
       return withNext(status === 'locked' ? paths.unlock : paths.login, paths.joinCode);
+    case 'gone':
+      // An address from before Arcafold last locked: its list, once unlocked.
+      if (status === 'unlocked') return route.to;
+      return status === 'locked' ? paths.unlock : paths.login;
     case 'recovery-key':
       // Step 2 of sign-up, or a new key from Settings (main library only).
       if (options.signingUp) return null;

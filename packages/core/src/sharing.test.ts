@@ -1414,3 +1414,34 @@ describe('a share that names your own albums or folders', () => {
     expect(w.server.photos.get(added.id)?.token).toBe(bobToken);
   });
 });
+
+describe('a share whose photos use your own ids', () => {
+  it('leaves your photo as it is, and what you do with it stays in your library', async () => {
+    const w = await world();
+    const bobsOwn = remoteStore(w.bob, w.server.api);
+    const mine = await bobsOwn.add(PHOTO, []);
+    const alices = remoteStore(w.alice, w.server.api);
+    const trips = await alices.createAlbum('Trips');
+    const hers = await alices.add(PHOTO, [trips.id]);
+    // Ids are unique per space only, so Alice's library may hold a photo with Bob's id.
+    const reusing: SpaceStore = {
+      ...alices,
+      list: async () => {
+        const listed = await alices.list();
+        return { ...listed, photos: listed.photos.map((photo) => ({ ...photo, id: mine.id })) };
+      },
+    };
+    const bobs = combinedStore(bobsOwn, () =>
+      Promise.resolve([{ id: 'joined', name: 'Alice', store: reusing }]),
+    );
+    const { photos } = await bobs.list();
+    expect(photos.filter((photo) => photo.id === mine.id)).toEqual([
+      expect.objectContaining({ albumIds: [] }),
+    ]);
+    expect(photos.find((photo) => photo.id === mine.id)?.library).toBeUndefined();
+
+    await bobs.remove(mine.id);
+    expect(w.server.photos.has(mine.id)).toBe(false);
+    expect(w.server.photos.has(hers.id)).toBe(true);
+  });
+});

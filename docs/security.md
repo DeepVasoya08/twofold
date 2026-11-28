@@ -90,6 +90,34 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
 - Setting up a private space from the main library writes a new slot 2, replacing any
   private space that was there (the main library cannot know). The dialog says so to
   everyone, always.
+- **Ids are unique only within their space.** Every table the device names records in is
+  keyed by space and id (`apps/api/migrations/0029_per_space_ids.sql`), so the same id can
+  be used in two spaces. Adding a record can only ever find that the open space already has
+  its id: asked about an id the private space uses, the main library (or someone it was
+  shared with, after they're removed) gets the same answer as for a new one. Each upload's
+  files get a name of their own from the server (see "What the server keeps"), so two
+  spaces' photos never share a file, and a file is only ever reached through its own
+  space's row.
+
+### Addresses hold no ids
+
+The web app's addresses never hold an id. A photo, album, smart album, file, folder or
+person is named in an address (and in a photo's `?from=`) by a random name it gets the
+first time an address points at it, and every name is forgotten when Arcafold locks or
+signs out (`apps/web/src/app/addresses.ts`). So the tab's Back button and the browser's
+own history (90 days in Chrome) only ever hold names that mean nothing afterwards. After a
+lock, any of them leads to the list it was in (Photos, Albums, Files or People), the same
+way whether it came from the main library or the private space, and the server has never
+seen one, so it can't be asked about. A page reload locks, so it forgets the names too.
+
+A photo saved straight from the viewer is named by when it was taken (with no dot, so the
+browser adds its type's extension), never by its id. Copies saved from a selection or an
+album are named by date too (see "Downloading copies").
+
+What the browser still keeps: which kinds of pages were open and when (that an album was
+open at 21:40, say), and the names of saved copies. Someone holding the unlocked browser
+can tell that Arcafold was used, but not in which space, nor match a page to anything the
+main library or the server holds.
 
 ### Trade-offs we accepted
 
@@ -176,8 +204,11 @@ other accounts; see [Sharing](#sharing).
   under a `crypto_kdf` subkey of the space key (context `arcspace`). The associated data is
   the record's kind and id, so the server can't swap one record for another, and the
   plaintext is padded to 256-byte blocks. Records that don't open are left out.
-- **What the server keeps.** Per photo: a random id, the space tag, the sealed record and
-  the two ciphertext sizes; R2 objects are `photos/<id>/thumb` and `photos/<id>/full`.
+- **What the server keeps.** Per photo: its id (random, from the device, and unique only
+  within its space), the space tag, the sealed record, the two ciphertext sizes and a
+  random name for its files that the server picks for each upload (`blob`); R2 objects
+  are `photos/<name>/thumb` and `photos/<name>/full`, so they say nothing about a photo's
+  id or space. Photos from before ids were per space keep their id as that name.
   Rows carry no timestamps; `pending_since` is set only while an upload hasn't been
   committed, so abandoned uploads in a space are cleaned up after a day.
 - **Uploads** are created, then both files are sent with their declared sizes (checked
@@ -372,10 +403,12 @@ under). It never gets the space key or the space id.
   learning it. Photos from a joined library appear in the joiner's open space, marked with
   the owner's name, and can't be moved to the joiner's other space.
 - **Your own ids win.** A joined library, album or folder lists its albums and folders in
-  records its owner seals, so it could name one of yours. The joiner's device leaves out
-  any entry with an id of its own albums or folders, with any folder listed inside one, and
-  keeps a share's photos out of its own albums. What you add to, make in or rename in your
-  own album or folder stays in your own space, sealed under your keys.
+  records its owner seals, so it could name one of yours, and since ids are unique only
+  within a space, its photos can have your photos' ids. The joiner's device leaves out any
+  entry with an id of its own albums, folders or photos, with any folder listed inside one,
+  and keeps a share's photos out of its own albums. What you add to, make in or rename in
+  your own album or folder stays in your own space, sealed under your keys, and what you do
+  to your own photo is done to yours.
 - **Stopping.** The owner removes a member (`DELETE /api/space/members/:id`) and that share
   token stops working at once; a member can also leave (`DELETE /api/space/membership`).
   Deleting an account leaves the libraries its reachable spaces joined, and wiping a space

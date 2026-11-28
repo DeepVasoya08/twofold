@@ -21,6 +21,8 @@ import * as ops from '@arcafold/core/account';
 import { leaveAll } from '@arcafold/core/sharing';
 import type { PendingSignUp, Session, Space } from '@arcafold/core/account';
 
+import { forgetNames } from './addresses';
+
 /**
  * Who is signed in, and whether their keys are in memory. Keys live only in this state:
  * locking, signing out or reloading the page forgets them.
@@ -175,6 +177,8 @@ export function AccountProvider({
 
   const dropKeys = useCallback((next: AccountState) => {
     keysDropped.current += 1;
+    // Addresses from before stop working: Back and the browser's history lead nowhere.
+    forgetNames();
     setGeneration((current) => current + 1);
     setState(next);
   }, []);
