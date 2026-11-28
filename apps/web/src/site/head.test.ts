@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { faq } from './faq';
-import { headTags, normalizeSiteUrl, robotsTxt, sitemapXml } from './head';
+import { headTags, normalizeSiteUrl, robotsTxt, securityTxt, sitemapXml } from './head';
 import { publicPage, publicPages } from './pages';
 
 const site = 'https://photos.example.com/';
@@ -87,5 +87,25 @@ describe('sitemap and robots.txt', () => {
     expect(robotsTxt(site)).toBe(
       'User-agent: *\nDisallow: /api/\n\nSitemap: https://photos.example.com/sitemap.xml\n',
     );
+  });
+});
+
+describe('security.txt', () => {
+  it('says where to report a problem, and runs out within a year of the build', () => {
+    expect(securityTxt(site, 'security@example.com', '2026-11-28')).toBe(
+      [
+        'Contact: mailto:security@example.com',
+        'Expires: 2027-11-23T00:00:00.000Z',
+        'Preferred-Languages: en',
+        'Canonical: https://photos.example.com/.well-known/security.txt',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('refuses a contact or date it can’t use', () => {
+    expect(() => securityTxt(site, 'not an address', '2026-11-28')).toThrow(/email address/);
+    expect(() => securityTxt(site, 'a@b.c\nContact: mailto:x@evil.test', '2026-11-28')).toThrow();
+    expect(() => securityTxt(site, 'security@example.com', 'soon')).toThrow(/date/);
   });
 });

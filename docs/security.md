@@ -18,6 +18,9 @@ non-negotiable; this document is the threat model and key design as they stand.
   `Strict-Transport-Security` makes browsers use HTTPS only, ahead of a custom domain.
 - API responses get their own, stricter headers (`default-src 'none'`, `X-Frame-Options:
 DENY`, `no-referrer`, `nosniff`, `Cache-Control: no-store`) in `apps/api/src/app.ts`.
+- `/.well-known/security.txt` (RFC 9116) says where to report a security problem: the
+  contact address the legal pages give (`apps/web/src/legal/details.ts`). It is written at
+  build time and runs out a little under a year later, so every deploy renews it.
 - CI runs `pnpm audit --audit-level high` on every PR and push to `main`. An advisory with
   no fixed version, reached only by dev or build tools, may be ignored by its GHSA id under
   `auditConfig.ignoreGhsas` in `pnpm-workspace.yaml`, with a note saying why; take it out

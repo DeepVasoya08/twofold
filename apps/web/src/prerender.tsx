@@ -5,7 +5,8 @@ import { MemoryRouter } from './app/router';
 import { Privacy } from './screens/Privacy';
 import { Terms } from './screens/Terms';
 import { Welcome } from './screens/Welcome';
-import { headTags, robotsTxt, sitemapXml } from './site/head';
+import { legalDetails } from './legal/details';
+import { SECURITY_TXT_PATH, headTags, robotsTxt, securityTxt, sitemapXml } from './site/head';
 import { publicPages } from './site/pages';
 import type { PublicRoute } from './site/pages';
 
@@ -41,5 +42,14 @@ export function prerender(siteUrl: string, lastModified: string): PrerenderedFil
     })),
     { file: 'sitemap.xml', content: sitemapXml(publicPages, siteUrl, lastModified) },
     { file: 'robots.txt', content: robotsTxt(siteUrl) },
+    // Security reports go to the same address as other notices, once there is one.
+    ...(legalDetails.contactEmail === null
+      ? []
+      : [
+          {
+            file: SECURITY_TXT_PATH.slice(1),
+            content: securityTxt(siteUrl, legalDetails.contactEmail, lastModified),
+          },
+        ]),
   ];
 }

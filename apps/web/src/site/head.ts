@@ -107,3 +107,27 @@ export function robotsTxt(siteUrl: string): string {
   const origin = normalizeSiteUrl(siteUrl);
   return `User-agent: *\nDisallow: /api/\n\nSitemap: ${origin}/sitemap.xml\n`;
 }
+
+/** Where security.txt is served, as RFC 9116 asks. */
+export const SECURITY_TXT_PATH = '/.well-known/security.txt';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * security.txt (RFC 9116): where to report a security problem. It runs out a little under a
+ * year after `builtOn` (a YYYY-MM-DD date), as the RFC advises, so every deploy renews it.
+ */
+export function securityTxt(siteUrl: string, contactEmail: string, builtOn: string): string {
+  const origin = normalizeSiteUrl(siteUrl);
+  const built = Date.parse(`${builtOn}T00:00:00Z`);
+  if (!Number.isFinite(built)) throw new Error(`Not a date: ${builtOn}`);
+  if (!/^[^\s@<>]+@[^\s@<>]+$/.test(contactEmail)) {
+    throw new Error('security.txt needs a plain email address to point to');
+  }
+  return [
+    `Contact: mailto:${contactEmail}`,
+    `Expires: ${new Date(built + 360 * DAY_MS).toISOString()}`,
+    'Preferred-Languages: en',
+    `Canonical: ${origin}${SECURITY_TXT_PATH}`,
+    '',
+  ].join('\n');
+}

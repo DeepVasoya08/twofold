@@ -1,11 +1,12 @@
 /**
  * Runs after `vite build`: writes the public pages (landing, privacy, terms) as static HTML,
- * plus sitemap.xml and robots.txt, using the server build of src/prerender.tsx. The plain
+ * plus sitemap.xml, robots.txt and .well-known/security.txt, using the server build of
+ * src/prerender.tsx. The plain
  * app shell moves to app.html, which the Worker serves for every other app path.
  *
  * SITE_URL sets the canonical origin in tags, the sitemap and robots.txt.
  */
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -37,6 +38,7 @@ for (const { file, head, content } of prerender(siteUrl, today)) {
     head === undefined
       ? content
       : shell.replace(TITLE, head).replace(ROOT, `<div id="root">${content}</div>`);
+  await mkdir(dirname(join(dist, file)), { recursive: true });
   await writeFile(join(dist, file), output);
 }
 
