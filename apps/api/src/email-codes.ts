@@ -6,7 +6,13 @@ import {
   newSessionToken,
 } from '@arcafold/crypto/webcrypto';
 
-import { deleteEmailCodeQuery, findEmailCode, saveEmailCode, takeEmailCodeTry } from './email-db';
+import {
+  countSendQuery,
+  deleteEmailCodeQuery,
+  findEmailCode,
+  saveEmailCode,
+  takeEmailCodeTry,
+} from './email-db';
 import { sendMail } from './mail';
 import type { Mail, MailSetup } from './mail';
 
@@ -16,7 +22,10 @@ export const CODE_TTL_MS = 10 * 60 * 1000;
 export const CODE_MAX_TRIES = 5;
 /** The shortest wait between two codes for the same scope. */
 export const RESEND_WAIT_MS = 60 * 1000;
-/** Codes one scope (an account, or an address at sign-up) can ask for per hour. */
+/**
+ * Codes one scope (an account, or an address at sign-up) can ask for per hour. Codes to a
+ * new address are also limited to this many per hour across all accounts.
+ */
 export const MAX_SENDS_PER_HOUR = 5;
 /** Sign-up codes one internet address can ask for per hour, whatever the emails. */
 export const MAX_SENDS_PER_ADDRESS = 20;
@@ -24,8 +33,11 @@ export const MAX_SENDS_PER_ADDRESS = 20;
 export const TICKET_TTL_MS = 60 * 60 * 1000;
 export const HOUR_MS = 60 * 60 * 1000;
 
-/** What each kind of code is for, mixed into its scope so kinds never match each other. */
-export type CodePurpose = 'verify' | 'signup' | 'signup-ticket' | 'signup-from';
+/**
+ * What each kind of code is for, mixed into its scope so kinds never match each other.
+ * `verify-to` counts the codes sent to a new address, whichever account asked.
+ */
+export type CodePurpose = 'verify' | 'signup' | 'signup-ticket' | 'signup-from' | 'verify-to';
 
 export const codeMessages = {
   wait: 'Wait a minute before asking for another code.',
@@ -44,13 +56,16 @@ export type IssueResult = 'sent' | 'wait' | 'too-many' | 'not-sent';
 /**
  * Makes a new code for `scope`, keeps only its HMAC (bound to `address`), and emails
  * `mail(code)` to the address. At most one a minute and MAX_SENDS_PER_HOUR an hour per scope;
- * two requests at once send one code.
+ * two requests at once send one code. With `addressScope`, the send is also counted there
+ * (in one statement, so parallel requests stop at the limit) and refused past
+ * MAX_SENDS_PER_HOUR, so many scopes together can't send one address more codes than one.
  */
 export async function issueCode(
   db: D1Database,
   setup: MailSetup,
   options: {
     scope: string;
+    addressScope?: string;
     accountId: string | null;
     address: string;
     mail: (code: string) => Mail;
@@ -62,6 +77,12 @@ export async function issueCode(
   const sameHour = earlier !== null && now - earlier.sendsSince < HOUR_MS;
   const sends = (sameHour ? earlier.sends : 0) + 1;
   if (sends > MAX_SENDS_PER_HOUR) return 'too-many';
+  if (options.addressScope !== undefined) {
+    const counted = await countSendQuery(db, options.addressScope, now, now - HOUR_MS).first<{
+      sends: number;
+    }>();
+    if ((counted?.sends ?? Infinity) > MAX_SENDS_PER_HOUR) return 'too-many';
+  }
   const code = newEmailCode();
   const saved = await saveEmailCode(
     db,

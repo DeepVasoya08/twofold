@@ -13,6 +13,9 @@ space. Losing the password and the recovery key still means losing the photos.
   with replies going to `support@arcafold.com`. No extra package or API key is involved.
 - Codes are 6 digits, work for 10 minutes and allow 5 tries (counted before each check, so
   parallel guesses don't get more). An account can ask for one code a minute and 5 an hour.
+  Codes to a new address are also limited to 5 an hour across all accounts (a note to an
+  address that has an account counts the same), as sign-up codes are per address, so many
+  accounts together get no more guesses at an address than one.
   D1 keeps only HMACs of the code and of what it is for, keyed with the `EMAIL_CODE_SECRET`
   Worker secret (`email_codes`, migration 0022), so a copy of the database can't be used to
   guess codes or read addresses. A code is bound to the address it was sent to.

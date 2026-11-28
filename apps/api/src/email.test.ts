@@ -370,6 +370,66 @@ describe('confirming a different email instead', () => {
     expect(mail?.subject).toBe('This email already has an Arcafold account');
     expect(mail?.text).not.toMatch(/\b\d{6}\b/);
   });
+
+  /** Other accounts, each signed in with its own login key. */
+  async function others(count: number): Promise<{ c: Client; loginKey: string }[]> {
+    const made = [];
+    for (let i = 0; i < count; i++) {
+      const c = new Client(env);
+      const theirKeys: [Uint8Array, Uint8Array, Uint8Array] = [
+        newLoginKey(),
+        newLoginKey(),
+        newLoginKey(),
+      ];
+      await signUp(c, `someone${String(i)}@example.com`, theirKeys);
+      made.push({ c, loginKey: toBase64Url(theirKeys[0]) });
+    }
+    return made;
+  }
+
+  const ask = (one: { c: Client; loginKey: string }, email: string) =>
+    one.c.request('POST', '/account/email/code', { email, loginKey: one.loginKey });
+
+  it('limits codes to one new address across all accounts, as sign-up does', async () => {
+    const accounts = await others(MAX_SENDS_PER_HOUR + 1);
+    const last = accounts[MAX_SENDS_PER_HOUR];
+    if (!last) throw new Error('No account');
+    for (const one of accounts.slice(0, MAX_SENDS_PER_HOUR)) {
+      expect((await ask(one, NEW)).status).toBe(204);
+    }
+    const refused = await ask(last, NEW);
+    expect(refused.status).toBe(429);
+    expect((await refused.json<{ error: string }>()).error).toMatch(/a lot of codes/);
+    expect(mailbox.sent.filter((m) => m.to === NEW)).toHaveLength(MAX_SENDS_PER_HOUR);
+    // Other addresses aren't held up by it.
+    expect((await ask(last, 'lee@example.com')).status).toBe(204);
+    // An hour later the address can get codes again.
+    sqlite.prepare('UPDATE email_codes SET sends_since = sends_since - 3600000').run();
+    waitForResend();
+    expect((await ask(last, NEW)).status).toBe(204);
+  });
+
+  it('limits notes to an address with an account the same way, so the limit tells nothing', async () => {
+    await signUp(new Client(env), 'kim@example.com', [newLoginKey(), newLoginKey(), newLoginKey()]);
+    const accounts = await others(MAX_SENDS_PER_HOUR + 1);
+    const statuses = async (email: string) => {
+      const seen = [];
+      for (const one of accounts) seen.push((await ask(one, email)).status);
+      return seen;
+    };
+    const taken = await statuses('kim@example.com');
+    waitForResend();
+    expect(await statuses(NEW)).toEqual(taken);
+    expect(taken.at(-1)).toBe(429);
+  });
+
+  it('can’t be raced past the limit for one address', async () => {
+    const accounts = await others(MAX_SENDS_PER_HOUR * 3);
+    const results = await Promise.all(accounts.map((one) => ask(one, NEW)));
+    expect(results.filter((res) => res.status === 204)).toHaveLength(MAX_SENDS_PER_HOUR);
+    expect(results.filter((res) => res.status === 429)).toHaveLength(MAX_SENDS_PER_HOUR * 2);
+    expect(mailbox.sent.filter((m) => m.to === NEW)).toHaveLength(MAX_SENDS_PER_HOUR);
+  });
 });
 
 describe('the phone’s background backup', () => {

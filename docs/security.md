@@ -745,7 +745,8 @@ so photos can later be found by describing them. The server stores only cipherte
   also limited to 20 an hour from one internet address. It
   never resets a password or unlocks anything. Codes are stored only as HMACs keyed with a
   Worker secret, bound to the address, limited to 5 tries (counted before each check) and
-  10 minutes, with one send a minute and 5 an hour per account. Until an account confirms,
+  10 minutes, with one send a minute and 5 an hour per account, and 5 an hour to any one
+  new address across all accounts. Until an account confirms,
   the server refuses everything but reading the account, confirming and signing out (a
   phone's upload-only backup carries on). Moving an unconfirmed account to another address
   needs the login key, and an address that already has an account gets a note instead of a
