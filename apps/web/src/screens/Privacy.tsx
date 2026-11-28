@@ -48,14 +48,20 @@ export function Privacy() {
         <li>your photos and their previews;</li>
         <li>
           photo details such as when and where a photo was taken, favorites, and which albums a
-          photo is in;
+          photo is in (for an album or folder you share, we can see which encrypted photos are in
+          it, but not what they show);
         </li>
         <li>album names, your profile photo, and the records of who you share with;</li>
-        <li>whether you have a private space, and anything in it.</li>
+        <li>everything in a private space.</li>
       </ul>
       <p>
         Because we can’t read this content, we can’t search it, scan it, recover it for you, or hand
         it over in readable form to anyone.
+      </p>
+      <p>
+        A private space is stored like any other library, under random ids, and nothing we keep
+        labels it as private. Your account’s storage total does count every space you use, including
+        a private one.
       </p>
 
       <h2>What we collect and keep</h2>

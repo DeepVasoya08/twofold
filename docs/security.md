@@ -115,8 +115,12 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   nothing ties a space to its owner.
 - **Some ciphertext can be orphaned.** Setting up a private space from the main library
   replaces any existing one without being able to delete its photos, and deleting an
-  account can only wipe spaces whose keys are on the device. What's left can never be
-  decrypted or reached again, but it isn't deleted.
+  account can only wipe spaces whose keys are on the device. What's left isn't deleted, and
+  nobody can decrypt it without keys those devices no longer hold. A replaced private
+  space's files still count against the account's storage; a deleted account's count goes
+  with it. So a modified app that deletes its account without wiping its spaces, and kept
+  their tokens and keys, still reaches them and can sign up again from zero, which gets it
+  no more than signing up with another email address would.
 - **The storage quota keeps a total per account.** Each account may keep its plan's
   storage of ciphertext (1 GB on Free) across every space it uploads to (`stored_bytes` on
   `accounts`, the limit from `billing`; see [billing.md](billing.md)). Only the total
