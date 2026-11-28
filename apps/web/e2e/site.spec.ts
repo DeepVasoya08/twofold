@@ -69,6 +69,18 @@ test('robots.txt and the sitemap list the public pages', async ({ request }) => 
   }
 });
 
+test('security.txt says where to report a problem, and hasn’t run out', async ({ request }) => {
+  const res = await request.get('/.well-known/security.txt');
+  expect(res.status()).toBe(200);
+  expect(res.headers()['content-type']).toMatch(/^text\/plain/);
+  const text = await res.text();
+  expect(text).toMatch(/^Contact: mailto:\S+@\S+$/m);
+  expect(text).toMatch(/^Canonical: https?:\/\/.+\/\.well-known\/security\.txt$/m);
+  const expires = Date.parse(/^Expires: (.+)$/m.exec(text)?.[1] ?? '');
+  expect(expires).toBeGreaterThan(Date.now());
+  expect(expires).toBeLessThan(Date.now() + 366 * 24 * 60 * 60 * 1000);
+});
+
 test('a missing file is a 404, not the app shell', async ({ request }) => {
   const res = await request.get('/assets/missing.js');
 

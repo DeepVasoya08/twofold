@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { legalDetails } from './legal/details';
 import { prerender } from './prerender';
 
 const files = prerender('https://photos.example.com', '2026-10-21');
@@ -11,14 +12,22 @@ function file(name: string) {
 }
 
 describe('prerender', () => {
-  it('writes the public pages, the sitemap and robots.txt', () => {
+  it('writes the public pages, the sitemap, robots.txt and security.txt', () => {
     expect(files.map((candidate) => candidate.file)).toEqual([
       'index.html',
       'privacy.html',
       'terms.html',
       'sitemap.xml',
       'robots.txt',
+      '.well-known/security.txt',
     ]);
+  });
+
+  it('points security reports at the address the legal pages give', () => {
+    const { content, head } = file('.well-known/security.txt');
+    expect(head).toBeUndefined();
+    expect(content).toContain(`Contact: mailto:${legalDetails.contactEmail ?? ''}\n`);
+    expect(content).toContain('Canonical: https://photos.example.com/.well-known/security.txt\n');
   });
 
   it('renders the landing page with its sections and the sharing example', () => {
