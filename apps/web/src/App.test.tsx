@@ -115,8 +115,9 @@ describe('App', () => {
     expect(html).toContain('sam@example.com');
   });
 
-  it('shows a new recovery key screen from the main library only', () => {
-    expect(heading(render('/signup/recovery-key'))).toBe('Save your recovery key');
+  it('shows the recovery words screen only while new words wait to be saved', () => {
+    // Nothing waits here, so either space goes back to Settings (see access.ts).
+    expect(heading(render('/signup/recovery-key'))).toBeUndefined();
     expect(heading(render('/signup/recovery-key', privateSession()))).toBeUndefined();
   });
 

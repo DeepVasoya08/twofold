@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fromBase64Url, loginVerifier, toBase64Url } from '@arcafold/crypto/webcrypto';
+import { generateRecoveryKey, recoveryKeyToWords, unlockWithPassword } from '@arcafold/crypto';
 import type {
   AccountResponse,
   LoginRequest,
   SignUpRequest,
+  SpaceMove,
   UpdateKeyringRequest,
 } from '@arcafold/types';
 
@@ -24,6 +26,7 @@ const server = vi.hoisted(() => ({
   codes: [] as { email: string; loginKey?: string }[],
   emailOff: false,
   signUps: [] as SignUpRequest[],
+  moves: [] as (SpaceMove | undefined)[],
 }));
 
 async function matches(account: AccountResponse, loginKey: string): Promise<boolean> {
@@ -66,11 +69,12 @@ vi.mock('./api', async (importOriginal) => {
         }
         return account;
       },
-      updateKeyring: async ({ loginKey, version, keyring }: UpdateKeyringRequest) => {
+      updateKeyring: async ({ loginKey, version, keyring, move }: UpdateKeyringRequest) => {
         const account = current();
         if (!(await matches(account, loginKey))) throw new actual.ApiError(403, 'Wrong password');
         if (version !== account.version) throw new actual.ApiError(409, 'Conflict');
         server.account = { ...account, keyring, version: version + 1 };
+        server.moves.push(move);
         return server.account;
       },
       deleteAccount: async ({ loginKey }: { loginKey: string }) => {
@@ -129,7 +133,23 @@ beforeEach(() => {
   server.codes = [];
   server.emailOff = false;
   server.signUps = [];
+  server.moves = [];
 });
+
+/** The library's token, as the server addresses it. */
+function tokenOf(session: Session): string {
+  return toBase64Url(session.opened.space.spaceId);
+}
+
+/** Changes the main password the way Settings does: prepare, save the words, complete. */
+async function changeMainPassword(session: Session, current: string, next: string) {
+  const pending = await ops.prepareKeyChange(session, current, next);
+  return { pending, session: await ops.completeKeyChange(session, pending) };
+}
+
+async function otherWords(): Promise<string> {
+  return (await recoveryKeyToWords(await generateRecoveryKey())).join(' ');
+}
 
 describe('sign-up and unlock', { timeout: 30_000 }, () => {
   it('signs up unlocked in the main library, then unlocks with the main password only', async () => {
@@ -181,7 +201,7 @@ describe('a kept password secret (phone fingerprint unlock)', { timeout: 30_000 
     await expect(ops.unlockWithSecret(current(), wrong)).rejects.toThrow(
       'That password isn’t right.',
     );
-    await ops.changeMainPassword(session, MAIN, 'a brand new main password');
+    await changeMainPassword(session, MAIN, 'a brand new main password');
     await expect(ops.unlockWithSecret(current(), old)).rejects.toThrow(
       'That password isn’t right.',
     );
@@ -239,10 +259,10 @@ describe('private space', { timeout: 30_000 }, () => {
 });
 
 describe('main password and recovery', { timeout: 30_000 }, () => {
-  it('changes the main password with the current one', async () => {
-    const { session } = await signUp();
+  it('changes the main password with the current one, and a new recovery key', async () => {
+    const { session, words } = await signUp();
     const wrong = await ops
-      .changeMainPassword(session, 'wrong guess here', 'new main one')
+      .prepareKeyChange(session, 'wrong guess here', 'new main one')
       .catch((error: unknown) => error);
     expect(wrong).toBeInstanceOf(FormError);
     expect(errorMessage(wrong)).toBe('That password isn’t right.');
@@ -251,18 +271,53 @@ describe('main password and recovery', { timeout: 30_000 }, () => {
 
     const withPrivate = await ops.setPrivatePassword(session, null, PRIVATE);
     const clash = await ops
-      .changeMainPassword(withPrivate, MAIN, PRIVATE)
+      .prepareKeyChange(withPrivate, MAIN, PRIVATE)
       .catch((error: unknown) => error);
     expect(errorInput(clash)).toBe('new');
 
-    const changed = await ops.changeMainPassword(withPrivate, MAIN, 'new main one');
+    const before = current();
+    const { pending, session: changed } = await changeMainPassword(
+      withPrivate,
+      MAIN,
+      'new main one',
+    );
+    expect(pending.kind).toBe('password');
+    expect(pending.recoveryWords).toHaveLength(12);
+    // Nothing changed on the server until the words were saved and the change completed.
+    expect(server.moves).toHaveLength(2);
     // Changing the main password keeps the private space's keys for this session.
     expect(changed.otherSpace).toBeDefined();
     expect((await ops.unlock(current(), 'new main one')).opened.slot).toBe(0);
     await expect(ops.unlock(current(), MAIN)).rejects.toThrow();
+    // The old words stop working and the new ones open the library.
+    await expect(ops.recover(EMAIL, words, 'another one entirely')).rejects.toThrow(
+      /doesn’t match this account/,
+    );
+    expect(current().keyring.slots[2]).toBe(before.keyring.slots[2]);
+    const recovered = await ops.recover(EMAIL, pending.recoveryWords.join(' '), 'another one');
+    expect(recovered.opened.space.spaceKey).toEqual(session.opened.space.spaceKey);
   });
 
-  it('recovers the main library with the words and leaves the private space alone', async () => {
+  it('moves the library to a new id, so an old copy of the account opens the old one only', async () => {
+    const { session } = await signUp();
+    const oldCopy = current().keyring;
+    const { session: changed } = await changeMainPassword(session, MAIN, 'new main one');
+
+    expect(server.moves.at(-1)).toEqual({ from: tokenOf(session), to: tokenOf(changed) });
+    expect(tokenOf(changed)).not.toBe(tokenOf(session));
+    expect(ops.openSpaceMoved(session, changed)).toBe(true);
+    // The key stays, so nothing in the library is sealed again.
+    expect(changed.opened.space.spaceKey).toEqual(session.opened.space.spaceKey);
+    // Someone with the old password and an earlier copy of the account gets only the old id,
+    // which the server no longer answers to.
+    const fromCopy = await unlockWithPassword(oldCopy, MAIN);
+    expect(fromCopy?.space.spaceId).toEqual(session.opened.space.spaceId);
+    expect((await ops.unlock(current(), 'new main one')).opened.space.spaceId).toEqual(
+      changed.opened.space.spaceId,
+    );
+  });
+
+  it('recovers the main library with the words, moves it, and leaves the private space alone', async () => {
     const { session, words } = await signUp();
     await ops.setPrivatePassword(session, null, PRIVATE);
     const privateSlot = current().keyring.slots[2];
@@ -270,10 +325,16 @@ describe('main password and recovery', { timeout: 30_000 }, () => {
     const recovered = await ops.recover(EMAIL, words.toUpperCase(), 'brand new main password');
     expect(recovered.opened.slot).toBe(0);
     expect(recovered.opened.space.spaceKey).toEqual(session.opened.space.spaceKey);
+    expect(server.moves.at(-1)).toEqual({ from: tokenOf(session), to: tokenOf(recovered) });
+    expect(tokenOf(recovered)).not.toBe(tokenOf(session));
     expect(current().keyring.slots[2]).toBe(privateSlot);
     expect((await ops.unlock(current(), 'brand new main password')).opened.slot).toBe(0);
     expect((await ops.unlock(current(), PRIVATE)).opened.slot).toBe(2);
     await expect(ops.unlock(current(), MAIN)).rejects.toThrow();
+    // The same words follow the library to its new id.
+    const again = await ops.recover(EMAIL, words, 'yet another password');
+    expect(again.opened.space.spaceKey).toEqual(session.opened.space.spaceKey);
+    expect(server.moves.at(-1)?.from).toBe(tokenOf(recovered));
   });
 
   it('refuses a mistyped or wrong recovery key', async () => {
@@ -286,27 +347,92 @@ describe('main password and recovery', { timeout: 30_000 }, () => {
     if (swapped !== words) {
       await expect(ops.recover(EMAIL, swapped, 'new password here')).rejects.toThrow();
     }
-    const other = (await ops.newRecoveryWords()).words.join(' ');
-    await expect(ops.recover(EMAIL, other, 'new password here')).rejects.toThrow(
+    await expect(ops.recover(EMAIL, await otherWords(), 'new password here')).rejects.toThrow(
       /doesn’t match this account/,
     );
+    expect(server.moves).toEqual([]);
   });
 
-  it('replaces the recovery key from the main library', async () => {
+  it('replaces the recovery key from the main library, given the main password', async () => {
     const { session, words } = await signUp();
-    const next = await ops.newRecoveryWords();
-    await ops.saveRecoveryKey(session, next.key);
-    await expect(ops.recover(EMAIL, words, 'new password here')).rejects.toThrow();
-    expect((await ops.recover(EMAIL, next.words.join(' '), 'new password here')).opened.slot).toBe(
-      0,
+    const wrong = await ops
+      .prepareKeyChange(session, 'wrong guess here', null)
+      .catch((error: unknown) => error);
+    expect(errorInput(wrong)).toBe('current');
+
+    const pending = await ops.prepareKeyChange(session, MAIN, null);
+    expect(pending.kind).toBe('recovery-key');
+    const changed = await ops.completeKeyChange(session, pending);
+    expect(server.moves.at(-1)).toEqual({ from: tokenOf(session), to: tokenOf(changed) });
+    // The main password stays the same and opens the moved library.
+    expect((await ops.unlock(current(), MAIN)).opened.space.spaceId).toEqual(
+      changed.opened.space.spaceId,
     );
+    await expect(ops.recover(EMAIL, words, 'new password here')).rejects.toThrow();
+    const recovered = await ops.recover(
+      EMAIL,
+      pending.recoveryWords.join(' '),
+      'new password here',
+    );
+    expect(recovered.opened.slot).toBe(0);
   });
 
-  it('cannot replace the recovery key from the private space', async () => {
+  it('changes the main password from the private space, which stays open where it is', async () => {
     const { session } = await signUp();
     await ops.setPrivatePassword(session, null, PRIVATE);
     const inside = await ops.unlock(current(), PRIVATE);
-    await expect(ops.saveRecoveryKey(inside, (await ops.newRecoveryWords()).key)).rejects.toThrow();
+    const wrong = await ops
+      .prepareKeyChange(inside, PRIVATE, 'new main one')
+      .catch((error: unknown) => error);
+    expect(errorMessage(wrong)).toBe('That isn’t your main password.');
+    expect(errorInput(wrong)).toBe('current');
+
+    const { pending, session: changed } = await changeMainPassword(inside, MAIN, 'new main one');
+    // This device stays in the private space, at its id, with the main library's new keys.
+    expect(changed.opened).toEqual(inside.opened);
+    expect(ops.openSpaceMoved(inside, changed)).toBe(false);
+    const moved = changed.otherSpace;
+    expect(moved?.spaceKey).toEqual(session.opened.space.spaceKey);
+    expect(server.moves.at(-1)).toEqual({
+      from: tokenOf(session),
+      to: toBase64Url(moved?.spaceId ?? new Uint8Array()),
+    });
+    expect((await ops.unlock(current(), 'new main one')).opened.space.spaceId).toEqual(
+      moved?.spaceId,
+    );
+    expect((await ops.unlock(current(), PRIVATE)).opened.space.spaceId).toEqual(
+      inside.opened.space.spaceId,
+    );
+    const recovered = await ops.recover(EMAIL, pending.recoveryWords.join(' '), 'another one');
+    expect(recovered.opened.space.spaceKey).toEqual(session.opened.space.spaceKey);
+  });
+
+  it('refuses the private password as the current main one in the main library', async () => {
+    const { session } = await signUp();
+    const withPrivate = await ops.setPrivatePassword(session, null, PRIVATE);
+    const wrong = await ops
+      .prepareKeyChange(withPrivate, PRIVATE, null)
+      .catch((error: unknown) => error);
+    // The same words as any wrong password, so it says nothing about a private space.
+    expect(errorMessage(wrong)).toBe('That password isn’t right.');
+    expect(server.moves).toHaveLength(1);
+  });
+
+  it('never moves the library for a private password, though every change names a move', async () => {
+    const { session } = await signUp();
+    await ops.setPrivatePassword(session, null, PRIVATE);
+    const inside = await ops.unlock(current(), PRIVATE);
+    const changed = await ops.setPrivatePassword(inside, PRIVATE, 'new private one');
+    expect(ops.openSpaceMoved(inside, changed)).toBe(false);
+    expect(server.moves).toHaveLength(2);
+    for (const move of server.moves) {
+      expect(move?.from).not.toBe(tokenOf(session));
+      expect(move?.from).not.toBe(tokenOf(inside));
+      expect(move?.to).not.toBe(move?.from);
+    }
+    expect((await ops.unlock(current(), MAIN)).opened.space.spaceId).toEqual(
+      session.opened.space.spaceId,
+    );
   });
 });
 

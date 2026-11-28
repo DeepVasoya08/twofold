@@ -52,7 +52,10 @@ export interface Keyring {
 export interface AccountResponse {
   email: string;
   name: string;
-  /** Bumped on every keyring change; updates must name the version they started from. */
+  /**
+   * The keyring's version: random and new on every change, never a count, so one copy says
+   * nothing about past changes. A change must name the version it started from.
+   */
   version: number;
   keyring: Keyring;
   /** The answer to the smart features question, or null if it hasn't been asked yet. */
@@ -80,6 +83,14 @@ export interface VerifyEmailRequest {
 
 /** The error code the server answers with (403) while an account must confirm its email. */
 export const VERIFY_EMAIL_ERROR = 'verify-email';
+
+/**
+ * The error code the server answers with (410) for a library's old token, once a new main
+ * password or recovery key has moved the library to a new one. A device that still uses it
+ * holds keys from before the change, so the app locks and the next unlock fetches the new
+ * keyring.
+ */
+export const SPACE_MOVED_ERROR = 'space-moved';
 
 /**
  * The smart features question shown once after sign-up (and once to accounts made before it
@@ -155,12 +166,29 @@ export interface LoginRequest {
   loginKey: string;
 }
 
+/**
+ * Moves a space's storage from one access token to another: every row kept under `from`'s
+ * tag is kept under `to`'s instead. Both are space tokens (base64url, 16 bytes).
+ */
+export interface SpaceMove {
+  from: string;
+  to: string;
+}
+
 /** Replaces the whole keyring. Sending all slots every time hides which one changed. */
 export interface UpdateKeyringRequest {
   /** Proves the caller knows a password (or the recovery key), not just the session cookie. */
   loginKey: string;
+  /** The version the change started from; a different one means another device got there first. */
   version: number;
   keyring: Keyring;
+  /**
+   * Moves the main library to the id its new slots hold, in the same step as the keyring, so
+   * its old id stops working. The app sends one with every keyring change: when the main
+   * library stays put, both tokens are fresh random ones, so nothing moves and the request
+   * looks the same.
+   */
+  move?: SpaceMove;
 }
 
 export interface DeleteAccountRequest {

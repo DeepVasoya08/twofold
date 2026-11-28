@@ -5,7 +5,6 @@ import type { AccountStorage, DeviceList } from '@arcafold/types';
 import {
   deleteAccount,
   deleteOtherSession,
-  deleteOtherSessions,
   listDevices,
   storageLimit,
   storedBytes,
@@ -27,6 +26,7 @@ import {
 } from '../schemas';
 import { clearSessionCookie, requireSession } from '../session';
 import type { AppEnv } from '../session';
+import { spaceTag, tagInUse } from '../space-move';
 import { email } from './email';
 
 /** The signed-in account. Changes need a fresh login key as well as the session cookie. */
@@ -60,8 +60,16 @@ account.put('/smart-features', async (c) => {
 });
 
 /**
- * Replaces the whole keyring. The browser always sends all three slots, so a password
- * change, a new recovery key and setting up a private space look identical here.
+ * Replaces the whole keyring. The browser always sends all three slots, and a space to move
+ * (the main library, to the id its new slots hold, or two random tokens when it stays put),
+ * so a password change, a new recovery key and setting up a private space are the same
+ * request, and this route never tells them apart. (What two copies of the keyring can still
+ * show is in docs/security.md.)
+ *
+ * The move runs in the same batch as the keyring: if the keyring isn't replaced, nothing
+ * moves, and the space's old token stops working at the moment the new keyring takes over.
+ * Holding a space's token is all it takes to move it, as to read or delete it; the owner's
+ * token is the only one that can, since a share or upload token names no rows of its own.
  */
 account.put('/keyring', async (c) => {
   const current = c.get('account');
@@ -86,15 +94,27 @@ account.put('/keyring', async (c) => {
   );
   if (proof === 'throttled') return c.json({ error: messages.throttled }, 429);
   if (proof === 'wrong') return c.json({ error: messages.wrongPassword }, 403);
-  if (!(await updateKeyring(c.env.DB, current.id, body.version, body.keyring))) {
+  const move = body.move
+    ? { from: await spaceTag(body.move.from), to: await spaceTag(body.move.to) }
+    : null;
+  if (move && move.from === move.to) return c.json({ error: messages.badRequest }, 400);
+  if (move && (await tagInUse(c.env.DB, move.to))) {
     return c.json({ error: messages.conflict }, 409);
   }
-  // A new password (or recovery key) signs out every other device. Every keyring change
-  // does this, whichever slot changed, so it says nothing about the private slot.
-  await deleteOtherSessions(c.env.DB, current.id, c.get('session'));
-  return c.json(
-    toAccountResponse({ ...current, keyring: body.keyring, version: body.version + 1 }, c.env),
+  // A new password (or recovery key) signs out every other device, in the same batch. Every
+  // keyring change does this, whichever slot changed, so the server never has to tell them
+  // apart. (Someone who knows the main password can still sign back in and compare; see
+  // docs/security.md.)
+  const version = await updateKeyring(
+    c.env.DB,
+    current.id,
+    body.version,
+    body.keyring,
+    c.get('session'),
+    move,
   );
+  if (version === null) return c.json({ error: messages.conflict }, 409);
+  return c.json(toAccountResponse({ ...current, keyring: body.keyring, version }, c.env));
 });
 
 /** How much of the account's limit (its plan's) is used, across both spaces. Both spaces show it. */

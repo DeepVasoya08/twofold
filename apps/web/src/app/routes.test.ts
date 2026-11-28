@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { redirectFor } from './access';
 import { matchRoute, parseNext, parsePhotoContext, paths, withNext } from './routes';
-import { lockedAccount, mainSession, signedOut } from '../test/sessions';
+import { lockedAccount, mainSession, privateSession, signedOut } from '../test/sessions';
 
 describe('matchRoute', () => {
   it.each([
@@ -171,5 +171,32 @@ describe('the invite code screen', () => {
     expect(redirectFor(route, signedOut, options)).toBe(withNext(paths.login, paths.joinCode));
     expect(redirectFor(route, lockedAccount, options)).toBe(withNext(paths.unlock, paths.joinCode));
     expect(redirectFor(route, mainSession(), { ...options, space: 'main' })).toBeNull();
+  });
+});
+
+describe('the recovery words screen', () => {
+  const route = { name: 'recovery-key' } as const;
+
+  it('shows while signing up, or while new words wait to be saved in either space', () => {
+    expect(redirectFor(route, signedOut, { space: null, signingUp: true })).toBeNull();
+    for (const [state, space] of [
+      [mainSession(), 'main'],
+      [privateSession(), 'private'],
+    ] as const) {
+      expect(redirectFor(route, state, { space, signingUp: false, changingKeys: true })).toBeNull();
+    }
+  });
+
+  it('goes back to Settings with nothing waiting, and to sign in without keys', () => {
+    for (const [state, space] of [
+      [mainSession(), 'main'],
+      [privateSession(), 'private'],
+    ] as const) {
+      expect(redirectFor(route, state, { space, signingUp: false })).toBe(paths.settings);
+    }
+    expect(redirectFor(route, lockedAccount, { space: null, signingUp: false })).toBe(paths.unlock);
+    expect(
+      redirectFor(route, signedOut, { space: null, signingUp: false, changingKeys: true }),
+    ).toBe(paths.signup);
   });
 });

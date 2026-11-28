@@ -12,13 +12,20 @@ let env: Env;
 let client: Client;
 let keys: [Uint8Array, Uint8Array, Uint8Array];
 let keyring: Keyring;
+/** The keyring's version after sign-up. */
+let version: number;
 
 beforeEach(async () => {
   env = { DB: createTestDb().db, BLOBS: {} as R2Bucket };
   client = new Client(env);
   keys = [newLoginKey(), newLoginKey(), newLoginKey()];
   keyring = await makeKeyring(keys);
-  await client.request('POST', '/auth/signup', { email: 'sam@example.com', name: 'Sam', keyring });
+  const res = await client.request('POST', '/auth/signup', {
+    email: 'sam@example.com',
+    name: 'Sam',
+    keyring,
+  });
+  version = (await res.json<AccountResponse>()).version;
 });
 
 function withNewPrivateSlot(base: Keyring, loginKeyVerifier: string): Keyring {
@@ -35,7 +42,7 @@ describe('GET /api/account', () => {
     expect(await res.json()).toEqual({
       email: 'sam@example.com',
       name: 'Sam',
-      version: 1,
+      version,
       keyring,
       smartFeatures: null,
       emailVerified: false,
@@ -129,25 +136,28 @@ describe('PUT /api/account/name', () => {
 });
 
 describe('PUT /api/account/keyring', () => {
-  it('replaces the keyring and bumps the version', async () => {
+  it('replaces the keyring and gives it a new random version, not a count', async () => {
     const next = withNewPrivateSlot(keyring, toBase64Url(randomBytes(32)));
     const res = await client.request('PUT', '/account/keyring', {
       loginKey: toBase64Url(keys[0]),
-      version: 1,
+      version,
       keyring: next,
     });
     expect(res.status).toBe(200);
     const body = await res.json<AccountResponse>();
-    expect(body.version).toBe(2);
+    expect(body.version).not.toBe(version);
+    expect(body.version).not.toBe(version + 1);
+    expect(Number.isSafeInteger(body.version)).toBe(true);
     expect(body.keyring).toEqual(next);
-    const reread = await client.request('GET', '/account');
-    expect((await reread.json<AccountResponse>()).keyring).toEqual(next);
+    const reread = await (await client.request('GET', '/account')).json<AccountResponse>();
+    expect(reread.keyring).toEqual(next);
+    expect(reread.version).toBe(body.version);
   });
 
   it('accepts a proof from any slot', async () => {
     const res = await client.request('PUT', '/account/keyring', {
       loginKey: toBase64Url(keys[2]),
-      version: 1,
+      version,
       keyring,
     });
     expect(res.status).toBe(200);
@@ -156,21 +166,30 @@ describe('PUT /api/account/keyring', () => {
   it('needs a login key, not just the session', async () => {
     const res = await client.request('PUT', '/account/keyring', {
       loginKey: toBase64Url(newLoginKey()),
-      version: 1,
+      version,
       keyring,
     });
     expect(res.status).toBe(403);
   });
 
   it('refuses a stale version', async () => {
-    const put = (version: number) =>
+    const put = (from: number) =>
       client.request('PUT', '/account/keyring', {
         loginKey: toBase64Url(keys[0]),
-        version,
+        version: from,
         keyring,
       });
-    expect((await put(1)).status).toBe(200);
-    expect((await put(1)).status).toBe(409);
+    expect((await put(version)).status).toBe(200);
+    expect((await put(version)).status).toBe(409);
+  });
+
+  it('refuses a version a JSON number can’t carry exactly', async () => {
+    const res = await client.request('PUT', '/account/keyring', {
+      loginKey: toBase64Url(keys[0]),
+      version: 2 ** 53,
+      keyring,
+    });
+    expect(res.status).toBe(400);
   });
 
   it('refuses a changed salt or KDF', async () => {
@@ -180,7 +199,7 @@ describe('PUT /api/account/keyring', () => {
     ]) {
       const res = await client.request('PUT', '/account/keyring', {
         loginKey: toBase64Url(keys[0]),
-        version: 1,
+        version,
         keyring: next,
       });
       expect(res.status).toBe(400);
@@ -196,7 +215,7 @@ describe('PUT /api/account/keyring', () => {
     expect((await other.request('GET', '/account')).status).toBe(200);
     const res = await client.request('PUT', '/account/keyring', {
       loginKey: toBase64Url(keys[0]),
-      version: 1,
+      version,
       keyring,
     });
     expect(res.status).toBe(200);
@@ -212,7 +231,7 @@ describe('PUT /api/account/keyring', () => {
     });
     await client.request('PUT', '/account/keyring', {
       loginKey: toBase64Url(newLoginKey()),
-      version: 1,
+      version,
       keyring,
     });
     expect((await other.request('GET', '/account')).status).toBe(200);
@@ -221,7 +240,7 @@ describe('PUT /api/account/keyring', () => {
   it('needs a session', async () => {
     const res = await new Client(env).request('PUT', '/account/keyring', {
       loginKey: toBase64Url(keys[0]),
-      version: 1,
+      version,
       keyring,
     });
     expect(res.status).toBe(401);

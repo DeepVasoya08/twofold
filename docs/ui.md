@@ -353,8 +353,14 @@ to save the search again.
   creates the account. Ticking "I've saved my recovery key" also downloads the words once
   as `arcafold-recovery-key.txt` (made on the device, `lib/recovery-file.ts`), and a
   Download button next to Copy words saves another copy.
-- `/signup/recovery-key` doubles as "New key" from Settings in the main library. The private
-  space can't make a recovery key; its Settings say the private password can't be recovered.
+- `/signup/recovery-key` also shows the new words for a new main password or a new recovery
+  key from Settings. Settings asks for the main password first (and the new one, for a
+  password change); the words screen shows the new words, and Continue makes the change,
+  which moves the main library to a new id (docs/security.md). Uploads, imports and
+  downloads have to finish first. The private space can change the main password the same
+  way and stays open, but can't make a recovery key on its own; its Settings say the private
+  password can't be recovered. Another tab still open with the old keys locks on its next
+  library request, with a note to unlock again.
 - Password hashing runs in a Web Worker, so spinners keep moving and the page stays usable
   while a login or unlock works. Signing out in the meantime ("Use another account")
   cancels it: the library doesn't open afterwards.
@@ -388,7 +394,7 @@ Routes are the same in both spaces; the content depends on which space is open.
 | `/privacy`             | Privacy Policy (prerendered)                                       |
 | `/terms`               | Terms of Use (prerendered)                                         |
 | `/signup`              | Create your account (step 1 of 2)                                  |
-| `/signup/recovery-key` | Save your 12-word recovery key (step 2)                            |
+| `/signup/recovery-key` | Save your 12-word recovery key (sign-up step 2, or new words)      |
 | `/login`               | Log in                                                             |
 | `/unlock`              | Unlock (returning user, key not in memory)                         |
 | `/recover`             | Reset the password with the recovery key                           |

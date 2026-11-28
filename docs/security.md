@@ -64,15 +64,63 @@ The recovery key is 128 random bits written as 12 BIP-39 words (with BIP-39's 4-
 checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
 (`crypto_generichash` keyed by the salt) instead of Argon2id.
 
+### A new main password or recovery key moves the main library
+
+The space id is the token the library's storage is reached with. So that a replaced
+password or recovery key, or an old copy of the keyring, leads nowhere, a **new main
+password**, a **new recovery key** and **recovering with the recovery key** all move the
+main library to a new random space id (`withNewSpaceId` in `packages/crypto/src/keyring.ts`,
+`moveMainLibrary` in `packages/core/src/account.ts`):
+
+1. The device makes the new id, keeps the space key, and seals slots 0 and 1 again to hold
+   both. The key stays the same, so nothing in the library is sealed again: records name
+   their kind and id in their associated data, not the space.
+2. A main password change always comes with **new recovery words**, shown before anything
+   changes: slot 1 has to be sealed again to follow the new id, which takes a recovery key,
+   and asking for the old words would mean everyone needs them at hand. A new recovery key
+   on its own needs the main password, for the same reason. Recovering seals slot 1 again
+   with the same key, so the words that were just used keep working.
+3. `PUT /api/account/keyring` carries the move (`move: { from, to }`, both space tokens).
+   In one D1 batch the server replaces the keyring, signs out the account's other devices,
+   moves every row kept under the old tag to the new one (`apps/api/src/space-move.ts`;
+   a test checks that it names every table with a `space` column) and records the old tag
+   in `moved_spaces`. Everything after the keyring update is guarded on the keyring's new
+   random version, so if the keyring isn't replaced, nothing moves. Files in R2 are named
+   by photo id, not by space, so they stay where they are.
+4. From then on the old token reaches nothing: every request with it gets a `410` with
+   code `space-moved`, whichever account sends it, so a browser tab still holding the old
+   keys can't add photos where nobody would find them. The app locks such a tab, and
+   unlocking fetches the new keyring. Its own move's late answers don't lock the tab that
+   made it (`whileMovingAway` in `packages/core/src/api.ts`).
+5. The new id must be one nothing uses: no rows under its tag, no share or upload token that
+   hashes to it, and not moved from before, so a move can't merge two spaces, take over a
+   token or bring an old id back (409).
+
+**What keeps working.** People the library is shared with hold their own share tokens,
+which name the library by its tag, so they move with it and keep their access: the change
+dialog says so, and Settings can stop sharing with anyone. Phones' upload-only tokens move
+with it too, though each phone is signed out like every other device.
+
+**The private space never moves.** Moving it would show the server which space it is.
+Private-slot changes send a move too, of two fresh random tokens that no space uses, so
+every keyring change has the same shape. The private password can be changed from inside
+the private space as before, and so can the main password: the main library then moves
+while this device stays in the private space.
+
 ### Why nobody can tell whether a private space exists
 
 - At sign-up slot 2 and verifier 2 are **random bytes** of exactly the same size as real
   ones. A secretbox ciphertext under an unknown key is indistinguishable from random, so
   one copy of the stored keyring looks the same with or without a private space (but two
-  copies can differ; see the trade-offs below).
+  copies can differ; see the trade-offs below). The keyring's `version`, which a change
+  must name so two devices can't overwrite each other, is random too and new on every
+  change, never a count, so one copy doesn't say whether the keyring ever changed
+  (`apps/api/src/keyring-version.ts`).
 - Every change uploads **all three slots and verifiers** together (`PUT
-/api/account/keyring`). Changing the main password, making a new recovery key and setting
-  up a private space are the same request. D1 keeps no per-slot columns or timestamps.
+/api/account/keyring`), with a space move. Changing the main password, making a new
+  recovery key and setting up a private space are the same request; only the main library
+  ever moves, and a private-slot change names two fresh random tokens instead. D1 keeps no
+  per-slot columns or timestamps.
 - **Unlocking** on a device that is already signed in fetches the keyring and tries the
   password against every slot locally, always all of them. Nothing is sent to the server.
 - **Logging in** on a new device sends the login key; the server compares it against all
@@ -101,9 +149,25 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   its key. So anyone who can compare two copies of an account's row (a compromised server
   watching the `PUT`, or D1 Time Travel, a backup or an export, which keep earlier copies
   for days) sees when slot 2 alone changed, and so that a private space was set up or its
-  password changed. It reveals nothing else: no photos, keys or passwords. Closing it would
-  need a new construction (ruled out by "never invent crypto") or a private password that can
-  only be set at sign-up and never changed; we accepted the gap instead.
+  password changed. So can someone who knows the main password and saved the keyring from
+  an earlier sign-in, with no server access at all: signing in again gets the new one, and
+  the sign-out every keyring change causes even tells them when. It reveals nothing else:
+  no photos, keys or passwords, and the setup and change dialogs say so. Closing it would
+  need a new construction (ruled out by "never invent crypto") or a private password that
+  can only be set at sign-up and never changed; we accepted the gap instead.
+- **A move changes the library's id, not its key.** Sealing every record again under a new
+  key would take as many requests as the library has records, with no single moment when the
+  old key stops working; moving the id is one step. So someone who kept the old key and later
+  gets a copy of the stored data itself (a leak of D1 and R2, or an insider) could still open
+  what is added after the move. Everyone else reaches storage only through the API, which
+  refuses the old id.
+- **Moving the main library lines it up with its account in D1's history.** Its rows move
+  in the same batch as the account's keyring, so a compromised server watching the `PUT`,
+  or D1 Time Travel or two backups, can see which tag was that account's main library, and
+  that rows moved for a main-library change and not for a private-slot change (which slot
+  comparison already shows, above). It says nothing about a private space, which never
+  moves; moving that too is what would give it away. `moved_spaces` keeps old tags only,
+  never where they went, whose they were or when.
 - **A compromised, live server could notice a second login key** when someone logs in with
   the private password on a new device (the stored data still reveals nothing). A
   compromised server could equally serve altered JavaScript, which is the limit of any
@@ -166,7 +230,9 @@ other accounts; see [Sharing](#sharing).
   and no table that maps one to the other, so the database can't say whose photos these
   are, or whether an account has one space or two. Storage routes still need a signed-in
   session, so only accounts can use storage, but the session is not recorded with what it
-  writes.
+  writes. A main library that moved to a new id (see
+  [above](#a-new-main-password-or-recovery-key-moves-the-main-library)) leaves its old tag
+  in `moved_spaces`, and the old token is refused from then on.
 - **Photo keys.** Every photo has its own random key. Its two files, a 640px JPEG preview
   made on the device and the original byte for byte, are each encrypted with
   `crypto_secretstream_xchacha20poly1305` in 64 KiB chunks, so any change, reordering or
@@ -721,7 +787,9 @@ so photos can later be found by describing them. The server stores only cipherte
   again; until then a decrypted photo already on its screen stays there.
 - Any keyring change (a password, the recovery key, or setting up a private space) signs
   out every other device. It has to be every change: the server can't tell which slot
-  changed, and treating them differently would tell it.
+  changed, and treating them differently would tell it. Other tabs in the same browser
+  share the session, so they stay signed in; after a move of the main library they lock on
+  their next library request, which the old id answers with a `410`.
 - Every write must be `Content-Type: application/json` (or `application/octet-stream` for
   encrypted files), which a cross-site form can't send without a CORS preflight the API
   never answers. This backs up `SameSite=Strict`; storage requests also carry a custom

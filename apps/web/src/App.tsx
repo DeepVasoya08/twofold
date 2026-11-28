@@ -208,7 +208,7 @@ function Redirect({ to }: { to: string }) {
 export function App() {
   const { pathname, search } = useRouter();
   const route = matchRoute(pathname);
-  const { state, space, pendingSignUp } = useAccount();
+  const { state, space, pendingSignUp, pendingKeyChange } = useAccount();
 
   // The private space re-tints the whole app (see styles/base.css).
   useEffect(() => {
@@ -227,6 +227,7 @@ export function App() {
   const redirect = redirectFor(route, state, {
     space,
     signingUp: pendingSignUp !== null,
+    changingKeys: pendingKeyChange !== null,
     search,
   });
   if (redirect) return <Redirect to={redirect} />;

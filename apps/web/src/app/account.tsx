@@ -12,14 +12,15 @@ import type { ReactNode } from 'react';
 import type { SpaceKeys } from '@arcafold/crypto';
 import type { AccountResponse, SmartFeaturesChoice } from '@arcafold/types';
 
-import { ApiError, api, onSessionEnded, onVerifyEmail } from '@arcafold/core/api';
+import { ApiError, api, onSessionEnded, onSpaceMoved, onVerifyEmail } from '@arcafold/core/api';
 import { onVisibleAgain } from '../lib/when-visible';
+import { useToast } from './toast';
 import type { Person } from '../mock/data';
 import { FormError } from '@arcafold/core/errors';
 
 import * as ops from '@arcafold/core/account';
 import { leaveAll } from '@arcafold/core/sharing';
-import type { PendingSignUp, Session, Space } from '@arcafold/core/account';
+import type { PendingKeyChange, PendingSignUp, Session, Space } from '@arcafold/core/account';
 
 /**
  * Who is signed in, and whether their keys are in memory. Keys live only in this state:
@@ -55,7 +56,18 @@ interface AccountValue {
   recover: (email: string, words: string, newPassword: string) => Promise<void>;
   lock: () => void;
   logOut: () => Promise<void>;
-  changeMainPassword: (current: string, next: string) => Promise<void>;
+  /**
+   * A new main password or recovery key waiting for its new recovery words to be saved: what
+   * the words screen shows. Its keys stay inside this provider.
+   */
+  pendingKeyChange: Pick<PendingKeyChange, 'kind' | 'recoveryWords'> | null;
+  /**
+   * Starts a new main password (`next`), or a new recovery key alone (`next` null), given the
+   * current main password. Nothing changes until completeKeyChange.
+   */
+  prepareKeyChange: (current: string, next: string | null) => Promise<void>;
+  /** Makes the pending change once its words are saved; the main library moves to a new id. */
+  completeKeyChange: () => Promise<void>;
   setPrivatePassword: (current: string | null, next: string) => Promise<void>;
   /** True while photos can move to the other space without asking for its password. */
   otherSpaceOpen: boolean;
@@ -64,7 +76,6 @@ interface AccountValue {
    * doesn't fit.
    */
   openOtherSpace: (password: string) => Promise<SpaceKeys>;
-  saveRecoveryKey: (recoveryKey: Uint8Array) => Promise<void>;
   /** The answer to the smart features question; null if unanswered or signed out. */
   smartFeatures: SmartFeaturesChoice | null;
   /** Answers the smart features question for this account. */
@@ -86,6 +97,8 @@ interface AccountValue {
 }
 
 const SIGNED_OUT_MEANWHILE = 'You signed out before Arcafold finished opening. Try again.';
+const START_AGAIN = 'Start again from Settings.';
+const MOVED_ELSEWHERE = 'Your password or recovery key changed. Unlock to keep going.';
 
 const AccountContext = createContext<AccountValue | null>(null);
 
@@ -134,6 +147,8 @@ export function AccountProvider({
   const [state, setState] = useState<AccountState>(initialState ?? { status: 'loading' });
   const [generation, setGeneration] = useState(0);
   const [pendingSignUp, setPendingSignUp] = useState<PendingSignUp | null>(null);
+  const [pendingKeyChange, setPendingKeyChange] = useState<PendingKeyChange | null>(null);
+  const toast = useToast();
   /**
    * Bumped when someone locks or signs out. Password hashing runs in a Web Worker, so the
    * page stays usable while a login or unlock is still working; if they sign out meanwhile,
@@ -176,6 +191,7 @@ export function AccountProvider({
   const dropKeys = useCallback((next: AccountState) => {
     keysDropped.current += 1;
     setGeneration((current) => current + 1);
+    setPendingKeyChange(null);
     setState(next);
   }, []);
 
@@ -192,6 +208,21 @@ export function AccountProvider({
       onSessionEnded(null);
     };
   }, [signedIn, dropKeys]);
+
+  // A library request refused because the library moved means its main password or recovery
+  // key changed in another tab or on another device (this tab's own move is not reported). The
+  // keys here are from before, so lock: unlocking fetches the new keyring.
+  const unlockedAccount = state.status === 'unlocked' ? state.session.account : null;
+  useEffect(() => {
+    if (!unlockedAccount) return;
+    onSpaceMoved(() => {
+      dropKeys({ status: 'locked', account: unlockedAccount });
+      toast.show(MOVED_ELSEWHERE);
+    });
+    return () => {
+      onSpaceMoved(null);
+    };
+  }, [unlockedAccount, dropKeys, toast]);
 
   // The server can start asking for the email to be confirmed while the app is open (email
   // was just set up), so a refusal that says so brings up the confirm screen.
@@ -245,11 +276,16 @@ export function AccountProvider({
       if (!session) throw new FormError('Unlock Arcafold first.');
       return session;
     };
-    /** Keeps an operation's new session, unless the keys were dropped while it ran. */
+    /**
+     * Keeps an operation's new session, unless the keys were dropped while it ran. When the
+     * open space's keys change (the main library moved to a new id), its decrypted state is
+     * thrown away and loaded again through the new id.
+     */
     const update = async (start: () => Promise<Session>): Promise<Session | null> => {
       const dropped = keysDropped.current;
       const next = await start();
       if (keysDropped.current !== dropped) return null;
+      if (session && ops.openSpaceMoved(session, next)) setGeneration((current) => current + 1);
       setState({ status: 'unlocked', session: next });
       return next;
     };
@@ -289,9 +325,21 @@ export function AccountProvider({
         dropKeys({ status: 'signed-out' });
         await api.logOut().catch(() => undefined);
       },
-      changeMainPassword: (current, next) =>
+      pendingKeyChange: pendingKeyChange
+        ? { kind: pendingKeyChange.kind, recoveryWords: pendingKeyChange.recoveryWords }
+        : null,
+      prepareKeyChange: (current, next) =>
         guard(async () => {
-          await update(() => ops.changeMainPassword(requireSession(), current, next));
+          const dropped = keysDropped.current;
+          const pending = await ops.prepareKeyChange(requireSession(), current, next);
+          if (keysDropped.current === dropped) setPendingKeyChange(pending);
+        }),
+      completeKeyChange: () =>
+        guard(async () => {
+          if (!pendingKeyChange) throw new FormError(START_AGAIN);
+          const pending = pendingKeyChange;
+          await update(() => ops.completeKeyChange(requireSession(), pending));
+          setPendingKeyChange((current) => (current === pending ? null : current));
         }),
       setPrivatePassword: (current, next) =>
         guard(async () => {
@@ -303,10 +351,6 @@ export function AccountProvider({
         if (!next?.otherSpace) throw new FormError('Unlock the other space first.');
         return next.otherSpace;
       },
-      saveRecoveryKey: (recoveryKey) =>
-        guard(async () => {
-          await update(() => ops.saveRecoveryKey(requireSession(), recoveryKey));
-        }),
       smartFeatures: account?.smartFeatures ?? null,
       chooseSmartFeatures: (answer) =>
         guard(async () => {
@@ -345,7 +389,7 @@ export function AccountProvider({
           );
         }),
     };
-  }, [state, generation, pendingSignUp, open, openFrom, dropKeys, guard]);
+  }, [state, generation, pendingSignUp, pendingKeyChange, open, openFrom, dropKeys, guard]);
 
   return <AccountContext value={value}>{children}</AccountContext>;
 }

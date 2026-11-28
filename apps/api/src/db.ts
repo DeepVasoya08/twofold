@@ -2,7 +2,10 @@ import { STORAGE_SIZES } from '@arcafold/types';
 import type { Device, DeviceKind, Keyring, SmartFeaturesChoice } from '@arcafold/types';
 
 import type { DeviceLabel } from './device';
+import { newKeyringVersion } from './keyring-version';
 import { keyringSchema } from './schemas';
+import { moveStatements } from './space-move';
+import type { SpaceMoveTags } from './space-move';
 
 /** An account row with its keyring parsed. */
 export interface AccountRecord {
@@ -61,21 +64,22 @@ export async function findAccountByEmail(
   return row ? toRecord(row) : null;
 }
 
-/** Inserts an account. Returns false if the email is taken. */
+/** Inserts an account, its keyring at a random version. Returns false if the email is taken. */
 export async function insertAccount(
   db: D1Database,
-  account: Omit<AccountRecord, 'version' | 'smartFeatures'>,
+  account: Omit<AccountRecord, 'smartFeatures'>,
   now: number,
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      'INSERT INTO accounts (id, email, name, keyring, version, created_at, email_verified) VALUES (?, ?, ?, ?, 1, ?, ?) ON CONFLICT (email) DO NOTHING',
+      'INSERT INTO accounts (id, email, name, keyring, version, created_at, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (email) DO NOTHING',
     )
     .bind(
       account.id,
       account.email,
       account.name,
       JSON.stringify(account.keyring),
+      account.version,
       now,
       account.emailVerified ? 1 : 0,
     )
@@ -83,18 +87,34 @@ export async function insertAccount(
   return result.meta.changes === 1;
 }
 
-/** Replaces the keyring if the version still matches. Returns false on a conflicting update. */
+/**
+ * Replaces the keyring if the version still matches, giving it a new random version (see
+ * keyring-version.ts), and in the same batch signs out the account's other sessions and, if
+ * asked, moves a space to a new tag (space-move.ts). Either all of it happens or none of it
+ * does. Returns the new version, or null on a conflicting update.
+ */
 export async function updateKeyring(
   db: D1Database,
   accountId: string,
   expectedVersion: number,
   keyring: Keyring,
-): Promise<boolean> {
-  const result = await db
-    .prepare('UPDATE accounts SET keyring = ?, version = version + 1 WHERE id = ? AND version = ?')
-    .bind(JSON.stringify(keyring), accountId, expectedVersion)
-    .run();
-  return result.meta.changes === 1;
+  keepSession: string,
+  move: SpaceMoveTags | null = null,
+): Promise<number | null> {
+  const version = newKeyringVersion();
+  // Everything after the first statement runs only if it replaced the keyring: no other
+  // change can have left the account at this new random version.
+  const replaced = 'EXISTS (SELECT 1 FROM accounts WHERE id = ? AND version = ?)';
+  const [result] = await db.batch([
+    db
+      .prepare('UPDATE accounts SET keyring = ?, version = ? WHERE id = ? AND version = ?')
+      .bind(JSON.stringify(keyring), version, accountId, expectedVersion),
+    db
+      .prepare(`DELETE FROM sessions WHERE account_id = ? AND token_hash != ? AND ${replaced}`)
+      .bind(accountId, keepSession, accountId, version),
+    ...(move ? moveStatements(db, move, replaced, [accountId, version]) : []),
+  ]);
+  return result?.meta.changes === 1 ? version : null;
 }
 
 /** Changes the account's name. */
@@ -224,18 +244,6 @@ export async function findSessionAccount(
 ): Promise<AccountRecord | null> {
   const { results } = await sessionAccountQuery(db, tokenHash, now).all();
   return sessionAccountFrom(results);
-}
-
-/** Signs out every other device: used after the keyring changes. */
-export async function deleteOtherSessions(
-  db: D1Database,
-  accountId: string,
-  keepTokenHash: string,
-): Promise<void> {
-  await db
-    .prepare('DELETE FROM sessions WHERE account_id = ? AND token_hash != ?')
-    .bind(accountId, keepTokenHash)
-    .run();
 }
 
 /** A session's last use is kept to the hour, so it can't be lined up with other records. */

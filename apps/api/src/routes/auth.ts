@@ -15,6 +15,7 @@ import {
   swapForTicket,
 } from '../email-codes';
 import { countSendQuery, deleteEmailCodeQuery, deleteStaleCodesQuery } from '../email-db';
+import { newKeyringVersion } from '../keyring-version';
 import { requestInfo } from '../request-info';
 import { mailSetup, sendNotice } from '../mail';
 import { alreadySignedUpMail, confirmEmailMail, newSignInMail } from '../mail-templates';
@@ -132,9 +133,10 @@ auth.post('/signup', async (c) => {
   }
   const id = crypto.randomUUID();
   const emailVerified = setup !== null;
+  const version = newKeyringVersion();
   const created = await insertAccount(
     c.env.DB,
-    { id, email: body.email, name: body.name, keyring: body.keyring, emailVerified },
+    { id, email: body.email, name: body.name, keyring: body.keyring, version, emailVerified },
     Date.now(),
   );
   if (!created) return c.json({ error: messages.emailTaken }, 409);
@@ -147,7 +149,7 @@ auth.post('/signup', async (c) => {
         email: body.email,
         name: body.name,
         keyring: body.keyring,
-        version: 1,
+        version,
         smartFeatures: null,
         emailVerified,
       },

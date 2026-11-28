@@ -1,7 +1,7 @@
 import type { OpenedSlot, SlotIndex, SlotSecret, SpaceKeys } from '@arcafold/crypto';
-import type { AccountResponse, Keyring } from '@arcafold/types';
+import type { AccountResponse, Keyring, SpaceMove } from '@arcafold/types';
 
-import { ApiError, api, spaceApi } from './api';
+import { ApiError, api, spaceApi, whileMovingAway } from './api';
 import { loadCrypto } from './crypto-loader';
 import { FormError } from './errors';
 import { isValidEmail } from './password';
@@ -36,9 +36,19 @@ export function spaceOf(opened: OpenedSlot): Space {
   return opened.slot === SLOTS.private ? 'private' : 'main';
 }
 
+/**
+ * Whether a change left the open space at a new id (the main library moved), so anything
+ * loaded through the old one has to be loaded again.
+ */
+export function openSpaceMoved(before: Session, after: Session): boolean {
+  const [was, now] = [before.opened.space.spaceId, after.opened.space.spaceId];
+  return was.length !== now.length || was.some((byte, index) => byte !== now[index]);
+}
+
 const WRONG_LOGIN = 'That email and password don’t match.';
 const WRONG_PASSWORD = 'That password isn’t right.';
 const PASSWORD_IN_USE = 'Choose a password you don’t already use for Arcafold.';
+const NOT_MAIN = 'That isn’t your main password.';
 
 /**
  * Lets the browser paint a busy state first, for when Argon2id has to run on the main thread
@@ -186,8 +196,10 @@ export async function unlockWithSecret(
 }
 
 /**
- * Uses the recovery key to reopen the main library and set a new main password. The
- * private slot is copied untouched.
+ * Uses the recovery key to reopen the main library and set a new main password. The library
+ * moves to a new id on the way (see completeKeyChange), and the recovery slot is sealed again
+ * with the same key to follow it, so the words keep working. The private slot is copied
+ * untouched.
  */
 export async function recover(email: string, words: string, newPassword: string): Promise<Session> {
   const crypto = await loadCrypto();
@@ -214,37 +226,97 @@ export async function recover(email: string, words: string, newPassword: string)
   if (opened?.slot !== SLOTS.recovery) {
     throw new FormError('That recovery key doesn’t match this account.');
   }
-  const session = await writeSlot({ account, opened }, SLOTS.main, opened.space, newPassword);
+  const { keyring } = account;
+  const passwordSecret = await crypto.deriveFromPassword(newPassword, keyring.salt, keyring.kdf);
+  await refuseClash(keyring, passwordSecret, SLOTS.main);
   // From here on this device is unlocked with the new main password.
-  return session;
+  return moveMainLibrary({ account, opened }, opened.space, passwordSecret, recoverySecret);
+}
+
+/** Refuses a new password that already opens a slot other than `index`. */
+async function refuseClash(keyring: Keyring, secret: SlotSecret, index: SlotIndex): Promise<void> {
+  const crypto = await loadCrypto();
+  const clash = await crypto.openKeyring(keyring, secret);
+  if (clash && clash.slot !== index) throw new FormError(PASSWORD_IN_USE, 'new');
 }
 
 /**
- * Seals `space` into slot `index` under a new password and uploads the whole keyring. The
- * new password must not already open a different slot.
+ * Moves the main library (`main`, its keys) to a new id and rewrites the main and recovery
+ * slots to hold it, in one step on the server: the old id reaches nothing from then on, so
+ * someone who opened the library with an old password or recovery key keeps no way in, even
+ * with an earlier copy of the account. The key stays, so nothing in the library is sealed
+ * again. The private slot is copied untouched, and the private space keeps its id: moving it
+ * would show the server which space it is.
+ *
+ * From the main library (or the recovery key) this device stays in the main library, at its
+ * new id. From the private space it stays there, with the main library's new keys at hand.
  */
-async function writeSlot(
+async function moveMainLibrary(
   session: Session,
-  index: SlotIndex,
+  main: SpaceKeys,
+  passwordSecret: SlotSecret,
+  recoverySecret: SlotSecret,
+): Promise<Session> {
+  const crypto = await loadCrypto();
+  const { keyring } = session.account;
+  const space = await crypto.withNewSpaceId(main);
+  const withPassword = await crypto.replaceSlot(keyring, SLOTS.main, space, passwordSecret);
+  const from = crypto.spaceToken(main);
+  const account = await whileMovingAway(from, async () =>
+    api.updateKeyring({
+      loginKey: crypto.toBase64Url(session.opened.loginKey),
+      version: session.account.version,
+      keyring: await crypto.replaceSlot(withPassword, SLOTS.recovery, space, recoverySecret),
+      move: { from, to: crypto.spaceToken(space) },
+    }),
+  );
+  if (session.opened.slot === SLOTS.private) {
+    return { account, opened: session.opened, otherSpace: space };
+  }
+  const opened: OpenedSlot = { slot: SLOTS.main, space, loginKey: passwordSecret.loginKey };
+  return session.otherSpace
+    ? { account, opened, otherSpace: session.otherSpace }
+    : { account, opened };
+}
+
+/**
+ * A move that moves nothing, for a keyring change that leaves the main library where it is:
+ * two fresh random tokens no space uses. Every keyring change then sends one, and they all
+ * look alike to the server.
+ */
+async function stayingPut(): Promise<SpaceMove> {
+  const crypto = await loadCrypto();
+  return {
+    from: crypto.spaceToken(await crypto.newSpace()),
+    to: crypto.spaceToken(await crypto.newSpace()),
+  };
+}
+
+/**
+ * Seals `space` into the private slot under a new password and uploads the whole keyring.
+ * The new password must not already open a different slot.
+ */
+async function writePrivateSlot(
+  session: Session,
   space: OpenedSlot['space'],
   password: string,
 ): Promise<Session> {
   const crypto = await loadCrypto();
   const { keyring } = session.account;
   const secret = await crypto.deriveFromPassword(password, keyring.salt, keyring.kdf);
-  const clash = await crypto.openKeyring(keyring, secret);
-  if (clash && clash.slot !== index) throw new FormError(PASSWORD_IN_USE, 'new');
+  await refuseClash(keyring, secret, SLOTS.private);
   const account = await api.updateKeyring({
     loginKey: crypto.toBase64Url(session.opened.loginKey),
     version: session.account.version,
-    keyring: await crypto.replaceSlot(keyring, index, space, secret),
+    keyring: await crypto.replaceSlot(keyring, SLOTS.private, space, secret),
+    move: await stayingPut(),
   });
-  const changedOwnSlot = index === session.opened.slot || session.opened.slot === SLOTS.recovery;
+  const changedOwnSlot = session.opened.slot === SLOTS.private;
   const opened = changedOwnSlot
-    ? { slot: index, space, loginKey: secret.loginKey }
+    ? { slot: SLOTS.private, space, loginKey: secret.loginKey }
     : session.opened;
   // Creating a private space from the main library means its keys are already here.
-  const otherSpace = index === SLOTS.private && !changedOwnSlot ? space : session.otherSpace;
+  const otherSpace = changedOwnSlot ? session.otherSpace : space;
   return otherSpace ? { account, opened, otherSpace } : { account, opened };
 }
 
@@ -261,14 +333,68 @@ async function openSlotWith(
   return opened;
 }
 
-export async function changeMainPassword(
+/**
+ * A change to the main library's slots, worked out on this device and kept in memory until
+ * its new recovery words are saved: the main library's keys, the main password's secret after
+ * the change (a new password's, or the current one's for a new recovery key alone) and the
+ * new recovery key. Nothing is sent until completeKeyChange.
+ */
+export interface PendingKeyChange {
+  /** A new main password, or a new recovery key alone. */
+  kind: 'password' | 'recovery-key';
+  recoveryWords: string[];
+  main: SpaceKeys;
+  passwordSecret: SlotSecret;
+  recoveryKey: Uint8Array;
+}
+
+/**
+ * Starts a new main password (`next`), or a new recovery key alone (`next` null), given the
+ * current main password. Either way the main library moves to a new id, and the recovery
+ * slot has to be rewritten to follow it, which takes a recovery key: so a new one is made
+ * here, for its words to be saved before anything changes.
+ */
+export async function prepareKeyChange(
   session: Session,
   current: string,
-  next: string,
-): Promise<Session> {
+  next: string | null,
+): Promise<PendingKeyChange> {
   await nextFrame();
-  const opened = await openSlotWith(session, SLOTS.main, current, WRONG_PASSWORD);
-  return writeSlot(session, SLOTS.main, opened.space, next);
+  const crypto = await loadCrypto();
+  const { keyring } = session.account;
+  const currentSecret = await crypto.deriveFromPassword(current, keyring.salt, keyring.kdf);
+  const opened = await crypto.openKeyring(keyring, currentSecret);
+  if (opened?.slot !== SLOTS.main) {
+    throw new FormError(spaceOf(session.opened) === 'main' ? WRONG_PASSWORD : NOT_MAIN, 'current');
+  }
+  let passwordSecret = currentSecret;
+  if (next !== null) {
+    passwordSecret = await crypto.deriveFromPassword(next, keyring.salt, keyring.kdf);
+    await refuseClash(keyring, passwordSecret, SLOTS.main);
+  }
+  const recoveryKey = await crypto.generateRecoveryKey();
+  return {
+    kind: next === null ? 'recovery-key' : 'password',
+    recoveryWords: await crypto.recoveryKeyToWords(recoveryKey),
+    main: opened.space,
+    passwordSecret,
+    recoveryKey,
+  };
+}
+
+/**
+ * Makes a change from prepareKeyChange once its words are saved: the main library moves to a
+ * new id, under the new main password (or the same one) and the new recovery key. The old
+ * password and the old words stop working, and so does the library's old id.
+ */
+export async function completeKeyChange(
+  session: Session,
+  pending: PendingKeyChange,
+): Promise<Session> {
+  const crypto = await loadCrypto();
+  const salt = session.account.keyring.salt;
+  const recoverySecret = await crypto.deriveFromRecoveryKey(pending.recoveryKey, salt);
+  return moveMainLibrary(session, pending.main, pending.passwordSecret, recoverySecret);
 }
 
 /**
@@ -286,7 +412,7 @@ export async function setPrivatePassword(
   const space = inPrivate
     ? (await openSlotWith(session, SLOTS.private, current ?? '', WRONG_PASSWORD)).space
     : await crypto.newSpace();
-  return writeSlot(session, SLOTS.private, space, next);
+  return writePrivateSlot(session, space, next);
 }
 
 /**
@@ -298,7 +424,7 @@ export async function openOtherSpace(session: Session, password: string): Promis
   await nextFrame();
   const fromPrivate = spaceOf(session.opened) === 'private';
   const opened = fromPrivate
-    ? await openSlotWith(session, SLOTS.main, password, 'That isn’t your main password.')
+    ? await openSlotWith(session, SLOTS.main, password, NOT_MAIN)
     : await openSlotWith(
         session,
         SLOTS.private,
@@ -306,26 +432,6 @@ export async function openOtherSpace(session: Session, password: string): Promis
         'That password doesn’t open a private space.',
       );
   return { ...session, otherSpace: opened.space };
-}
-
-export async function newRecoveryWords(): Promise<{ key: Uint8Array; words: string[] }> {
-  const crypto = await loadCrypto();
-  const key = await crypto.generateRecoveryKey();
-  return { key, words: await crypto.recoveryKeyToWords(key) };
-}
-
-/** Replaces the recovery slot. Only the main library has the keys to do this. */
-export async function saveRecoveryKey(session: Session, recoveryKey: Uint8Array): Promise<Session> {
-  if (spaceOf(session.opened) !== 'main') throw new FormError('Open your main library first.');
-  const crypto = await loadCrypto();
-  const { keyring } = session.account;
-  const secret = await crypto.deriveFromRecoveryKey(recoveryKey, keyring.salt);
-  const account = await api.updateKeyring({
-    loginKey: crypto.toBase64Url(session.opened.loginKey),
-    version: session.account.version,
-    keyring: await crypto.replaceSlot(keyring, SLOTS.recovery, session.opened.space, secret),
-  });
-  return { ...session, account };
 }
 
 /**

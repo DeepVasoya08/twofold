@@ -47,6 +47,7 @@ export const messages = {
   emailTaken: 'An account with this email already exists. Log in instead.',
   conflict: 'Your account changed on another device. Reload and try again.',
   verifyEmail: 'Confirm your email to keep going.',
+  spaceMoved: 'Your password or recovery key changed. Unlock Arcafold again to keep going.',
   /**
    * The same words in every space and on every plan, with no price or plan name: the phone
    * apps show it too, and they never point to a purchase (docs/billing.md).

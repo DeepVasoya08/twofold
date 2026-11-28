@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
 import {
   MAIN_PASSWORD,
@@ -8,11 +9,49 @@ import {
   goTo,
   lock,
   logIn,
+  setUpPrivateSpace,
   signOut,
   signUp,
   unlockWith,
   uploadPhotos,
 } from './helpers';
+
+const NEW_PASSWORD = 'my-changed-password-3';
+const decryptedTiles = (page: Page) => page.locator('.photo-tile img');
+
+/** Resets the main password with recovery words, from the sign-in side. */
+async function recover(page: Page, email: string, words: string, password: string) {
+  await page.goto('/recover');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Recovery key').fill(words);
+  await page.getByLabel('New password').fill(password);
+  await page.getByRole('button', { name: 'Reset password' }).click();
+}
+
+/** Ticks the box on the new recovery words screen and continues; returns the words. */
+async function saveNewWords(page: Page): Promise<string> {
+  await expect(page).toHaveURL('/signup/recovery-key');
+  const wordList = page.getByRole('list', { name: 'Recovery key' }).getByRole('listitem');
+  await expect(wordList).toHaveCount(12);
+  const words = (await wordList.allTextContents()).join(' ');
+  await page.getByLabel("I've saved my recovery key somewhere safe").check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page).toHaveURL('/settings');
+  return words;
+}
+
+/** Changes the main password from Settings, in either space; returns the new words. */
+async function changeMainPassword(page: Page, current: string, next: string): Promise<string> {
+  await goTo(page, 'Settings');
+  await page.getByRole('button', { name: 'Change' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Change main password' });
+  await dialog.getByLabel(/^Current/).fill(current);
+  await dialog.getByLabel('New password').fill(next);
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  const words = await saveNewWords(page);
+  await expect(page.getByText('Password changed', { exact: true })).toBeVisible();
+  return words;
+}
 
 test('reloading locks Arcafold; the password opens it again', async ({ page }) => {
   await signUp(page);
@@ -91,23 +130,28 @@ test('one password box opens the library or the private space', async ({ page })
   await expect(page.getByRole('heading', { level: 1, name: 'Private space' })).toBeVisible();
 });
 
-test('the recovery key resets the main password', async ({ page }) => {
+test('the recovery key resets the main password, and keeps working', async ({ page }) => {
   const { email, words } = await signUp(page);
+  await uploadPhotos(page, 1);
   await signOut(page);
 
-  await page.goto('/recover');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Recovery key').fill(words);
-  await page.getByLabel('New password').fill('a-brand-new-password-7');
-  await page.getByRole('button', { name: 'Reset password' }).click();
+  await recover(page, email, words, 'a-brand-new-password-7');
   await expect(page.getByText('Password reset. Welcome back.')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
+  // The library moved to a new id on the way, with everything in it.
+  await expect(decryptedTiles(page)).toHaveCount(1);
 
   await signOut(page);
   await logIn(page, email, MAIN_PASSWORD);
   await expect(page.getByText('That email and password don’t match.')).toBeVisible();
   await logIn(page, email, 'a-brand-new-password-7');
   await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
+
+  // The same words followed the library, so they work again.
+  await signOut(page);
+  await recover(page, email, words, 'a-third-password-8');
+  await expect(page.getByText('Password reset. Welcome back.')).toBeVisible();
+  await expect(decryptedTiles(page)).toHaveCount(1);
 });
 
 test('a wrong recovery key is refused', async ({ page }) => {
@@ -126,12 +170,22 @@ test('a wrong recovery key is refused', async ({ page }) => {
 });
 
 test('a new recovery key replaces the old one', async ({ page }) => {
-  await signUp(page);
+  const { email, words: oldWords } = await signUp(page);
   await goTo(page, 'Settings');
   await page.getByRole('button', { name: 'New key' }).click();
+  // The main password first: the library moves to a new id along with the new key.
+  const dialog = page.getByRole('dialog', { name: 'Make a new recovery key' });
+  await dialog.getByLabel('Main password').fill('not my password at all');
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await expect(dialog.getByLabel('Main password')).toHaveAccessibleDescription(
+    'That password isn’t right.',
+  );
+  await dialog.getByLabel('Main password').fill(MAIN_PASSWORD);
+  await dialog.getByRole('button', { name: 'Next' }).click();
   await expect(
     page.getByRole('heading', { level: 1, name: 'Save your recovery key' }),
   ).toBeVisible();
+  await expect(page.getByText(/replace your old recovery key/)).toBeVisible();
   const wordList = page.getByRole('list', { name: 'Recovery key' }).getByRole('listitem');
   await expect(wordList).toHaveCount(12);
   const words = await wordList.allTextContents();
@@ -150,30 +204,108 @@ test('a new recovery key replaces the old one', async ({ page }) => {
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByText('New recovery key saved')).toBeVisible();
   await expect(page).toHaveURL('/settings');
+
+  // The main password stays the same; the old words open nothing and the new ones do.
+  await lock(page);
+  await unlockWith(page, MAIN_PASSWORD);
+  await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
+  await signOut(page);
+  await recover(page, email, oldWords, 'a-brand-new-password-7');
+  await expect(page.getByRole('alert')).toContainText('doesn’t match this account');
+  await recover(page, email, words.join(' '), 'a-brand-new-password-7');
+  await expect(page.getByText('Password reset. Welcome back.')).toBeVisible();
 });
 
-test('changing the main password', async ({ page }) => {
-  await signUp(page);
+test('changing the main password comes with new recovery words', async ({ page }) => {
+  const { email, words: oldWords } = await signUp(page);
+  await uploadPhotos(page, 1);
   await goTo(page, 'Settings');
   await page.getByRole('button', { name: 'Change' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Change main password' });
   await dialog.getByLabel('Current password').fill('not my password at all');
-  await dialog.getByLabel('New password').fill('my-changed-password-3');
-  await dialog.getByRole('button', { name: 'Change password' }).click();
+  await dialog.getByLabel('New password').fill(NEW_PASSWORD);
+  await dialog.getByRole('button', { name: 'Next' }).click();
   // The error sits under the current password, the field to fix.
   await expect(dialog.getByLabel('Current password')).toHaveAccessibleDescription(
     'That password isn’t right.',
   );
   await expect(dialog.getByLabel('New password')).not.toHaveAttribute('aria-invalid');
   await dialog.getByLabel('Current password').fill(MAIN_PASSWORD);
-  await dialog.getByRole('button', { name: 'Change password' }).click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
+
+  // Nothing has changed until the new words are saved.
+  await expect(
+    page.getByText(/Your new main password comes with a new recovery key/),
+  ).toBeVisible();
+  const words = await saveNewWords(page);
+  expect(words).not.toBe(oldWords);
   await expect(page.getByText('Password changed')).toBeVisible();
+  // The library moved to a new id, and everything in it came along.
+  await goTo(page, 'Photos');
+  await expect(decryptedTiles(page)).toHaveCount(1);
 
   await lock(page);
   await unlockWith(page, MAIN_PASSWORD);
   await expect(page.getByText('That password isn’t right.')).toBeVisible();
-  await unlockWith(page, 'my-changed-password-3');
+  await unlockWith(page, NEW_PASSWORD);
   await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
+  await expect(decryptedTiles(page)).toHaveCount(1);
+
+  // The old words stopped working with the old password; the new ones open the library.
+  await signOut(page);
+  await recover(page, email, oldWords, 'a-brand-new-password-7');
+  await expect(page.getByRole('alert')).toContainText('doesn’t match this account');
+  await recover(page, email, words, 'a-brand-new-password-7');
+  await expect(page.getByText('Password reset. Welcome back.')).toBeVisible();
+  await expect(decryptedTiles(page)).toHaveCount(1);
+});
+
+test('a tab left open with the old keys locks once the main password changes', async ({
+  page,
+  context,
+}) => {
+  await signUp(page);
+  await uploadPhotos(page, 1);
+  // Another tab in the same browser shares the session, and opens the library too.
+  const other = await context.newPage();
+  await other.goto('/photos');
+  await unlockWith(other, MAIN_PASSWORD);
+  await expect(decryptedTiles(other)).toHaveCount(1);
+
+  await changeMainPassword(page, MAIN_PASSWORD, NEW_PASSWORD);
+
+  // Its regular check for changes now goes to the old id, which the server refuses: so it
+  // locks, rather than add photos where nobody would find them.
+  await other.bringToFront();
+  await expect(other).toHaveURL('/unlock', { timeout: 20_000 });
+  await expect(
+    other.getByText('Your password or recovery key changed. Unlock to keep going.'),
+  ).toBeVisible();
+  await unlockWith(other, MAIN_PASSWORD);
+  await expect(other.getByText('That password isn’t right.')).toBeVisible();
+  await unlockWith(other, NEW_PASSWORD);
+  await expect(decryptedTiles(other)).toHaveCount(1);
+});
+
+test('the main password can change from the private space, which stays open', async ({ page }) => {
+  await signUp(page);
+  await uploadPhotos(page, 1);
+  await setUpPrivateSpace(page);
+  await lock(page);
+  await unlockWith(page, PRIVATE_PASSWORD);
+  await expect(page.getByRole('heading', { level: 1, name: 'Private space' })).toBeVisible();
+
+  await changeMainPassword(page, MAIN_PASSWORD, NEW_PASSWORD);
+  await goTo(page, 'Photos');
+  await expect(page.getByRole('heading', { level: 1, name: 'Private space' })).toBeVisible();
+
+  await lock(page);
+  await unlockWith(page, NEW_PASSWORD);
+  await expect(page.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
+  await expect(decryptedTiles(page)).toHaveCount(1);
+  await lock(page);
+  await unlockWith(page, PRIVATE_PASSWORD);
+  await expect(page.getByRole('heading', { level: 1, name: 'Private space' })).toBeVisible();
 });
 
 test('deleting the account needs the password', async ({ page }) => {
