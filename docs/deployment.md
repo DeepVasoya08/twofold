@@ -146,6 +146,12 @@ The product's domain is `arcafold.com`. Moving to it, in order:
 4. Search Console: add a **Domain** property for `arcafold.com` (DNS verification works now)
    and re-request Google's branding review.
 
+Leave Cloudflare's **Web Analytics** and **JavaScript Detections** (under Security → Bots)
+off for the zone. Both add a script to every page. The CSP blocks them, but if one ran it
+would report each page's address, album and photo ids included, which the Privacy page
+says Arcafold doesn't collect. `apps/web/src/headers.test.ts` keeps the CSP from letting
+them in.
+
 ### 6. Google Photos connection (optional)
 
 "Connect Google Photos" on the import screen signs people in to Google in their browser and
