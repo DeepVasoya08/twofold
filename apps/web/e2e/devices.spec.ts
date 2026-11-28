@@ -39,6 +39,17 @@ test('switching back to the tab quickly doesn’t send requests', async ({ page 
   await signUp(page);
   await expect(page.getByText('Your library is ready')).toBeVisible();
   await page.waitForLoadState('networkidle');
+  // Stop the page's clock a little ahead and come back to the tab once, so everything that
+  // checks when the tab comes back has just checked. From here no time passes on the page,
+  // however slow this machine is, so every switch below is a quick one.
+  const checked = page.waitForResponse((response) => response.url().endsWith('/api/space/stamp'));
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 5_000);
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await checked;
+  await page.waitForTimeout(500);
+
   const sent: string[] = [];
   page.on('request', (request) => {
     if (request.url().includes('/api/')) sent.push(request.url());
