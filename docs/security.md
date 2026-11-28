@@ -757,6 +757,11 @@ so photos can later be found by describing them. The server stores only cipherte
   and there is no password-change email, since it would date a private space's setup.
 - Input is validated with zod at the API boundary (`apps/api/src/schemas.ts`), including
   exact key sizes and KDF bounds.
+- Each space's limits (people the library or one album is shared with, invites in
+  progress, joined libraries, albums, and changes waiting in a shared folder) are counted
+  in the same statement that adds the row, so requests sent at the same moment can't pass
+  them. The API tests check this with a database stand-in that answers each query on a
+  later tick, as D1 does over the network (`pace` in `apps/api/src/test/d1.ts`).
 - **The server decides who may do what.** Every space request is checked against what its
   token may do, looked up afresh each time (so a change to someone's access applies to their
   next request, whatever their screen still shows): the space's own token, a library member

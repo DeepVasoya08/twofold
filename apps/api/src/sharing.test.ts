@@ -2,7 +2,7 @@ import { fromBase64Url, randomBytes, sha256, toBase64Url } from '@arcafold/crypt
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { INVITE_TTL_MS, MAX_MEMBERS, SPACE_HEADER } from '@arcafold/types';
+import { INVITE_TTL_MS, MAX_JOINED, MAX_MEMBERS, SPACE_HEADER } from '@arcafold/types';
 import { MAX_PENDING_INVITES } from '@arcafold/types';
 import type {
   InviterView,
@@ -16,11 +16,13 @@ import type {
 import type { Env } from './env';
 import { MAX_FAILURES } from './proof';
 import { createTestDb } from './test/d1';
+import type { Pace } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
 
 let env: Env;
 let sqlite: DatabaseSync;
+let pace: Pace;
 let owner: Client;
 let guest: Client;
 let ownerToken: string;
@@ -49,6 +51,7 @@ function useSpace(c: Client, token: string): void {
 beforeEach(async () => {
   const db = createTestDb();
   sqlite = db.sqlite;
+  pace = db.pace;
   env = { DB: db.db, BLOBS: createTestR2().bucket };
   owner = await signUp('sam@example.com');
   guest = await signUp('kim@example.com');
@@ -173,6 +176,22 @@ describe('members', () => {
     ).toBe(409);
   });
 
+  it('can’t be raced past the limit: parallel shares add no more than it', async () => {
+    pace.slow = true;
+    const results = await Promise.all(
+      Array.from({ length: MAX_MEMBERS * 3 }, () =>
+        owner.request('POST', '/space/members', {
+          id: newId(),
+          token: random(16),
+          meta: newMeta(),
+        }),
+      ),
+    );
+    expect(results.filter((res) => res.status === 201)).toHaveLength(MAX_MEMBERS);
+    expect(results.filter((res) => res.status === 409)).toHaveLength(MAX_MEMBERS * 2);
+    expect(sqlite.prepare('SELECT * FROM members').all()).toHaveLength(MAX_MEMBERS);
+  });
+
   it('are forgotten when the owner wipes the space', async () => {
     const member = await share();
     await owner.request('POST', '/space/joined', { id: newId(), meta: newMeta() });
@@ -198,6 +217,25 @@ describe('joined libraries', () => {
     expect((await owner.request('DELETE', `/space/joined/${joined.id}`, {})).status).toBe(204);
     const after = await owner.request('GET', '/space/joined');
     expect(await after.json<JoinedList>()).toEqual({ joined: [] });
+  });
+
+  it('are limited, and can’t be raced past the limit', async () => {
+    pace.slow = true;
+    const results = await Promise.all(
+      Array.from({ length: MAX_JOINED * 3 }, () =>
+        owner.request('POST', '/space/joined', { id: newId(), meta: newMeta() }),
+      ),
+    );
+    expect(results.filter((res) => res.status === 201)).toHaveLength(MAX_JOINED);
+    expect(results.filter((res) => res.status === 409)).toHaveLength(MAX_JOINED * 2);
+    expect(sqlite.prepare('SELECT * FROM joined').all()).toHaveLength(MAX_JOINED);
+    const more = await owner.request('POST', '/space/joined', { id: newId(), meta: newMeta() });
+    expect(more.status).toBe(409);
+    expect((await more.json<{ error: string }>()).error).toMatch(/as many libraries/);
+    // The limit is per space.
+    useSpace(owner, random(16));
+    const elsewhere = { id: newId(), meta: newMeta() };
+    expect((await owner.request('POST', '/space/joined', elsewhere)).status).toBe(201);
   });
 
   it('have no account column', () => {
@@ -564,6 +602,18 @@ describe('pending invites', () => {
       expect((await owner.request('POST', '/space/pending-invites', record())).status).toBe(201);
     }
     expect((await owner.request('POST', '/space/pending-invites', record())).status).toBe(409);
+  });
+
+  it('can’t be raced past the limit', async () => {
+    pace.slow = true;
+    const results = await Promise.all(
+      Array.from({ length: MAX_PENDING_INVITES * 3 }, () =>
+        owner.request('POST', '/space/pending-invites', record()),
+      ),
+    );
+    expect(results.filter((res) => res.status === 201)).toHaveLength(MAX_PENDING_INVITES);
+    expect(results.filter((res) => res.status === 409)).toHaveLength(MAX_PENDING_INVITES * 2);
+    expect(await list(owner)).toHaveLength(MAX_PENDING_INVITES);
   });
 
   it('keep no account or token, and are forgotten when the space is wiped', async () => {

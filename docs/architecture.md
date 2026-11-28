@@ -106,7 +106,9 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
     `people`, `search_segments`, `search_words` and `smart_albums` (keyed by space, never
     by account), and `invites` (up to a week, keyed by hashes of the code, link and handle).
   - API tests run the real migrations on Node's built-in SQLite (`src/test/d1.ts`) and an
-    in-memory R2 (`src/test/r2.ts`).
+    in-memory R2 (`src/test/r2.ts`). The SQLite stand-in answers at once; a test of a race
+    sets its `pace` to slow, so each query answers on a later tick and requests sent
+    together interleave as they do against D1.
 
 ## Local development
 

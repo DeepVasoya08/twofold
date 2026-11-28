@@ -12,10 +12,10 @@ import {
 import type { AlbumList, PhotoPage, ProfilePhotoResponse, StoredPhoto } from '@arcafold/types';
 
 import type { Env } from './env';
-import { PAGE_SIZE, PENDING_TTL_MS } from './routes/space';
+import { MAX_ALBUMS, PAGE_SIZE, PENDING_TTL_MS } from './routes/space';
 import { STALE_PENDING_SQL } from './space-db';
 import { createTestDb } from './test/d1';
-import type { RoundTrips } from './test/d1';
+import type { Pace, RoundTrips } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
 import type { TestR2 } from './test/r2';
@@ -26,6 +26,7 @@ let r2: TestR2;
 let client: Client;
 let token: string;
 let trips: RoundTrips;
+let pace: Pace;
 
 const newId = () => toBase64Url(randomBytes(16));
 const newMeta = () => toBase64Url(randomBytes(300));
@@ -39,6 +40,7 @@ beforeEach(async () => {
   const blobs = createTestR2();
   sqlite = db.sqlite;
   trips = db.trips;
+  pace = db.pace;
   r2 = blobs.r2;
   env = { DB: db.db, BLOBS: blobs.bucket };
   client = new Client(env);
@@ -428,6 +430,26 @@ describe('albums', () => {
     useSpace(client, token);
     const res = await client.request('GET', '/space/albums');
     expect(await res.json<AlbumList>()).toEqual({ albums: [album] });
+  });
+
+  it('limits how many a space has, and can’t be raced past the limit', async () => {
+    const add = () => client.request('POST', '/space/albums', { id: newId(), meta: newMeta() });
+    expect((await add()).status).toBe(201);
+    // Fill the space to two short of the limit directly; adding them one by one is slow.
+    const { space } = sqlite.prepare('SELECT space FROM albums').get() as { space: string };
+    const fill = sqlite.prepare('INSERT INTO albums (id, space, meta) VALUES (?, ?, ?)');
+    for (let i = 3; i < MAX_ALBUMS; i++) fill.run(newId(), space, newMeta());
+    pace.slow = true;
+    const results = await Promise.all(Array.from({ length: 10 }, add));
+    expect(results.filter((res) => res.status === 201)).toHaveLength(2);
+    expect(results.filter((res) => res.status === 409)).toHaveLength(8);
+    expect(sqlite.prepare('SELECT * FROM albums').all()).toHaveLength(MAX_ALBUMS);
+    const more = await add();
+    expect(more.status).toBe(409);
+    expect((await more.json<{ error: string }>()).error).toMatch(/most albums/);
+    // The limit is per space.
+    useSpace(client, toBase64Url(randomBytes(16)));
+    expect((await add()).status).toBe(201);
   });
 });
 

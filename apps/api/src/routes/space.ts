@@ -622,7 +622,7 @@ space.post('/albums', async (c) => {
   if ((await countAlbums(c.env.DB, tag)) >= MAX_ALBUMS) {
     return c.json({ error: 'You have the most albums Arcafold allows.' }, 409);
   }
-  if (!(await insertAlbum(c.env.DB, tag, body))) {
+  if (!(await insertAlbum(c.env.DB, tag, body, MAX_ALBUMS))) {
     return c.json({ error: messages.badRequest }, 409);
   }
   return c.body(null, 201);
@@ -910,7 +910,8 @@ space.post('/members', requireOwner, async (c) => {
   }
   const access: MemberAccess = body.access ?? 'view';
   const member = { id: body.id, tokenHash, meta: body.meta, album, access };
-  if (!(await insertMember(c.env.DB, tag, member))) {
+  const cap = album === null ? MAX_MEMBERS : MAX_ALBUM_MEMBERS;
+  if (!(await insertMember(c.env.DB, tag, member, cap))) {
     return c.json({ error: messages.badRequest }, 409);
   }
   return c.body(null, 201);
@@ -983,7 +984,7 @@ space.post('/joined', requireOwner, async (c) => {
   if ((await countJoined(c.env.DB, tag)) >= MAX_JOINED) {
     return c.json({ error: 'You’ve joined as many libraries as Arcafold allows.' }, 409);
   }
-  if (!(await insertJoined(c.env.DB, tag, body))) {
+  if (!(await insertJoined(c.env.DB, tag, body, MAX_JOINED))) {
     return c.json({ error: messages.badRequest }, 409);
   }
   return c.body(null, 201);
@@ -1018,7 +1019,7 @@ space.post('/pending-invites', requireOwner, async (c) => {
       409,
     );
   }
-  if (!(await insertPendingInvite(c.env.DB, tag, body))) {
+  if (!(await insertPendingInvite(c.env.DB, tag, body, MAX_PENDING_INVITES))) {
     return c.json({ error: messages.badRequest }, 409);
   }
   return c.body(null, 201);
