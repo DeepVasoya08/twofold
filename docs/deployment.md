@@ -89,38 +89,42 @@ or in the output of `pnpm exec wrangler whoami`.
 
 ### 3. Configure GitHub
 
-In the repository, open **Settings → Secrets and variables → Actions**:
+The Deploy, Backup and Deploy staging workflows declare `environment: production`. Open
+**Settings → Environments → production** (create it with that exact name if the first
+deploy has not run yet):
 
-| Kind     | Tab           | Name                          | Value                                              |
-| -------- | ------------- | ----------------------------- | -------------------------------------------------- |
-| Secret   | **Secrets**   | `CLOUDFLARE_API_TOKEN`        | the token from step 2                              |
-| Secret   | **Secrets**   | `CLOUDFLARE_ACCOUNT_ID`       | your Cloudflare account ID                         |
-| Variable | **Variables** | `D1_DATABASE_ID`              | the ID from `wrangler d1 create`                   |
-| Variable | **Variables** | `SITE_URL` (optional)         | the public origin, e.g. `https://arcafold.example` |
-| Variable | **Variables** | `GOOGLE_CLIENT_ID` (optional) | the OAuth client ID from step 6                    |
+| Where                 | Name                          | Value                                              |
+| --------------------- | ----------------------------- | -------------------------------------------------- |
+| Environment secrets   | `CLOUDFLARE_API_TOKEN`        | the token from step 2                              |
+| Environment secrets   | `CLOUDFLARE_ACCOUNT_ID`       | your Cloudflare account ID                         |
+| Environment variables | `D1_DATABASE_ID`              | the ID from `wrangler d1 create`                   |
+| Environment variables | `SITE_URL` (optional)         | the public origin, e.g. `https://arcafold.example` |
+| Environment variables | `GOOGLE_CLIENT_ID` (optional) | the OAuth client ID from step 6                    |
 
 `D1_DATABASE_ID` must be a **variable**, not a secret: the workflow reads
 `vars.D1_DATABASE_ID`, so a secret with that name is invisible to it and the
 "Configure D1 database ID" step fails with "Repository variable D1_DATABASE_ID is not
-set". It is not sensitive; it only identifies the database to the account.
+set". It is not sensitive; it only identifies the database to the account. Variables may
+live on the repository instead (**Settings → Secrets and variables → Actions**); secrets
+must not, so delete any repository secret with one of these names.
 
-Repository-level secrets and variables are the simplest choice. They are visible to the
-deploy job even though it runs in the `production` environment.
+### 4. Keep the token to `main`
 
-### 4. The `production` environment (optional gate)
+On the same **production** environment page:
 
-The deploy job declares `environment: production`. GitHub creates that environment
-automatically on the first deploy, so there is nothing to set up for deploys to work.
+- set **Deployment branches and tags** to **Selected branches and tags → `main`**;
+- optionally, add yourself under **Required reviewers** to approve each deploy.
 
-To add a manual approval or restrict deploys to `main`, open **Settings → Environments
-→ production** (create it with that exact name if the first deploy has not run yet) and:
+This keeps the token to code that has reached `main`. A repository secret can be read by a
+workflow on any branch, so anyone (or any app) that can push a branch could write a
+workflow that reads it. An environment secret limited to `main` reaches only jobs that run
+on `main`: Deploy (after CI passes on `main`), the nightly Backup, and Deploy staging,
+which builds only `main`.
 
-- add yourself under **Required reviewers** to approve each deploy, and
-- set **Deployment branches and tags** to **Selected branches → `main`**.
-
-If you prefer, you can store the two secrets and the variable on the `production`
-environment instead of the repository. Environment values override repository values
-of the same name, so keep them in one place only to avoid stale duplicates.
+Protect `main` itself too: **Settings → Rules → Rulesets → New branch ruleset**, target
+`main`, and turn on **Restrict deletions**, **Block force pushes** and **Require a pull
+request before merging**, so nothing reaches `main`, and so production, without a pull
+request.
 
 ### 5. Custom domain (optional)
 

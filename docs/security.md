@@ -22,7 +22,10 @@ DENY`, `no-referrer`, `nosniff`, `Cache-Control: no-store`) in `apps/api/src/app
   no fixed version, reached only by dev or build tools, may be ignored by its GHSA id under
   `auditConfig.ignoreGhsas` in `pnpm-workspace.yaml`, with a note saying why; take it out
   once a fix ships.
-- Credentials live only in GitHub secrets (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`).
+- Credentials live only in the `production` environment's GitHub secrets
+  (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`), which only jobs running on `main` can
+  read ([deployment.md](deployment.md#4-keep-the-token-to-main)). Deploy staging uses
+  the same token, so it builds only `main`, never an unreviewed branch.
 
 ## Key slots
 

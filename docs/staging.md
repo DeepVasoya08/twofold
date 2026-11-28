@@ -3,18 +3,25 @@
 Staging is a second copy of Arcafold at `https://arcafold-staging.<your-subdomain>.workers.dev`.
 It shares nothing with production: it has its own Worker (`arcafold-staging`), its own
 database (`arcafold-staging`) and its own bucket (`arcafold-staging-blobs`). It's used for
-restore drills and for trying a branch before it reaches production. Accounts made there
+restore drills and for trying `main` somewhere other than production. Accounts made there
 are separate from production accounts.
 
 ## Deploy to staging
 
-Go to **Actions → Deploy staging → Run workflow** and pick a branch (`main` by default).
+Go to **Actions → Deploy staging → Run workflow** and leave **Use workflow from** on
+`main`. It deploys the latest `main`; started from any other branch, the run does nothing.
+
+Staging deploys only `main` because it runs with the production environment's
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, and that token can deploy production
+too. Code from a branch that hasn't been reviewed must never run with it. Try a branch
+locally instead (`pnpm --filter @arcafold/api dev`, see
+[architecture.md](architecture.md#local-development)) and let CI run its tests.
 
 The first run creates the database and the two buckets. Every run applies migrations and
-deploys. It uses the production environment's `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID`, and the names in `wrangler.jsonc`'s `staging` section decide what
-it touches. If the token isn't allowed to create a D1 database or an R2 bucket, the run
-stops at that step. Create them once by hand and run it again:
+deploys. The names in `wrangler.jsonc`'s `staging` section decide what it touches, and the
+token is given only to the steps that use it, never to installing packages or building. If
+the token isn't allowed to create a D1 database or an R2 bucket, the run stops at that
+step. Create them once by hand and run it again:
 
 ```sh
 cd apps/api
