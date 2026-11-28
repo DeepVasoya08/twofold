@@ -6,10 +6,12 @@ import type { AlbumItemList, AlbumList, MemberList, PhotoPage } from '@arcafold/
 
 import type { Env } from './env';
 import { createTestDb } from './test/d1';
+import type { Pace } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
 
 let env: Env;
+let pace: Pace;
 let owner: Client;
 let guest: Client;
 
@@ -30,6 +32,7 @@ function useSpace(c: Client, token: string): void {
 
 beforeEach(async () => {
   const db = createTestDb();
+  pace = db.pace;
   env = { DB: db.db, BLOBS: createTestR2().bucket };
   owner = await signUp('sam@example.com');
   guest = await signUp('kim@example.com');
@@ -242,6 +245,26 @@ describe('sharing an album', () => {
     // Library sharing has its own limit.
     const library = { id: newId(), token: random(16), meta: newMeta() };
     expect((await owner.request('POST', '/space/members', library)).status).toBe(201);
+  });
+
+  it('can’t be raced past one album’s limit', async () => {
+    const album = await addAlbum();
+    await shareAlbum(album);
+    pace.slow = true;
+    const results = await Promise.all(
+      Array.from({ length: MAX_ALBUM_MEMBERS * 3 }, () =>
+        owner.request('POST', '/space/members', {
+          id: newId(),
+          token: random(16),
+          meta: newMeta(),
+          album,
+        }),
+      ),
+    );
+    expect(results.filter((res) => res.status === 201)).toHaveLength(MAX_ALBUM_MEMBERS);
+    expect(results.filter((res) => res.status === 409)).toHaveLength(MAX_ALBUM_MEMBERS * 2);
+    const listed = await owner.request('GET', '/space/members');
+    expect((await listed.json<MemberList>()).members).toHaveLength(MAX_ALBUM_MEMBERS);
   });
 
   it('stops for everyone when sharing stops or the album is deleted', async () => {

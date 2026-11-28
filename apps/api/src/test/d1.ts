@@ -10,6 +10,29 @@ export interface RoundTrips {
 }
 
 /**
+ * How quickly the stand-in answers. At once by default. With `slow`, each query or batch
+ * answers on a later timer tick, as D1 does over the network, so requests sent together
+ * interleave the way they do in production (for tests of races).
+ */
+export interface Pace {
+  slow: boolean;
+}
+
+/** Runs a query now, or on a later timer tick when the pace is slow. */
+function answer<T>(pace: Pace, query: () => T): Promise<T> {
+  if (!pace.slow) return Promise.resolve(query());
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      try {
+        resolve(query());
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    }, 0);
+  });
+}
+
+/**
  * A small D1 stand-in on Node's built-in SQLite, with the real migrations applied, so API
  * tests run the same SQL as production. Only the parts of D1 the API uses are here.
  */
@@ -17,31 +40,36 @@ class Statement {
   constructor(
     private readonly db: DatabaseSync,
     private readonly trips: RoundTrips,
+    private readonly pace: Pace,
     private readonly sql: string,
     private readonly params: SQLInputValue[] = [],
   ) {}
 
   bind(...params: SQLInputValue[]): Statement {
-    return new Statement(this.db, this.trips, this.sql, params);
+    return new Statement(this.db, this.trips, this.pace, this.sql, params);
   }
 
   first<T>(): Promise<T | null> {
     this.trips.count += 1;
-    const row = this.db.prepare(this.sql).get(...this.params);
-    return Promise.resolve((row ?? null) as T | null);
+    return answer(
+      this.pace,
+      () => (this.db.prepare(this.sql).get(...this.params) ?? null) as T | null,
+    );
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- D1's own signature
   all<T>(): Promise<{ results: T[] }> {
     this.trips.count += 1;
-    const rows = this.db.prepare(this.sql).all(...this.params);
-    return Promise.resolve({ results: rows as T[] });
+    return answer(this.pace, () => ({
+      results: this.db.prepare(this.sql).all(...this.params) as T[],
+    }));
   }
 
   run(): Promise<{ meta: { changes: number } }> {
     this.trips.count += 1;
-    const result = this.db.prepare(this.sql).run(...this.params);
-    return Promise.resolve({ meta: { changes: Number(result.changes) } });
+    return answer(this.pace, () => ({
+      meta: { changes: Number(this.db.prepare(this.sql).run(...this.params).changes) },
+    }));
   }
 
   /** What D1 gives for each statement in a batch: rows (for a query) and the change count. */
@@ -60,6 +88,7 @@ class Statement {
 class TestD1 {
   readonly sqlite = new DatabaseSync(':memory:');
   readonly trips: RoundTrips = { count: 0 };
+  readonly pace: Pace = { slow: false };
 
   constructor() {
     this.sqlite.exec('PRAGMA foreign_keys = ON');
@@ -72,24 +101,31 @@ class TestD1 {
   }
 
   prepare(sql: string): Statement {
-    return new Statement(this.sqlite, this.trips, sql);
+    return new Statement(this.sqlite, this.trips, this.pace, sql);
   }
 
   batch(statements: Statement[]): Promise<{ results: unknown[]; meta: { changes: number } }[]> {
     this.trips.count += 1;
-    this.sqlite.exec('BEGIN');
-    try {
-      const results = statements.map((statement) => statement.runInBatch());
-      this.sqlite.exec('COMMIT');
-      return Promise.resolve(results);
-    } catch (error) {
-      this.sqlite.exec('ROLLBACK');
-      throw error;
-    }
+    return answer(this.pace, () => {
+      this.sqlite.exec('BEGIN');
+      try {
+        const results = statements.map((statement) => statement.runInBatch());
+        this.sqlite.exec('COMMIT');
+        return results;
+      } catch (error) {
+        this.sqlite.exec('ROLLBACK');
+        throw error;
+      }
+    });
   }
 }
 
-export function createTestDb(): { db: D1Database; sqlite: DatabaseSync; trips: RoundTrips } {
+export function createTestDb(): {
+  db: D1Database;
+  sqlite: DatabaseSync;
+  trips: RoundTrips;
+  pace: Pace;
+} {
   const d1 = new TestD1();
-  return { db: d1 as unknown as D1Database, sqlite: d1.sqlite, trips: d1.trips };
+  return { db: d1 as unknown as D1Database, sqlite: d1.sqlite, trips: d1.trips, pace: d1.pace };
 }

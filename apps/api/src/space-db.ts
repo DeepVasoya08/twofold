@@ -276,15 +276,25 @@ export async function countAlbums(db: D1Database, space: string): Promise<number
   return row?.count ?? 0;
 }
 
-/** Returns false if the id is taken (in any space). */
+/**
+ * Adds an album, unless the space already has `cap` (counted in the same statement, so
+ * requests at the same moment can't pass it). Returns false if the id is taken (in any
+ * space) or the cap is reached.
+ */
 export async function insertAlbum(
   db: D1Database,
   space: string,
   album: StoredAlbum,
+  cap: number,
 ): Promise<boolean> {
   const result = await db
-    .prepare('INSERT INTO albums (id, space, meta) VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING')
-    .bind(album.id, space, album.meta)
+    .prepare(
+      `INSERT INTO albums (id, space, meta)
+       SELECT ?1, ?2, ?3
+        WHERE (SELECT COUNT(*) FROM albums WHERE space = ?2) < ?4
+       ON CONFLICT (id) DO NOTHING`,
+    )
+    .bind(album.id, space, album.meta, cap)
     .run();
   return result.meta.changes === 1;
 }

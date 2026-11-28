@@ -50,7 +50,11 @@ export const countJoined = (db: D1Database, space: string) =>
 export const countPendingInvites = (db: D1Database, space: string) =>
   count(db, 'SELECT COUNT(*) AS count FROM pending_invites WHERE space = ?', space);
 
-/** Returns false if the id or token is taken. */
+/**
+ * Adds someone the library (or one album, with `album`) is shared with, unless that already
+ * has `cap` people. Counted in the same statement, so requests at the same moment can't
+ * pass the cap. Returns false if the id or token is taken, or the cap is reached.
+ */
 export async function insertMember(
   db: D1Database,
   space: string,
@@ -61,13 +65,16 @@ export async function insertMember(
     album: string | null;
     access: MemberAccess;
   },
+  cap: number,
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      `INSERT INTO members (id, token_hash, space, meta, album, access) VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO members (id, token_hash, space, meta, album, access)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6
+        WHERE (SELECT COUNT(*) FROM members WHERE space = ?3 AND album IS ?5) < ?7
        ON CONFLICT DO NOTHING`,
     )
-    .bind(member.id, member.tokenHash, space, member.meta, member.album, member.access)
+    .bind(member.id, member.tokenHash, space, member.meta, member.album, member.access, cap)
     .run();
   return result.meta.changes === 1;
 }
@@ -105,15 +112,24 @@ export async function listJoined(db: D1Database, space: string): Promise<StoredJ
   return results;
 }
 
-/** Returns false if the id is taken. */
+/**
+ * Keeps a library this space joined, unless it already keeps `cap` of them (counted in the
+ * same statement). Returns false if the id is taken or the cap is reached.
+ */
 export async function insertJoined(
   db: D1Database,
   space: string,
   joined: StoredJoined,
+  cap: number,
 ): Promise<boolean> {
   const result = await db
-    .prepare('INSERT INTO joined (id, space, meta) VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING')
-    .bind(joined.id, space, joined.meta)
+    .prepare(
+      `INSERT INTO joined (id, space, meta)
+       SELECT ?1, ?2, ?3
+        WHERE (SELECT COUNT(*) FROM joined WHERE space = ?2) < ?4
+       ON CONFLICT (id) DO NOTHING`,
+    )
+    .bind(joined.id, space, joined.meta, cap)
     .run();
   return result.meta.changes === 1;
 }
@@ -137,17 +153,24 @@ export async function listPendingInvites(
   return results;
 }
 
-/** Returns false if the id is taken. */
+/**
+ * Keeps an invite in progress, unless the space already has `cap` of them (counted in the
+ * same statement). Returns false if the id is taken or the cap is reached.
+ */
 export async function insertPendingInvite(
   db: D1Database,
   space: string,
   invite: StoredPendingInvite,
+  cap: number,
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      'INSERT INTO pending_invites (id, space, meta) VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING',
+      `INSERT INTO pending_invites (id, space, meta)
+       SELECT ?1, ?2, ?3
+        WHERE (SELECT COUNT(*) FROM pending_invites WHERE space = ?2) < ?4
+       ON CONFLICT (id) DO NOTHING`,
     )
-    .bind(invite.id, space, invite.meta)
+    .bind(invite.id, space, invite.meta, cap)
     .run();
   return result.meta.changes === 1;
 }
