@@ -21,9 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
+    # The Cloudflare token is given only to the steps that need it (migrations and deploys),
+    # never to installs or builds, so a package's install script or build step can't read it.
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID }}
       # The public origin for canonical links, link previews and the sitemap (optional).
       SITE_URL: ${{ vars.SITE_URL }}
@@ -55,6 +55,9 @@ jobs:
 
       - name: Apply D1 migrations
         working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler d1 migrations apply DB --remote
 
       # Smart search's resources are too big to commit. build.py downloads a pinned export,
@@ -87,6 +90,9 @@ jobs:
       # One Worker serves the web app (static assets) and the API (/api/*) on one origin.
       - name: Deploy Worker
         working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy
 
       # Account email needs a secret that keys the stored email codes (docs/email.md). It is
@@ -95,6 +101,8 @@ jobs:
       - name: Set email code secret
         working-directory: apps/api
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           EMAIL_CODE_SECRET: ${{ secrets.EMAIL_CODE_SECRET }}
         run: |
           if [ -z "$EMAIL_CODE_SECRET" ]; then
@@ -106,4 +114,7 @@ jobs:
       # Copies photo files into the backup bucket every hour (docs/backups.md).
       - name: Deploy backup Worker
         working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy -c wrangler.backup.jsonc

@@ -32,5 +32,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/search-resources/requi
 .venv/bin/python scripts/search-resources/build.py public/resources/search
 ```
 
+The requirements pin every package by the hashes of its published files, so pip installs
+nothing else; take a new version's hashes from `https://pypi.org/pypi/<package>/<version>/json`.
 The deploy workflow does the same before building the web app. Without them the app still
 works; anything that needs Smart search says its resources couldn't be downloaded.
