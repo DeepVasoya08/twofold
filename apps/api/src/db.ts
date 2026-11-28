@@ -126,7 +126,7 @@ export async function updateSmartFeatures(
  * grace (the `billing` table), otherwise the Free plan's (?3). Expects the account id in ?2
  * and `now` in ?4.
  */
-const LIMIT_SQL = `COALESCE(
+export const LIMIT_SQL = `COALESCE(
   (SELECT storage_bytes FROM billing
     WHERE account_id = ?2 AND MAX(paid_until, COALESCE(grace_until, 0)) > ?4),
   ?3)`;

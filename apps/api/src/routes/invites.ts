@@ -22,6 +22,7 @@ import {
 } from '../schemas';
 import { requireSession } from '../session';
 import type { AppEnv } from '../session';
+import { limitWrites } from '../write-limit';
 import {
   deleteExpiredInvites,
   deleteInvite,
@@ -45,7 +46,7 @@ const outOfOrder = 'This invite has already moved on. Start again with a new cod
  */
 export const invites = new Hono<AppEnv>();
 
-invites.use(requireSession);
+invites.use(requireSession, limitWrites);
 
 const hashText = async (text: string) => toBase64Url(await sha256(new TextEncoder().encode(text)));
 

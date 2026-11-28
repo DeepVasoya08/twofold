@@ -127,6 +127,17 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   and deleted photos are given back to the account that deletes them (storage doesn't know
   who uploaded them), so a member deleting an owner's photo frees the member's quota, not
   the owner's.
+- **What lands in the database is limited per account and per day.** Files count against
+  storage, but sealed records, search and face data and invites live in D1, which is far
+  smaller than R2 and serves everyone, and spaces are unlimited (any token opens one). So
+  every JSON write to `/api/space/*` and `/api/invites` counts its body (at least 512 bytes)
+  against a daily limit per account, before it runs, in one statement, so parallel writes
+  can't get past it: 32 MiB a day on Free, or 1/256 of a paid plan's storage if that's more
+  (`write_budgets`, `apps/api/src/write-limit.ts`). That is far more than a Free library's
+  records, and a whole paid library's import stays under it. The counter is keyed by an
+  HMAC of the account id under the Worker's secret, so a copy of the database alone doesn't
+  say whose it is, and it is deleted when its day has passed. Once D1 is over 5 GB, every
+  counted write logs its size, so a filling database shows up long before its 10 GB limit.
 - **Infrastructure keeps its own history.** R2 records when each object was uploaded, and
   D1 keeps point-in-time history for its Time Travel window, so a deleted photo's sealed
   row (not its key or contents) can outlive the delete for that long.
