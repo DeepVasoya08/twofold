@@ -1,9 +1,10 @@
 # Response headers for static assets served by the Worker (Workers Static Assets).
 # Keep the CSP strict: this app handles decrypted photos. The only other hosts it talks to
-# are Google's Photos Picker API and the host it downloads picked photos from, straight into
-# this browser for Connect Google Photos (lib/import/google-picker.ts).
+# are Google's Photos Picker API, the host it downloads picked photos from, straight into
+# this browser, and Google's token revocation, all for Connect Google Photos
+# (lib/import/google-picker.ts).
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://photospicker.googleapis.com https://*.googleusercontent.com; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://photospicker.googleapis.com https://*.googleusercontent.com https://oauth2.googleapis.com; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff

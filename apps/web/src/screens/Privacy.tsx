@@ -148,9 +148,10 @@ export function Privacy() {
       <p>
         Each imported photo is encrypted on your device before it’s uploaded, so we store it but
         can’t read it, the same as photos you upload yourself. Google’s sign-in (access) token is
-        kept only in your device’s memory while the import runs. It is never sent to our servers,
-        never written to your browser’s storage, and is forgotten when the import ends or you close
-        the page.
+        kept only in your device’s memory while the import runs. It is never sent to our servers or
+        written to your browser’s storage by Arcafold. Google hands it over in a page address, which
+        your browser may keep in its history, so Arcafold revokes it at Google as soon as the import
+        ends, is cancelled or Arcafold locks.
       </p>
       <h3>Data retention and deletion</h3>
       <p>

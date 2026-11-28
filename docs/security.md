@@ -10,8 +10,9 @@ non-negotiable; this document is the threat model and key design as they stand.
   The API imports only `@arcafold/crypto/webcrypto`, which never loads libsodium.
 - The web app and the API share one origin (a single Worker), so there is no CORS
   surface and `'self'` in `connect-src` covers API calls. The only other hosts the app may
-  connect to are Google's Photos Picker API (`photospicker.googleapis.com`) and the host
-  picked photos download from (`*.googleusercontent.com`), for Connect Google Photos.
+  connect to are Google's Photos Picker API (`photospicker.googleapis.com`), the host
+  picked photos download from (`*.googleusercontent.com`) and Google's token revocation
+  (`oauth2.googleapis.com`), for Connect Google Photos.
 - The web app ships a strict Content-Security-Policy and related headers via
   `apps/web/public/_headers` (Workers Static Assets). `'wasm-unsafe-eval'` is allowed so
   libsodium's WebAssembly can load. libsodium is loaded on first use, not on the welcome page.
@@ -201,8 +202,12 @@ other accounts; see [Sharing](#sharing).
   only the photos the person picks). Google sends the access token back in the URL fragment
   of `/import/google/done`, which never reaches a server; that page passes it to the app over
   a same-origin `BroadcastChannel`, checked against a random `state`, wipes it from the
-  address bar and closes. The token is kept in memory only, never logged or stored, and
-  forgotten when the import ends or the vault locks. Each picked photo downloads from Google
+  address bar and closes. The token is kept in memory only, never logged or stored. The
+  browser may still keep that address, token and all, in its history, so the app signs out
+  of Google (ends the Picker session, then revokes the token at
+  `oauth2.googleapis.com/revoke`) as soon as it no longer needs it: when the import ends,
+  when picking is cancelled or fails, and when the vault locks. A token that can't be
+  revoked runs out within the hour. Each picked photo downloads from Google
   straight into the browser and goes through the same encryption as an upload; Arcafold's
   server never sees the photos or the Google account.
 - **Fingerprints.** Each new photo's sealed record also holds `fp`, a keyed BLAKE2b hash

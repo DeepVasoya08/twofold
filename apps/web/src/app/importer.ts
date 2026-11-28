@@ -96,14 +96,18 @@ export class Importer {
     return this.state.phase === 'running';
   }
 
-  /** Starts importing; `onDone` is called when it ends. Does nothing while one runs. */
-  start = (jobs: readonly ImportJob[], onDone?: () => void): void => {
-    if (this.running) return;
+  /**
+   * Starts importing; `onDone` is called when it ends, whether it finishes, is stopped or is
+   * dropped as the vault locks. Does nothing, and returns false, while another one runs.
+   */
+  start = (jobs: readonly ImportJob[], onDone?: () => void): boolean => {
+    if (this.running) return false;
     this.onDone = onDone;
     this.queue = [...jobs];
     this.seen = new Map();
     this.set({ ...IDLE, phase: 'running', total: jobs.length });
     this.pump();
+    return true;
   };
 
   /** Stops taking new photos; those on their way finish. */
@@ -120,14 +124,16 @@ export class Importer {
     this.set(IDLE);
   };
 
-  /** Drops everything, as when the vault locks. */
+  /** Drops everything, as when the vault locks. An import that was running ends there. */
   dispose(): void {
+    const onDone = this.onDone;
     this.run += 1;
     this.queue = [];
     this.stored = [];
     this.inFlight = { count: 0, bytes: 0 };
     this.onDone = undefined;
     this.set(IDLE);
+    onDone?.();
   }
 
   private set(change: Partial<ImporterState>): void {

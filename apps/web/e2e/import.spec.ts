@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { crc32, deflateRawSync } from 'node:zlib';
 
 import { expect, test } from '@playwright/test';
+import type { BrowserContext } from '@playwright/test';
 
 import { distinctPhotos, goTo, signUp } from './helpers';
 
@@ -170,13 +171,13 @@ test('imports a copy of iCloud Photos with dates, albums and favorites', async (
   await expect(page.getByRole('link', { name: /^Photo from May 3, 2017/ })).toBeVisible();
 });
 
-test('connects Google Photos and imports the picked photos, straight from Google', async ({
-  page,
-  context,
-}) => {
-  // Google's sign-in, Picker API and photo host, played by the test.
+/**
+ * Plays Google's sign-in, Picker API, photo host and token revocation for `context`. Picking
+ * finishes on the second check unless `picks` is false. Returns what reached Google, in order.
+ */
+async function playGoogle(context: BrowserContext, picks = true): Promise<{ events: string[] }> {
+  const events: string[] = [];
   let polls = 0;
-  let deleted = false;
   await context.route('https://accounts.google.com/**', async (route) => {
     const url = new URL(route.request().url());
     expect(url.searchParams.get('scope')).toBe(
@@ -215,8 +216,8 @@ test('connects Google Photos and imports the picked photos, straight from Google
     const { pathname } = new URL(request.url());
     let body: unknown = {};
     if (request.method() === 'POST') body = session(false);
-    else if (request.method() === 'DELETE') deleted = true;
-    else if (pathname === '/v1/sessions/s1') body = session((polls += 1) >= 2);
+    else if (request.method() === 'DELETE') events.push('session ended');
+    else if (pathname === '/v1/sessions/s1') body = session(picks && (polls += 1) >= 2);
     else if (pathname === '/v1/mediaItems') {
       body = {
         mediaItems: [
@@ -252,6 +253,23 @@ test('connects Google Photos and imports the picked photos, straight from Google
     expect(route.request().headers().authorization).toBe('Bearer e2e-token');
     await route.fulfill({ status: 200, headers: cors, body: SECRET, contentType: 'image/png' });
   });
+  await context.route('https://oauth2.googleapis.com/**', async (route) => {
+    const request = route.request();
+    expect(request.url()).toBe('https://oauth2.googleapis.com/revoke');
+    expect(request.method()).toBe('POST');
+    // The token goes in the body, never the address.
+    expect(request.postData()).toBe('token=e2e-token');
+    events.push('token revoked');
+    await route.fulfill({ status: 200, headers: cors, json: {} });
+  });
+  return { events };
+}
+
+test('connects Google Photos and imports the picked photos, straight from Google', async ({
+  page,
+  context,
+}) => {
+  const google = await playGoogle(context);
 
   await signUp(page);
   await goTo(page, 'Settings');
@@ -265,11 +283,27 @@ test('connects Google Photos and imports the picked photos, straight from Google
     'https://photos.google.com/picker/s1/autoclose',
   );
   await expect(page.getByText('Import finished. 1 photo imported.')).toBeVisible();
-  // The finished session is ended at Google.
-  await expect.poll(() => deleted).toBe(true);
+  // Once the import is done, the session is ended at Google and the token revoked, so the
+  // address the sign-in came back to, which the browser may keep, holds a dead token.
+  await expect.poll(() => google.events).toEqual(['session ended', 'token revoked']);
 
   await goTo(page, 'Photos');
   await expect(page.getByRole('link', { name: /^Photo from Jun 1, 2015/ })).toBeVisible();
+});
+
+test('cancelling Google Photos while picking signs out of Google', async ({ page, context }) => {
+  const google = await playGoogle(context, false);
+
+  await signUp(page);
+  await goTo(page, 'Settings');
+  await page.getByRole('button', { name: 'Import from Google Photos' }).click();
+  const signInWindow = context.waitForEvent('page');
+  await page.getByRole('button', { name: 'Connect Google Photos' }).click();
+  await (await signInWindow).waitForEvent('close');
+  await expect(page.getByRole('link', { name: 'Choose photos in Google Photos' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('button', { name: 'Connect Google Photos' })).toBeVisible();
+  await expect.poll(() => google.events).toEqual(['session ended', 'token revoked']);
 });
 
 test('the Apple tab offers the phone’s own photo picker first', async ({ page }) => {
