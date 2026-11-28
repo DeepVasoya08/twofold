@@ -415,7 +415,10 @@ token limited to that album and **the album's own key**, never the space's recor
   revokes everyone it was shared with. Opening the album's Share dialog to invite someone
   lists anything that was missed.
 - **Stopping.** Removing someone revokes their token. **Stop sharing with everyone** also
-  deletes the album's copies and drops its key, so sharing it again uses a new key.
+  deletes the album's copies and drops its key from the album's sealed record, so sharing it
+  again makes a new key. That holds as long as the server keeps the record as written: a
+  compromised server that puts back the record from before could bring the old key back
+  into use (see the trade-offs below).
 - **On the other side.** The grant is kept as a `joined` record like a library, sealed
   under the joiner's owner-only key in the space they joined from. The album and its
   photos appear under Albums → Shared with me and stay out of the timeline.
@@ -590,7 +593,13 @@ than minutes. A live server can still link the sessions on both sides, as it cou
   knows the records key (or album key) and the per-photo keys of photos it saw, and could
   decrypt any ciphertext it got hold of later. The server refuses its token from the moment it's
   removed, but a compromised server could still hand it new ciphertext. Rotating the space
-  key on removal would close that and is left for later.
+  key on removal would close that and is left for later. A compromised server could also put
+  back an album's sealed record from before **Stop sharing with everyone**, which brings its
+  dropped key back: photos added to the album afterwards would be sealed under it, and
+  sharing the album again would hand out the same key, so people removed earlier could read
+  them. Putting back a photo's record the same way can list it again in an album or folder it
+  was taken out of. Noticing either needs something the server can't roll back, such as a
+  record kept on each device, and is left for later.
 - **A member can delete photos for everyone**, like the owner. Sharing is for people you
   trust.
 - **The safety phrase is only as good as the comparison.** If nobody checks the words, a

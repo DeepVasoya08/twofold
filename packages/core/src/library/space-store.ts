@@ -1690,7 +1690,9 @@ export function remoteStore(
       if (!current) throw new FormError(ALBUM_GONE);
       await api.unshareAlbum(albumId);
       if (!current.shareKey) return;
-      // A new share gets a new key, so nobody who had this one can read what comes after.
+      // Sharing it again makes a new key, so nobody who had this one can read what comes
+      // after, as long as the server keeps this record: a compromised one could put back the
+      // old record, key and all (see docs/security.md).
       const meta: AlbumMeta = { v: 1, title: current.title };
       await api.updateAlbum(albumId, await sealAlbum(albumId, meta));
       albumMetas.set(albumId, meta);
