@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  KEEP_FROM_AUTOFILL,
   MAX_NAME_LENGTH,
   firstProblem,
   moveLabel,
@@ -82,5 +83,11 @@ describe('nameError', () => {
   it('asks for a name and refuses one that is too long', () => {
     expect(nameError('   ')).toBe('Enter your name.');
     expect(nameError('x'.repeat(MAX_NAME_LENGTH + 1))).toBe('Use at most 60 characters.');
+  });
+});
+
+describe('KEEP_FROM_AUTOFILL', () => {
+  it('keeps a box out of Android’s autofill altogether, rather than only hinting', () => {
+    expect(KEEP_FROM_AUTOFILL).toEqual({ autoComplete: 'off', importantForAutofill: 'no' });
   });
 });

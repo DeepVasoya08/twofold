@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { expect, test } from '@playwright/test';
+import type { Locator } from '@playwright/test';
 
 import {
   MAIN_PASSWORD,
@@ -13,6 +14,15 @@ import {
   unlockWith,
   uploadPhotos,
 } from './helpers';
+
+/** A private password box asks 1Password, LastPass, Bitwarden and Dashlane to leave it alone. */
+async function expectKeptFromPasswordManagers(field: Locator): Promise<void> {
+  await expect(field).toHaveAttribute('autocomplete', 'off');
+  await expect(field).toHaveAttribute('data-1p-ignore', 'true');
+  await expect(field).toHaveAttribute('data-lpignore', 'true');
+  await expect(field).toHaveAttribute('data-bwignore', 'true');
+  await expect(field).toHaveAttribute('data-form-type', 'other');
+}
 
 test('reloading locks Arcafold; the password opens it again', async ({ page }) => {
   await signUp(page);
@@ -34,6 +44,15 @@ test('one password box opens the library or the private space', async ({ page })
   await goTo(page, 'Settings');
   await page.getByRole('button', { name: 'Set up' }).click();
   const setup = page.getByRole('dialog', { name: 'Set up a private space' });
+  // Password managers are asked to leave the private password alone, and the dialog says
+  // never to let one save it.
+  await expect(setup.getByText(/Never let a browser or password manager save it/)).toBeVisible();
+  for (const field of [
+    setup.getByLabel('Private password', { exact: true }),
+    setup.getByLabel('Confirm private password'),
+  ]) {
+    await expectKeptFromPasswordManagers(field);
+  }
   await setup.getByLabel('Private password', { exact: true }).fill(MAIN_PASSWORD);
   await setup.getByLabel('Confirm private password').fill(MAIN_PASSWORD);
   await setup.getByRole('button', { name: 'Create private space' }).click();
@@ -61,6 +80,7 @@ test('one password box opens the library or the private space', async ({ page })
   await page.locator('.photo-tile').first().click();
   await page.getByRole('button', { name: 'Move to private space' }).click();
   const move = page.getByRole('dialog', { name: 'Move to private space' });
+  await expectKeptFromPasswordManagers(move.getByLabel('Private password'));
   await move.getByLabel('Private password').fill(MAIN_PASSWORD);
   await move.getByRole('button', { name: 'Move' }).click();
   await expect(move.getByText(/doesn't open a private space/)).toBeVisible();

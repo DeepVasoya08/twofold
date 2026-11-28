@@ -6,7 +6,7 @@ import type { Session, Space } from '@arcafold/core/account';
 type SpaceKeys = NonNullable<Session['otherSpace']>;
 
 import { useAccount } from '../session/account';
-import { moveLabel, wrongOtherPassword } from '../session/forms';
+import { KEEP_FROM_AUTOFILL, moveLabel, wrongOtherPassword } from '../session/forms';
 import { Banner, Button, Field } from '../ui/kit';
 import { usePalette } from '../ui/theme';
 
@@ -74,7 +74,7 @@ export function MoveSheet({
             setError(null);
           }}
           secure
-          autoComplete="off"
+          {...KEEP_FROM_AUTOFILL}
           autoFocus
           returnKeyType="go"
           onSubmitEditing={submit}

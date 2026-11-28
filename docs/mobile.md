@@ -19,8 +19,10 @@ or a native module.
 - Over-the-air updates are off (`updates.enabled: false`): every change ships as a new build.
 - Icons are drawn from the web app's mark by `scripts/make_icons.py`.
 - Signing in (`src/session/`): sign-in, sign-up with the recovery key, and the unlock screen
-  use the shared account code, so the same single password field opens either space. Keys
-  live in memory only. The session cookie is kept across launches (`session/kept-session.ts`,
+  use the shared account code, so the same single password field opens either space. The
+  unlock box and the move sheet are kept out of Android's autofill (`KEEP_FROM_AUTOFILL` in
+  `session/forms.ts`), so no password manager offers to save the private password typed
+  there; sign-in still offers autofill. Keys live in memory only. The session cookie is kept across launches (`session/kept-session.ts`,
   `expo-secure-store`, encrypted with a keystore key), so a closed app opens at the lock
   screen, after checking the session is still good; signed out from another device meanwhile,
   it opens at sign-in. Signing out forgets it. The last email that signed in is kept in the

@@ -104,6 +104,15 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   password changed. It reveals nothing else: no photos, keys or passwords. Closing it would
   need a new construction (ruled out by "never invent crypto") or a private password that can
   only be set at sign-up and never changed; we accepted the gap instead.
+- **A password manager can keep the private password.** Log in and Unlock have one
+  password box for both passwords, so it has to stay an ordinary password box, and a
+  browser's own password manager may offer to save or update the password typed there.
+  Saved, the private password shows to anyone who can open the saved passwords. Its own
+  boxes (setup, change, move) ask the common managers to leave them alone, and the setup box
+  tells people to choose Never whenever a browser or manager offers to save it. On the phone,
+  the unlock box and the move sheet are kept out of Android's autofill altogether; signing
+  in on a new phone still offers autofill. Boxes that aren't password boxes would escape
+  managers, but keyboards learn what's typed in them, which is worse.
 - **A compromised, live server could notice a second login key** when someone logs in with
   the private password on a new device (the stored data still reveals nothing). A
   compromised server could equally serve altered JavaScript, which is the limit of any

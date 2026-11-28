@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useAccount } from '../session/account';
+import { KEEP_FROM_AUTOFILL } from '../session/forms';
 import { Banner, Button, Field, Note, Screen, useSubmit } from '../ui/kit';
 
 /**
@@ -51,8 +52,7 @@ export function Unlock() {
           setError(null);
         }}
         secure
-        autoComplete="current-password"
-        textContentType="password"
+        {...KEEP_FROM_AUTOFILL}
         autoFocus={!canUseBiometrics}
         onSubmitEditing={submit}
         returnKeyType="go"
