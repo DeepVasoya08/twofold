@@ -247,6 +247,14 @@ function DeviceRows() {
   });
 }
 
+/**
+ * Under the private password as it's chosen. A browser's own password manager can't be told
+ * to leave it alone, and offers to save or update a password after it opens Arcafold; once
+ * saved, anyone who can open the saved passwords sees it.
+ */
+const PRIVATE_PASSWORD_HINT =
+  'Make it different from your main password. Never let a browser or password manager save it: if one offers after you use it, choose Never.';
+
 /** The password input in a dialog that an error is shown under. */
 type ErrorInput = 'current' | 'new' | 'confirm';
 
@@ -841,7 +849,7 @@ export function Settings() {
           {isPrivate && (
             <PasswordField
               label="Current private password"
-              autoComplete="off"
+              neverSave
               value={current}
               onChange={(event) => {
                 setCurrent(event.currentTarget.value);
@@ -852,7 +860,7 @@ export function Settings() {
           )}
           <PasswordField
             label={isPrivate ? 'New private password' : 'Private password'}
-            autoComplete="off"
+            neverSave
             value={next}
             onChange={(event) => {
               setNext(event.currentTarget.value);
@@ -860,11 +868,11 @@ export function Settings() {
             }}
             error={errorAt('new')}
             showStrength
-            hint="Make it different from your main password."
+            hint={PRIVATE_PASSWORD_HINT}
           />
           <PasswordField
             label="Confirm private password"
-            autoComplete="off"
+            neverSave
             value={confirm}
             onChange={(event) => {
               setConfirm(event.currentTarget.value);

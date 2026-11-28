@@ -28,6 +28,11 @@ exists but is low-key (Settings → Sharing).
 - The main library never reveals whether a private space exists: Settings always offers
   "Set up", and the move dialog gives the same answer for a wrong password and for no
   private space.
+- The private password's own boxes (setting it up, changing it, the move dialog) ask
+  1Password, LastPass, Bitwarden and Dashlane to leave them alone (`neverSave` on
+  `PasswordField`), and the setup box says never to let a browser or password manager save
+  it. A browser's own manager takes no such request, so the single unlock box can still be
+  offered for saving (see the trade-offs in [security.md](security.md)).
 - Inside the private space the app turns to "night", deep navy and lavender whatever the
   light or dark setting (`data-space="private"` on `<html>`, tokens in `styles/base.css`),
   and shows a small "Private" label, so you know where you are.

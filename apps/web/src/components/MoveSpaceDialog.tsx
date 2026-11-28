@@ -91,7 +91,7 @@ export function MoveSpaceDialog({
       <form className="form" onSubmit={onSubmit} noValidate>
         <PasswordField
           label={isPrivate ? 'Main password' : 'Private password'}
-          autoComplete="off"
+          neverSave
           value={password}
           onChange={(event) => {
             setPassword(event.currentTarget.value);

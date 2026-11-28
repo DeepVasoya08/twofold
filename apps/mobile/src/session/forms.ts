@@ -55,6 +55,16 @@ export function firstProblem(errors: SignUpErrors): keyof SignUpValues | null {
   return SIGN_UP_ORDER.find((key) => errors[key]) ?? null;
 }
 
+/**
+ * For a password box the private password can be typed in: the unlock box and the move
+ * sheet. Android's autofill, and any password manager working through it, then neither fills
+ * nor offers to save what's typed there, so the private password never ends up kept where
+ * whoever opens the saved passwords would see it. Signing in on a new phone still offers
+ * autofill. (A plain text box shown as dots would also escape autofill, but keyboards learn
+ * what's typed in one.)
+ */
+export const KEEP_FROM_AUTOFILL = { autoComplete: 'off', importantForAutofill: 'no' } as const;
+
 /** "Move to library" from the private space, "Move to private space" from the library. */
 export function moveLabel(space: Space): string {
   return space === 'private' ? 'Move to library' : 'Move to private space';

@@ -52,7 +52,22 @@ interface PasswordFieldProps extends InputProps {
   error?: string | null | undefined;
   showStrength?: boolean;
   value: string;
+  /**
+   * For a password no password manager should keep (the private space's): asks the common
+   * ones to neither fill nor save it. A browser's own manager takes no such request, so the
+   * form around it should also say not to save it.
+   */
+  neverSave?: boolean;
 }
+
+/** What 1Password, LastPass, Bitwarden and Dashlane read as "leave this field alone". */
+const NEVER_SAVE = {
+  autoComplete: 'off',
+  'data-1p-ignore': 'true',
+  'data-lpignore': 'true',
+  'data-bwignore': 'true',
+  'data-form-type': 'other',
+} as const;
 
 export function PasswordField({
   label,
@@ -61,6 +76,7 @@ export function PasswordField({
   showStrength = false,
   value,
   className,
+  neverSave = false,
   ...input
 }: PasswordFieldProps) {
   const id = useId();
@@ -81,6 +97,7 @@ export function PasswordField({
       <div className="field__control">
         <input
           {...input}
+          {...(neverSave ? NEVER_SAVE : {})}
           id={id}
           value={value}
           type={visible ? 'text' : 'password'}
