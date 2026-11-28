@@ -325,7 +325,9 @@ under). It never gets the space key or the space id.
   confirmed) and changeable at any time with `PUT /api/space/members/:id`. The server
   enforces it on every request: a `view` token may only make `GET` requests (and leave), so
   it can view and download but not add, change, favorite or delete anything; an `edit`
-  token can also add, favorite and delete photos, and add, rename and delete albums. A
+  token can also add, favorite and delete photos, and add, rename and delete albums (but
+  not delete an album while it's shared, since that would stop its sharing, which only the
+  owner may do). A
   member asks what it may do with `GET /api/space/membership`, so the app only offers what
   the server will allow; if that can't be read, the app treats the library as view-only.
   Album members are always `view`. Members from before this existed kept `edit`, which is

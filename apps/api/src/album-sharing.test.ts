@@ -292,6 +292,24 @@ describe('sharing an album', () => {
     expect(await itemIds(album)).toEqual([added]);
     expect((await guest.request('DELETE', `/space/albums/${album}/shared`, {})).status).toBe(403);
   });
+
+  it('keeps library members from deleting a shared album, which would stop its sharing', async () => {
+    const album = await addAlbum();
+    await shareAlbum(album);
+    const member = await addAlbumMember(album);
+    const libraryMember = { id: newId(), token: random(16), meta: newMeta(), access: 'edit' };
+    expect((await owner.request('POST', '/space/members', libraryMember)).status).toBe(201);
+    useSpace(guest, libraryMember.token);
+    const refused = await guest.request('DELETE', `/space/albums/${album}`, {});
+    expect(refused.status).toBe(403);
+    expect((await refused.json<{ error: string }>()).error).toMatch(/owner/);
+    // The album, and the person it was shared with, are still there.
+    const members = await (await owner.request('GET', '/space/members')).json<MemberList>();
+    expect(members.members.map((each) => each.id)).toContain(member.id);
+    // Once the owner stops sharing it, a library member may delete it like any other album.
+    expect((await owner.request('DELETE', `/space/albums/${album}/shared`, {})).status).toBe(204);
+    expect((await guest.request('DELETE', `/space/albums/${album}`, {})).status).toBe(204);
+  });
 });
 
 describe('letting someone add to and edit an album', () => {
