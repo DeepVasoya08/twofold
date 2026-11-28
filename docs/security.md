@@ -155,6 +155,12 @@ while this device stays in the private space.
   no photos, keys or passwords, and the setup and change dialogs say so. Closing it would
   need a new construction (ruled out by "never invent crypto") or a private password that
   can only be set at sign-up and never changed; we accepted the gap instead.
+- **A move changes the library's id, not its key.** Sealing every record again under a new
+  key would take as many requests as the library has records, with no single moment when the
+  old key stops working; moving the id is one step. So someone who kept the old key and later
+  gets a copy of the stored data itself (a leak of D1 and R2, or an insider) could still open
+  what is added after the move. Everyone else reaches storage only through the API, which
+  refuses the old id.
 - **Moving the main library lines it up with its account in D1's history.** Its rows move
   in the same batch as the account's keyring, so a compromised server watching the `PUT`,
   or D1 Time Travel or two backups, can see which tag was that account's main library, and
