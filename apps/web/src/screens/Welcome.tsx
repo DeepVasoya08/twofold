@@ -388,7 +388,7 @@ export function Welcome() {
               </p>
               <Checks
                 items={[
-                  'Your library never shows whether a private space exists.',
+                  'Your library looks the same with or without a private space.',
                   'Each space has its own keys, so opening one never opens the other.',
                   'Move photos into the private space whenever you like.',
                 ]}

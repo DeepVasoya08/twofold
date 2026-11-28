@@ -12,6 +12,9 @@ test.describe('without JavaScript, as a crawler sees it', () => {
       page.getByRole('heading', { level: 2, name: 'One unlock screen. Two separate spaces.' }),
     ).toBeVisible();
     await expect(page.getByText('Shared with Estrella').first()).toBeVisible();
+    await expect(
+      page.getByText('Your library looks the same with or without a private space.'),
+    ).toBeVisible();
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /encryption/);
     await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
       'content',
@@ -25,6 +28,11 @@ test.describe('without JavaScript, as a crawler sees it', () => {
     await page.goto('/privacy');
     await expect(page).toHaveTitle('Privacy Policy · Arcafold');
     await expect(page.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeVisible();
+    // It claims no more than the server keeps: shared albums' contents are visible to it, and
+    // the storage total covers every space.
+    await expect(page.getByText(/for an album or folder you share, we can see/)).toBeVisible();
+    await expect(page.getByText(/storage total does count every space/)).toBeVisible();
+    await expect(page.getByText(/whether you have a private space/)).toHaveCount(0);
 
     await page.goto('/terms');
     await expect(page).toHaveTitle('Terms of Use · Arcafold');
