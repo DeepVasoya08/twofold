@@ -52,4 +52,5 @@ export const messages = {
    * apps show it too, and they never point to a purchase (docs/billing.md).
    */
   storageFull: 'Your storage is full. Delete some photos or files to make room.',
+  httpsOnly: 'Arcafold only works over a secure connection (https).',
 } as const;

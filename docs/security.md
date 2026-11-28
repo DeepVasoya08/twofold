@@ -722,6 +722,12 @@ so photos can later be found by describing them. The server stores only cipherte
 - Any keyring change (a password, the recovery key, or setting up a private space) signs
   out every other device. It has to be every change: the server can't tell which slot
   changed, and treating them differently would tell it.
+- Nothing is answered over plain http outside local development (`apps/api/src/https.ts`):
+  the API refuses it (403), so a login key or session cookie never crosses the network in
+  the clear and no session cookie is set without `Secure`, and app pages that reach the
+  Worker are redirected to https. Static files are served before the Worker runs, so the
+  zone's **Always Use HTTPS** setting must be on as well ([deployment.md](deployment.md)).
+  Production has no `workers.dev` address (`workers_dev: false`), only its custom domain.
 - Every write must be `Content-Type: application/json` (or `application/octet-stream` for
   encrypted files), which a cross-site form can't send without a CORS preflight the API
   never answers. This backs up `SameSite=Strict`; storage requests also carry a custom
