@@ -6,6 +6,7 @@ import type { AccountResponse, SignUpTicketResponse } from '@arcafold/types';
 import type { Env } from './env';
 import { emailInUseMail, mailTime, maskEmail, newSignInMail } from './mail-templates';
 import { describePlace } from './request-info';
+import { createTestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
@@ -51,6 +52,7 @@ beforeEach(async () => {
   env = {
     DB: db.db,
     BLOBS: createTestR2().bucket,
+    COUNTERS: createTestCounters().namespace,
     EMAIL: mailbox as unknown as SendEmail,
     EMAIL_CODE_SECRET: SECRET,
   };
@@ -159,7 +161,7 @@ describe('new sign-in emails', () => {
   });
 
   it('isn’t sent to an address that was never confirmed', async () => {
-    const plain = new Client({ DB: env.DB, BLOBS: env.BLOBS });
+    const plain = new Client({ DB: env.DB, BLOBS: env.BLOBS, COUNTERS: env.COUNTERS });
     const other = [newLoginKey(), newLoginKey(), newLoginKey()] as const;
     await plain.request('POST', '/auth/signup', {
       email: 'old@example.com',

@@ -7,11 +7,14 @@ import type { MemberAccess, PhotoPage, StoredPhoto, TrashResponse } from '@arcaf
 
 import type { Env } from './env';
 import { PAGE_SIZE } from './routes/space';
+import { createTestCounters } from './test/counters';
+import type { TestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
 
 let env: Env;
+let counters: TestCounters;
 let sqlite: DatabaseSync;
 let owner: Client;
 let guest: Client;
@@ -35,7 +38,8 @@ function useSpace(c: Client, spaceToken: string): void {
 beforeEach(async () => {
   const db = createTestDb();
   sqlite = db.sqlite;
-  env = { DB: db.db, BLOBS: createTestR2().bucket };
+  counters = createTestCounters();
+  env = { DB: db.db, BLOBS: createTestR2().bucket, COUNTERS: counters.namespace };
   owner = await signUp('sam@example.com');
   guest = await signUp('kim@example.com');
   token = random(16);
@@ -75,12 +79,13 @@ async function ids(path: string, c = owner): Promise<string[]> {
 
 const library = (c = owner) => ids('/space/photos', c);
 const deleted = (c = owner) => ids('/space/trash', c);
-const stored = () =>
+const samId = () =>
   (
-    sqlite.prepare("SELECT stored_bytes FROM accounts WHERE email = 'sam@example.com'").get() as {
-      stored_bytes: number;
+    sqlite.prepare("SELECT id FROM accounts WHERE email = 'sam@example.com'").get() as {
+      id: string;
     }
-  ).stored_bytes;
+  ).id;
+const stored = () => counters.stored(samId());
 
 async function share(extra: { access?: MemberAccess; album?: string }) {
   const member = { id: newId(), token: random(16), meta: newMeta(), ...extra };

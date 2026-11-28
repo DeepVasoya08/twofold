@@ -51,7 +51,11 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
   unknown `/api/*` routes return 404 rather than the app shell. Stores and serves
   ciphertext; never receives plaintext photos, passwords, or keys. R2 object keys are
   random IDs. D1 holds metadata. Schema changes are SQL files in `apps/api/migrations`,
-  applied on deploy.
+  applied on deploy. Each account's running counts (its storage total, what it added to the
+  database today, its wrong invite codes) live outside D1, in a Durable Object per account
+  (`AccountCounters` in `src/counters.ts`, bound as `COUNTERS`), so the database's history
+  can't line accounts up with spaces
+  ([security.md](security.md#account-totals-live-outside-the-database)).
   A second Worker, `arcafold-backup` (`src/backup`, `wrangler.backup.jsonc`), has no
   routes: every hour it copies photo files into the backup bucket
   ([backups.md](backups.md)).
@@ -105,8 +109,9 @@ everything from one origin, so there is no CORS and the CSP's `connect-src` need
     `albums`, `album_items`, `members`, `joined`, `pending_invites`, `face_segments`,
     `people`, `search_segments`, `search_words` and `smart_albums` (keyed by space, never
     by account), and `invites` (up to a week, keyed by hashes of the code, link and handle).
-  - API tests run the real migrations on Node's built-in SQLite (`src/test/d1.ts`) and an
-    in-memory R2 (`src/test/r2.ts`).
+  - API tests run the real migrations on Node's built-in SQLite (`src/test/d1.ts`), an
+    in-memory R2 (`src/test/r2.ts`) and the real account counters on in-memory storage
+    (`src/test/counters.ts`).
 
 ## Local development
 

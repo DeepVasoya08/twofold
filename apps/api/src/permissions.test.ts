@@ -5,6 +5,7 @@ import { SPACE_HEADER } from '@arcafold/types';
 
 import { app } from './app';
 import type { Env } from './env';
+import { createTestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
@@ -102,7 +103,11 @@ let album: string;
 const tokens = new Map<Who, string>();
 
 beforeEach(async () => {
-  env = { DB: createTestDb().db, BLOBS: createTestR2().bucket };
+  env = {
+    DB: createTestDb().db,
+    BLOBS: createTestR2().bucket,
+    COUNTERS: createTestCounters().namespace,
+  };
   owner = new Client(env);
   const keyring = await makeKeyring([newLoginKey(), newLoginKey(), newLoginKey()]);
   await owner.request('POST', '/auth/signup', { email: 'sam@example.com', name: 'Sam', keyring });

@@ -5,6 +5,7 @@ import { SPACE_HEADER } from '@arcafold/types';
 import type { StampResponse } from '@arcafold/types';
 
 import type { Env } from './env';
+import { createTestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
@@ -72,7 +73,11 @@ async function upload(): Promise<string> {
 }
 
 beforeEach(async () => {
-  env = { DB: createTestDb().db, BLOBS: createTestR2().bucket };
+  env = {
+    DB: createTestDb().db,
+    BLOBS: createTestR2().bucket,
+    COUNTERS: createTestCounters().namespace,
+  };
   owner = await signUp('sam@example.com');
   owner.headers = { [SPACE_HEADER]: random(16) };
 });

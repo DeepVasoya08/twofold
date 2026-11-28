@@ -6,6 +6,7 @@ import type { AccountResponse, Keyring } from '@arcafold/types';
 
 import type { Env } from './env';
 import { MAX_EMAIL_FAILURES, MAX_FAILURES } from './proof';
+import { createTestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import type { RoundTrips } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
@@ -23,7 +24,7 @@ beforeEach(async () => {
   const test = createTestDb();
   sqlite = test.sqlite;
   trips = test.trips;
-  env = { DB: test.db, BLOBS: {} as R2Bucket };
+  env = { DB: test.db, BLOBS: {} as R2Bucket, COUNTERS: createTestCounters().namespace };
   client = new Client(env);
   keys = [newLoginKey(), newLoginKey(), newLoginKey()];
   keyring = await makeKeyring(keys);

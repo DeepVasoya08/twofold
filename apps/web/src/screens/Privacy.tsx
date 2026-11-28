@@ -107,7 +107,9 @@ export function Privacy() {
       <p>
         To stop people guessing passwords, we count failed sign-in attempts for each email address
         together with a one-way hash of the internet (IP) address they came from. These counts are
-        deleted after 15 minutes.
+        deleted after 15 minutes. To stop any one account flooding the service or guessing invite
+        codes, we also count how much each account has added in the last day and its recent wrong
+        invite codes. We keep only the latest of each, and delete them with the account.
       </p>
       <h3>Invites</h3>
       <p>

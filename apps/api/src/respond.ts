@@ -8,11 +8,14 @@ import type { Env } from './env';
 import { mailSetup } from './mail';
 
 /** Whether this account must confirm its email before using anything else. */
-export function mustVerifyEmail(account: AccountRecord, env: Env): boolean {
+export function mustVerifyEmail(account: Pick<AccountRecord, 'emailVerified'>, env: Env): boolean {
   return !account.emailVerified && mailSetup(env) !== null;
 }
 
-export function toAccountResponse(account: AccountRecord, env: Env): AccountResponse {
+export function toAccountResponse(
+  account: Omit<AccountRecord, 'unmovedBytes'>,
+  env: Env,
+): AccountResponse {
   return {
     email: account.email,
     name: account.name,
@@ -52,4 +55,5 @@ export const messages = {
    * apps show it too, and they never point to a purchase (docs/billing.md).
    */
   storageFull: 'Your storage is full. Delete some photos or files to make room.',
+  tooManyWrites: 'You’ve made a lot of changes today. Try again tomorrow.',
 } as const;

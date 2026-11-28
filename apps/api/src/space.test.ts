@@ -14,6 +14,8 @@ import type { AlbumList, PhotoPage, ProfilePhotoResponse, StoredPhoto } from '@a
 import type { Env } from './env';
 import { PAGE_SIZE, PENDING_TTL_MS } from './routes/space';
 import { STALE_PENDING_SQL } from './space-db';
+import { createTestCounters } from './test/counters';
+import type { TestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import type { RoundTrips } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
@@ -21,6 +23,7 @@ import { createTestR2 } from './test/r2';
 import type { TestR2 } from './test/r2';
 
 let env: Env;
+let counters: TestCounters;
 let sqlite: DatabaseSync;
 let r2: TestR2;
 let client: Client;
@@ -29,6 +32,13 @@ let trips: RoundTrips;
 
 const newId = () => toBase64Url(randomBytes(16));
 const newMeta = () => toBase64Url(randomBytes(300));
+
+const samId = () =>
+  (
+    sqlite.prepare("SELECT id FROM accounts WHERE email = 'sam@example.com'").get() as {
+      id: string;
+    }
+  ).id;
 
 function useSpace(c: Client, spaceToken: string): void {
   c.headers = { [SPACE_HEADER]: spaceToken };
@@ -40,7 +50,8 @@ beforeEach(async () => {
   sqlite = db.sqlite;
   trips = db.trips;
   r2 = blobs.r2;
-  env = { DB: db.db, BLOBS: blobs.bucket };
+  counters = createTestCounters();
+  env = { DB: db.db, BLOBS: blobs.bucket, COUNTERS: counters.namespace };
   client = new Client(env);
   const keyring = await makeKeyring([newLoginKey(), newLoginKey(), newLoginKey()]);
   await client.request('POST', '/auth/signup', { email: 'sam@example.com', name: 'Sam', keyring });
@@ -315,13 +326,14 @@ describe('database round trips', () => {
     expect(await tripsFor(() => client.request('GET', '/space/photos'))).toBe(2);
   });
 
-  it('uploads a photo in ten round trips across its three requests', async () => {
+  it('uploads a photo in eleven round trips across its three requests', async () => {
     // Two of them (the abandoned-upload check and the quota reservation) run side by side.
-    // The second file's upload commits the photo, so there is no fourth request, and gives
-    // the space a new stamp, once the photo can be seen.
+    // Creating the photo also counts its record against the account's daily database
+    // limit. The second file's upload commits the photo, so there is no fourth request, and
+    // gives the space a new stamp, once the photo can be seen.
     const before = trips.count;
     await upload();
-    expect(trips.count - before).toBe(10);
+    expect(trips.count - before).toBe(11);
   });
 });
 
@@ -433,11 +445,9 @@ describe('albums', () => {
 
 describe('storage quota', () => {
   const QUOTA = STORAGE_SIZES.accountQuota;
-  const stored = () =>
-    (sqlite.prepare('SELECT stored_bytes FROM accounts').get() as { stored_bytes: number })
-      .stored_bytes;
+  const stored = () => counters.stored(samId());
   const setStored = (bytes: number) => {
-    sqlite.prepare('UPDATE accounts SET stored_bytes = ?').run(bytes);
+    counters.setStored(samId(), bytes);
   };
   const start = (size = 1000) =>
     client.request('POST', '/space/photos', {
@@ -591,9 +601,7 @@ describe('storage quota', () => {
 
 describe('profile photo', () => {
   const path = '/space/profile-photo';
-  const stored = () =>
-    (sqlite.prepare('SELECT stored_bytes FROM accounts').get() as { stored_bytes: number })
-      .stored_bytes;
+  const stored = () => counters.stored(samId());
   const newPhoto = (size = 2000) => ({
     id: newId(),
     meta: newMeta(),
@@ -630,7 +638,7 @@ describe('profile photo', () => {
   });
 
   it('is refused when storage is full', async () => {
-    sqlite.prepare('UPDATE accounts SET stored_bytes = ?').run(STORAGE_SIZES.accountQuota - 10);
+    counters.setStored(samId(), STORAGE_SIZES.accountQuota - 10);
     const res = await client.request('PUT', path, newPhoto(100));
     expect(res.status).toBe(413);
     expect(await get()).toBeNull();

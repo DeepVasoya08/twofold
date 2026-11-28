@@ -42,6 +42,12 @@
       "migrations_dir": "migrations",
     },
   ],
+  // Each account's storage total and counts, kept outside the database so that its backups
+  // and history can't line accounts up with spaces (src/counters.ts, docs/security.md).
+  "durable_objects": {
+    "bindings": [{ "name": "COUNTERS", "class_name": "AccountCounters" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AccountCounters"] }],
   "env": {
     // A separate copy for restore drills and trying changes before production
     // (docs/staging.md). It shares nothing with production: its own Worker, database and
@@ -60,6 +66,9 @@
           "migrations_dir": "migrations",
         },
       ],
+      "durable_objects": {
+        "bindings": [{ "name": "COUNTERS", "class_name": "AccountCounters" }],
+      },
     },
   },
 }

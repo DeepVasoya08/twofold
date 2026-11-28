@@ -7,6 +7,7 @@ import type { AccountResponse } from '@arcafold/types';
 
 import type { Env } from './env';
 import { MAX_SENDS_PER_HOUR } from './routes/email';
+import { createTestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
@@ -53,7 +54,7 @@ let keys: [Uint8Array, Uint8Array, Uint8Array];
  */
 async function signUp(c: Client, email: string, loginKeys = keys): Promise<void> {
   const keyring = await makeKeyring(loginKeys);
-  const before = new Client({ DB: env.DB, BLOBS: env.BLOBS });
+  const before = new Client({ DB: env.DB, BLOBS: env.BLOBS, COUNTERS: env.COUNTERS });
   const res = await before.request('POST', '/auth/signup', { email, name: 'Sam', keyring });
   expect(res.status).toBe(201);
   c.cookie = before.cookie;
@@ -75,6 +76,7 @@ beforeEach(async () => {
   env = {
     DB: db.db,
     BLOBS: createTestR2().bucket,
+    COUNTERS: createTestCounters().namespace,
     EMAIL: mailbox as unknown as SendEmail,
     EMAIL_CODE_SECRET: SECRET,
   };
@@ -110,7 +112,7 @@ describe('an unconfirmed account', () => {
   });
 
   it('is not asked while email is not set up, and the routes say so', async () => {
-    const plain = { DB: env.DB, BLOBS: env.BLOBS };
+    const plain = { DB: env.DB, BLOBS: env.BLOBS, COUNTERS: env.COUNTERS };
     const other = new Client(plain);
     await signUp(other, 'kim@example.com', [newLoginKey(), newLoginKey(), newLoginKey()]);
     expect(await account(other)).toMatchObject({ emailVerified: false, mustVerifyEmail: false });
@@ -374,7 +376,7 @@ describe('confirming a different email instead', () => {
 
 describe('the phone’s background backup', () => {
   it('keeps uploading while the email waits to be confirmed', async () => {
-    const plain = new Client({ DB: env.DB, BLOBS: env.BLOBS });
+    const plain = new Client({ DB: env.DB, BLOBS: env.BLOBS, COUNTERS: env.COUNTERS });
     plain.cookie = client.cookie;
     plain.headers = { [SPACE_HEADER]: toBase64Url(randomBytes(16)) };
     const uploadToken = toBase64Url(randomBytes(16));

@@ -14,6 +14,7 @@ import type {
 import { MAX_SENDS_PER_ADDRESS } from './email-codes';
 import type { Env } from './env';
 import { DECOY_KDF } from './routes/auth';
+import { createTestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
@@ -56,6 +57,7 @@ beforeEach(async () => {
   env = {
     DB: db.db,
     BLOBS: createTestR2().bucket,
+    COUNTERS: createTestCounters().namespace,
     EMAIL: mailbox as unknown as SendEmail,
     EMAIL_CODE_SECRET: SECRET,
   };
@@ -76,7 +78,7 @@ async function ticketFor(c: Client, email: string): Promise<string> {
 
 /** An account made the old way (email off), so the address is taken. */
 async function existing(email: string): Promise<void> {
-  const before = new Client({ DB: env.DB, BLOBS: env.BLOBS });
+  const before = new Client({ DB: env.DB, BLOBS: env.BLOBS, COUNTERS: env.COUNTERS });
   const res = await before.request('POST', '/auth/signup', { email, name: 'Kim', keyring });
   expect(res.status).toBe(201);
 }
@@ -242,7 +244,7 @@ describe('not telling who has an account', () => {
 
 describe('with email off', () => {
   it('says so on the code routes, and signs up and answers prelogin as before', async () => {
-    const plain = new Client({ DB: env.DB, BLOBS: env.BLOBS });
+    const plain = new Client({ DB: env.DB, BLOBS: env.BLOBS, COUNTERS: env.COUNTERS });
     const code = await plain.request('POST', '/auth/signup/code', { email: EMAIL });
     expect(code.status).toBe(200);
     expect(await code.json()).toEqual({ codeSent: false });

@@ -11,6 +11,13 @@ What protects Arcafold's data, how to set it up, and how to bring things back.
 D1 matters most. It holds every account's key slots, so without it the photos in R2 can't
 be decrypted by anyone, recovery key or not.
 
+Each account's storage total and counts (what it added to the database today, its wrong
+invite codes) aren't in D1 or its backups: they live in a Durable Object per account
+(`AccountCounters`), so that the database's history can't line accounts up with their spaces
+([security.md](security.md#account-totals-live-outside-the-database)). Nothing backs them up
+on purpose. Cloudflare keeps 30 days of point-in-time history for them, which only Worker
+code can use.
+
 ## How the photo backup works
 
 A separate Worker, `arcafold-backup` (`apps/api/src/backup`, `wrangler.backup.jsonc`), runs
@@ -126,6 +133,10 @@ Use D1 Time Travel. It restores in place, and the database ID stays the same. A 
 rewinds the live database for everyone: anything written after that point (accounts,
 uploads, shares, deletes) is gone, and photos uploaded since then lose their records.
 Check the point with `info` first.
+
+Account storage totals don't rewind with it, and can't be rebuilt from the database by
+design, so an account's total still counts the photos uploaded after the restore point.
+The same goes for a restore from an export, below.
 
 `apps/api/wrangler.jsonc` holds a placeholder database ID that only the deploy workflow
 fills in. Before these commands, set `database_id` there to your real ID (the

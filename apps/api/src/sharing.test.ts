@@ -15,6 +15,7 @@ import type {
 
 import type { Env } from './env';
 import { MAX_FAILURES } from './proof';
+import { createTestCounters } from './test/counters';
 import { createTestDb } from './test/d1';
 import { Client, makeKeyring, newLoginKey } from './test/fixtures';
 import { createTestR2 } from './test/r2';
@@ -49,7 +50,7 @@ function useSpace(c: Client, token: string): void {
 beforeEach(async () => {
   const db = createTestDb();
   sqlite = db.sqlite;
-  env = { DB: db.db, BLOBS: createTestR2().bucket };
+  env = { DB: db.db, BLOBS: createTestR2().bucket, COUNTERS: createTestCounters().namespace };
   owner = await signUp('sam@example.com');
   guest = await signUp('kim@example.com');
   ownerToken = random(16);

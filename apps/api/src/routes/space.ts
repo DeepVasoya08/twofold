@@ -49,13 +49,8 @@ import {
   sharedAlbumList,
   sharedAlbumPhotoIds,
 } from '../album-share-db';
-import {
-  findSessionAccount,
-  releaseStorage,
-  reserveStorage,
-  sessionAccountFrom,
-  sessionAccountQuery,
-} from '../db';
+import { releaseStorage, reserveStorage } from '../account-counts';
+import { findSessionAccount, sessionAccountFrom, sessionAccountQuery } from '../db';
 import { deleteFaceData } from '../face-db';
 import { messages, mustVerifyEmail, readBody } from '../respond';
 import {
@@ -78,6 +73,7 @@ import {
 } from '../schemas';
 import { requestSessionHash, sessionEnded, verifyEmailFirst } from '../session';
 import type { AppEnv } from '../session';
+import { limitWrites } from '../write-limit';
 import {
   countAlbumMembers,
   countJoined,
@@ -277,7 +273,7 @@ const stampChanges = createMiddleware<AppEnv>(async (c, next) => {
   }
 });
 
-space.use(requireSpace, limitMemberTokens, stampChanges);
+space.use(requireSpace, limitMemberTokens, limitWrites, stampChanges);
 
 // People are kept per space like everything else, and only for its owner.
 space.route('/', people);
@@ -294,7 +290,7 @@ async function deletePhotos(c: Context<AppEnv>, tag: string, photos: PhotoSize[]
   await c.env.BLOBS.delete(photos.flatMap((photo) => objectKeys(photo.id)));
   const deleted = await deletePhotoRows(c.env.DB, tag, photos);
   const bytes = deleted.reduce((total, photo) => total + photo.size, 0);
-  await releaseStorage(c.env.DB, c.get('account').id, bytes);
+  await releaseStorage(c, bytes);
 }
 
 const storageFull = messages.storageFull;
@@ -398,8 +394,7 @@ space.post('/photos', async (c) => {
   // abandoned uploads runs alongside; if the reservation lost the race to space it freed,
   // it is tried once more.
   const size = body.thumbSize + body.fullSize;
-  const accountId = c.get('account').id;
-  const reserve = () => reserveStorage(c.env.DB, accountId, size, now);
+  const reserve = () => reserveStorage(c, size, now);
   const [, reserved] = await Promise.all([
     stalePendingPhotos(c.env.DB, tag, now - PENDING_TTL_MS).then((stale) =>
       deletePhotos(c, tag, stale).then(() => stale.length),
@@ -413,7 +408,7 @@ space.post('/photos', async (c) => {
   const sealedFor =
     c.get('access') === 'upload' ? { owner: true as const } : album === null ? null : { album };
   if (!(await insertPendingPhoto(c.env.DB, tag, body, now, sealedFor))) {
-    await releaseStorage(c.env.DB, accountId, size);
+    await releaseStorage(c, size);
     return c.json({ error: messages.badRequest }, 409);
   }
   // Nobody sees an upload until it's committed.
@@ -799,7 +794,7 @@ space.delete('/', requireOwner, async (c) => {
     (await deleteProfilePhoto(c.env.DB, tag)) +
     (await deleteFaceData(c.env.DB, tag)) +
     (await deleteSearchData(c.env.DB, tag));
-  await releaseStorage(c.env.DB, c.get('account').id, freed);
+  await releaseStorage(c, freed);
   return c.body(null, 204);
 });
 
@@ -858,22 +853,17 @@ space.put('/profile-photo', requireOwner, async (c) => {
   const body = await readBody(c, profilePhotoSchema);
   const image = body && fromBase64Url(body.image);
   if (!body || !image) return c.json({ error: messages.badRequest }, 400);
-  const accountId = c.get('account').id;
-  if (!(await reserveStorage(c.env.DB, accountId, image.length, Date.now()))) {
+  if (!(await reserveStorage(c, image.length, Date.now()))) {
     return c.json({ error: storageFull }, 413);
   }
   const replaced = await replaceProfilePhoto(c.env.DB, c.get('space'), body, image.length);
-  await releaseStorage(c.env.DB, accountId, replaced);
+  await releaseStorage(c, replaced);
   return c.body(null, 204);
 });
 
 space.delete('/profile-photo', requireOwner, async (c) => {
   if (!(await readBody(c, emptySchema))) return c.json({ error: messages.badRequest }, 400);
-  await releaseStorage(
-    c.env.DB,
-    c.get('account').id,
-    await deleteProfilePhoto(c.env.DB, c.get('space')),
-  );
+  await releaseStorage(c, await deleteProfilePhoto(c.env.DB, c.get('space')));
   return c.body(null, 204);
 });
 
