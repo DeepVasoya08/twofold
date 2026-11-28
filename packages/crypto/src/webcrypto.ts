@@ -52,6 +52,15 @@ export function newSessionToken(): string {
   return toBase64Url(randomBytes(32));
 }
 
+/**
+ * A new random name (128 bits), base64url, that stands for something without saying which
+ * thing it is: what R2 calls a photo's files, or what an address in the web app calls a
+ * photo or album.
+ */
+export function newRandomName(): string {
+  return toBase64Url(randomBytes(16));
+}
+
 /** What the server stores for a session token, so a database leak does not leak sessions. */
 export async function sessionTokenHash(token: string): Promise<string> {
   return toBase64Url(await sha256(new TextEncoder().encode(token)));

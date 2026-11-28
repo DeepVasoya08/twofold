@@ -41,7 +41,7 @@ export async function listUploadTokens(db: D1Database, space: string): Promise<s
 
 /**
  * Registers a phone's upload token, unless the space has its most already. Returns false
- * if it wasn't added: too many, or the id or token is taken.
+ * if it wasn't added: too many, this space already has the id, or the token is taken.
  */
 export async function insertUploadToken(
   db: D1Database,

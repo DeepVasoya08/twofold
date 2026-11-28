@@ -50,7 +50,7 @@ export const countJoined = (db: D1Database, space: string) =>
 export const countPendingInvites = (db: D1Database, space: string) =>
   count(db, 'SELECT COUNT(*) AS count FROM pending_invites WHERE space = ?', space);
 
-/** Returns false if the id or token is taken. */
+/** Returns false if this space already has the id, or the token is taken. */
 export async function insertMember(
   db: D1Database,
   space: string,
@@ -105,14 +105,16 @@ export async function listJoined(db: D1Database, space: string): Promise<StoredJ
   return results;
 }
 
-/** Returns false if the id is taken. */
+/** Returns false if this space already has the id. */
 export async function insertJoined(
   db: D1Database,
   space: string,
   joined: StoredJoined,
 ): Promise<boolean> {
   const result = await db
-    .prepare('INSERT INTO joined (id, space, meta) VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING')
+    .prepare(
+      'INSERT INTO joined (id, space, meta) VALUES (?, ?, ?) ON CONFLICT (space, id) DO NOTHING',
+    )
     .bind(joined.id, space, joined.meta)
     .run();
   return result.meta.changes === 1;
@@ -137,7 +139,7 @@ export async function listPendingInvites(
   return results;
 }
 
-/** Returns false if the id is taken. */
+/** Returns false if this space already has the id. */
 export async function insertPendingInvite(
   db: D1Database,
   space: string,
@@ -145,7 +147,7 @@ export async function insertPendingInvite(
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      'INSERT INTO pending_invites (id, space, meta) VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING',
+      'INSERT INTO pending_invites (id, space, meta) VALUES (?, ?, ?) ON CONFLICT (space, id) DO NOTHING',
     )
     .bind(invite.id, space, invite.meta)
     .run();
