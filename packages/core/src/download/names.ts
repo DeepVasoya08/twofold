@@ -1,4 +1,4 @@
-import { fileExtension } from '../file-types';
+import { cleanFileName, fileExtension } from '../file-types';
 import { extensionOf } from '../photo-types';
 
 /**
@@ -36,9 +36,11 @@ export interface CopyDetails {
 }
 
 function nameParts({ takenAt, type, name: own }: CopyDetails): { base: string; extension: string } {
+  // A file's name is cleaned once more where it becomes a file or zip entry on the device,
+  // so a name with folders or `..` in it can never save outside where it's meant to go.
   return own === undefined
     ? { base: takenName(takenAt), extension: extensionOf(type) }
-    : splitName(own);
+    : splitName(cleanFileName(own));
 }
 
 /**

@@ -98,6 +98,16 @@ describe('parsePhotoMeta', () => {
     expect(parsePhotoMeta(value)).toBeNull();
   });
 
+  it.each([
+    ['folders', '../../../../data/data/com.arcafold.app/x.txt', 'x.txt'],
+    ['Windows folders', '..\\..\\startup\\run.bat', 'run.bat'],
+    ['nothing but dots', '..', 'File'],
+    ['control characters', 'a\u0000b\u001f.txt', 'ab.txt'],
+  ])('cleans a file name with %s, whoever sealed it', (_label, name, cleaned) => {
+    const parsed = parsePhotoMeta({ ...photo, type: 'text/plain', kind: 'file', name });
+    expect(parsed?.name).toBe(cleaned);
+  });
+
   it('ignores file fields that are malformed instead of refusing the file', () => {
     const parsed = parsePhotoMeta({
       ...photo,

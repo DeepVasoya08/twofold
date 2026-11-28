@@ -346,7 +346,10 @@ under). It never gets the space key or the space id.
   device that can share files, through the system share sheet. Those copies are not
   encrypted, and the dialog says so before anything is saved. File names come from when
   each photo was taken and the zip is called `Arcafold <date>.zip`, so neither names the
-  space or album. Download links are temporary object URLs, revoked after a few seconds.
+  space or album. A file (not a photo) keeps its own name, which anyone who can add to a
+  shared folder chooses, so it is cleaned when its record is opened and again when a copy
+  is named (`cleanFileName`: no folders, `..` or control characters), and the phone's saver
+  refuses any name that would land outside its folder. Download links are temporary object URLs, revoked after a few seconds.
   Closing the download dialog keeps the download (and its decrypted copies) in memory so
   it can finish in the background; they're dropped once saved, when the download is
   cancelled, or when the vault locks.
