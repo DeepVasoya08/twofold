@@ -69,7 +69,10 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
 - At sign-up slot 2 and verifier 2 are **random bytes** of exactly the same size as real
   ones. A secretbox ciphertext under an unknown key is indistinguishable from random, so
   one copy of the stored keyring looks the same with or without a private space (but two
-  copies can differ; see the trade-offs below).
+  copies can differ; see the trade-offs below). The keyring's `version`, which a change
+  must name so two devices can't overwrite each other, is random too and new on every
+  change, never a count, so one copy doesn't say whether the keyring ever changed
+  (`apps/api/src/keyring-version.ts`).
 - Every change uploads **all three slots and verifiers** together (`PUT
 /api/account/keyring`). Changing the main password, making a new recovery key and setting
   up a private space are the same request. D1 keeps no per-slot columns or timestamps.
@@ -101,9 +104,12 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
   its key. So anyone who can compare two copies of an account's row (a compromised server
   watching the `PUT`, or D1 Time Travel, a backup or an export, which keep earlier copies
   for days) sees when slot 2 alone changed, and so that a private space was set up or its
-  password changed. It reveals nothing else: no photos, keys or passwords. Closing it would
-  need a new construction (ruled out by "never invent crypto") or a private password that can
-  only be set at sign-up and never changed; we accepted the gap instead.
+  password changed. So can someone who knows the main password and saved the keyring from
+  an earlier sign-in, with no server access at all: signing in again gets the new one, and
+  the sign-out every keyring change causes even tells them when. It reveals nothing else:
+  no photos, keys or passwords, and the setup and change dialogs say so. Closing it would
+  need a new construction (ruled out by "never invent crypto") or a private password that
+  can only be set at sign-up and never changed; we accepted the gap instead.
 - **A compromised, live server could notice a second login key** when someone logs in with
   the private password on a new device (the stored data still reveals nothing). A
   compromised server could equally serve altered JavaScript, which is the limit of any

@@ -67,7 +67,7 @@ export const loginSchema = z.strictObject({ email, loginKey });
 
 export const updateKeyringSchema = z.strictObject({
   loginKey,
-  version: z.number().int().min(1),
+  version: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
   keyring: keyringSchema,
 });
 
