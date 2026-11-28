@@ -220,6 +220,36 @@ describe('POST /api/auth/login', () => {
     expect((await from('198.51.100.7', keys[0])).status).toBe(429);
   });
 
+  it('doesn’t let one address use up the ceiling and lock everyone out', async () => {
+    const from = (address: string, loginKey: Uint8Array) =>
+      new Client(env).send(
+        'POST',
+        '/auth/login',
+        JSON.stringify({ email: EMAIL, loginKey: toBase64Url(loginKey) }),
+        { 'content-type': 'application/json', 'cf-connecting-ip': address },
+      );
+    for (let i = 0; i < MAX_EMAIL_FAILURES + 5; i++) await from('203.0.113.9', newLoginKey());
+    expect((await from('203.0.113.9', keys[0])).status).toBe(429);
+    expect((await from('198.51.100.7', keys[0])).status).toBe(200);
+  });
+
+  it('counts IPv6 addresses by their first 64 bits', async () => {
+    const from = (address: string, loginKey: Uint8Array) =>
+      new Client(env).send(
+        'POST',
+        '/auth/login',
+        JSON.stringify({ email: EMAIL, loginKey: toBase64Url(loginKey) }),
+        { 'content-type': 'application/json', 'cf-connecting-ip': address },
+      );
+    for (let i = 0; i < MAX_FAILURES; i++) {
+      // A new address each time, all in one /64, as anyone given a /64 could send.
+      const address = `2001:db8:1:2:${(i + 1).toString(16)}::1`;
+      expect((await from(address, newLoginKey())).status).toBe(401);
+    }
+    expect((await from('2001:db8:1:2:ffff::9', keys[0])).status).toBe(429);
+    expect((await from('2001:db8:1:3::1', keys[0])).status).toBe(200);
+  });
+
   it('keeps no address in readable form, and forgets finished windows', async () => {
     await new Client(env).send(
       'POST',

@@ -400,6 +400,32 @@ export function attemptQuery(
     .bind(email, now, windowStart);
 }
 
+/**
+ * Like attemptQuery, but counts the attempt only while `gate` (counted earlier in the same
+ * batch) is still within `gateLimit`, and returns no row when it isn't. The per-email
+ * ceiling uses it, so attempts that one address's own limit has already refused don't use
+ * the ceiling up.
+ */
+export function attemptWithinQuery(
+  db: D1Database,
+  key: string,
+  gate: string,
+  gateLimit: number,
+  now: number,
+  windowStart: number,
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO login_failures (email, window_start, failures)
+       SELECT ?1, ?2, 1 WHERE (SELECT failures FROM login_failures WHERE email = ?4) <= ?5
+       ON CONFLICT (email) DO UPDATE SET
+         failures = CASE WHEN window_start > ?3 THEN failures + 1 ELSE 1 END,
+         window_start = CASE WHEN window_start > ?3 THEN window_start ELSE ?2 END
+       RETURNING failures`,
+    )
+    .bind(key, now, windowStart, gate, gateLimit);
+}
+
 /** The count an attemptQuery returned. */
 export function attemptCount(rows: readonly unknown[]): number {
   const row = rows[0] as { failures: number } | undefined;

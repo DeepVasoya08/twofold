@@ -22,7 +22,8 @@ space. Losing the password and the recovery key still means losing the photos.
   after that, and the account starts confirmed. An address that already has an account gets
   a "you already have an account" note instead of a code, and the screen says "check your
   email" either way, with a line under the code box saying that an address with an
-  account gets a note instead (so nobody is left wondering, without saying which it was). Sign-up codes are also limited to 20 an hour per internet address.
+  account gets a note instead (so nobody is left wondering, without saying which it was). Sign-up codes are also limited to 20 an hour per internet address (an IPv6 address
+  counts by its first 64 bits).
   While email is off, `signup/code` answers `{ codeSent: false }` and sign-up goes on
   without a code, as before.
 - **Sign-in** (while email is on) gives an email with no account a made-up salt that is
