@@ -70,7 +70,7 @@ function InviteRequest({ entry }: { entry: InviteEntry }) {
   const target = useTarget();
   const [busy, setBusy] = useState(false);
   if (entry.progress.stage !== 'confirm') return null;
-  const { name, phrase } = entry.progress;
+  const { name, phrase, joinerKey } = entry.progress;
   const id = entry.invite.id;
 
   const run = (action: () => Promise<unknown>) => {
@@ -116,7 +116,7 @@ function InviteRequest({ entry }: { entry: InviteEntry }) {
           disabled={busy}
           aria-busy={busy}
           onClick={() => {
-            run(() => pending.confirm(id));
+            run(() => pending.confirm(id, joinerKey));
           }}
         >
           {busy ? 'Sharing…' : 'They match, share'}

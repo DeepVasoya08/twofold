@@ -49,7 +49,7 @@ function InviteRequest({ entry, albums }: { entry: InviteEntry; albums: readonly
   const palette = usePalette();
   const [busy, setBusy] = useState(false);
   if (entry.progress.stage !== 'confirm') return null;
-  const { name, phrase } = entry.progress;
+  const { name, phrase, joinerKey } = entry.progress;
   const id = entry.invite.id;
   const run = (action: () => Promise<unknown>) => {
     if (busy) return;
@@ -80,7 +80,7 @@ function InviteRequest({ entry, albums }: { entry: InviteEntry; albums: readonly
         busyLabel="Sharing…"
         busy={busy}
         onPress={() => {
-          run(() => invites.confirm(id));
+          run(() => invites.confirm(id, joinerKey));
         }}
       />
       <Button

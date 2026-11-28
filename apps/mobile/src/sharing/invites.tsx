@@ -23,12 +23,13 @@ import {
   confirmInvite,
   defaultApis,
   setInviteAccess,
+  shownJoiner,
   startInvite,
   startJoin,
 } from '@arcafold/core/sharing';
 import type { Invite, Join, Member } from '@arcafold/core/sharing';
 import { advancePending, grantedText, passInterval } from '@arcafold/core/sharing-pass';
-import type { InviteEntry, JoinEntry } from '@arcafold/core/sharing-pass';
+import type { InviteEntry, JoinEntry, SeenJoiners } from '@arcafold/core/sharing-pass';
 import type { MemberAccess } from '@arcafold/types';
 
 import { useNotice } from '../ui/notice';
@@ -59,8 +60,8 @@ export interface Invites {
   cancel: (inviteId: string) => Promise<void>;
   /** Changes what a library invite will let them do, until it's confirmed. */
   setAccess: (inviteId: string, access: MemberAccess) => Promise<void>;
-  /** The four words match: share. */
-  confirm: (inviteId: string) => Promise<Member>;
+  /** The four words shown for `shownKey` match: share with that key. */
+  confirm: (inviteId: string, shownKey: string) => Promise<Member>;
   /** Accepts an invite by its code or link token. */
   accept: (ref: string) => Promise<Join>;
   /** Gives up on an invite this space accepted. */
@@ -136,6 +137,8 @@ export function InvitesProvider({
   const [granted, setGranted] = useState<string[]>([]);
   const [watchers, setWatchers] = useState(0);
   const settled = useRef(new Set<string>());
+  /** The joiner key each invite showed here, which later passes are held to. */
+  const seen = useRef<SeenJoiners>(new Map());
   const running = useRef(false);
   const again = useRef(false);
 
@@ -163,7 +166,14 @@ export function InvitesProvider({
       joins: new Map(joins.map((entry) => [entry.join.id, entry.progress])),
     };
     runner.current = async () => {
-      const result = await advancePending(keys, myName, apis, settled.current, before);
+      const result = await advancePending(
+        keys,
+        myName,
+        apis,
+        settled.current,
+        before,
+        seen.current,
+      );
       for (const each of result.granted) settled.current.add(each.joinId);
       for (const problem of result.problems) notice(problem);
       setInvites(result.invites.filter((entry) => !settled.current.has(entry.invite.id)));
@@ -291,10 +301,9 @@ export function InvitesProvider({
           ),
         );
       },
-      confirm: async (inviteId) => {
+      confirm: async (inviteId, shownKey) => {
         const { invite, progress } = find(inviteId);
-        if (progress.stage !== 'confirm') throw new FormError('They haven’t joined yet.');
-        const joiner = { name: progress.name, joinerKey: progress.joinerKey };
+        const joiner = shownJoiner(progress, shownKey);
         let member: Member;
         if (invite.album === null) {
           member = await confirmInvite(invite, joiner, keys, myName, apis);

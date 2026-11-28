@@ -53,6 +53,13 @@ export interface PassResult {
   problems: string[];
 }
 
+/**
+ * The joiner key each invite was first seen with on this device, by invite id. The app keeps
+ * it in memory for as long as the space stays open and passes the same map to every pass, so
+ * a server can't swap the key (and the words) after the two people compared them.
+ */
+export type SeenJoiners = Map<string, string>;
+
 /** True for errors that end an invite, as opposed to a dropped connection worth retrying. */
 function isFinal(error: unknown): boolean {
   return error instanceof FormError;
@@ -61,7 +68,8 @@ function isFinal(error: unknown): boolean {
 /**
  * Loads the space's invites and moves each along. Ones in `settled` (finished or cancelled on
  * this device meanwhile) are left alone. When a step fails for a moment (offline), the
- * invite keeps the progress `before` showed. Throws only if the list itself didn't load.
+ * invite keeps the progress `before` showed. `seen` gains each joiner key as it appears, and
+ * holds every later pass to it. Throws only if the list itself didn't load.
  */
 export async function advancePending(
   keys: SpaceKeys,
@@ -72,6 +80,7 @@ export async function advancePending(
     invites: ReadonlyMap<string, InviteProgress>;
     joins: ReadonlyMap<string, JoinProgress>;
   },
+  seen: SeenJoiners,
 ): Promise<PassResult> {
   const pending = await listPending(keys, apis);
   const result: PassResult = {
@@ -85,11 +94,13 @@ export async function advancePending(
   for (const invite of pending.invites) {
     if (settled.has(invite.id)) continue;
     try {
-      const progress = await advanceInvite(invite, myName, keys, apis);
+      const progress = await advanceInvite(invite, myName, keys, apis, seen.get(invite.id));
+      if (invite.joinerKey !== null) seen.set(invite.id, invite.joinerKey);
       if (progress.stage === 'gone') {
         // Expired, cancelled elsewhere, or finished: the record is no use anymore.
         await forgetPending(keys, invite.id, apis);
         result.goneInvites.push(invite.id);
+        seen.delete(invite.id);
       } else {
         result.invites.push({ invite, progress });
       }
@@ -102,6 +113,7 @@ export async function advancePending(
       await cancelInvite(invite, keys, apis);
       result.goneInvites.push(invite.id);
       result.problems.push(errorMessage(error));
+      seen.delete(invite.id);
     }
   }
   for (const join of pending.joins) {
