@@ -9,6 +9,7 @@ import {
   fromBase64Url,
   loginVerifier,
   newEmailCode,
+  newRandomName,
   newSessionToken,
   sessionTokenHash,
   toBase64Url,
@@ -49,6 +50,17 @@ describe('session tokens', () => {
     expect(newSessionToken()).not.toBe(token);
     expect(await sessionTokenHash(token)).toBe(await sessionTokenHash(token));
     expect(await sessionTokenHash(token)).not.toBe(token);
+  });
+});
+
+describe('random names', () => {
+  it('are 128-bit, URL-safe and new each time', () => {
+    const names = new Set(Array.from({ length: 100 }, () => newRandomName()));
+    expect(names.size).toBe(100);
+    for (const name of names) {
+      expect(name).toMatch(/^[A-Za-z0-9_-]{22}$/);
+      expect(fromBase64Url(name)).toHaveLength(16);
+    }
   });
 });
 

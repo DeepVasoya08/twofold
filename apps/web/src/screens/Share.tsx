@@ -4,8 +4,8 @@ import type { MemberAccess } from '@arcafold/types';
 
 import { useMe } from '../app/account';
 import { usePendingInvites } from '../app/invites';
-import { Link, useRouter } from '../app/router';
-import { parseShareAlbum, paths } from '../app/routes';
+import { Link } from '../app/router';
+import { paths } from '../app/routes';
 import { foldersOf, useVault } from '../app/vault';
 import { PageHeader } from '../components/AppShell';
 import { Avatar } from '../components/Brand';
@@ -323,15 +323,13 @@ function InvitePanel({ where, album }: { where: string; album: SharedAlbum | nul
 }
 
 /**
- * Invite someone to the open space or to one of its albums, or join a library or album
- * someone shared with you.
+ * Invite someone to the open space or to one of its albums (`albumId`), or join a library or
+ * album someone shared with you.
  */
-export function Share() {
+export function Share({ albumId }: { albumId: string | null }) {
   const { space, state: vault, status } = useVault();
-  const { search } = useRouter();
 
   const where = space === 'private' ? 'private space' : 'library';
-  const albumId = parseShareAlbum(search);
   if (albumId !== null) {
     const found = vault.albums.find((each) => each.id === albumId && each.library === undefined);
     // A folder in Files is shared the same way.

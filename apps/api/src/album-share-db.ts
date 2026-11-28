@@ -73,8 +73,7 @@ export async function putAlbumItem(
                          WHERE id = ?1 AND space = ?3 AND shared_meta IS NOT NULL)
             AND EXISTS (SELECT 1 FROM photos
                          WHERE id = ?2 AND space = ?3 AND pending_since IS NULL)
-         ON CONFLICT (album, photo) DO UPDATE SET meta = excluded.meta
-          WHERE album_items.space = excluded.space`,
+         ON CONFLICT (space, album, photo) DO UPDATE SET meta = excluded.meta`,
       )
       .bind(item.album, item.photo, space, item.meta),
     db
@@ -106,7 +105,7 @@ export async function putAddedAlbumItem(
           AND EXISTS (SELECT 1 FROM photos
                        WHERE id = ?2 AND space = ?3 AND pending_since IS NULL
                          AND sealed_for_album = ?1)
-       ON CONFLICT (album, photo) DO NOTHING`,
+       ON CONFLICT (space, album, photo) DO NOTHING`,
     )
     .bind(item.album, item.photo, space, item.meta)
     .run();
@@ -145,7 +144,7 @@ export async function removeAlbumItem(
         `INSERT INTO album_removed (album, photo, space)
          SELECT album, photo, space FROM album_items
           WHERE album = ?1 AND photo = ?2 AND space = ?3
-         ON CONFLICT (album, photo) DO NOTHING`,
+         ON CONFLICT (space, album, photo) DO NOTHING`,
       )
       .bind(album, photo, space),
     db
@@ -181,8 +180,8 @@ export async function forgetAlbumRemoved(
 
 /**
  * Keeps a change someone given a shared folder made inside it, sealed under its key, until the
- * owner's device makes it. False if the folder isn't shared, the id is taken, or it already
- * has the most changes waiting.
+ * owner's device makes it. False if the folder isn't shared, the space already has the id, or
+ * the folder already has the most changes waiting.
  */
 export async function addFolderEdit(
   db: D1Database,
@@ -197,7 +196,7 @@ export async function addFolderEdit(
         WHERE EXISTS (SELECT 1 FROM albums
                        WHERE id = ?2 AND space = ?3 AND shared_meta IS NOT NULL)
           AND (SELECT COUNT(*) FROM folder_edits WHERE album = ?2 AND space = ?3) < ?5
-       ON CONFLICT (id) DO NOTHING`,
+       ON CONFLICT (space, id) DO NOTHING`,
     )
     .bind(edit.id, album, space, edit.meta, MAX_FOLDER_EDITS)
     .run();
@@ -294,8 +293,9 @@ export async function listSharedAlbumPhotos(
   const { results } = await db
     .prepare(
       `SELECT photos.id AS id, album_items.meta AS meta, thumb_size, full_size
-         FROM album_items JOIN photos ON photos.id = album_items.photo
-        WHERE album_items.album = ? AND album_items.space = ? AND photos.space = album_items.space
+         FROM album_items
+         JOIN photos ON photos.space = album_items.space AND photos.id = album_items.photo
+        WHERE album_items.album = ? AND album_items.space = ?
           AND photos.pending_since IS NULL AND photos.trashed = 0 AND photos.id > ?
         ORDER BY photos.id LIMIT ?`,
     )
@@ -310,24 +310,26 @@ export async function listSharedAlbumPhotos(
 }
 
 /**
- * Which of these photos the shared album lists (and aren't in Recently deleted): the only
- * files its people may download.
+ * Which of these photos the shared album lists (and aren't in Recently deleted), with the
+ * names of their files: the only files its people may download.
  */
-export async function sharedAlbumPhotoIds(
+export async function sharedAlbumPhotoBlobs(
   db: D1Database,
   space: string,
   album: string,
   ids: readonly string[],
-): Promise<Set<string>> {
-  if (ids.length === 0) return new Set();
+): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
   const { results } = await db
     .prepare(
-      `SELECT photo FROM album_items JOIN photos ON photos.id = album_items.photo
-        WHERE album_items.album = ? AND album_items.space = ? AND photos.space = album_items.space
+      `SELECT photos.id AS id, photos.blob AS blob
+         FROM album_items
+         JOIN photos ON photos.space = album_items.space AND photos.id = album_items.photo
+        WHERE album_items.album = ? AND album_items.space = ?
           AND photos.pending_since IS NULL AND photos.trashed = 0
           AND album_items.photo IN (${ids.map(() => '?').join(', ')})`,
     )
     .bind(album, space, ...ids)
-    .all<{ photo: string }>();
-  return new Set(results.map((row) => row.photo));
+    .all<{ id: string; blob: string }>();
+  return new Map(results.map((row) => [row.id, row.blob]));
 }

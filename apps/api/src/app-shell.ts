@@ -6,7 +6,7 @@ const FILE_LIKE = /\.[A-Za-z0-9]+$/;
 
 /**
  * Answers a non-API request that matched no static asset. App paths like /photos or
- * /albums/<id> get the app shell, whose router picks the screen; anything that looks like
+ * /albums/<name> get the app shell, whose router picks the screen; anything that looks like
  * a file gets a 404 rather than an HTML page.
  */
 export async function serveAppShell(request: Request, assets: Fetcher): Promise<Response> {

@@ -13,6 +13,7 @@ import {
   folderRestore,
   folderTrash,
   folderTree,
+  foldersOfShare,
   inFiles,
   inTrashedFolder,
   itemsIn,
@@ -229,5 +230,52 @@ describe('shared with you', () => {
     expect(changeable('signed')).toBe(true);
     expect(changeable('lease')).toBe(false);
     expect(changeable('look')).toBe(false);
+  });
+});
+
+describe('what a share may show', () => {
+  // Your own folders, as `taken` sees them.
+  const yours = new Set(['medical', 'holiday']);
+  const taken = (id: string) => yours.has(id);
+  const ids = (list: readonly Folder[]) => list.map((folder) => folder.id);
+
+  it('keeps a share’s own folders, inside each other in any order', () => {
+    const listed: Folder[] = [
+      { id: 'deep', name: 'Deep', parentId: 'inner' },
+      { id: 'inner', name: 'Inner', parentId: 'from' },
+      { id: 'from', name: 'From Alice' },
+    ];
+    expect(ids(foldersOfShare(listed, taken))).toEqual(['deep', 'inner', 'from']);
+  });
+
+  it('leaves out a folder with one of your ids, and anything listed inside it', () => {
+    const listed: Folder[] = [
+      { id: 'from', name: 'From Alice' },
+      { id: 'medical', name: 'Medical', parentId: 'from' },
+      { id: 'scans', name: 'Scans', parentId: 'medical' },
+    ];
+    expect(ids(foldersOfShare(listed, taken))).toEqual(['from']);
+  });
+
+  it('never puts a folder of theirs inside one of yours', () => {
+    const listed: Folder[] = [
+      { id: 'from', name: 'From Alice' },
+      { id: 'trap', name: 'Upload here', parentId: 'medical' },
+    ];
+    expect(ids(foldersOfShare(listed, taken))).toEqual(['from']);
+  });
+
+  it('keeps a folder whose parent isn’t listed, which then shows at the top', () => {
+    const listed: Folder[] = [{ id: 'orphan', name: 'Orphan', parentId: 'gone' }];
+    expect(ids(foldersOfShare(listed, taken))).toEqual(['orphan']);
+  });
+
+  it('leaves out folders that name each other in a loop', () => {
+    const listed: Folder[] = [
+      { id: 'a', name: 'A', parentId: 'b' },
+      { id: 'b', name: 'B', parentId: 'a' },
+      { id: 'self', name: 'Self', parentId: 'self' },
+    ];
+    expect(foldersOfShare(listed, taken)).toEqual([]);
   });
 });

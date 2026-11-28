@@ -21,6 +21,7 @@ import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
 import { MoveSpaceDialog, moveLabel } from '../components/MoveSpaceDialog';
 import { PhotoImage } from '../components/PhotoImage';
+import { viewerSaveName } from '../lib/copy-names';
 import { formatDay, formatTime, sortNewestFirst } from '../lib/format';
 import type { DocumentLook } from '../lib/file-sort/looks';
 import type { Person } from '../mock/data';
@@ -309,7 +310,7 @@ export function PhotoViewer({ photoId }: { photoId: string }) {
           <a
             className="viewer__btn viewer__btn--wide-only"
             href={photo.fullSrc}
-            download={`arcafold-${photo.id}`}
+            download={viewerSaveName(photo.takenAt)}
             aria-label="Download"
           >
             <Icon name="download" />

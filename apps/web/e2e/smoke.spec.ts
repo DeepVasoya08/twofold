@@ -16,7 +16,8 @@ test('serves the web app with its security headers', async ({ page }) => {
 });
 
 test('deep links fall back to the app shell, which asks you to log in', async ({ page }) => {
-  await page.goto('/albums/kyoto');
+  // An album's address from an earlier visit, whose name stands for nothing now.
+  await page.goto('/albums/AAAAAAAAAAAAAAAAAAAAAA');
 
   await expect(page).toHaveURL('/login');
   await expect(page.getByRole('heading', { level: 1, name: 'Welcome back' })).toBeVisible();

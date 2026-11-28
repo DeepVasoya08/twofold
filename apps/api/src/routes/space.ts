@@ -47,7 +47,7 @@ import {
   putAlbumItem,
   setAlbumShared,
   sharedAlbumList,
-  sharedAlbumPhotoIds,
+  sharedAlbumPhotoBlobs,
 } from '../album-share-db';
 import {
   findSessionAccount,
@@ -99,7 +99,7 @@ import {
 } from '../share-db';
 import {
   commitPhoto,
-  committedPhotoIds,
+  committedPhotoBlobs,
   countAlbums,
   countPhotos,
   deleteAlbum,
@@ -291,7 +291,7 @@ space.route('/', search);
  */
 async function deletePhotos(c: Context<AppEnv>, tag: string, photos: PhotoSize[]) {
   if (photos.length === 0) return;
-  await c.env.BLOBS.delete(photos.flatMap((photo) => objectKeys(photo.id)));
+  await c.env.BLOBS.delete(photos.flatMap((photo) => objectKeys(photo.blob)));
   const deleted = await deletePhotoRows(c.env.DB, tag, photos);
   const bytes = deleted.reduce((total, photo) => total + photo.size, 0);
   await releaseStorage(c.env.DB, c.get('account').id, bytes);
@@ -320,9 +320,9 @@ space.get('/photos', async (c) => {
  */
 export const THUMB_READS = 4;
 
-/** Reads one thumbnail in full, or null if it isn't there. */
-async function readThumb(bucket: R2Bucket, id: string): Promise<Uint8Array | null> {
-  const object = await bucket.get(objectKey(id, 'thumb'));
+/** Reads one thumbnail in full, by its files' name, or null if it isn't there. */
+async function readThumb(bucket: R2Bucket, blob: string): Promise<Uint8Array | null> {
+  const object = await bucket.get(objectKey(blob, 'thumb'));
   return object ? new Uint8Array(await object.arrayBuffer()) : null;
 }
 
@@ -365,8 +365,8 @@ function thumbStream(
 
 /**
  * Many encrypted thumbnails in one response, in the order asked (see THUMB_BATCH_MAX for the
- * format). Photos that aren't committed in this space come back empty, so a batch can't
- * reach another space's files.
+ * format). Photos that aren't committed in this space come back empty: files are named by
+ * this space's rows, so a batch can't reach another space's files.
  */
 space.get('/thumbs', async (c) => {
   const ids = (c.req.query('ids') ?? '').split(',');
@@ -377,11 +377,12 @@ space.get('/thumbs', async (c) => {
   if (!valid) return c.json({ error: messages.badRequest }, 400);
   const album = c.get('album');
   const found = album
-    ? await sharedAlbumPhotoIds(c.env.DB, c.get('space'), album, ids)
-    : await committedPhotoIds(c.env.DB, c.get('space'), ids);
+    ? await sharedAlbumPhotoBlobs(c.env.DB, c.get('space'), album, ids)
+    : await committedPhotoBlobs(c.env.DB, c.get('space'), ids);
   const read = (index: number) => {
     const id = ids[index];
-    return id !== undefined && found.has(id) ? readThumb(c.env.BLOBS, id) : Promise.resolve(null);
+    const blob = id === undefined ? undefined : found.get(id);
+    return blob === undefined ? Promise.resolve(null) : readThumb(c.env.BLOBS, blob);
   };
   return c.body(thumbStream(ids.length, read), 200, {
     'content-type': 'application/octet-stream',
@@ -453,14 +454,14 @@ space.put('/photos/:id/:part', async (c) => {
   const length = Number(c.req.header('content-length'));
   const body = c.req.raw.body;
   if (length !== expected || !body) return c.json({ error: messages.badRequest }, 400);
-  const key = objectKey(params.id, params.part);
+  const key = objectKey(photo.blob, params.part);
   const stored = await c.env.BLOBS.put(key, body);
   if (stored?.size !== expected) {
     await c.env.BLOBS.delete(key);
     return c.json({ error: messages.badRequest }, 400);
   }
   const other = params.part === 'thumb' ? 'full' : 'thumb';
-  const otherStored = await c.env.BLOBS.head(objectKey(params.id, other));
+  const otherStored = await c.env.BLOBS.head(objectKey(photo.blob, other));
   const sizes = {
     thumbSize: params.part === 'thumb' ? stored.size : (otherStored?.size ?? -1),
     fullSize: params.part === 'full' ? stored.size : (otherStored?.size ?? -1),
@@ -480,15 +481,15 @@ space.post('/photos/:id/commit', async (c) => {
     return c.json({ error: messages.badRequest }, 400);
   }
   const tag = c.get('space');
-  if (c.get('album') !== null || c.get('access') === 'upload') {
-    const photo = await findPhoto(c.env.DB, tag, id.data);
-    if (!photo || !mayUpload(c, photo)) return c.json({ error: notFound }, 404);
-  }
+  // The row names the photo's files, so it is read first.
+  const photo = await findPhoto(c.env.DB, tag, id.data);
+  if (!photo || !mayUpload(c, photo)) return c.json({ error: notFound }, 404);
+  if (!photo.pending) return c.body(null, 204);
   // The files' sizes go into the commit itself, so it only succeeds if they match what was
-  // declared; the photo is looked up only to say why a commit didn't happen.
+  // declared.
   const [thumb, full] = await Promise.all([
-    c.env.BLOBS.head(objectKey(id.data, 'thumb')),
-    c.env.BLOBS.head(objectKey(id.data, 'full')),
+    c.env.BLOBS.head(objectKey(photo.blob, 'thumb')),
+    c.env.BLOBS.head(objectKey(photo.blob, 'full')),
   ]);
   if (
     thumb &&
@@ -497,32 +498,26 @@ space.post('/photos/:id/commit', async (c) => {
   ) {
     return c.body(null, 204);
   }
-  const photo = await findPhoto(c.env.DB, tag, id.data);
-  if (!photo) return c.json({ error: notFound }, 404);
-  if (!photo.pending) return c.body(null, 204);
+  // Uploading its last file may have committed it meanwhile.
+  const latest = await findPhoto(c.env.DB, tag, id.data);
+  if (!latest) return c.json({ error: notFound }, 404);
+  if (!latest.pending) return c.body(null, 204);
   return c.json({ error: 'The upload didn’t finish. Try again.' }, 409);
 });
 
 space.get('/photos/:id/:part', async (c) => {
   const params = parsePhotoParams(c.req.param());
   if (!params) return c.json({ error: messages.badRequest }, 400);
-  // The row and the file are fetched together; the file is only sent if the row says this
-  // space has the photo (and, for a token given one album, that the album lists it).
+  // The row names the file, so a file is only ever reached through a row of this space (and,
+  // for a token given one album, a photo the album lists).
   const album = c.get('album');
-  const [visible, object] = await Promise.all([
-    album
-      ? sharedAlbumPhotoIds(c.env.DB, c.get('space'), album, [params.id]).then((found) =>
-          found.has(params.id),
-        )
-      : findPhoto(c.env.DB, c.get('space'), params.id).then(
-          (photo) => photo !== null && !photo.pending,
-        ),
-    c.env.BLOBS.get(objectKey(params.id, params.part)),
-  ]);
-  if (!visible || !object) {
-    await object?.body.cancel();
-    return c.json({ error: notFound }, 404);
-  }
+  const blob = album
+    ? (await sharedAlbumPhotoBlobs(c.env.DB, c.get('space'), album, [params.id])).get(params.id)
+    : await findPhoto(c.env.DB, c.get('space'), params.id).then((photo) =>
+        photo && !photo.pending ? photo.blob : undefined,
+      );
+  const object = blob === undefined ? null : await c.env.BLOBS.get(objectKey(blob, params.part));
+  if (!object) return c.json({ error: notFound }, 404);
   return c.body(object.body, 200, {
     'content-type': 'application/octet-stream',
     'content-length': String(object.size),
@@ -584,7 +579,9 @@ space.delete('/photos/:id', async (c) => {
   const allowed =
     photo !== null && (c.get('album') === null || (photo.pending && mayUpload(c, photo)));
   if (!photo || !allowed) return c.json({ error: notFound }, 404);
-  await deletePhotos(c, tag, [{ id: photo.id, size: photo.thumbSize + photo.fullSize }]);
+  await deletePhotos(c, tag, [
+    { id: photo.id, blob: photo.blob, size: photo.thumbSize + photo.fullSize },
+  ]);
   return c.body(null, 204);
 });
 

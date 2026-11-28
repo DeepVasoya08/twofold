@@ -75,6 +75,14 @@ async function listPhotos(c = client, after?: string): Promise<PhotoPage> {
   return res.json<PhotoPage>();
 }
 
+/** The R2 key of one of a photo's files: named by its row's random `blob`, not its id. */
+function fileKey(photoId: string, part: 'thumb' | 'full'): string {
+  const row = sqlite.prepare('SELECT blob FROM photos WHERE id = ?').get(photoId) as
+    { blob: string } | undefined;
+  if (!row) throw new Error('No such photo');
+  return `photos/${row.blob}/${part}`;
+}
+
 describe('access', () => {
   it('needs a session', async () => {
     const stranger = new Client(env);
@@ -131,12 +139,23 @@ describe('what the database keeps', () => {
     expect(JSON.stringify(sqlite.prepare('SELECT * FROM photos').all())).not.toContain(token);
   });
 
-  it('names R2 objects by the random photo id only', async () => {
+  it('names R2 objects by a random name of their own, not the photo’s id or its space', async () => {
     const { photo } = await upload();
-    expect([...r2.objects.keys()].sort()).toEqual([
-      `photos/${photo.id}/full`,
-      `photos/${photo.id}/thumb`,
-    ]);
+    const second = await upload();
+    const keys = [...r2.objects.keys()];
+    expect(keys.sort()).toEqual(
+      [
+        fileKey(photo.id, 'full'),
+        fileKey(photo.id, 'thumb'),
+        fileKey(second.photo.id, 'full'),
+        fileKey(second.photo.id, 'thumb'),
+      ].sort(),
+    );
+    const tag = toBase64Url(await sha256(fromBase64Url(token) ?? new Uint8Array()));
+    for (const key of keys) {
+      expect(key).toMatch(/^photos\/[A-Za-z0-9_-]{22}\/(thumb|full)$/);
+      for (const named of [photo.id, second.photo.id, token, tag]) expect(key).not.toContain(named);
+    }
   });
 });
 
@@ -227,12 +246,14 @@ describe('uploading', () => {
     const stale = { id: newId(), meta: newMeta(), thumbSize: 10, fullSize: 20 };
     await client.request('POST', '/space/photos', stale);
     await putFile(client, stale.id, 'thumb', randomBytes(10));
+    const staleFile = fileKey(stale.id, 'thumb');
+    expect(r2.objects.has(staleFile)).toBe(true);
     sqlite
       .prepare('UPDATE photos SET pending_since = ? WHERE id = ?')
       .run(Date.now() - PENDING_TTL_MS - 1, stale.id);
     await upload();
     expect(sqlite.prepare('SELECT id FROM photos WHERE id = ?').get(stale.id)).toBeUndefined();
-    expect(r2.objects.has(`photos/${stale.id}/thumb`)).toBe(false);
+    expect(r2.objects.has(staleFile)).toBe(false);
   });
 
   it('finds abandoned uploads without reading the space’s other photos', () => {
@@ -328,11 +349,11 @@ describe('database round trips', () => {
 describe('listing', () => {
   it('pages through photos in id order', async () => {
     const insert = sqlite.prepare(
-      'INSERT INTO photos (id, space, meta, thumb_size, full_size) VALUES (?, ?, ?, 1, 1)',
+      'INSERT INTO photos (id, space, meta, thumb_size, full_size, blob) VALUES (?, ?, ?, 1, 1, ?)',
     );
     const tag = toBase64Url(await sha256(fromBase64Url(token) ?? new Uint8Array()));
     const ids = Array.from({ length: PAGE_SIZE + 3 }, newId);
-    for (const id of ids) insert.run(id, tag, newMeta());
+    for (const id of ids) insert.run(id, tag, newMeta(), newId());
     const first = await listPhotos();
     expect(first.photos).toHaveLength(PAGE_SIZE);
     expect(first.next).not.toBeNull();
@@ -358,10 +379,11 @@ describe('changing and deleting', () => {
   it('deletes a photo and its files', async () => {
     const { photo } = await upload();
     const kept = await upload();
+    const deletedFiles = [fileKey(photo.id, 'thumb'), fileKey(photo.id, 'full')];
     expect((await client.request('DELETE', `/space/photos/${photo.id}`, {})).status).toBe(204);
     expect((await listPhotos()).photos).toEqual([kept.photo]);
-    expect(r2.objects.has(`photos/${photo.id}/full`)).toBe(false);
-    expect(r2.objects.has(`photos/${kept.photo.id}/full`)).toBe(true);
+    for (const file of deletedFiles) expect(r2.objects.has(file)).toBe(false);
+    expect(r2.objects.has(fileKey(kept.photo.id, 'full'))).toBe(true);
   });
 
   it('wipes a whole space and nothing else', async () => {
@@ -370,12 +392,13 @@ describe('changing and deleting', () => {
     const otherToken = toBase64Url(randomBytes(16));
     useSpace(client, otherToken);
     const other = await upload();
+    const otherFiles = [fileKey(other.photo.id, 'full'), fileKey(other.photo.id, 'thumb')];
     useSpace(client, token);
     expect((await client.request('DELETE', '/space', {})).status).toBe(204);
     expect((await listPhotos()).photos).toEqual([]);
     const albums = await client.request('GET', '/space/albums');
     expect((await albums.json<AlbumList>()).albums).toEqual([]);
-    expect([...r2.objects.keys()].every((key) => key.includes(other.photo.id))).toBe(true);
+    expect([...r2.objects.keys()].sort()).toEqual(otherFiles.sort());
     useSpace(client, otherToken);
     expect((await listPhotos()).photos).toEqual([other.photo]);
   });

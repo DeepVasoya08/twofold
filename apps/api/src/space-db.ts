@@ -1,8 +1,15 @@
+import { newRandomName } from '@arcafold/crypto/webcrypto';
 import type { PhotoPart, StoredAlbum, StoredPhoto, StoredProfilePhoto } from '@arcafold/types';
 
 /**
  * Storage queries. Every query is scoped to a space tag (the SHA-256 of the space's access
  * token); no query, row or index involves an account.
+ *
+ * Ids are the device's, and unique only within their space: every table is keyed by space
+ * and id, so adding a record can only find that this space already has its id, never that
+ * another space does (docs/security.md). A photo's files in R2 are named by its row's `blob`,
+ * a random name the server picks, so two spaces with the same photo id never share a file,
+ * and a file is only ever reached through its own space's row.
  */
 
 interface PhotoRow {
@@ -27,18 +34,22 @@ function toPhoto(row: PhotoRow): StoredPhoto {
   return photo;
 }
 
-/** A photo row, committed or still uploading. */
+/** A photo row, committed or still uploading, with the name its files have in R2. */
 export interface PhotoRecord extends StoredPhoto {
   pending: boolean;
+  blob: string;
 }
 
-/** R2 object key of one of a photo's files. Photo ids are random, so these are too. */
-export function objectKey(photoId: string, part: PhotoPart): string {
-  return `photos/${photoId}/${part}`;
+/**
+ * R2 object key of one of a photo's files, from its row's random `blob` name (for photos from
+ * before ids were per space, their id, which was unique then).
+ */
+export function objectKey(blob: string, part: PhotoPart): string {
+  return `photos/${blob}/${part}`;
 }
 
-export function objectKeys(photoId: string): string[] {
-  return [objectKey(photoId, 'thumb'), objectKey(photoId, 'full')];
+export function objectKeys(blob: string): string[] {
+  return [objectKey(blob, 'thumb'), objectKey(blob, 'full')];
 }
 
 /** Committed photos after the cursor, in id order. */
@@ -66,20 +77,20 @@ export async function findPhoto(
 ): Promise<PhotoRecord | null> {
   const row = await db
     .prepare(
-      'SELECT id, meta, thumb_size, full_size, pending_since, sealed_for_owner, sealed_for_album FROM photos WHERE space = ? AND id = ?',
+      'SELECT id, meta, thumb_size, full_size, pending_since, sealed_for_owner, sealed_for_album, blob FROM photos WHERE space = ? AND id = ?',
     )
     .bind(space, id)
-    .first<PhotoRow>();
-  return row ? { ...toPhoto(row), pending: row.pending_since !== null } : null;
+    .first<PhotoRow & { blob: string }>();
+  return row ? { ...toPhoto(row), pending: row.pending_since !== null, blob: row.blob } : null;
 }
 
 /** Who a new photo's metadata is sealed for, when it isn't the space's records key. */
 export type SealedFor = { owner: true } | { album: string } | null;
 
 /**
- * Starts an upload. Returns false if the id is taken (in any space). `sealedFor` marks a
- * photo a phone added with an upload-only token (`owner`), or one someone given one album
- * added to it (`album`).
+ * Starts an upload, under a new random name for its files. Returns false if this space
+ * already has the id. `sealedFor` marks a photo a phone added with an upload-only token
+ * (`owner`), or one someone given one album added to it (`album`).
  */
 export async function insertPendingPhoto(
   db: D1Database,
@@ -93,10 +104,20 @@ export async function insertPendingPhoto(
   const result = await db
     .prepare(
       `INSERT INTO photos
-         (id, space, meta, thumb_size, full_size, pending_since, sealed_for_owner, sealed_for_album)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+         (id, space, meta, thumb_size, full_size, pending_since, sealed_for_owner, sealed_for_album, blob)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (space, id) DO NOTHING`,
     )
-    .bind(photo.id, space, photo.meta, photo.thumbSize, photo.fullSize, now, forOwner, forAlbum)
+    .bind(
+      photo.id,
+      space,
+      photo.meta,
+      photo.thumbSize,
+      photo.fullSize,
+      now,
+      forOwner,
+      forAlbum,
+      newRandomName(),
+    )
     .run();
   return result.meta.changes === 1;
 }
@@ -122,32 +143,36 @@ export async function commitPhoto(
   return result.meta.changes === 1;
 }
 
-/** Which of these photos are committed in this space: the ones a thumbnail batch may return. */
-export async function committedPhotoIds(
+/**
+ * Which of these photos are committed in this space, the ones a thumbnail batch may return,
+ * with the names of their files.
+ */
+export async function committedPhotoBlobs(
   db: D1Database,
   space: string,
   ids: readonly string[],
-): Promise<Set<string>> {
-  if (ids.length === 0) return new Set();
+): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
   const { results } = await db
     .prepare(
-      `SELECT id FROM photos WHERE space = ? AND pending_since IS NULL
+      `SELECT id, blob FROM photos WHERE space = ? AND pending_since IS NULL
           AND id IN (${ids.map(() => '?').join(', ')})`,
     )
     .bind(space, ...ids)
-    .all<{ id: string }>();
-  return new Set(results.map((row) => row.id));
+    .all<{ id: string; blob: string }>();
+  return new Map(results.map((row) => [row.id, row.blob]));
 }
 
-/** A photo row's id and the bytes it holds (both files), for deleting it. */
+/** A photo row's id, its files' name and the bytes it holds (both files), for deleting it. */
 export interface PhotoSize {
   id: string;
+  blob: string;
   size: number;
 }
 
 /** Served by the photos_pending index, so it never reads the space's finished photos. */
 export const STALE_PENDING_SQL =
-  'SELECT id, thumb_size + full_size AS size FROM photos WHERE space = ? AND pending_since < ? LIMIT 100';
+  'SELECT id, blob, thumb_size + full_size AS size FROM photos WHERE space = ? AND pending_since < ? LIMIT 100';
 
 /** This space's uploads that started before `before` and never finished. */
 export async function stalePendingPhotos(
@@ -254,7 +279,7 @@ export async function somePhotos(
   limit: number,
 ): Promise<PhotoSize[]> {
   const { results } = await db
-    .prepare('SELECT id, thumb_size + full_size AS size FROM photos WHERE space = ? LIMIT ?')
+    .prepare('SELECT id, blob, thumb_size + full_size AS size FROM photos WHERE space = ? LIMIT ?')
     .bind(space, limit)
     .all<PhotoSize>();
   return results;
@@ -276,14 +301,16 @@ export async function countAlbums(db: D1Database, space: string): Promise<number
   return row?.count ?? 0;
 }
 
-/** Returns false if the id is taken (in any space). */
+/** Returns false if this space already has the id. */
 export async function insertAlbum(
   db: D1Database,
   space: string,
   album: StoredAlbum,
 ): Promise<boolean> {
   const result = await db
-    .prepare('INSERT INTO albums (id, space, meta) VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING')
+    .prepare(
+      'INSERT INTO albums (id, space, meta) VALUES (?, ?, ?) ON CONFLICT (space, id) DO NOTHING',
+    )
     .bind(album.id, space, album.meta)
     .run();
   return result.meta.changes === 1;

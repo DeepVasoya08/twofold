@@ -143,7 +143,7 @@ test('creates an album and uploads into it', async ({ page }) => {
   await page.getByLabel('Album name').fill('Paris');
   await page.getByRole('button', { name: 'Create album' }).click();
 
-  // Album ids are random, so the address names no title.
+  // The address names the album by a random name: never its title, nor even its id.
   await expect(page).toHaveURL(/\/albums\/[\w-]{22}$/);
   await expect(page.getByText('Nothing in here yet')).toBeVisible();
   await uploadPhotos(page, 1);

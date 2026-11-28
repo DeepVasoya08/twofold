@@ -63,6 +63,7 @@ const titles: Record<Route['name'], string> = {
   join: 'Invite · Arcafold',
   'join-code': 'Enter an invite code · Arcafold',
   'speed-test': 'Speed test · Arcafold',
+  gone: 'Arcafold',
   'not-found': 'Not found · Arcafold',
 };
 
@@ -90,6 +91,9 @@ function Screen({ route }: { route: Route }) {
       return <SpeedTest />;
     case 'not-found':
       return <NotFound />;
+    case 'gone':
+      // redirectFor always sends it on.
+      return null;
     case 'gallery':
       return (
         <AppShell>
@@ -177,7 +181,7 @@ function Screen({ route }: { route: Route }) {
     case 'share':
       return (
         <AppShell>
-          <Share />
+          <Share albumId={route.albumId} />
         </AppShell>
       );
     case 'join':

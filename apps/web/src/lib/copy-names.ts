@@ -1,1 +1,7 @@
-export { copyName, copyNames, takenName, zipName } from '@arcafold/core/download/names';
+export {
+  copyName,
+  copyNames,
+  takenName,
+  viewerSaveName,
+  zipName,
+} from '@arcafold/core/download/names';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { copyName, copyNames, takenName, zipName } from './names';
+import { copyName, copyNames, takenName, viewerSaveName, zipName } from './names';
 
 /** An ISO time for a local date and time, as the browser would show it. */
 const local = (...parts: [number, number, number, number, number, number]) =>
@@ -14,6 +14,13 @@ describe('takenName', () => {
 
   it('falls back for a date that doesn’t parse', () => {
     expect(takenName('someday')).toBe('Photo');
+  });
+});
+
+describe('viewerSaveName', () => {
+  it('names a photo by when it was taken, with no dot for the browser to take as its type', () => {
+    expect(viewerSaveName(local(2026, 10, 19, 14, 32, 5))).toBe('2026-10-19 14-32-05');
+    expect(viewerSaveName('someday')).toBe('Photo');
   });
 });
 

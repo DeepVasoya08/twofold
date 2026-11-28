@@ -40,7 +40,7 @@ import {
   sharedSubtree,
 } from './folder-edits';
 import type { SharedFolderState } from './folder-edits';
-import { folderName } from './folders';
+import { folderName, foldersOfShare } from './folders';
 import type { Album, FileDetails, Folder, Photo } from './model';
 
 /**
@@ -1857,6 +1857,10 @@ export function combinedStore(
       const albums = [...mine.albums];
       const folders = [...mine.folders];
       const seen = new Map(photos.map((photo, index) => [photo.id, index]));
+      // A share lists its own albums and folders, in records its owner seals as they like, so
+      // it could name one of yours. Yours always win: a share's entry with one of your ids is
+      // left out, so what you add to your own album or folder stays in your library.
+      const ownIds = new Set([...mine.albums, ...mine.folders].map((each) => each.id));
       for (const { source, loaded, viewOnly } of loadedShared) {
         if (!loaded) continue;
         const marks = {
@@ -1865,8 +1869,11 @@ export function combinedStore(
           ...(viewOnly && { viewOnly: true }),
         };
         const albumMarks = source.album ? { ...marks, joinedId: source.id } : marks;
-        for (const photo of loaded.photos) {
-          const index = seen.get(photo.id);
+        for (const listed of loaded.photos) {
+          const index = seen.get(listed.id);
+          // A share can't add to your own photos either, nor put its photos in your albums.
+          if (index !== undefined && index < mine.photos.length) continue;
+          const photo = { ...listed, albumIds: listed.albumIds.filter((id) => !ownIds.has(id)) };
           const existing = index === undefined ? undefined : photos[index];
           if (index !== undefined && existing) {
             // Already here through another share: it's in this album too.
@@ -1884,13 +1891,14 @@ export function combinedStore(
           });
         }
         for (const album of loaded.albums) {
-          if (albumStores.has(album.id)) continue;
+          if (ownIds.has(album.id) || albumStores.has(album.id)) continue;
           albumStores.set(album.id, source.store);
           albums.push({ ...album, ...albumMarks });
         }
         // Folders of a library shared with you whole, or a folder shared on its own (with the
         // folders inside it; the shared one is the one with no parent).
-        for (const folder of loaded.folders) {
+        const taken = (id: string) => ownIds.has(id) || albumStores.has(id);
+        for (const folder of foldersOfShare(loaded.folders, taken)) {
           if (albumStores.has(folder.id)) continue;
           albumStores.set(folder.id, source.store);
           folders.push({

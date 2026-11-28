@@ -86,7 +86,7 @@ exists but is low-key (Settings → Sharing).
 ## Folders in Files
 
 - Files has folders you make and name yourself, any number deep (`screens/Files.tsx`,
-  `/files/folder/:id`, shared logic in `packages/core/src/library/folders.ts`). The top of
+  `/files/folder/:name`, shared logic in `packages/core/src/library/folders.ts`). The top of
   Files shows its folders, then the files in no folder; a folder shows its path back up,
   its folders, any photos uploaded into it (they're in Photos too) and its files.
 - **New folder** makes one where you are. **Upload here** (Add files inside a folder)
@@ -332,7 +332,7 @@ words, each with Forget. Looking alike is compared with its own tuning (`LOOKS_T
 If the photos haven't been looked at yet, the search says so instead of showing nothing.
 
 **Save as album** (under a search's chips, while Smart search is on) saves the search as a
-smart album (`screens/SmartAlbum.tsx`, `/albums/smart/:id`). It keeps what was typed, the
+smart album (`screens/SmartAlbum.tsx`, `/albums/smart/:name`). It keeps what was typed, the
 chips tapped off, the "More like this" photo, the words' search vector and when it was
 saved, so dates like "last year" keep meaning the year they meant then and opening it never
 needs the text half. Each time it's shown, the search runs again over the photos looked at
@@ -393,21 +393,27 @@ Routes are the same in both spaces; the content depends on which space is open.
 | `/unlock`              | Unlock (returning user, key not in memory)                         |
 | `/recover`             | Reset the password with the recovery key                           |
 | `/photos`              | Library or private space: timeline grouped by month                |
-| `/photos/:id`          | Photo viewer; `?from=favorites`, `album:<id>` or `person:<id>`     |
+| `/photos/:name`        | Photo viewer; `?from=favorites`, `album:<name>` or `person:<name>` |
 | `/albums`              | Albums, with tabs and "New album"                                  |
-| `/albums/:id`          | One album, with Download and its menu                              |
+| `/albums/:name`        | One album, with Download and its menu                              |
 | `/favorites`           | Favorites                                                          |
 | `/files`               | Files that aren't photos: download, move, delete                   |
-| `/files/:id`           | One file: PDF, text or Word shown in the app, and Download         |
+| `/files/:name`         | One file: PDF, text or Word shown in the app, and Download         |
 | `/recently-deleted`    | Recently deleted: restore, delete now, or empty                    |
 | `/people`              | People found in photos (or turning face grouping on)               |
-| `/people/:id`          | One person's photos: name, merge, hide, "Not this person"          |
+| `/people/:name`        | One person's photos: name, merge, hide, "Not this person"          |
 | `/settings`            | Profile, passwords, sharing, security, devices, appearance         |
 | `/settings/import`     | Import from Google Photos or Apple Photos (`?from=apple`)          |
-| `/settings/share`      | Invite someone to the open space (or `?album=` one album), or join |
+| `/settings/share`      | Invite someone to the open space (`/:name` for one album), or join |
 | `/join/:token`         | Someone's invite link: accept it                                   |
 | `/join`                | Enter an invite code                                               |
 | anything else          | Not found                                                          |
+
+`:name` is never an id: each photo, album, file, folder and person gets a random name the
+first time an address points at it, kept in memory until Arcafold locks (`app/addresses.ts`).
+After a lock an old address leads to its list (Photos, Albums, Files or People), so Back and
+the browser's history show nothing of what was open (see
+[security.md](security.md#addresses-hold-no-ids)).
 
 Upload is a dialog opened from the sidebar (desktop) or the top bar (phones); inside an
 album it also adds the photos to that album. Each photo is read on the device, given a

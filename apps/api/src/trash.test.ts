@@ -136,6 +136,8 @@ describe('Recently deleted', () => {
       'trashed',
       'sealed_for_owner',
       'sealed_for_album',
+      // A random name for the photo's files in R2, not a date either.
+      'blob',
     ]);
   });
 
