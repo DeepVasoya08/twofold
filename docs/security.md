@@ -16,6 +16,9 @@ non-negotiable; this document is the threat model and key design as they stand.
   `apps/web/public/_headers` (Workers Static Assets). `'wasm-unsafe-eval'` is allowed so
   libsodium's WebAssembly can load. libsodium is loaded on first use, not on the welcome page.
   `Strict-Transport-Security` makes browsers use HTTPS only, ahead of a custom domain.
+  `apps/web/src/headers.test.ts` keeps `script-src` to the app's own files, with no inline
+  code or `eval`, so a script added to the pages on the way (Cloudflare's Web Analytics beacon
+  or its JavaScript Detections, if switched on) can't run.
 - API responses get their own, stricter headers (`default-src 'none'`, `X-Frame-Options:
 DENY`, `no-referrer`, `nosniff`, `Cache-Control: no-store`) in `apps/api/src/app.ts`.
 - CI runs `pnpm audit --audit-level high` on every PR and push to `main`. An advisory with
