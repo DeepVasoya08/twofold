@@ -24,6 +24,16 @@ export function uploadHeadline(summary: UploadSummary, noun: UploadNoun = 'photo
   return `${photos(summary.done)} added, ${String(summary.failed)} couldn’t be`;
 }
 
+/**
+ * The note under the progress while photos are on their way. In the private space they stop
+ * if the app locks first, and no notification says when they're in.
+ */
+export function uploadNote(stopsOnLock: boolean): string {
+  return stopsOnLock
+    ? 'Keep Arcafold open until they’re in. If it locks first, the ones not sent yet stop, and you’ll need to add them again.'
+    : 'You can leave Arcafold: they keep going, and a notification says when they’re in.';
+}
+
 /** Why the first one that failed did, when one did. */
 export function firstFailure(items: readonly UploadItem[]): string | null {
   const failed = items.find((item) => item.status === 'failed');

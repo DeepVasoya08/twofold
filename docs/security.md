@@ -90,6 +90,14 @@ checksum). It is already uniformly random, so its `master` is a keyed BLAKE2b
 - Setting up a private space from the main library writes a new slot 2, replacing any
   private space that was there (the main library cannot know). The dialog says so to
   everyone, always.
+- **On the phone, the private space's uploads end at the lock.** While photos are on their
+  way, Android shows a progress notification, the same in both spaces. Photos added to the
+  private space stop when Arcafold locks, which takes that notification away, and never get
+  the "N photos added" notice the main library's uploads leave behind: it stays after the
+  lock, and a main library without those photos would give the private space away
+  (`apps/mobile/src/library/close-uploads.ts`). A photo already being sent as it locks
+  (three at most) can't be called back and lands quietly. Android's notification history,
+  where the phone has it turned on, can still list the progress notification for a day.
 
 ### Trade-offs we accepted
 

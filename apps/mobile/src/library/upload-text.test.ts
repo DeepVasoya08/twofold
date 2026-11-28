@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { summarizeUploads } from '@arcafold/core/upload/progress';
 import type { UploadItem } from '@arcafold/core/upload/uploader';
 
-import { firstFailure, uploadHeadline, uploadNoun } from './upload-text';
+import { firstFailure, uploadHeadline, uploadNote, uploadNoun } from './upload-text';
 
 describe('uploadHeadline', () => {
   it('counts up while photos are on their way', () => {
@@ -20,6 +20,20 @@ describe('uploadHeadline', () => {
     expect(uploadHeadline(summarizeUploads(['done', 'done', 'failed']))).toBe(
       '2 photos added, 1 couldn’t be',
     );
+  });
+});
+
+describe('uploadNote', () => {
+  it('says the main library’s uploads carry on away from the app', () => {
+    expect(uploadNote(false)).toBe(
+      'You can leave Arcafold: they keep going, and a notification says when they’re in.',
+    );
+  });
+
+  it('says the private space’s stop if the app locks first, and promises no notification', () => {
+    const note = uploadNote(true);
+    expect(note).toContain('If it locks first');
+    expect(note).not.toContain('notification');
   });
 });
 

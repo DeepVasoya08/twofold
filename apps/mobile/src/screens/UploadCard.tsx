@@ -4,7 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { summarizeUploads } from '@arcafold/core/upload/progress';
 
 import { originalsText } from '../library/originals';
-import { firstFailure, uploadHeadline, uploadNoun } from '../library/upload-text';
+import { firstFailure, uploadHeadline, uploadNote, uploadNoun } from '../library/upload-text';
 import type { Library } from '../library/use-library';
 import { Button } from '../ui/kit';
 import type { Palette } from '../ui/theme';
@@ -12,7 +12,7 @@ import type { Palette } from '../ui/theme';
 /**
  * How the photos being added are getting on, in the cards over the bottom of the screen.
  * Once photos picked into the private space are all in, it offers to delete them from the
- * gallery.
+ * gallery. There, it also says to keep the app open meanwhile, since locking stops them.
  */
 export function UploadCard({
   library,
@@ -56,7 +56,7 @@ export function UploadCard({
       </View>
       {summary.running > 0 ? (
         <Text style={[styles.uploadNote, { color: palette.muted }]}>
-          You can leave Arcafold: they keep going, and a notification says when they’re in.
+          {uploadNote(library.uploadsStopOnLock)}
         </Text>
       ) : null}
       {failure ? (
