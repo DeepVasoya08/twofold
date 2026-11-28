@@ -30,6 +30,12 @@ It deploys the exact commit CI tested, in this order:
 The job stops at the first failing step. Fix the cause and use **Re-run jobs** on the
 failed Deploy run.
 
+The Cloudflare token and account ID are given only to the steps that use them (migrations,
+the two deploys and setting the email secret), never to installing packages or building, so
+a package's install script or build step can't read them. The Python packages that build
+Smart search's resources are pinned by hash (`apps/web/scripts/search-resources/requirements.txt`),
+so pip installs exactly the files that were checked.
+
 Nightly database backups run in a separate workflow (`backup.yml`) with their own token;
 setup and restore are in [backups.md](backups.md). A separate staging copy, deployed by
 hand, is described in [staging.md](staging.md).
